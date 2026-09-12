@@ -16,8 +16,7 @@ export const siteConfig = {
   nav: [
     { label: "Accueil", to: "/" },
     { label: "Actus", to: "/actus" },
-    { label: "Matchs", to: "/matchs" },
-    { label: "Classement", to: "/classement" },
+    // Matchs / Classement sont fournis automatiquement par le module football.
   ],
 
   theme: {
