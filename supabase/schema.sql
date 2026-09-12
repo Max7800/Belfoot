@@ -224,3 +224,24 @@ create policy "votes_write"     on votes    for all using (voter = auth.uid()) w
 create policy "reports_insert"  on reports  for insert with check (reporter = auth.uid());
 create policy "reports_read"    on reports  for select using (is_admin());
 create policy "reports_update"  on reports  for update using (is_admin());
+
+
+-- =============================================================================
+--  BOOTSTRAP AUTH — un profil est créé automatiquement à chaque inscription.
+--  (rôle 'member' par défaut ; promotion admin = une ligne SQL, voir plus bas)
+-- =============================================================================
+create or replace function handle_new_user() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  insert into profiles (id, username, role)
+  values (new.id, split_part(new.email, '@', 1), 'member')
+  on conflict (id) do nothing;
+  return new;
+end $$;
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users for each row execute function handle_new_user();
+
+-- Promotion admin (à lancer une fois, après ta 1ère connexion) :
+--   update profiles set role = 'admin'
+--   where id = (select id from auth.users where email = 'TON_EMAIL');

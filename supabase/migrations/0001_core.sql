@@ -177,3 +177,71 @@ create table if not exists job_runs (
 );
 alter table job_runs enable row level security;
 create policy "job_runs_read" on job_runs for select using (is_admin());
+
+-- =============================================================================
+--  INTERACTIONS (capacité moteur, couche 2) — POLYMORPHES.
+--  target_type = 'entry' | 'forum_post' | 'fm_sheet' | 'match' | ...
+--  => commentaires / votes / signalements sur N'IMPORTE quel contenu.
+-- =============================================================================
+create table if not exists comments (
+  id uuid primary key default gen_random_uuid(),
+  target_type text not null, target_id uuid not null,
+  author uuid references auth.users(id) on delete set null,
+  body text not null,
+  status text not null default 'visible',   -- visible | hidden
+  created_at timestamptz default now(),
+  deleted_at timestamptz
+);
+create index if not exists comments_target on comments (target_type, target_id, created_at);
+
+create table if not exists votes (
+  id uuid primary key default gen_random_uuid(),
+  target_type text not null, target_id uuid not null,
+  voter uuid references auth.users(id) on delete cascade,
+  value int not null default 1,             -- +1 / -1
+  created_at timestamptz default now(),
+  unique (target_type, target_id, voter)
+);
+create index if not exists votes_target on votes (target_type, target_id);
+
+create table if not exists reports (
+  id uuid primary key default gen_random_uuid(),
+  target_type text not null, target_id uuid not null,
+  reporter uuid references auth.users(id) on delete set null,
+  reason text,
+  status text not null default 'open',       -- open | resolved | dismissed
+  created_at timestamptz default now()
+);
+
+alter table comments enable row level security;
+alter table votes    enable row level security;
+alter table reports  enable row level security;
+create policy "comments_read"   on comments for select using ((status='visible' and deleted_at is null) or is_admin());
+create policy "comments_insert" on comments for insert with check (author = auth.uid());
+create policy "comments_update" on comments for update using (author = auth.uid() or is_admin());
+create policy "votes_read"      on votes    for select using (true);
+create policy "votes_write"     on votes    for all using (voter = auth.uid()) with check (voter = auth.uid());
+create policy "reports_insert"  on reports  for insert with check (reporter = auth.uid());
+create policy "reports_read"    on reports  for select using (is_admin());
+create policy "reports_update"  on reports  for update using (is_admin());
+
+
+-- =============================================================================
+--  BOOTSTRAP AUTH — un profil est créé automatiquement à chaque inscription.
+--  (rôle 'member' par défaut ; promotion admin = une ligne SQL, voir plus bas)
+-- =============================================================================
+create or replace function handle_new_user() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  insert into profiles (id, username, role)
+  values (new.id, split_part(new.email, '@', 1), 'member')
+  on conflict (id) do nothing;
+  return new;
+end $$;
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users for each row execute function handle_new_user();
+
+-- Promotion admin (à lancer une fois, après ta 1ère connexion) :
+--   update profiles set role = 'admin'
+--   where id = (select id from auth.users where email = 'TON_EMAIL');
