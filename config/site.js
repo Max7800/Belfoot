@@ -2,8 +2,8 @@
 //  IDENTITÉ DU SITE — SITE FOOT (fork du socle). À ajuster : nom, domaine, accent.
 // =============================================================================
 export const siteConfig = {
-  name: "Foot Belge",              // <- nom/marque à confirmer
-  shortName: "FootBE",
+  name: "Belfoot",
+  shortName: "Belfoot",
   domain: "a-definir.be",          // <- domaine à venir
   description: "Actu du foot belge : JPL, D1B, divisions inférieures, Coupe, Belges expatriés et grandes ligues européennes.",
   locale: "fr",
