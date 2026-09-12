@@ -26,6 +26,8 @@ export const siteConfig = {
     allowVisitorSwitch: true,
   },
 
+  auth: { providers: ["google", "discord", "twitch"], email: true },
+
   flags: { comments: true },
 
   modules: { auth: true, search: true, contact: true },
