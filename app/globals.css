@@ -1,0 +1,51 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Tokens — mode sombre par défaut. L'accent est injecté au runtime depuis
+   siteConfig.theme.accent (voir app/layout.js). */
+:root {
+  --accent: 28 163 221;
+  --bg: 15 23 42;
+  --surface: 30 41 59;
+  --surface-2: 2 6 23;
+  --content: 248 250 252;
+  --muted: 148 163 184;
+  --line: 255 255 255;
+}
+[data-theme="light"] {
+  --bg: 248 249 250;
+  --surface: 255 255 255;
+  --surface-2: 241 245 249;
+  --content: 15 23 42;
+  --muted: 71 85 105;
+  --line: 15 23 42;
+}
+/* Sous-arbre forcé en sombre (ex. l'admin) quel que soit le thème visiteur */
+[data-force-dark] {
+  --bg: 15 23 42;
+  --surface: 30 41 59;
+  --surface-2: 2 6 23;
+  --content: 248 250 252;
+  --muted: 148 163 184;
+  --line: 255 255 255;
+}
+
+html, body { padding: 0; margin: 0; }
+body { background: rgb(var(--bg)); color: rgb(var(--content)); font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+a { color: inherit; text-decoration: none; }
+* { box-sizing: border-box; }
+
+/* Contenu riche (éditeur + rendu public) */
+.rich { color: rgb(var(--content) / 0.88); line-height: 1.7; }
+.rich h1, .rich h2, .rich h3 { font-weight: 800; margin: 1em 0 .4em; color: rgb(var(--content)); }
+.rich h2 { font-size: 1.4rem; }
+.rich h3 { font-size: 1.15rem; }
+.rich p { margin: .6em 0; }
+.rich ul, .rich ol { margin: .6em 0; padding-left: 1.4em; }
+.rich ul { list-style: disc; }
+.rich ol { list-style: decimal; }
+.rich a { color: rgb(var(--accent)); text-decoration: underline; }
+.rich strong { font-weight: 700; }
+.rich em { font-style: italic; }
+.rich blockquote { border-left: 3px solid rgb(var(--accent)); padding-left: 1em; color: rgb(var(--muted)); margin: .8em 0; }
