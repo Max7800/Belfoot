@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import SaveStatus from "@/components/ui/SaveStatus";
 import ImageField from "@/components/ui/ImageField";
+import { slugify } from "@/lib/slugify";
 
 export default function EntityManager({ spec }) {
   const { table, title, singular, fields, hasSource } = spec;
@@ -31,7 +32,9 @@ export default function EntityManager({ spec }) {
 
   const save = async () => {
     setStatus("saving");
-    const { error } = await supabase.from(table).upsert(editing);
+    const row = { ...editing };
+    if (spec.slugFrom && !row.slug) row.slug = slugify(row[spec.slugFrom] || "");
+    const { error } = await supabase.from(table).upsert(row);
     if (error) { setStatus("error"); alert(error.message); } else { setStatus("saved"); setEditing(null); load(); }
     setTimeout(() => setStatus("idle"), 2000);
   };

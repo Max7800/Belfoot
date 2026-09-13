@@ -1,9 +1,10 @@
 // Déclaration des entités football pour l'admin générique (EntityManager).
 export const FOOTBALL_ENTITIES = {
   competitions: {
-    table: "competitions", title: "Compétitions", singular: "Compétition", orderBy: "name", hasSource: true,
+    table: "competitions", title: "Compétitions", singular: "Compétition", orderBy: "name", hasSource: true, slugFrom: "name",
     fields: [
       { key: "name", label: "Nom", type: "text" },
+      { key: "slug", label: "Slug (auto si vide)", type: "text" },
       { key: "provider", label: "Provider (ex. thesportsdb)", type: "text" },
       { key: "external_id", label: "ID ligue chez le provider", type: "text" },
       { key: "logo_url", label: "Logo", type: "image" },

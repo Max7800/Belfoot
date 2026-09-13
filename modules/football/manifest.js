@@ -5,6 +5,7 @@ const football = {
   icon: "trophy",
   enabled: true,
   nav: [
+    { label: "Compétitions", to: "/competitions" },
     { label: "Matchs", to: "/matchs" },
     { label: "Classement", to: "/classement" },
   ],

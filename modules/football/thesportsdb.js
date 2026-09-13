@@ -29,6 +29,8 @@ const provider = {
       external_id: String(e.idEvent),
       home_ext: e.idHomeTeam ? String(e.idHomeTeam) : null,
       away_ext: e.idAwayTeam ? String(e.idAwayTeam) : null,
+      home_name: e.strHomeTeam || null,
+      away_name: e.strAwayTeam || null,
       home_score: e.intHomeScore != null && e.intHomeScore !== "" ? Number(e.intHomeScore) : null,
       away_score: e.intAwayScore != null && e.intAwayScore !== "" ? Number(e.intAwayScore) : null,
       status: mapStatus(e.strStatus),
