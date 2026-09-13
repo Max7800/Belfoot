@@ -43,26 +43,6 @@ export const collections = {
     },
   },
 
-  // ── Exemple 2 : des fiches ordonnées manuellement + galerie ───────────────
-  entries_demo: {
-    label: "Fiches",
-    labelSingular: "Fiche",
-    icon: "layers",
-    route: "/fiches",
-    public: true,
-    ordered: true,
-    contribute: true,   // ouvre /proposer/entries_demo aux membres           // réordonnables au glisser-déposer dans l'admin
-    fields: {
-      title:     { type: "text", label: "Titre", required: true },
-      slug:      { type: "slug", from: "title" },
-      cover:     { type: "image", label: "Couverture" },
-      images:    { type: "gallery", label: "Galerie" },
-      body:      { type: "richtext", label: "Description" },
-      category:  { type: "category", label: "Catégorie" },
-      published: { type: "bool", label: "Publié", default: true },
-      seo:       { type: "seo" },
-    },
-  },
 
   // Le site foot ajoutera ses collections ici (joueurs, matchs, etc.)
   // en réutilisant exactement le même schéma déclaratif.

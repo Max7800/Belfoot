@@ -1,24 +1,24 @@
 "use client";
-// Registre client : associe une clé de panneau admin à son composant.
-// Les collections passent par le CollectionManager générique ; les modules
-// métier fournissent leurs propres composants d'admin.
-import CollectionManager from "@/components/admin/CollectionManager";
-import ContributionsQueue from "@/components/admin/ContributionsQueue";
-import CategoriesManager from "@/components/admin/CategoriesManager";
-import MatchesAdmin from "@/modules/football/admin/MatchesAdmin";
-import ClubsAdmin from "@/modules/football/admin/ClubsAdmin";
-import { collections } from "@/config/collections";
-
-const MODULE_PANELS = {
-  "football-matches": MatchesAdmin,
-  "football-clubs": ClubsAdmin,
-};
-
-const CAPABILITY = { contributions: ContributionsQueue, categories: CategoriesManager };
+import Dashboard from "./Dashboard";
+import EntityManager from "./EntityManager";
+import CollectionManager from "./CollectionManager";
+import CategoriesManager from "./CategoriesManager";
+import ContributionsQueue from "./ContributionsQueue";
+import { ProfilesPanel, ReportsPanel, JobsPanel, SyncHistoryPanel, ProvidersPanel, SettingsInfo, Placeholder } from "./panels";
+import { FOOTBALL_ENTITIES } from "@/config/football-admin";
 
 export function panelComponent(key) {
-  if (CAPABILITY[key]) return { Comp: CAPABILITY[key], props: {} };
-  if (collections[key]) return { Comp: CollectionManager, props: { collectionKey: key } };
-  const Comp = MODULE_PANELS[key];
-  return Comp ? { Comp, props: {} } : null;
+  if (key === "dashboard") return { Comp: Dashboard, props: {} };
+  if (key === "news") return { Comp: CollectionManager, props: { collectionKey: "news" } };
+  if (key === "categories") return { Comp: CategoriesManager, props: {} };
+  if (key === "contributions") return { Comp: ContributionsQueue, props: {} };
+  if (FOOTBALL_ENTITIES[key]) return { Comp: EntityManager, props: { spec: FOOTBALL_ENTITIES[key] } };
+
+  const direct = {
+    providers: ProvidersPanel, jobs: JobsPanel, "sync-history": SyncHistoryPanel,
+    profiles: ProfilesPanel, reports: ReportsPanel,
+  };
+  if (direct[key]) return { Comp: direct[key], props: {} };
+  if (["config", "modules", "flags"].includes(key)) return { Comp: SettingsInfo, props: { which: key === "config" ? "site" : key } };
+  return { Comp: Placeholder, props: { title: key } };
 }
