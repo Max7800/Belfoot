@@ -20,7 +20,7 @@ export default function ClassementPage() {
           <tbody>
             {rows.map((r, i) => (
               <tr key={r.club_id} className="border-t border-line/10 text-center">
-                <td className="flex items-center gap-2 p-2 text-left">{i + 1}. {club(r.club_id).name}</td>
+                <td className="p-2 text-left"><span className="inline-flex items-center gap-2">{i + 1}. {club(r.club_id).logo_url && <img src={club(r.club_id).logo_url} className="h-5 w-5 object-contain" alt="" />}{club(r.club_id).name}</span></td>
                 <td>{r.played}</td><td>{r.won}</td><td>{r.drawn}</td><td>{r.lost}</td><td>{r.goal_diff}</td><td className="font-bold">{r.points}</td>
               </tr>
             ))}

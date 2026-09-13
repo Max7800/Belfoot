@@ -1,4 +1,5 @@
-import "@/modules/football/thesportsdb";              // enregistre le provider
+import "@/modules/football/thesportsdb";
+import "@/modules/football/apifootball";              // enregistre le provider
 import { syncCompetition } from "../syncCompetition";
 
 export default {

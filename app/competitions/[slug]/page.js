@@ -84,7 +84,7 @@ export default function CompetitionPage() {
           <table className="w-full text-sm">
             <thead className="bg-surface2 text-muted"><tr><th className="p-2 text-left">Club</th><th>J</th><th>G</th><th>N</th><th>P</th><th>Diff</th><th>Pts</th></tr></thead>
             <tbody>
-              {standings.map((r, i) => <tr key={r.club_id} className="border-t border-line/10 text-center"><td className="p-2 text-left">{i + 1}. {clubName(r.club_id)}</td><td>{r.played}</td><td>{r.won}</td><td>{r.drawn}</td><td>{r.lost}</td><td>{r.goal_diff}</td><td className="font-bold">{r.points}</td></tr>)}
+              {standings.map((r, i) => <tr key={r.club_id} className="border-t border-line/10 text-center"><td className="p-2 text-left"><span className="inline-flex items-center gap-2">{i + 1}. {clubsMap[r.club_id]?.logo_url && <img src={clubsMap[r.club_id].logo_url} className="h-5 w-5 object-contain" alt="" />}{clubName(r.club_id)}</span></td><td>{r.played}</td><td>{r.won}</td><td>{r.drawn}</td><td>{r.lost}</td><td>{r.goal_diff}</td><td className="font-bold">{r.points}</td></tr>)}
               {standings.length === 0 && <tr><td colSpan="7" className="p-4 text-center text-muted">Classement vide (nécessite des matchs terminés).</td></tr>}
             </tbody>
           </table>

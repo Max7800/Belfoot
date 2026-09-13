@@ -1,4 +1,5 @@
 import "@/modules/football/thesportsdb";
+import "@/modules/football/apifootball";
 import { syncCompetition } from "../syncCompetition";
 
 // Live : même mécanique (ré-upsert scores/statuts). À planifier plus fréquemment.
