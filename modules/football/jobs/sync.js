@@ -8,7 +8,7 @@ export default {
     const { data: comps } = await db.from("competitions").select("*").not("provider", "is", null);
     if (!comps?.length) return "aucune compétition avec provider";
     const out = [];
-    for (const c of comps) out.push(await syncCompetition(db, c, ctx));
+    for (const c of comps) out.push(await syncCompetition(db, c, { ...ctx, mode: "full" }));
     return out.join(" | ");
   },
 };

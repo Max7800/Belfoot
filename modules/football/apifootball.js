@@ -8,6 +8,17 @@ function mapStatus(short) {
   if (["NS", "TBD"].includes(short)) return "scheduled";
   return "live";
 }
+function mapFixture(f) {
+  return {
+    external_id: String(f.fixture.id),
+    home_ext: String(f.teams.home.id), away_ext: String(f.teams.away.id),
+    home_name: f.teams.home.name, away_name: f.teams.away.name,
+    home_score: f.goals.home, away_score: f.goals.away,
+    status: mapStatus(f.fixture.status?.short), minute: f.fixture.status?.elapsed ?? null,
+    matchday: f.league?.round ? (Number((String(f.league.round).match(/\d+/) || [])[0]) || null) : null,
+    kickoff: f.fixture.date || null,
+  };
+}
 async function api(path, ctx) {
   const key = ctx.apifootballKey || process.env.APIFOOTBALL_KEY;
   if (!key) throw new Error("APIFOOTBALL_KEY manquante");
@@ -27,16 +38,18 @@ const provider = {
   },
   async fetchMatches(competition, ctx = {}) {
     const y = seasonYear(competition.ext?.season || ctx.season);
-    const rows = await api(`/fixtures?league=${competition.external_id}&season=${y}`, ctx);
-    return rows.map((f) => ({
-      external_id: String(f.fixture.id),
-      home_ext: String(f.teams.home.id), away_ext: String(f.teams.away.id),
-      home_name: f.teams.home.name, away_name: f.teams.away.name,
-      home_score: f.goals.home, away_score: f.goals.away,
-      status: mapStatus(f.fixture.status?.short), minute: f.fixture.status?.elapsed ?? null,
-      matchday: f.league?.round ? (Number((String(f.league.round).match(/\d+/) || [])[0]) || null) : null,
-      kickoff: f.fixture.date || null,
-    }));
+    return (await api(`/fixtures?league=${competition.external_id}&season=${y}`, ctx)).map(mapFixture);
+  },
+  // Sync intelligente : uniquement les matchs en direct (1 requête légère).
+  async fetchLiveMatches(competition, ctx = {}) {
+    return (await api(`/fixtures?league=${competition.external_id}&live=all`, ctx)).map(mapFixture);
+  },
+  // Coverage flags de la ligue/saison (lineups, players, injuries, statistics…).
+  async fetchCoverage(competition, ctx = {}) {
+    const y = seasonYear(competition.ext?.season || ctx.season);
+    const rows = await api(`/leagues?id=${competition.external_id}&season=${y}`, ctx);
+    const seas = rows[0]?.seasons?.find((s) => String(s.year) === String(y));
+    return seas?.coverage || rows[0]?.seasons?.[0]?.coverage || null;
   },
 };
 registerProvider(provider);
