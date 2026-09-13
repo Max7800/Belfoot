@@ -45,10 +45,15 @@ export async function syncCompetition(db, competition, ctx = {}) {
   const matchN = await upsertExternal(db, "matches", competition.provider, resolveMatches(matches, competition.id, map),
     ["competition_id", "home_club_id", "away_club_id", "home_score", "away_score", "status", "minute", "kickoff", "matchday"]);
 
-  if (provider.fetchCoverage) {
-    try { const coverage = await provider.fetchCoverage(competition, ctx);
-      if (coverage) await db.from("competitions").update({ ext: { ...(competition.ext || {}), coverage } }).eq("id", competition.id);
+  let leagueName = competition.name;
+  if (provider.fetchLeagueInfo) {
+    try {
+      const info = await provider.fetchLeagueInfo(competition, ctx);
+      if (info) {
+        leagueName = info.name || leagueName;
+        await db.from("competitions").update({ ext: { ...(competition.ext || {}), coverage: info.coverage, providerName: info.name, country: info.country } }).eq("id", competition.id);
+      }
     } catch {}
   }
-  return `${competition.name}: ${clubsN} clubs, ${matchN} matchs`;
+  return `${leagueName}: ${clubsN} clubs, ${matchN} matchs`;
 }

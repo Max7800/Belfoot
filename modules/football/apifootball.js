@@ -19,18 +19,26 @@ function mapFixture(f) {
     kickoff: f.fixture.date || null,
   };
 }
-async function api(path, ctx) {
+async function apiFull(path, ctx) {
   const key = ctx.apifootballKey || process.env.APIFOOTBALL_KEY;
   if (!key) throw new Error("APIFOOTBALL_KEY manquante");
   const r = await fetch(`${BASE}${path}`, { headers: { "x-apisports-key": key } });
   const j = await r.json();
   if (j.errors && (Array.isArray(j.errors) ? j.errors.length : Object.keys(j.errors).length)) throw new Error("API-Football: " + JSON.stringify(j.errors));
-  return j.response || [];
+  return j;
 }
+const api = async (path, ctx) => (await apiFull(path, ctx)).response || [];
 
-// external_id = id de ligue API-Football (JPL = 144). season = année (ex. 2024).
 const provider = {
   key: "apifootball",
+  // Infos ligue : nom réel (auto-vérification de l'id) + pays + coverage flags.
+  async fetchLeagueInfo(competition, ctx = {}) {
+    const y = seasonYear(competition.ext?.season || ctx.season);
+    const rows = await api(`/leagues?id=${competition.external_id}&season=${y}`, ctx);
+    const L = rows[0]; if (!L) return null;
+    const seas = L.seasons?.find((s) => String(s.year) === String(y)) || L.seasons?.[0];
+    return { name: L.league?.name, country: L.country?.name, coverage: seas?.coverage || null };
+  },
   async fetchClubs(competition, ctx = {}) {
     const y = seasonYear(competition.ext?.season || ctx.season);
     const rows = await api(`/teams?league=${competition.external_id}&season=${y}`, ctx);
@@ -40,16 +48,37 @@ const provider = {
     const y = seasonYear(competition.ext?.season || ctx.season);
     return (await api(`/fixtures?league=${competition.external_id}&season=${y}`, ctx)).map(mapFixture);
   },
-  // Sync intelligente : uniquement les matchs en direct (1 requête légère).
   async fetchLiveMatches(competition, ctx = {}) {
     return (await api(`/fixtures?league=${competition.external_id}&live=all`, ctx)).map(mapFixture);
   },
-  // Coverage flags de la ligue/saison (lineups, players, injuries, statistics…).
-  async fetchCoverage(competition, ctx = {}) {
-    const y = seasonYear(competition.ext?.season || ctx.season);
-    const rows = await api(`/leagues?id=${competition.external_id}&season=${y}`, ctx);
-    const seas = rows[0]?.seasons?.find((s) => String(s.year) === String(y));
-    return seas?.coverage || rows[0]?.seasons?.[0]?.coverage || null;
+  // DISCOVERY : effectif d'un club (avec nationalité) — paginé, plafonné.
+  async fetchSquadPlayers(club, ctx = {}) {
+    const y = seasonYear(ctx.season);
+    const out = []; let page = 1, pages = 1;
+    do {
+      const j = await apiFull(`/players?team=${club.external_id}&season=${y}&page=${page}`, ctx);
+      pages = j.paging?.total || 1;
+      for (const x of j.response || []) out.push({
+        external_id: String(x.player.id), name: x.player.name, nationality: x.player.nationality,
+        position: x.statistics?.[0]?.games?.position || null, photo_url: x.player.photo || null,
+      });
+      page++;
+    } while (page <= pages && page <= 15);   // plafond quota
+    return out;
+  },
+  // TRACKING : stats agrégées de saison d'un joueur (1 requête).
+  async fetchPlayerSeason(player, ctx = {}) {
+    const y = seasonYear(ctx.season);
+    const row = (await api(`/players?id=${player.external_id}&season=${y}`, ctx))[0];
+    if (!row) return null;
+    const a = { appearances: 0, lineups: 0, minutes: 0, goals: 0, assists: 0, yellow: 0, red: 0, rating: null };
+    for (const st of row.statistics || []) {
+      a.appearances += st.games?.appearences || 0; a.lineups += st.games?.lineups || 0; a.minutes += st.games?.minutes || 0;
+      a.goals += st.goals?.total || 0; a.assists += st.goals?.assists || 0;
+      a.yellow += st.cards?.yellow || 0; a.red += st.cards?.red || 0;
+      if (st.games?.rating) a.rating = Number(st.games.rating);
+    }
+    return { season: y, ...a };
   },
 };
 registerProvider(provider);

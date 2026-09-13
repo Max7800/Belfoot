@@ -30,7 +30,7 @@ export function ReportsPanel() {
     </div></div>);
 }
 
-const JOB_LABELS = { "football.sync": "🔄 Synchroniser (import complet)", "football.live-sync": "🔄 Live (scores)" };
+const JOB_LABELS = { "football.sync": "🔄 Synchroniser (import complet)", "football.live-sync": "🔄 Live (scores)", "football.discover-belgians": "🔎 Découvrir les Belges", "football.track-belgians": "📊 MAJ Belges suivis" };
 
 export function JobsPanel() {
   const [rows, setRows] = useState([]);
