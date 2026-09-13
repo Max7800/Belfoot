@@ -233,10 +233,11 @@ create policy "reports_update"  on reports  for update using (is_admin());
 create or replace function handle_new_user() returns trigger
 language plpgsql security definer set search_path = public as $$
 begin
-  insert into profiles (id, username, role)
-  values (new.id, split_part(new.email, '@', 1), 'member')
+  insert into profiles (id, role) values (new.id, 'member')
   on conflict (id) do nothing;
   return new;
+exception when others then
+  return new;   -- ne jamais bloquer l inscription/connexion a cause du profil
 end $$;
 drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
