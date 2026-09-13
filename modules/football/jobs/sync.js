@@ -1,9 +1,8 @@
-import "@/modules/football/thesportsdb";
+import "@/modules/football/thesportsdb";              // enregistre le provider
 import { syncCompetition } from "../syncCompetition";
 
-// Live : même mécanique (ré-upsert scores/statuts). À planifier plus fréquemment.
 export default {
-  key: "football.live-sync",
+  key: "football.sync",
   async run({ db, ...ctx }) {
     const { data: comps } = await db.from("competitions").select("*").not("provider", "is", null);
     if (!comps?.length) return "aucune compétition avec provider";
