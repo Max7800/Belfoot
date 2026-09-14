@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -93,7 +94,7 @@ export default function CompetitionPage() {
 
       {tab === "clubs" && (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {clubsList.map((c) => <div key={c.id} className="flex items-center gap-3 rounded-xl border border-line/10 bg-surface p-3">{c.logo_url && <img src={c.logo_url} className="h-8 w-8 object-contain" alt="" />}<span className="font-semibold">{c.name}</span></div>)}
+          {clubsList.map((c) => <Link key={c.id} href={`/clubs/${c.id}`} className="flex items-center gap-3 rounded-xl border border-line/10 bg-surface p-3 transition hover:border-accent/40">{c.logo_url && <img src={c.logo_url} className="h-8 w-8 object-contain" alt="" />}<span className="font-semibold">{c.name}</span></Link>)}
           {clubsList.length === 0 && <p className="text-muted">Aucun club.</p>}
         </div>
       )}

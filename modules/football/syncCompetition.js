@@ -51,7 +51,9 @@ export async function syncCompetition(db, competition, ctx = {}) {
       const info = await provider.fetchLeagueInfo(competition, ctx);
       if (info) {
         leagueName = info.name || leagueName;
-        await db.from("competitions").update({ ext: { ...(competition.ext || {}), coverage: info.coverage, providerName: info.name, country: info.country } }).eq("id", competition.id);
+        const patch = { ext: { ...(competition.ext || {}), coverage: info.coverage, providerName: info.name, country: info.country } };
+        if (!competition.locked && info.logo) patch.logo_url = info.logo;   // logo auto, sauf fiche verrouillée
+        await db.from("competitions").update(patch).eq("id", competition.id);
       }
     } catch {}
   }
