@@ -24,6 +24,7 @@ export async function syncEvents(db, competition, ctx = {}) {
       await db.from("match_events").insert(evs.map((e) => ({
         match_id: m.id, minute: e.minute, type: e.type,
         player_id: playerMap[e.player_ext] || null, club_id: clubMap[e.team_ext] || null, source: competition.provider,
+        player_name: e.player_name || null, assist_name: e.assist_name || null, detail: e.detail || null,
       })));
     }
     n += evs.length;

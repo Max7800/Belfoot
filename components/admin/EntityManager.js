@@ -5,19 +5,22 @@ import SaveStatus from "@/components/ui/SaveStatus";
 import ImageField from "@/components/ui/ImageField";
 import { slugify } from "@/lib/slugify";
 
+const POS = { Goalkeeper: 0, Defender: 1, Midfielder: 2, Attacker: 3 };
+
 export default function EntityManager({ spec }) {
   const { table, title, singular, fields, hasSource } = spec;
   const [rows, setRows] = useState([]);
   const [rel, setRel] = useState({});
   const [editing, setEditing] = useState(null);
   const [status, setStatus] = useState("idle");
+  const [q, setQ] = useState("");
+  const [groupFilter, setGroupFilter] = useState("all");
   const relFields = useMemo(() => fields.filter((f) => f.type === "relation"), [fields]);
 
   const load = async () => {
-    let q = supabase.from(table).select("*");
-    if (spec.orderBy) q = q.order(spec.orderBy, { ascending: spec.orderAsc !== false, nullsFirst: false });
-    const { data } = await q;
-    setRows(data || []);
+    let query = supabase.from(table).select("*");
+    if (spec.orderBy) query = query.order(spec.orderBy, { ascending: spec.orderAsc !== false, nullsFirst: false });
+    const { data } = await query; setRows(data || []);
   };
   useEffect(() => {
     load();
@@ -41,6 +44,21 @@ export default function EntityManager({ spec }) {
   const remove = async (r) => { if (!confirm("Supprimer ?")) return; await supabase.from(table).delete().eq("id", r.id); load(); };
   const setV = (k, v) => setEditing((e) => ({ ...e, [k]: v }));
   const rowLabel = (r) => r.name || r.label || r.title || (r.id ? String(r.id).slice(0, 8) : "—");
+  const relLabelOf = (relTable, id) => (rel[relTable] || []).find((o) => o.id === id)?.label || "Sans club / non associé";
+
+  const Row = ({ it }) => (
+    <div className="flex items-center gap-3 p-3">
+      {(it.logo_url || it.photo_url) && <img src={it.logo_url || it.photo_url} alt="" className="h-8 w-8 rounded object-cover" />}
+      <div className="min-w-0 flex-1">
+        <div className="truncate font-semibold">{rowLabel(it)}</div>
+        <div className="text-xs text-muted">
+          {it.position ? it.position + " · " : ""}{hasSource ? (it.locked ? "🔒 manuel" : (it.source || "manual")) : ""}{it.tracked ? " · suivi" : ""}
+        </div>
+      </div>
+      <button onClick={() => setEditing({ ...it, images: it.images || [], data: it.data || {}, seo: it.seo || {} })} className="text-sm text-muted hover:text-content">Éditer</button>
+      <button onClick={() => remove(it)} className="text-sm text-red-400">Suppr.</button>
+    </div>
+  );
 
   if (editing) {
     return (
@@ -61,7 +79,7 @@ export default function EntityManager({ spec }) {
               <span>source : <b className="text-content">{editing.source || "manual"}</b></span>
               <span>external_id : {editing.external_id || "—"}</span>
               <span>synchro : {editing.synced_at ? new Date(editing.synced_at).toLocaleString() : "—"}</span>
-              <label className="flex items-center gap-2 text-content"><input type="checkbox" checked={!!editing.locked} onChange={(e) => setV("locked", e.target.checked)} />🔒 verrouillé (protège de la synchro)</label>
+              <label className="flex items-center gap-2 text-content"><input type="checkbox" checked={!!editing.locked} onChange={(e) => setV("locked", e.target.checked)} />🔒 verrouillé</label>
             </div>
           </div>
         )}
@@ -69,26 +87,47 @@ export default function EntityManager({ spec }) {
     );
   }
 
+  // filtrage + regroupement
+  let list = rows;
+  if (spec.search && q.trim()) list = list.filter((r) => (r.name || "").toLowerCase().includes(q.toLowerCase()));
+  const gb = spec.groupBy;
+  let groups = null;
+  if (gb) {
+    if (groupFilter !== "all") list = list.filter((r) => String(r[gb.field] || "") === (groupFilter === "none" ? "" : groupFilter));
+    const map = new Map();
+    for (const r of list) { const key = r[gb.field] || "__none__"; (map.get(key) || map.set(key, []).get(key)).push(r); }
+    groups = [...map.entries()].map(([key, items]) => ({
+      key, label: key === "__none__" ? "Sans club / non associé" : relLabelOf(gb.relTable, key),
+      items: items.sort((a, b) => (POS[a.position] ?? 9) - (POS[b.position] ?? 9) || (a.name || "").localeCompare(b.name || "")),
+    })).sort((a, b) => a.label.localeCompare(b.label));
+  }
+
   return (
     <div>
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-lg font-bold">{title}</h2>
-        <button onClick={() => setEditing({})} className="rounded bg-accent px-3 py-1 text-sm font-bold text-white">+ {singular || "Ajouter"}</button>
+        <div className="flex flex-wrap items-center gap-2">
+          {spec.search && <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Rechercher…" className="rounded border border-line/10 bg-surface2 px-2 py-1 text-xs" />}
+          {gb && <select value={groupFilter} onChange={(e) => setGroupFilter(e.target.value)} className="rounded border border-line/10 bg-surface2 px-2 py-1 text-xs"><option value="all">Tous les clubs</option>{(rel[gb.relTable] || []).map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}<option value="none">Sans club</option></select>}
+          <button onClick={() => setEditing({ collection: spec.collection })} className="rounded bg-accent px-3 py-1 text-sm font-bold text-white">+ {singular || "Ajouter"}</button>
+        </div>
       </div>
-      <div className="divide-y divide-line/10 rounded-xl border border-line/10">
-        {rows.map((r) => (
-          <div key={r.id} className="flex items-center gap-3 p-3">
-            {(r.logo_url || r.photo_url) && <img src={r.logo_url || r.photo_url} alt="" className="h-8 w-8 rounded object-cover" />}
-            <div className="min-w-0 flex-1">
-              <div className="truncate font-semibold">{rowLabel(r)}</div>
-              {hasSource && <div className="text-xs text-muted">{r.locked ? "🔒 manuel" : (r.source || "manual")}{r.synced_at ? ` · synchro ${new Date(r.synced_at).toLocaleDateString()}` : ""}</div>}
+      {groups ? (
+        <div className="space-y-4">
+          {groups.map((g) => (
+            <div key={g.key}>
+              <div className="mb-1 flex items-center gap-2 text-sm font-bold">{g.label} <span className="text-xs font-normal text-muted">({g.items.length})</span></div>
+              <div className="divide-y divide-line/10 rounded-xl border border-line/10">{g.items.map((it) => <Row key={it.id} it={it} />)}</div>
             </div>
-            <button onClick={() => setEditing(r)} className="text-sm text-muted hover:text-content">Éditer</button>
-            <button onClick={() => remove(r)} className="text-sm text-red-400">Suppr.</button>
-          </div>
-        ))}
-        {rows.length === 0 && <div className="p-4 text-sm text-muted">Aucune entrée. (Se remplira surtout via provider / sync.)</div>}
-      </div>
+          ))}
+          {groups.length === 0 && <div className="p-4 text-sm text-muted">Aucune entrée.</div>}
+        </div>
+      ) : (
+        <div className="divide-y divide-line/10 rounded-xl border border-line/10">
+          {list.map((it) => <Row key={it.id} it={it} />)}
+          {list.length === 0 && <div className="p-4 text-sm text-muted">Aucune entrée. (Se remplira surtout via provider / sync.)</div>}
+        </div>
+      )}
     </div>
   );
 }

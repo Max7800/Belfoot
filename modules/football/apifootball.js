@@ -58,11 +58,21 @@ const provider = {
     do {
       const j = await apiFull(`/players?team=${club.external_id}&season=${y}&page=${page}`, ctx);
       pages = j.paging?.total || 1;
-      for (const x of j.response || []) out.push({
-        external_id: String(x.player.id), name: x.player.name, nationality: x.player.nationality,
-        position: x.statistics?.[0]?.games?.position || null, photo_url: x.player.photo || null,
-        age: x.player.age ?? null, birth_date: x.player.birth?.date || null,
-      });
+      for (const x of j.response || []) {
+        const arr = x.statistics || [];
+        const st = arr.find((z) => String(z.league?.id) === String(ctx.leagueId)) || arr[0] || null;
+        out.push({
+          external_id: String(x.player.id), name: x.player.name, nationality: x.player.nationality,
+          position: st?.games?.position || null, photo_url: x.player.photo || null,
+          age: x.player.age ?? null, birth_date: x.player.birth?.date || null,
+          stats: st ? {
+            appearances: st.games?.appearences || 0, lineups: st.games?.lineups || 0, minutes: st.games?.minutes || 0,
+            goals: st.goals?.total || 0, assists: st.goals?.assists || 0,
+            yellow: st.cards?.yellow || 0, red: st.cards?.red || 0,
+            rating: st.games?.rating ? Number(st.games.rating) : null,
+          } : null,
+        });
+      }
       page++;
     } while (page <= pages && page <= 15);   // plafond quota
     return out;
@@ -89,12 +99,16 @@ provider.fetchEvents = async function (match, ctx = {}) {
     const minute = e.time?.elapsed ?? null;
     const team_ext = e.team?.id ? String(e.team.id) : null;
     if (e.type === "Goal") {
-      events.push({ minute, type: "goal", player_ext: e.player?.id ? String(e.player.id) : null, team_ext });
-      if (e.assist?.id) events.push({ minute, type: "assist", player_ext: String(e.assist.id), team_ext });
+      events.push({ minute, type: "goal", team_ext, detail: e.detail || null,
+        player_ext: e.player?.id ? String(e.player.id) : null, player_name: e.player?.name || null,
+        assist_name: e.assist?.name || null });
     } else if (e.type === "Card") {
-      events.push({ minute, type: /red/i.test(e.detail || "") ? "red" : "yellow", player_ext: e.player?.id ? String(e.player.id) : null, team_ext });
+      events.push({ minute, type: /red/i.test(e.detail || "") ? "red" : "yellow", team_ext, detail: e.detail || null,
+        player_ext: e.player?.id ? String(e.player.id) : null, player_name: e.player?.name || null });
     } else if (e.type === "subst") {
-      events.push({ minute, type: "sub", player_ext: e.player?.id ? String(e.player.id) : null, team_ext });
+      events.push({ minute, type: "sub", team_ext, detail: null,
+        player_ext: e.player?.id ? String(e.player.id) : null, player_name: e.player?.name || null,
+        assist_name: e.assist?.name || null });   // player = sortant, assist = entrant
     }
   }
   return events;

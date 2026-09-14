@@ -27,12 +27,13 @@ export const FOOTBALL_ENTITIES = {
     ],
   },
   players: {
-    table: "players", title: "Joueurs", singular: "Joueur", orderBy: "name", hasSource: true,
+    table: "players", title: "Joueurs", singular: "Joueur", orderBy: "name", hasSource: true, search: true, groupBy: { field: "club_id", relTable: "clubs", relLabel: "name" },
     fields: [
       { key: "name", label: "Nom", type: "text" },
       { key: "club_id", label: "Club actuel", type: "relation", table: "clubs", labelCol: "name" },
       { key: "position", label: "Poste", type: "select", options: ["GK", "DEF", "MID", "FWD"] },
       { key: "number", label: "N°", type: "number" },
+      { key: "age", label: "Âge", type: "number" },
       { key: "nationality", label: "Nationalité", type: "text" },
       { key: "competition", label: "Championnat", type: "text" },
       { key: "photo_url", label: "Photo", type: "image" },

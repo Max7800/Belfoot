@@ -27,7 +27,7 @@ export default function MatchPage() {
   if (m === undefined) return <p className="text-muted">Chargement…</p>;
   if (m === null) return <p className="text-muted">Match introuvable.</p>;
   const h = clubs[m.home_club_id] || {}, a = clubs[m.away_club_id] || {};
-  const icon = (t) => ({ goal: "⚽", assist: "🅰️", yellow: "🟨", red: "🟥", sub: "🔁" }[t] || "•");
+  const icon = (t) => ({ goal: "⚽", yellow: "🟨", red: "🟥", sub: "🔁" }[t] || "•");
   return (
     <div className="mx-auto max-w-2xl">
       <div className="mb-2 text-center text-xs uppercase tracking-wider text-muted">{comp?.name}{m.matchday ? ` · Journée ${m.matchday}` : ""}</div>
@@ -43,7 +43,21 @@ export default function MatchPage() {
       <h2 className="mb-3 text-sm font-bold uppercase tracking-wider text-muted">Faits du match</h2>
       {events.length === 0
         ? <p className="text-sm text-muted">Aucun événement importé (lance « ⚽ Événements de match » dans l'admin).</p>
-        : <div className="space-y-1">{events.map((e, i) => <div key={i} className="flex items-center gap-3 rounded border border-line/10 bg-surface p-2 text-sm"><span className="w-10 text-muted">{e.minute != null ? e.minute + "'" : ""}</span><span>{icon(e.type)}</span><span className="flex-1">{players[e.player_id] || "—"}</span>{clubs[e.club_id]?.logo_url && <img src={clubs[e.club_id].logo_url} className="h-5 w-5 object-contain" alt="" />}</div>)}</div>}
+        : <div className="divide-y divide-line/10 rounded-xl border border-line/10">{events.map((e, i) => {
+            const name = e.player_name || players[e.player_id] || "—";
+            let line = name, sub = null;
+            if (e.type === "goal") { if (e.detail && !/normal/i.test(e.detail)) line += ` (${e.detail})`; if (e.assist_name) sub = `Passe : ${e.assist_name}`; }
+            else if ((e.type === "yellow" || e.type === "red") && e.detail) sub = e.detail;
+            else if (e.type === "sub") { line = `${name} ↓`; if (e.assist_name) sub = `${e.assist_name} ↑`; }
+            return (
+              <div key={i} className="flex items-start gap-2 px-3 py-1.5 text-sm">
+                <span className="w-8 shrink-0 text-right text-muted tabular-nums">{e.minute != null ? e.minute + "'" : ""}</span>
+                <span className="shrink-0">{icon(e.type)}</span>
+                <span className="min-w-0 flex-1"><span className="font-medium">{line}</span>{sub && <span className="block text-xs text-muted">{sub}</span>}</span>
+                {clubs[e.club_id]?.logo_url && <img src={clubs[e.club_id].logo_url} className="h-4 w-4 shrink-0 object-contain" alt="" />}
+              </div>
+            );
+          })}</div>}
     </div>
   );
 }
