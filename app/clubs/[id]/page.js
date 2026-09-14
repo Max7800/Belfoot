@@ -1,7 +1,9 @@
 "use client";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import MatchRow from "@/components/football/MatchRow";
 
 export default function ClubPage() {
   const { id } = useParams();
@@ -22,7 +24,6 @@ export default function ClubPage() {
   })().catch(() => setClub(null)); }, [id]);
   if (club === undefined) return <p className="text-muted">Chargement…</p>;
   if (club === null) return <p className="text-muted">Club introuvable.</p>;
-  const cn = (i) => clubsMap[i]?.name || "—";
   return (
     <div>
       <div className="mb-6 flex items-center gap-4">
@@ -31,22 +32,16 @@ export default function ClubPage() {
       </div>
       {players.length > 0 && (
         <section className="mb-8">
-          <h2 className="mb-3 text-lg font-bold">Joueurs</h2>
+          <h2 className="mb-3 text-lg font-bold">Effectif</h2>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {players.map((p) => <div key={p.id} className="flex items-center gap-3 rounded-xl border border-line/10 bg-surface p-3 text-sm">{p.photo_url && <img src={p.photo_url} className="h-8 w-8 rounded-full object-cover" alt="" />}<span className="flex-1 font-semibold">{p.name}</span>{p.nationality && <span className="text-xs text-muted">{p.nationality}</span>}</div>)}
+            {players.map((p) => <Link key={p.id} href={`/players/${p.id}`} className="flex items-center gap-3 rounded-xl border border-line/10 bg-surface p-3 text-sm transition hover:border-accent/40">{p.photo_url && <img src={p.photo_url} className="h-8 w-8 rounded-full object-cover" alt="" />}<span className="min-w-0 flex-1 truncate font-semibold">{p.name}</span>{p.nationality && <span className="shrink-0 text-xs text-muted">{p.nationality}</span>}</Link>)}
           </div>
         </section>
       )}
       <section>
         <h2 className="mb-3 text-lg font-bold">Derniers matchs</h2>
         <div className="space-y-2">
-          {matches.map((m) => (
-            <div key={m.id} className="flex items-center gap-3 rounded-xl border border-line/10 bg-surface p-3 text-sm">
-              <span className="flex flex-1 items-center justify-end gap-2">{cn(m.home_club_id)}{clubsMap[m.home_club_id]?.logo_url && <img src={clubsMap[m.home_club_id].logo_url} className="h-6 w-6 object-contain" alt="" />}</span>
-              <span className="rounded bg-surface2 px-2 py-1 font-bold">{m.home_score ?? "-"} : {m.away_score ?? "-"}</span>
-              <span className="flex flex-1 items-center gap-2">{clubsMap[m.away_club_id]?.logo_url && <img src={clubsMap[m.away_club_id].logo_url} className="h-6 w-6 object-contain" alt="" />}{cn(m.away_club_id)}</span>
-            </div>
-          ))}
+          {matches.map((m) => <MatchRow key={m.id} m={m} clubs={clubsMap} href={`/matchs/${m.id}`} />)}
           {matches.length === 0 && <p className="text-muted">Aucun match.</p>}
         </div>
       </section>

@@ -61,6 +61,7 @@ const provider = {
       for (const x of j.response || []) out.push({
         external_id: String(x.player.id), name: x.player.name, nationality: x.player.nationality,
         position: x.statistics?.[0]?.games?.position || null, photo_url: x.player.photo || null,
+        age: x.player.age ?? null, birth_date: x.player.birth?.date || null,
       });
       page++;
     } while (page <= pages && page <= 15);   // plafond quota
@@ -80,6 +81,23 @@ const provider = {
     }
     return { season: y, ...a };
   },
+};
+provider.fetchEvents = async function (match, ctx = {}) {
+  const raw = await api(`/fixtures/events?fixture=${match.external_id}`, ctx);
+  const events = [];
+  for (const e of raw) {
+    const minute = e.time?.elapsed ?? null;
+    const team_ext = e.team?.id ? String(e.team.id) : null;
+    if (e.type === "Goal") {
+      events.push({ minute, type: "goal", player_ext: e.player?.id ? String(e.player.id) : null, team_ext });
+      if (e.assist?.id) events.push({ minute, type: "assist", player_ext: String(e.assist.id), team_ext });
+    } else if (e.type === "Card") {
+      events.push({ minute, type: /red/i.test(e.detail || "") ? "red" : "yellow", player_ext: e.player?.id ? String(e.player.id) : null, team_ext });
+    } else if (e.type === "subst") {
+      events.push({ minute, type: "sub", player_ext: e.player?.id ? String(e.player.id) : null, team_ext });
+    }
+  }
+  return events;
 };
 registerProvider(provider);
 export default provider;
