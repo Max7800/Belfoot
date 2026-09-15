@@ -106,8 +106,14 @@ export default function CompetitionPage() {
   const inForm = forms[0];
   const topScorer = topBy("goals")[0];
   const topAssist = topBy("assists")[0];
-  const lastResults = [...phaseFinished].sort((a, b) => new Date(b.kickoff) - new Date(a.kickoff)).slice(0, 5);
-  const upcoming = [...matches].filter((m) => m.status !== "finished").sort((a, b) => new Date(a.kickoff || 0) - new Date(b.kickoff || 0)).slice(0, 5);
+  const lastRound = Math.max(-1, ...phaseFinished.map((m) => m.round_number ?? -1));
+  const lastResults = lastRound >= 0
+    ? phaseMatches.filter((m) => (m.round_number ?? -1) === lastRound)
+    : [...phaseFinished].sort((a, b) => new Date(b.kickoff) - new Date(a.kickoff)).slice(0, 10);
+  const nextRound = Math.min(Infinity, ...phaseMatches.filter((m) => m.status !== "finished" && m.round_number != null).map((m) => m.round_number));
+  const upcoming = Number.isFinite(nextRound)
+    ? phaseMatches.filter((m) => m.round_number === nextRound)
+    : [...matches].filter((m) => m.status !== "finished").sort((a, b) => new Date(a.kickoff || 0) - new Date(b.kickoff || 0)).slice(0, 10);
 
   const ClubChip = ({ id, extra }) => <Link href={`/clubs/${id}`} className="inline-flex items-center gap-2 hover:text-accent">{clubsMap[id]?.logo_url && <img src={clubsMap[id].logo_url} className="h-5 w-5 object-contain" alt="" />}<span>{clubName(id)}</span>{extra != null && <b className="text-content">{extra}</b>}</Link>;
   const PlayerLine = ({ p, st, v }) => <Link href={`/players/${p.id}`} className="flex items-center gap-2 rounded-lg p-1 hover:bg-surface"><img src={p.photo_url || ""} className="h-8 w-8 rounded-full object-cover" alt="" /><span className="min-w-0 flex-1 truncate">{p.name}</span><b className="shrink-0">{v}</b></Link>;
@@ -135,11 +141,11 @@ export default function CompetitionPage() {
               <ol className="space-y-1 text-sm">{standings.slice(0, 5).map((r, i) => <li key={r.club} className="flex items-center justify-between"><span className="flex items-center gap-2">{i + 1}. <ClubChip id={r.club} /></span><b>{r.pts}</b></li>)}{standings.length === 0 && <li className="text-muted">—</li>}</ol>
             </div>
             <div className="rounded-2xl border border-line/10 bg-surface p-4">
-              <div className="mb-2 text-xs font-bold uppercase tracking-wider text-muted">Derniers résultats</div>
+              <div className="mb-2 text-xs font-bold uppercase tracking-wider text-muted">{lastRound >= 0 ? `Résultats — Journée ${lastRound}` : "Derniers résultats"}</div>
               <div className="space-y-1">{lastResults.map((m) => <MatchRow key={m.id} m={m} clubs={clubsMap} href={`/matchs/${m.id}`} />)}{lastResults.length === 0 && <p className="text-sm text-muted">—</p>}</div>
             </div>
             <div className="rounded-2xl border border-line/10 bg-surface p-4">
-              <div className="mb-2 text-xs font-bold uppercase tracking-wider text-muted">Prochains matchs</div>
+              <div className="mb-2 text-xs font-bold uppercase tracking-wider text-muted">{Number.isFinite(nextRound) ? `Prochaine journée — J${nextRound}` : "Prochains matchs"}</div>
               <div className="space-y-1">{upcoming.map((m) => <MatchRow key={m.id} m={m} clubs={clubsMap} href={`/matchs/${m.id}`} />)}{upcoming.length === 0 && <p className="text-sm text-muted">—</p>}</div>
             </div>
           </div>
