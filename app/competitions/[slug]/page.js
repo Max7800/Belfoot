@@ -29,6 +29,10 @@ export default function CompetitionPage() {
   const [players, setPlayers] = useState([]); const [pss, setPss] = useState({});
   const [phase, setPhase] = useState(null); const [round, setRound] = useState("all");
   const [selClub, setSelClub] = useState(null); const [posFilter, setPosFilter] = useState("all");
+  const [anchor, setAnchor] = useState(null);
+
+  useEffect(() => { if (tab === "stats" && anchor) { const el = document.getElementById(anchor); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); setAnchor(null); } }, [tab, anchor]);
+  const goStats = (sec) => { setTab("stats"); setAnchor(sec); };
 
   const TABS = [["overview", L("comp.tab.overview", "Vue d'ensemble")], ["matchs", L("nav.matchs", "Matchs")], ["classement", L("nav.classement", "Classement")], ["clubs", L("nav.clubs", "Clubs")], ["joueurs", L("nav.joueurs", "Joueurs")], ["stats", L("comp.tab.stats", "Stats")]];
 
@@ -66,7 +70,7 @@ export default function CompetitionPage() {
   const withStats = players.map((p) => ({ p, st: pss[p.id] })).filter((x) => x.st);
   const topBy = (key) => withStats.filter((x) => x.st[key] != null).sort((a, b) => (b.st[key] || 0) - (a.st[key] || 0)).slice(0, 10);
   const maxApp = Math.max(0, ...withStats.map((x) => x.st.appearances || 0));
-  const ratingThreshold = Math.max(5, Math.round(maxApp * 0.4));
+  const ratingThreshold = comp?.rating_min ?? Math.max(5, Math.round(maxApp * 0.4));
   const topRating = withStats.filter((x) => x.st.rating != null && (x.st.appearances || 0) >= ratingThreshold).sort((a, b) => b.st.rating - a.st.rating).slice(0, 10);
 
   if (comp === undefined) return <p className="text-muted">Chargement…</p>;
@@ -89,29 +93,43 @@ export default function CompetitionPage() {
   const nextRound = Math.min(Infinity, ...phaseMatches.filter((m) => m.status !== "finished" && m.round_number != null).map((m) => m.round_number));
   const upcoming = Number.isFinite(nextRound) ? phaseMatches.filter((m) => m.round_number === nextRound) : [...matches].filter((m) => m.status !== "finished").sort((a, b) => new Date(a.kickoff || 0) - new Date(b.kickoff || 0)).slice(0, 10);
   const allFinished = matches.length > 0 && matches.every((m) => m.status === "finished");
+  const csMap = {};
+  for (const m of phaseFinished) { if (m.away_score === 0 && m.home_club_id) csMap[m.home_club_id] = (csMap[m.home_club_id] || 0) + 1; if (m.home_score === 0 && m.away_club_id) csMap[m.away_club_id] = (csMap[m.away_club_id] || 0) + 1; }
+  const cleanSheets = Object.entries(csMap).map(([club, v]) => ({ club, v })).sort((a, b) => b.v - a.v).slice(0, 10);
 
   const ClubChip = ({ id }) => <Link href={`/clubs/${id}`} className="inline-flex min-w-0 items-center gap-2 hover:text-accent">{clubsMap[id]?.logo_url && <img src={clubsMap[id].logo_url} className="h-5 w-5 shrink-0 object-contain" alt="" />}<span className="truncate">{clubName(id)}</span></Link>;
   const Card = ({ title, onSee, children }) => <div className="flex h-full flex-col rounded-2xl border border-line/10 bg-surface p-4"><div className="mb-2 flex shrink-0 items-center justify-between"><div className="text-xs font-bold uppercase tracking-wider text-muted">{title}</div>{onSee && <button onClick={onSee} className="text-xs text-accent hover:underline">{L("comp.seeall", "Voir tout")} →</button>}</div><div className="flex-1">{children}</div></div>;
-  const LeaderCard = ({ icon, title, x, unit }) => <div className="rounded-2xl border border-accent/30 bg-accent/5 p-4"><div className="text-xs font-bold uppercase tracking-wider text-muted">{icon} {title}</div>{x ? <Link href={`/players/${x.p.id}`} className="mt-2 flex items-center gap-3"><img src={x.p.photo_url || ""} className="h-14 w-14 rounded-full object-cover" alt="" /><span className="min-w-0"><b className="block truncate">{x.p.name}</b><span className="flex items-center gap-1 text-xs text-muted">{clubsMap[x.p.club_id]?.logo_url && <img src={clubsMap[x.p.club_id].logo_url} className="h-3.5 w-3.5 object-contain" alt="" />}{clubName(x.p.club_id)}</span></span><b className="ml-auto text-2xl">{unit}</b></Link> : <p className="mt-2 text-sm text-muted">—</p>}</div>;
+  const LeaderCard = ({ icon, title, x, unit, meta, onClick }) => <button onClick={onClick} className="w-full rounded-2xl border border-accent/30 bg-accent/5 p-4 text-left transition hover:border-accent/60"><div className="text-xs font-bold uppercase tracking-wider text-muted">{icon} {title}</div>{x ? <div className="mt-2 flex items-center gap-3"><img src={x.p.photo_url || ""} className="h-14 w-14 rounded-full object-cover" alt="" /><span className="min-w-0"><b className="block truncate">{x.p.name}</b><span className="flex items-center gap-1 text-xs text-muted">{clubsMap[x.p.club_id]?.logo_url && <img src={clubsMap[x.p.club_id].logo_url} className="h-3.5 w-3.5 object-contain" alt="" />}{clubName(x.p.club_id)}</span>{meta && <span className="block text-[11px] text-muted/70">{meta(x.st)}</span>}</span><b className="ml-auto text-2xl">{unit}</b></div> : <p className="mt-2 text-sm text-muted">—</p>}</button>;
   const PhaseChips = () => phases.length > 1 ? <div className="mb-4 flex flex-wrap gap-1">{phases.map((ph) => <button key={ph} onClick={() => { setPhase(ph); setRound("all"); }} className={`rounded-full border px-3 py-1 text-xs ${curPhase === ph ? "border-accent bg-accent/10 text-accent" : "border-line/20 text-muted"}`}>{ph}</button>)}</div> : null;
 
-  function TopCategory({ title, rows, fmt }) {
-    if (!rows.length) return <div><h3 className="mb-2 font-bold">{title}</h3><p className="text-sm text-muted">—</p></div>;
+  function TopCategory({ title, id, rows, fmt, meta }) {
+    if (!rows.length) return <div id={id}><h3 className="mb-2 font-bold">{title}</h3><p className="text-sm text-muted">—</p></div>;
     const [a, b, c, ...rest] = rows;
     const Sub = ({ id }) => <span className="flex items-center gap-1 text-[11px] text-muted">{clubsMap[id]?.logo_url && <img src={clubsMap[id].logo_url} className="h-3.5 w-3.5 object-contain" alt="" />}{clubName(id)}</span>;
     const Medal = ({ x, tone, ring }) => <Link href={`/players/${x.p.id}`} className={`flex items-center gap-2 rounded-xl border p-2 ${tone}`}><img src={x.p.photo_url || ""} className={`h-9 w-9 rounded-full object-cover ring-1 ${ring}`} alt="" /><span className="min-w-0 flex-1"><span className="block truncate text-sm font-bold">{x.p.name}</span><Sub id={x.p.club_id} /></span><b>{fmt(x.st)}</b></Link>;
     return (
-      <div>
+      <div id={id}>
         <h3 className="mb-2 font-bold">{title}</h3>
         <Link href={`/players/${a.p.id}`} className="mb-2 flex items-center gap-3 rounded-2xl border border-amber-400/40 bg-amber-400/10 p-3">
           <img src={a.p.photo_url || ""} className="h-14 w-14 rounded-full object-cover ring-2 ring-amber-400/60" alt="" />
-          <span className="min-w-0 flex-1"><span className="block truncate font-black">{a.p.name}</span><Sub id={a.p.club_id} /></span>
+          <span className="min-w-0 flex-1"><span className="block truncate font-black">{a.p.name}</span><Sub id={a.p.club_id} />{meta && <span className="block text-[11px] text-muted/70">{meta(a.st)}</span>}</span>
           <b className="text-2xl text-amber-300">{fmt(a.st)}</b>
         </Link>
         {(b || c) && <div className="mb-2 grid grid-cols-2 gap-2">{b && <Medal x={b} tone="border-slate-300/25 bg-slate-300/5" ring="ring-slate-300/40" />}{c && <Medal x={c} tone="border-amber-700/30 bg-amber-700/5" ring="ring-amber-700/40" />}</div>}
         {rest.length > 0 && <ol className="space-y-1 text-sm">{rest.map((x, i) => <li key={x.p.id} className="flex items-center gap-2"><span className="w-4 text-muted">{i + 4}</span><Link href={`/players/${x.p.id}`} className="min-w-0 flex-1 truncate hover:text-accent">{x.p.name}</Link><b>{fmt(x.st)}</b></li>)}</ol>}
       </div>
     );
+  }
+
+  function ClubTop({ title, id, rows, unit }) {
+    if (!rows.length) return <div id={id}><h3 className="mb-2 font-bold">{title}</h3><p className="text-sm text-muted">—</p></div>;
+    const [a, b, c, ...rest] = rows;
+    const Med = ({ x, tone }) => <Link href={`/clubs/${x.club}`} className={`flex items-center gap-2 rounded-xl border p-2 ${tone}`}>{clubsMap[x.club]?.logo_url && <img src={clubsMap[x.club].logo_url} className="h-8 w-8 object-contain" alt="" />}<span className="min-w-0 flex-1 truncate text-sm font-bold">{clubName(x.club)}</span><b>{x.v}</b></Link>;
+    return (<div id={id}><h3 className="mb-2 font-bold">{title}</h3>
+      <Link href={`/clubs/${a.club}`} className="mb-2 flex items-center gap-3 rounded-2xl border border-amber-400/40 bg-amber-400/10 p-3">{clubsMap[a.club]?.logo_url && <img src={clubsMap[a.club].logo_url} className="h-12 w-12 object-contain" alt="" />}<span className="min-w-0 flex-1 truncate font-black">{clubName(a.club)}</span><b className="text-2xl text-amber-300">{a.v}</b></Link>
+      {(b || c) && <div className="mb-2 grid grid-cols-2 gap-2">{b && <Med x={b} tone="border-slate-300/25 bg-slate-300/5" />}{c && <Med x={c} tone="border-amber-700/30 bg-amber-700/5" />}</div>}
+      {rest.length > 0 && <ol className="space-y-1 text-sm">{rest.map((x, i) => <li key={x.club} className="flex items-center gap-2"><span className="w-4 text-muted">{i + 4}</span><Link href={`/clubs/${x.club}`} className="min-w-0 flex-1 truncate hover:text-accent">{clubName(x.club)}</Link><b>{x.v}</b></li>)}</ol>}
+    </div>);
   }
 
   return (
@@ -149,18 +167,18 @@ export default function CompetitionPage() {
           <div>
             <div className="mb-2 text-sm font-bold uppercase tracking-wider text-muted">{L("comp.leaders", "Les leaders")}</div>
             <div className="grid gap-3 sm:grid-cols-3">
-              <LeaderCard icon="⚽" title={L("comp.topscorer", "Meilleur buteur")} x={topScorer} unit={topScorer?.st.goals} />
-              <LeaderCard icon="🅰️" title={L("comp.topassist", "Meilleur passeur")} x={topAssist} unit={topAssist?.st.assists} />
-              <LeaderCard icon="⭐" title={L("comp.toprating", "Meilleure note")} x={topRate} unit={topRate?.st.rating?.toFixed?.(2)} />
+              <LeaderCard icon="⚽" title={L("comp.topscorer", "Meilleur buteur")} x={topScorer} unit={topScorer?.st.goals} onClick={() => goStats("buteurs")} />
+              <LeaderCard icon="🅰️" title={L("comp.topassist", "Meilleur passeur")} x={topAssist} unit={topAssist?.st.assists} onClick={() => goStats("passeurs")} />
+              <LeaderCard icon="⭐" title={L("comp.toprating", "Meilleure note")} x={topRate} unit={topRate?.st.rating?.toFixed?.(2)} meta={(s) => `${s.appearances || 0} app · ${s.minutes || 0} min`} onClick={() => goStats("notes")} />
             </div>
           </div>
 
           <div>
             <div className="mb-2 text-sm font-bold uppercase tracking-wider text-muted">{L("comp.otherstats", "Autres statistiques")}</div>
             <div className="grid gap-3 sm:grid-cols-3">
-              <div className="rounded-2xl border border-line/10 bg-surface p-4"><div className="text-xs font-bold uppercase tracking-wider text-muted">🔥 {L("comp.inform", "Club en forme")}</div>{inForm ? <div className="mt-2"><ClubChip id={inForm.club} /><div className="mt-1 flex gap-1 text-xs">{inForm.res.map((r, i) => <span key={i} className={`rounded px-1 ${r === "V" ? "bg-green-500/20 text-green-400" : r === "N" ? "bg-white/10 text-muted" : "bg-red-500/20 text-red-400"}`}>{r}</span>)}</div></div> : <p className="mt-2 text-sm text-muted">—</p>}</div>
-              <div className="rounded-2xl border border-line/10 bg-surface p-4"><div className="text-xs font-bold uppercase tracking-wider text-muted">{L("stat.bestatk", "Meilleure attaque")}</div>{bestAtk ? <div className="mt-2 flex items-center justify-between"><ClubChip id={bestAtk.club} /><b className="text-xl">{bestAtk.gf}</b></div> : <p className="mt-2 text-sm text-muted">—</p>}</div>
-              <div className="rounded-2xl border border-line/10 bg-surface p-4"><div className="text-xs font-bold uppercase tracking-wider text-muted">{L("stat.bestdef", "Meilleure défense")}</div>{bestDef ? <div className="mt-2 flex items-center justify-between"><ClubChip id={bestDef.club} /><b className="text-xl">{bestDef.ga}</b></div> : <p className="mt-2 text-sm text-muted">—</p>}</div>
+              <Link href={inForm ? `/clubs/${inForm.club}` : "#"} className="block rounded-2xl border border-line/10 bg-surface p-4 transition hover:border-accent/40"><div className="text-xs font-bold uppercase tracking-wider text-muted">🔥 {L("comp.inform", "Club en forme")}</div>{inForm ? <div className="mt-2"><ClubChip id={inForm.club} /><div className="mt-1 flex gap-1 text-xs">{inForm.res.map((r, i) => <span key={i} className={`rounded px-1 ${r === "V" ? "bg-green-500/20 text-green-400" : r === "N" ? "bg-white/10 text-muted" : "bg-red-500/20 text-red-400"}`}>{r}</span>)}</div></div> : <p className="mt-2 text-sm text-muted">—</p>}</Link>
+              <button onClick={() => setTab("classement")} className="rounded-2xl border border-line/10 bg-surface p-4 text-left transition hover:border-accent/40"><div className="text-xs font-bold uppercase tracking-wider text-muted">{L("stat.bestatk", "Meilleure attaque")}</div>{bestAtk ? <div className="mt-2 flex items-center justify-between"><ClubChip id={bestAtk.club} /><b className="text-xl">{bestAtk.gf}</b></div> : <p className="mt-2 text-sm text-muted">—</p>}</button>
+              <button onClick={() => setTab("classement")} className="rounded-2xl border border-line/10 bg-surface p-4 text-left transition hover:border-accent/40"><div className="text-xs font-bold uppercase tracking-wider text-muted">{L("stat.bestdef", "Meilleure défense")}</div>{bestDef ? <div className="mt-2 flex items-center justify-between"><ClubChip id={bestDef.club} /><b className="text-xl">{bestDef.ga}</b></div> : <p className="mt-2 text-sm text-muted">—</p>}</button>
             </div>
           </div>
 
@@ -221,11 +239,12 @@ export default function CompetitionPage() {
           <PhaseChips />
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4"><div className="rounded-xl border border-line/10 bg-surface p-4"><div className="text-2xl font-black">{phaseFinished.length}</div><div className="text-xs text-muted">{L("stat.played", "Matchs joués")}</div></div><div className="rounded-xl border border-line/10 bg-surface p-4"><div className="text-2xl font-black">{goals}</div><div className="text-xs text-muted">{L("stat.goals", "Buts")}</div></div><div className="rounded-xl border border-line/10 bg-surface p-4"><div className="text-2xl font-black">{phaseFinished.length ? (goals / phaseFinished.length).toFixed(2) : "0"}</div><div className="text-xs text-muted">{L("stat.avg", "Buts / match")}</div></div><div className="rounded-xl border border-line/10 bg-surface p-4"><div className="text-2xl font-black">{homeW}/{draw}/{awayW}</div><div className="text-xs text-muted">{L("stat.hda", "Dom/Nul/Ext")}</div></div></div>
           <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
-            <TopCategory title={L("comp.topscorer", "Buteurs")} rows={topBy("goals")} fmt={(s) => s.goals} />
-            <TopCategory title={L("comp.topassist", "Passeurs")} rows={topBy("assists")} fmt={(s) => s.assists} />
-            <TopCategory title={L("stat.minutes", "Minutes")} rows={topBy("minutes")} fmt={(s) => s.minutes} />
-            <TopCategory title={L("stat.lineups", "Titularisations")} rows={topBy("lineups")} fmt={(s) => s.lineups} />
-            <TopCategory title={L("stat.ratings", "Meilleures notes")} rows={topRating} fmt={(s) => s.rating?.toFixed?.(2) ?? s.rating} />
+            <TopCategory id="buteurs" title={L("comp.topscorer", "Buteurs")} rows={topBy("goals")} fmt={(s) => s.goals} />
+            <TopCategory id="passeurs" title={L("comp.topassist", "Passeurs")} rows={topBy("assists")} fmt={(s) => s.assists} />
+            <TopCategory id="minutes" title={L("stat.minutes", "Minutes")} rows={topBy("minutes")} fmt={(s) => s.minutes} />
+            <TopCategory id="titu" title={L("stat.lineups", "Titularisations")} rows={topBy("lineups")} fmt={(s) => s.lineups} />
+            <TopCategory id="notes" title={L("stat.ratings", "Meilleures notes")} rows={topRating} fmt={(s) => s.rating?.toFixed?.(2) ?? s.rating} meta={(s) => `${s.appearances || 0} app · ${s.minutes || 0} min`} />
+            <ClubTop id="cleansheets" title={L("stat.cleansheets", "Clean sheets")} rows={cleanSheets} />
           </div>
         </div>
       )}

@@ -11,6 +11,7 @@ export const FOOTBALL_ENTITIES = {
       { key: "logo_url", label: "Logo", type: "image" },
       { key: "banner_url", label: "Bannière (décor, sans texte)", type: "image" },
       { key: "zones", label: "Zones de classement", type: "zones" },
+      { key: "rating_min", label: "Note : min. apparitions", type: "number" },
     ],
   },
   seasons: {
