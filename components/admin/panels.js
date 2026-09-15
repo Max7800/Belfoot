@@ -96,3 +96,35 @@ export function SettingsInfo({ which }) {
 export function Placeholder({ title }) {
   return <div><h2 className="mb-2 text-lg font-bold capitalize">{title}</h2><p className="text-sm text-muted">Panneau en place — version minimale. On l'enrichit au fil du chantier.</p></div>;
 }
+
+export function LabelsPanel() {
+  const [labels, setLabels] = useState({});
+  const [nk, setNk] = useState(""); const [nv, setNv] = useState("");
+  const load = () => supabase.from("site_settings").select("data").eq("id", 1).maybeSingle().then(({ data }) => setLabels((data?.data && data.data.labels) || {}));
+  useEffect(() => { load(); }, []);
+  const persist = async (obj) => { const { data } = await supabase.from("site_settings").select("data").eq("id", 1).maybeSingle(); await supabase.from("site_settings").update({ data: { ...(data?.data || {}), labels: obj } }).eq("id", 1); setLabels(obj); };
+  const setVal = (k, v) => setLabels((o) => ({ ...o, [k]: v }));
+  const add = () => { if (!nk.trim()) return; persist({ ...labels, [nk.trim()]: nv }); setNk(""); setNv(""); };
+  const del = (k) => { const o = { ...labels }; delete o[k]; persist(o); };
+  return (
+    <div>
+      <h2 className="mb-2 text-lg font-bold">Textes</h2>
+      <p className="mb-4 text-xs text-muted">Surcharge les libellés de l'interface (clé → texte). Vide = le texte par défaut du code s'applique.</p>
+      <div className="mb-4 flex flex-wrap items-end gap-2">
+        <input value={nk} onChange={(e) => setNk(e.target.value)} placeholder="clé (ex. comp.kicker)" className="rounded border border-line/10 bg-surface2 px-2 py-1 text-sm" />
+        <input value={nv} onChange={(e) => setNv(e.target.value)} placeholder="texte" className="rounded border border-line/10 bg-surface2 px-2 py-1 text-sm" />
+        <button onClick={add} className="rounded bg-accent px-3 py-1 text-sm font-bold text-white">+ Ajouter</button>
+      </div>
+      <div className="space-y-1">
+        {Object.entries(labels).map(([k, v]) => (
+          <div key={k} className="flex items-center gap-2 text-sm">
+            <span className="w-40 shrink-0 truncate text-xs text-muted">{k}</span>
+            <input value={v} onChange={(e) => setVal(k, e.target.value)} onBlur={() => persist(labels)} className="flex-1 rounded border border-line/10 bg-surface2 px-2 py-1" />
+            <button onClick={() => del(k)} className="text-red-400">×</button>
+          </div>
+        ))}
+        {Object.keys(labels).length === 0 && <p className="text-sm text-muted">Aucun texte personnalisé (les défauts s'appliquent).</p>}
+      </div>
+    </div>
+  );
+}

@@ -141,6 +141,20 @@ function Field({ f, value, onChange, options }) {
   if (f.type === "select") return <div>{label}<select value={value || ""} onChange={(e) => onChange(e.target.value)} className={box}><option value="">—</option>{f.options.map((o) => <option key={o} value={o}>{o}</option>)}</select></div>;
   if (f.type === "number") return <div>{label}<input type="number" value={value ?? ""} onChange={(e) => onChange(e.target.value === "" ? null : Number(e.target.value))} className={box} /></div>;
   if (f.type === "datetime") return <div>{label}<input type="datetime-local" value={value ? String(value).slice(0, 16) : ""} onChange={(e) => onChange(e.target.value || null)} className={box} /></div>;
+  if (f.type === "zones") {
+    const arr = Array.isArray(value) ? value : [];
+    const upd = (i, k, v) => onChange(arr.map((z, j) => (j === i ? { ...z, [k]: v } : z)));
+    return (<div>{label}<div className="space-y-1">{arr.map((z, i) => (
+      <div key={i} className="flex items-center gap-1">
+        <input value={z.label || ""} onChange={(e) => upd(i, "label", e.target.value)} placeholder="Label (ex. Ligue des Champions)" className="flex-1 rounded border border-line/10 bg-surface2 px-2 py-1 text-xs" />
+        <input type="color" value={z.color || "#3b82f6"} onChange={(e) => upd(i, "color", e.target.value)} className="h-7 w-8 rounded bg-transparent" />
+        <input type="number" value={z.from ?? ""} onChange={(e) => upd(i, "from", Number(e.target.value))} placeholder="de" className="w-12 rounded border border-line/10 bg-surface2 px-1 py-1 text-xs" />
+        <input type="number" value={z.to ?? ""} onChange={(e) => upd(i, "to", Number(e.target.value))} placeholder="à" className="w-12 rounded border border-line/10 bg-surface2 px-1 py-1 text-xs" />
+        <button type="button" onClick={() => onChange(arr.filter((_, j) => j !== i))} className="px-1 text-red-400">×</button>
+      </div>))}
+      <button type="button" onClick={() => onChange([...arr, { label: "", color: "#3b82f6", from: 1, to: 1 }])} className="rounded border border-line/20 px-2 py-1 text-xs text-muted hover:text-content">+ zone</button>
+    </div></div>);
+  }
   if (f.type === "textarea") return <div>{label}<textarea value={value || ""} onChange={(e) => onChange(e.target.value)} rows={3} className={box} /></div>;
   return <div>{label}<input value={value || ""} onChange={(e) => onChange(e.target.value)} className={box} /></div>;
 }

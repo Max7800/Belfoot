@@ -9,6 +9,8 @@ export const FOOTBALL_ENTITIES = {
       { key: "provider", label: "Provider (ex. thesportsdb)", type: "text" },
       { key: "external_id", label: "ID ligue chez le provider", type: "text" },
       { key: "logo_url", label: "Logo", type: "image" },
+      { key: "banner_url", label: "Bannière (décor, sans texte)", type: "image" },
+      { key: "zones", label: "Zones de classement", type: "zones" },
     ],
   },
   seasons: {

@@ -33,6 +33,7 @@ export const adminSections = [
     { key: "flags", label: "Feature flags" },
     { key: "media", label: "Médias" },
     { key: "seo", label: "SEO" },
+    { key: "labels", label: "Textes" },
     { key: "io", label: "Import / export" },
   ] },
 ];
