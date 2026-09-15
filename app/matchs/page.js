@@ -4,32 +4,31 @@ import { supabase } from "@/lib/supabaseClient";
 import MatchRow from "@/components/football/MatchRow";
 
 export default function MatchsPage() {
-  const [rows, setRows] = useState([]); const [clubs, setClubs] = useState({}); const [md, setMd] = useState("all");
-  useEffect(() => { (async () => {
-    const [{ data: m }, { data: c }] = await Promise.all([
-      supabase.from("matches").select("*").order("matchday", { ascending: true }).order("kickoff", { ascending: true }).limit(500),
-      supabase.from("clubs").select("id,name,logo_url"),
-    ]);
-    setRows(m || []); setClubs(Object.fromEntries((c || []).map((x) => [x.id, x])));
-  })().catch(() => {}); }, []);
-  const matchdays = useMemo(() => [...new Set(rows.map((m) => m.matchday).filter((x) => x != null))].sort((a, b) => a - b), [rows]);
-  const shown = md === "all" ? rows : rows.filter((m) => String(m.matchday) === String(md));
-  const grouped = useMemo(() => { const g = {}; for (const m of shown) { (g[m.matchday ?? "?"] ||= []).push(m); } return g; }, [shown]);
+  const [comps, setComps] = useState([]); const [cid, setCid] = useState("");
+  const [matches, setMatches] = useState([]); const [clubs, setClubs] = useState({});
+  const [phase, setPhase] = useState(null); const [round, setRound] = useState("all");
+  useEffect(() => { supabase.from("competitions").select("*").order("name").then(({ data }) => { setComps(data || []); if (data?.[0]) setCid(data[0].id); }); }, []);
+  useEffect(() => { if (!cid) return; (async () => {
+    const { data: m } = await supabase.from("matches").select("*").eq("competition_id", cid).order("round_number", { ascending: true, nullsFirst: false }).order("kickoff", { ascending: true });
+    setMatches(m || []); setPhase(null); setRound("all");
+    const ids = [...new Set((m || []).flatMap((x) => [x.home_club_id, x.away_club_id]).filter(Boolean))];
+    if (ids.length) { const { data: cl } = await supabase.from("clubs").select("id,name,logo_url").in("id", ids); setClubs(Object.fromEntries((cl || []).map((x) => [x.id, x]))); }
+  })().catch(() => {}); }, [cid]);
+  const phases = useMemo(() => { const c = {}; for (const m of matches) { const p = m.phase || "—"; c[p] = (c[p] || 0) + 1; } return Object.keys(c).sort((a, b) => c[b] - c[a]); }, [matches]);
+  const cur = phase || phases[0] || null;
+  const pm = matches.filter((m) => (m.phase || "—") === cur);
+  const rounds = useMemo(() => { const seen = new Map(); for (const m of pm) { const k = m.round_number != null ? String(m.round_number) : (m.round_raw || "?"); if (!seen.has(k)) seen.set(k, { key: k, num: m.round_number, label: m.round_number != null ? `Journée ${m.round_number}` : (m.round_raw || "Tour") }); } return [...seen.values()].sort((a, b) => (a.num ?? 999) - (b.num ?? 999)); }, [pm]);
+  const shown = round === "all" ? pm : pm.filter((m) => (m.round_number != null ? String(m.round_number) : (m.round_raw || "?")) === round);
+  const grouped = useMemo(() => { const g = {}; for (const m of shown) { const k = m.round_number != null ? String(m.round_number) : (m.round_raw || "?"); (g[k] ||= { label: m.round_number != null ? `Journée ${m.round_number}` : (m.round_raw || "Tour"), num: m.round_number, items: [] }).items.push(m); } return Object.values(g).sort((a, b) => (a.num ?? 999) - (b.num ?? 999)); }, [shown]);
   return (
     <div>
-      <h1 className="mb-6 text-3xl font-black">Matchs</h1>
-      {matchdays.length > 0 && (
-        <div className="mb-4 flex flex-wrap gap-1">
-          <button onClick={() => setMd("all")} className={`rounded-full border px-3 py-1 text-xs ${md === "all" ? "border-accent bg-accent/10 text-accent" : "border-line/20 text-muted"}`}>Toutes</button>
-          {matchdays.map((d) => <button key={d} onClick={() => setMd(d)} className={`rounded-full border px-3 py-1 text-xs ${String(md) === String(d) ? "border-accent bg-accent/10 text-accent" : "border-line/20 text-muted"}`}>J{d}</button>)}
-        </div>
-      )}
-      {Object.keys(grouped).sort((a, b) => a - b).map((k) => (
-        <div key={k} className="mb-5">
-          <div className="mb-2 text-xs font-bold uppercase tracking-wider text-muted">Journée {k}</div>
-          <div className="space-y-2">{grouped[k].map((m) => <MatchRow key={m.id} m={m} clubs={clubs} href={`/matchs/${m.id}`} />)}</div>
-        </div>
-      ))}
+      <h1 className="mb-4 text-3xl font-black">Matchs</h1>
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <select value={cid} onChange={(e) => setCid(e.target.value)} className="rounded border border-line/10 bg-surface px-3 py-1.5 text-sm">{comps.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
+        {phases.length > 1 && phases.map((p) => <button key={p} onClick={() => { setPhase(p); setRound("all"); }} className={`rounded-full border px-3 py-1 text-xs ${cur === p ? "border-accent bg-accent/10 text-accent" : "border-line/20 text-muted"}`}>{p}</button>)}
+      </div>
+      {rounds.length > 1 && <div className="mb-4 flex flex-wrap gap-1"><button onClick={() => setRound("all")} className={`rounded-full border px-3 py-1 text-xs ${round === "all" ? "border-accent bg-accent/10 text-accent" : "border-line/20 text-muted"}`}>Tout</button>{rounds.map((r) => <button key={r.key} onClick={() => setRound(r.key)} className={`rounded-full border px-3 py-1 text-xs ${round === r.key ? "border-accent bg-accent/10 text-accent" : "border-line/20 text-muted"}`}>{r.num != null ? `J${r.num}` : r.label}</button>)}</div>}
+      {grouped.map((g) => <div key={g.label} className="mb-5"><div className="mb-2 text-xs font-bold uppercase tracking-wider text-muted">{g.label}</div><div className="space-y-2">{g.items.map((m) => <MatchRow key={m.id} m={m} clubs={clubs} href={`/matchs/${m.id}`} />)}</div></div>)}
       {shown.length === 0 && <p className="text-muted">Aucun match.</p>}
     </div>
   );
