@@ -15,7 +15,7 @@ function mapFixture(f) {
     home_name: f.teams.home.name, away_name: f.teams.away.name,
     home_score: f.goals.home, away_score: f.goals.away,
     status: mapStatus(f.fixture.status?.short), minute: f.fixture.status?.elapsed ?? null,
-    matchday: f.league?.round ? (Number((String(f.league.round).match(/\d+/) || [])[0]) || null) : null,
+    round: f.league?.round || null,
     kickoff: f.fixture.date || null,
   };
 }

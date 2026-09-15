@@ -1,17 +1,31 @@
 import { getProvider } from "./providers";
 import { upsertExternal } from "./sync";
 
+function parseRound(raw) {
+  if (!raw) return { round_raw: null, phase: null, round_number: null };
+  const str = String(raw).trim();
+  const parts = str.split(" - ");
+  const last = parts[parts.length - 1].trim();
+  if (parts.length >= 2 && /^\d+$/.test(last)) {
+    return { round_raw: str, phase: parts.slice(0, -1).join(" - ").trim(), round_number: Number(last) };
+  }
+  return { round_raw: str, phase: str, round_number: null };  // coupe / phase sans numéro
+}
+
 async function clubMap(db, source) {
   const { data } = await db.from("clubs").select("id,external_id").eq("source", source);
   return Object.fromEntries((data || []).map((c) => [c.external_id, c.id]));
 }
 function resolveMatches(matches, competitionId, map) {
-  return matches.map((m) => ({
-    external_id: m.external_id, competition_id: competitionId,
-    home_club_id: map[m.home_ext] || null, away_club_id: map[m.away_ext] || null,
-    home_score: m.home_score, away_score: m.away_score, status: m.status, minute: m.minute ?? null,
-    kickoff: m.kickoff, matchday: m.matchday, ext: m,
-  }));
+  return matches.map((m) => {
+    const pr = parseRound(m.round);
+    return {
+      external_id: m.external_id, competition_id: competitionId,
+      home_club_id: map[m.home_ext] || null, away_club_id: map[m.away_ext] || null,
+      home_score: m.home_score, away_score: m.away_score, status: m.status, minute: m.minute ?? null,
+      kickoff: m.kickoff, matchday: pr.round_number, round_raw: pr.round_raw, phase: pr.phase, round_number: pr.round_number, ext: m,
+    };
+  });
 }
 
 export async function syncCompetition(db, competition, ctx = {}) {
@@ -43,7 +57,7 @@ export async function syncCompetition(db, competition, ctx = {}) {
   }
   const map = await clubMap(db, competition.provider);
   const matchN = await upsertExternal(db, "matches", competition.provider, resolveMatches(matches, competition.id, map),
-    ["competition_id", "home_club_id", "away_club_id", "home_score", "away_score", "status", "minute", "kickoff", "matchday"]);
+    ["competition_id", "home_club_id", "away_club_id", "home_score", "away_score", "status", "minute", "kickoff", "matchday", "round_raw", "phase", "round_number"]);
 
   let leagueName = competition.name;
   if (provider.fetchLeagueInfo) {
