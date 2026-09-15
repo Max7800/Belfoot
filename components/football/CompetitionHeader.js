@@ -2,7 +2,7 @@
 // Header 100% overlay : la bannière est décorative (aucun texte/logo intégré),
 // tout le contenu est posé en HTML/CSS. Dynamique et réutilisable (aucune compé en dur).
 export default function CompetitionHeader({ comp, seasonLabel, kicker }) {
-  const banner = comp.banner_url;
+  const banner = comp.banner_url || "/competition-banner.png";
   return (
     <div className="relative -mx-4 mb-6 overflow-hidden sm:mx-0 sm:rounded-2xl">
       <div className="absolute inset-0 bg-gradient-to-br from-[#0a1730] to-[#123a6b]" />
