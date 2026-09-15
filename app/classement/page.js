@@ -7,7 +7,7 @@ import { computeStandings } from "@/lib/standings";
 export default function ClassementPage() {
   const [comps, setComps] = useState([]); const [cid, setCid] = useState("");
   const [matches, setMatches] = useState([]); const [clubs, setClubs] = useState({}); const [phase, setPhase] = useState(null);
-  useEffect(() => { supabase.from("competitions").select("*").order("name").then(({ data }) => { setComps(data || []); if (data?.[0]) setCid(data[0].id); }); }, []);
+  useEffect(() => { supabase.from("competitions").select("*").order("position", { ascending: true, nullsFirst: false }).order("name").then(({ data }) => { setComps(data || []); if (data?.[0]) setCid(data[0].id); }); }, []);
   useEffect(() => { if (!cid) return; (async () => {
     const { data: m } = await supabase.from("matches").select("*").eq("competition_id", cid);
     setMatches(m || []); setPhase(null);
@@ -23,7 +23,14 @@ export default function ClassementPage() {
     <div>
       <h1 className="mb-4 text-3xl font-black">Classement</h1>
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <select value={cid} onChange={(e) => setCid(e.target.value)} className="rounded border border-line/10 bg-surface px-3 py-1.5 text-sm">{comps.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
+        <div className="flex flex-wrap gap-2">
+          {comps.map((c) => (
+            <button key={c.id} onClick={() => setCid(c.id)} className={`flex items-center gap-2 rounded-xl border p-2 pr-3 text-sm transition ${cid === c.id ? "border-accent bg-accent/10" : "border-line/10 bg-surface hover:border-accent/40"}`}>
+              {c.logo_url && <img src={c.logo_url} className="h-7 w-7 object-contain" alt="" />}
+              <span className="font-semibold">{c.name}</span>
+            </button>
+          ))}
+        </div>
         {phases.length > 1 && phases.map((p) => <button key={p} onClick={() => setPhase(p)} className={`rounded-full border px-3 py-1 text-xs ${cur === p ? "border-accent bg-accent/10 text-accent" : "border-line/20 text-muted"}`}>{p}</button>)}
       </div>
       <div className="overflow-hidden rounded-xl border border-line/10">
