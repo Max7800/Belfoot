@@ -55,7 +55,7 @@ export default function EntityManager({ spec }) {
           {it.position ? it.position + " · " : ""}{hasSource ? (it.locked ? "🔒 manuel" : (it.source || "manual")) : ""}{it.tracked ? " · suivi" : ""}
         </div>
       </div>
-      <button onClick={() => setEditing({ ...it, images: it.images || [], data: it.data || {}, seo: it.seo || {} })} className="text-sm text-muted hover:text-content">Éditer</button>
+      <button onClick={() => setEditing({ ...it })} className="text-sm text-muted hover:text-content">Éditer</button>
       <button onClick={() => remove(it)} className="text-sm text-red-400">Suppr.</button>
     </div>
   );
@@ -109,7 +109,7 @@ export default function EntityManager({ spec }) {
         <div className="flex flex-wrap items-center gap-2">
           {spec.search && <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Rechercher…" className="rounded border border-line/10 bg-surface2 px-2 py-1 text-xs" />}
           {gb && <select value={groupFilter} onChange={(e) => setGroupFilter(e.target.value)} className="rounded border border-line/10 bg-surface2 px-2 py-1 text-xs"><option value="all">Tous les clubs</option>{(rel[gb.relTable] || []).map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}<option value="none">Sans club</option></select>}
-          <button onClick={() => setEditing({ collection: spec.collection })} className="rounded bg-accent px-3 py-1 text-sm font-bold text-white">+ {singular || "Ajouter"}</button>
+          <button onClick={() => setEditing({})} className="rounded bg-accent px-3 py-1 text-sm font-bold text-white">+ {singular || "Ajouter"}</button>
         </div>
       </div>
       {groups ? (

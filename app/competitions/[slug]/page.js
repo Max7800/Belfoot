@@ -91,7 +91,7 @@ export default function CompetitionPage() {
   const allFinished = matches.length > 0 && matches.every((m) => m.status === "finished");
 
   const ClubChip = ({ id }) => <Link href={`/clubs/${id}`} className="inline-flex min-w-0 items-center gap-2 hover:text-accent">{clubsMap[id]?.logo_url && <img src={clubsMap[id].logo_url} className="h-5 w-5 shrink-0 object-contain" alt="" />}<span className="truncate">{clubName(id)}</span></Link>;
-  const Card = ({ title, onSee, children }) => <div className="rounded-2xl border border-line/10 bg-surface p-4"><div className="mb-2 flex items-center justify-between"><div className="text-xs font-bold uppercase tracking-wider text-muted">{title}</div>{onSee && <button onClick={onSee} className="text-xs text-accent hover:underline">{L("comp.seeall", "Voir tout")} →</button>}</div>{children}</div>;
+  const Card = ({ title, onSee, children }) => <div className="flex h-full flex-col rounded-2xl border border-line/10 bg-surface p-4"><div className="mb-2 flex shrink-0 items-center justify-between"><div className="text-xs font-bold uppercase tracking-wider text-muted">{title}</div>{onSee && <button onClick={onSee} className="text-xs text-accent hover:underline">{L("comp.seeall", "Voir tout")} →</button>}</div><div className="flex-1">{children}</div></div>;
   const LeaderCard = ({ icon, title, x, unit }) => <div className="rounded-2xl border border-accent/30 bg-accent/5 p-4"><div className="text-xs font-bold uppercase tracking-wider text-muted">{icon} {title}</div>{x ? <Link href={`/players/${x.p.id}`} className="mt-2 flex items-center gap-3"><img src={x.p.photo_url || ""} className="h-14 w-14 rounded-full object-cover" alt="" /><span className="min-w-0"><b className="block truncate">{x.p.name}</b><span className="flex items-center gap-1 text-xs text-muted">{clubsMap[x.p.club_id]?.logo_url && <img src={clubsMap[x.p.club_id].logo_url} className="h-3.5 w-3.5 object-contain" alt="" />}{clubName(x.p.club_id)}</span></span><b className="ml-auto text-2xl">{unit}</b></Link> : <p className="mt-2 text-sm text-muted">—</p>}</div>;
   const PhaseChips = () => phases.length > 1 ? <div className="mb-4 flex flex-wrap gap-1">{phases.map((ph) => <button key={ph} onClick={() => { setPhase(ph); setRound("all"); }} className={`rounded-full border px-3 py-1 text-xs ${curPhase === ph ? "border-accent bg-accent/10 text-accent" : "border-line/20 text-muted"}`}>{ph}</button>)}</div> : null;
 
@@ -126,21 +126,22 @@ export default function CompetitionPage() {
         <div className="space-y-6">
           <div className="grid gap-4 lg:grid-cols-3">
             <Card title={L("comp.top5", "Classement")} onSee={() => setTab("classement")}>
-              <ol className="space-y-1 text-sm">
+              <ol className="space-y-0.5 text-[15px]">
                 {standings.slice(0, 5).map((r, i) => { const z = zoneFor(i + 1); return (
-                  <li key={r.club} className="flex items-center gap-2">
-                    <span className="w-5 shrink-0 rounded text-center font-bold" style={z ? { color: z.color, boxShadow: `inset 2px 0 0 ${z.color}` } : null}>{i + 1}</span>
-                    <ClubChip id={r.club} /><b className="ml-auto">{r.pts}</b>
+                  <li key={r.club} className="flex items-center gap-2 rounded-lg py-1.5" style={z ? { boxShadow: `inset 3px 0 0 ${z.color}`, paddingLeft: 6 } : null}>
+                    <span className="w-5 shrink-0 text-center font-bold" style={z ? { color: z.color } : null}>{i + 1}</span>
+                    {clubsMap[r.club]?.logo_url && <img src={clubsMap[r.club].logo_url} className="h-6 w-6 shrink-0 object-contain" alt="" />}
+                    <Link href={`/clubs/${r.club}`} className="min-w-0 flex-1 truncate font-semibold hover:text-accent">{clubName(r.club)}</Link><b className="ml-auto">{r.pts}</b>
                   </li>); })}
                 {standings.length === 0 && <li className="text-muted">—</li>}
               </ol>
               {zones.length > 0 && <div className="mt-3 flex flex-wrap gap-2 text-[10px] text-muted">{zones.map((z, i) => <span key={i} className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full" style={{ background: z.color }} />{z.label}</span>)}</div>}
             </Card>
             <Card title={lastRound >= 0 ? `${L("comp.results", "Résultats")} — ${L("comp.round", "Journée")} ${lastRound}` : L("comp.results", "Derniers résultats")} onSee={() => setTab("matchs")}>
-              <div className="space-y-1">{lastResults.map((m) => <MatchRow key={m.id} m={m} clubs={clubsMap} href={`/matchs/${m.id}`} />)}{lastResults.length === 0 && <p className="text-sm text-muted">—</p>}</div>
+              <div className="space-y-1">{lastResults.map((m) => <MatchRow key={m.id} m={m} clubs={clubsMap} href={`/matchs/${m.id}`} compact />)}{lastResults.length === 0 && <p className="text-sm text-muted">—</p>}</div>
             </Card>
             <Card title={Number.isFinite(nextRound) ? `${L("comp.upcoming", "Prochaine journée")} — J${nextRound}` : L("comp.upcoming", "Prochains matchs")} onSee={() => setTab("matchs")}>
-              {upcoming.length ? <div className="space-y-1">{upcoming.map((m) => <MatchRow key={m.id} m={m} clubs={clubsMap} href={`/matchs/${m.id}`} />)}</div>
+              {upcoming.length ? <div className="space-y-1">{upcoming.map((m) => <MatchRow key={m.id} m={m} clubs={clubsMap} href={`/matchs/${m.id}`} compact />)}</div>
                 : <div className="flex flex-col items-center gap-2 py-8 text-muted"><Calendar className="h-6 w-6" /><span className="text-sm">{allFinished ? L("empty.season", "Saison terminée") : L("empty.upcoming", "Aucun match à venir")}</span></div>}
             </Card>
           </div>
