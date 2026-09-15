@@ -7,7 +7,7 @@ export default function MatchsPage() {
   const [comps, setComps] = useState([]); const [cid, setCid] = useState("");
   const [matches, setMatches] = useState([]); const [clubs, setClubs] = useState({});
   const [phase, setPhase] = useState(null); const [round, setRound] = useState("all");
-  useEffect(() => { supabase.from("competitions").select("*").order("position", { ascending: true, nullsFirst: false }).order("name").then(({ data }) => { setComps(data || []); if (data?.[0]) setCid(data[0].id); }); }, []);
+  useEffect(() => { supabase.from("competitions").select("*").order("name").then(({ data }) => { const arr = (data || []).sort((a, b) => (a.position ?? 999) - (b.position ?? 999)); setComps(arr); if (arr[0]) setCid(arr[0].id); }); }, []);
   useEffect(() => { if (!cid) return; (async () => {
     const { data: m } = await supabase.from("matches").select("*").eq("competition_id", cid).order("round_number", { ascending: true, nullsFirst: false }).order("kickoff", { ascending: true });
     setMatches(m || []); setPhase(null); setRound("all");
