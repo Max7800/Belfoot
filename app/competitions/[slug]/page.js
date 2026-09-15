@@ -38,6 +38,8 @@ export default function CompetitionPage() {
   const [pss, setPss] = useState({});
   const [phase, setPhase] = useState(null);
   const [round, setRound] = useState("all");
+  const [selClub, setSelClub] = useState(null);
+  const [posFilter, setPosFilter] = useState("all");
 
   useEffect(() => { (async () => {
     let c = (await supabase.from("competitions").select("*").eq("slug", slug).maybeSingle()).data;
@@ -96,8 +98,10 @@ export default function CompetitionPage() {
   const goals = phaseFinished.reduce((s, m) => s + m.home_score + m.away_score, 0);
   let homeW = 0, draw = 0, awayW = 0;
   phaseFinished.forEach((m) => { if (m.home_score > m.away_score) homeW++; else if (m.home_score === m.away_score) draw++; else awayW++; });
-  const bestAtk = [...standings].sort((a, b) => b.gf - a.gf)[0];
-  const bestDef = [...standings].sort((a, b) => a.ga - b.ga)[0];
+  const maxPlayed = Math.max(0, ...standings.map((r) => r.played));
+  const eligible = standings.filter((r) => r.played >= Math.max(3, maxPlayed * 0.5));   // exclut les clubs à peu de matchs (barrages)
+  const bestAtk = [...eligible].sort((a, b) => b.gf - a.gf)[0];
+  const bestDef = [...eligible].sort((a, b) => a.ga - b.ga)[0];
   const forms = standings.map((r) => ({ club: r.club, ...clubForm(phaseFinished, r.club) })).sort((a, b) => b.pts - a.pts);
   const inForm = forms[0];
   const topScorer = topBy("goals")[0];
@@ -193,27 +197,50 @@ export default function CompetitionPage() {
       )}
 
       {tab === "joueurs" && (
-        <div className="space-y-5">
-          {[...new Set(players.map((p) => p.club_id || "__none__"))].map((cid) => {
-            const items = players.filter((p) => (p.club_id || "__none__") === cid).sort((a, b) => (POS[a.position] ?? 9) - (POS[b.position] ?? 9) || (a.name || "").localeCompare(b.name || ""));
-            return (
-              <div key={cid}>
-                <div className="mb-2 flex items-center gap-2 text-sm font-bold">{clubsMap[cid]?.logo_url && <img src={clubsMap[cid].logo_url} className="h-6 w-6 object-contain" alt="" />}{cid === "__none__" ? "Sans club" : clubName(cid)}<span className="text-xs font-normal text-muted">({items.length})</span></div>
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-                  {items.map((p) => (
-                    <Link key={p.id} href={`/players/${p.id}`} className="group rounded-2xl border border-line/10 bg-surface p-3 text-center transition hover:border-accent/40">
-                      <img src={p.photo_url || ""} className="mx-auto h-16 w-16 rounded-full object-cover" alt="" />
-                      <div className="mt-2 truncate text-sm font-bold">{p.name}</div>
-                      <div className="text-xs text-muted">{[p.position, p.age ? `${p.age} ans` : null].filter(Boolean).join(" · ")}</div>
-                      {p.nationality && <div className="mt-1 text-[10px] uppercase tracking-wider text-muted/60">{p.nationality}</div>}
-                    </Link>
-                  ))}
-                </div>
+        selClub === null ? (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+            {[...clubsList].sort((a, b) => a.name.localeCompare(b.name)).map((c) => (
+              <button key={c.id} onClick={() => { setSelClub(c.id); setPosFilter("all"); }} className="rounded-2xl border border-line/10 bg-surface p-4 text-center transition hover:border-accent/40">
+                {c.logo_url && <img src={c.logo_url} className="mx-auto h-14 w-14 object-contain" alt="" />}
+                <div className="mt-2 font-bold">{c.name}</div>
+                <div className="text-xs text-muted">{players.filter((p) => p.club_id === c.id).length} joueurs</div>
+              </button>
+            ))}
+            {players.some((p) => !p.club_id) && (
+              <button onClick={() => { setSelClub("__none__"); setPosFilter("all"); }} className="rounded-2xl border border-line/10 bg-surface p-4 text-center transition hover:border-accent/40">
+                <div className="mt-2 font-bold">Sans club</div>
+                <div className="text-xs text-muted">{players.filter((p) => !p.club_id).length} joueurs</div>
+              </button>
+            )}
+            {clubsList.length === 0 && <p className="text-muted">Aucun joueur. Lance « 👥 Effectifs » dans l'admin.</p>}
+          </div>
+        ) : (() => {
+          const POS_LABEL = { all: "Tous", Goalkeeper: "Gardiens", Defender: "Défenseurs", Midfielder: "Milieux", Attacker: "Attaquants" };
+          const roster = players.filter((p) => (selClub === "__none__" ? !p.club_id : p.club_id === selClub));
+          const shown = roster.filter((p) => posFilter === "all" || p.position === posFilter).sort((a, b) => (POS[a.position] ?? 9) - (POS[b.position] ?? 9) || (a.name || "").localeCompare(b.name || ""));
+          return (
+            <div>
+              <div className="mb-3 flex items-center gap-3">
+                <button onClick={() => setSelClub(null)} className="text-sm text-muted hover:text-content">← Clubs</button>
+                <span className="flex items-center gap-2 font-bold">{clubsMap[selClub]?.logo_url && <img src={clubsMap[selClub].logo_url} className="h-6 w-6 object-contain" alt="" />}{selClub === "__none__" ? "Sans club" : clubName(selClub)}</span>
               </div>
-            );
-          })}
-          {players.length === 0 && <p className="text-muted">Aucun joueur. Lance « 👥 Effectifs » dans l'admin.</p>}
-        </div>
+              <div className="mb-4 flex flex-wrap gap-1">
+                {["all", "Goalkeeper", "Defender", "Midfielder", "Attacker"].map((pf) => <button key={pf} onClick={() => setPosFilter(pf)} className={`rounded-full border px-3 py-1 text-xs ${posFilter === pf ? "border-accent bg-accent/10 text-accent" : "border-line/20 text-muted"}`}>{POS_LABEL[pf]}</button>)}
+              </div>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+                {shown.map((p) => (
+                  <Link key={p.id} href={`/players/${p.id}`} className="rounded-2xl border border-line/10 bg-surface p-3 text-center transition hover:border-accent/40">
+                    <img src={p.photo_url || ""} className="mx-auto h-16 w-16 rounded-full object-cover" alt="" />
+                    <div className="mt-2 truncate text-sm font-bold">{p.name}</div>
+                    <div className="text-xs text-muted">{[p.position, p.age ? `${p.age} ans` : null].filter(Boolean).join(" · ")}</div>
+                    {p.nationality && <div className="mt-1 text-[10px] uppercase tracking-wider text-muted/60">{p.nationality}</div>}
+                  </Link>
+                ))}
+                {shown.length === 0 && <p className="text-muted">Aucun joueur pour ce filtre.</p>}
+              </div>
+            </div>
+          );
+        })()
       )}
 
       {tab === "stats" && (
