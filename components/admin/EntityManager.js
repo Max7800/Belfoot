@@ -132,12 +132,31 @@ export default function EntityManager({ spec }) {
   );
 }
 
+function RelationField({ value, options, onChange }) {
+  const [q, setQ] = useState(""); const [open, setOpen] = useState(false);
+  const box = "w-full rounded border border-line/10 bg-surface2 px-3 py-2 text-sm outline-none focus:border-accent";
+  const cur = (options || []).find((o) => o.id === value);
+  const filtered = (options || []).filter((o) => o.label.toLowerCase().includes(q.toLowerCase())).slice(0, 50);
+  return (
+    <div className="relative">
+      <input value={open ? q : (cur?.label || "")} onChange={(e) => { setQ(e.target.value); setOpen(true); }} onFocus={() => { setQ(""); setOpen(true); }} onBlur={() => setTimeout(() => setOpen(false), 150)} placeholder="Rechercher…" className={box} />
+      {open && (
+        <div className="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded border border-line/10 bg-surface2 shadow-lg">
+          <button type="button" onMouseDown={() => { onChange(null); setOpen(false); }} className="block w-full px-3 py-1.5 text-left text-sm text-muted hover:bg-surface">—</button>
+          {filtered.map((o) => <button key={o.id} type="button" onMouseDown={() => { onChange(o.id); setOpen(false); }} className="block w-full truncate px-3 py-1.5 text-left text-sm hover:bg-surface">{o.label}</button>)}
+          {filtered.length === 0 && <div className="px-3 py-1.5 text-xs text-muted">Aucun résultat</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Field({ f, value, onChange, options }) {
   const label = <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-muted">{f.label}</label>;
   const box = "w-full rounded border border-line/10 bg-surface2 px-3 py-2 text-sm outline-none focus:border-accent";
   if (f.type === "bool") return <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!value} onChange={(e) => onChange(e.target.checked)} />{f.label}</label>;
   if (f.type === "image") return <div>{label}<ImageField value={value} onChange={onChange} /></div>;
-  if (f.type === "relation") return <div>{label}<select value={value || ""} onChange={(e) => onChange(e.target.value || null)} className={box}><option value="">—</option>{(options || []).map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}</select></div>;
+  if (f.type === "relation") return <div>{label}<RelationField value={value} options={options} onChange={onChange} /></div>;
   if (f.type === "select") return <div>{label}<select value={value || ""} onChange={(e) => onChange(e.target.value)} className={box}><option value="">—</option>{f.options.map((o) => <option key={o} value={o}>{o}</option>)}</select></div>;
   if (f.type === "number") return <div>{label}<input type="number" value={value ?? ""} onChange={(e) => onChange(e.target.value === "" ? null : Number(e.target.value))} className={box} /></div>;
   if (f.type === "datetime") return <div>{label}<input type="datetime-local" value={value ? String(value).slice(0, 16) : ""} onChange={(e) => onChange(e.target.value || null)} className={box} /></div>;

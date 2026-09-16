@@ -1,10 +1,11 @@
+"use client";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-export const dynamic = "force-dynamic";
 
-export default async function CompetitionsPage() {
-  let comps = [];
-  try { const { data } = await supabase.from("competitions").select("*").order("name"); comps = (data || []).sort((a, b) => (a.position ?? 999) - (b.position ?? 999)); } catch {}
+export default function CompetitionsPage() {
+  const [comps, setComps] = useState([]);
+  useEffect(() => { supabase.from("competitions").select("*").order("name").then(({ data }) => setComps((data || []).sort((a, b) => (a.position ?? 999) - (b.position ?? 999)))).catch(() => {}); }, []);
   return (
     <div>
       <h1 className="mb-6 text-3xl font-black">Compétitions</h1>
