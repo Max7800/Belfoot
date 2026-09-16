@@ -132,19 +132,22 @@ export default function CompetitionPage() {
   };
 
   const LeaderCard = ({ title, x, unit, meta, onClick, variant }) => {
-    const v = VARIANTS[variant]; const t = tiles(variant); const bg = t.background_url;
-    const style = bg ? { backgroundImage: `url(${bg})`, backgroundSize: "cover", backgroundPosition: "center" } : undefined;
+    const v = VARIANTS[variant]; const t = tiles(variant);
+    const on = t.enabled !== false;
+    const accent = (on && t.accent) || v.accent;
+    const bg = on ? t.background_url : null;
+    const style = { ...(bg ? { backgroundImage: `url(${bg})`, backgroundSize: "cover", backgroundPosition: "center" } : {}), ...(on && !bg ? { borderColor: accent + "80" } : {}) };
     return (
-      <button onClick={onClick} className={`relative w-full overflow-hidden rounded-2xl border ${v.border} ${v.glow} ${bg ? "" : `bg-gradient-to-br ${v.grad} to-transparent`} p-4 text-left transition hover:brightness-110`} style={style}>
+      <button onClick={onClick} className={`relative w-full overflow-hidden rounded-2xl border p-4 text-left transition hover:brightness-110 ${on ? v.glow : "border-line/10"} ${on && !bg ? `bg-gradient-to-br ${v.grad} to-transparent` : (bg ? "" : "bg-surface")}`} style={style}>
         {bg && <span className="absolute inset-0" style={{ background: `rgba(0,0,0,${t.overlay ?? 0.55})` }} />}
-        <span className="pointer-events-none absolute -bottom-3 -right-2"><Watermark kind={v.wm} color={v.accent} /></span>
+        {on && <span className="pointer-events-none absolute -bottom-3 -right-2"><Watermark kind={v.wm} color={accent} /></span>}
         <div className="relative">
           <div className="text-xs font-bold uppercase tracking-wider text-muted">{v.icon} {title}</div>
           {x ? (
             <div className="mt-2 flex items-center gap-3">
-              <img src={x.p.photo_url || ""} className="h-14 w-14 rounded-full object-cover ring-2" style={{ "--tw-ring-color": v.accent }} alt="" />
+              <img src={x.p.photo_url || ""} className="h-14 w-14 rounded-full object-cover ring-2" style={{ "--tw-ring-color": accent }} alt="" />
               <span className="min-w-0"><b className="block truncate">{x.p.name}</b><span className="flex items-center gap-1 text-xs text-muted">{clubsMap[x.p.club_id]?.logo_url && <img src={clubsMap[x.p.club_id].logo_url} className="h-3.5 w-3.5 object-contain" alt="" />}{clubName(x.p.club_id)}</span>{meta && <span className="block text-[11px] text-muted/70">{meta(x.st)}</span>}</span>
-              <b className="ml-auto text-2xl" style={{ color: v.accent }}>{unit}</b>
+              <b className="ml-auto text-2xl" style={{ color: accent }}>{unit}</b>
             </div>
           ) : <p className="mt-2 text-sm text-muted">—</p>}
         </div>
@@ -175,7 +178,11 @@ export default function CompetitionPage() {
   }
 
   return (
-    <div>
+    <div className="relative">
+      <div className="pointer-events-none fixed inset-0 -z-10">
+        <div className="absolute inset-0" style={{ background: "radial-gradient(1100px 520px at 50% -120px, rgba(36,92,180,0.16), transparent 70%)" }} />
+        <div className="absolute inset-0" style={{ background: "radial-gradient(760px 420px at 100% 110%, rgba(18,48,110,0.14), transparent 70%)" }} />
+      </div>
       <CompetitionHeader comp={comp} seasonLabel={seasonLabel} kicker={L("comp.kicker", "Compétitions")} />
       <div className="mb-6 flex items-center justify-between gap-2 border-b border-line/10">
         <div className="flex flex-wrap gap-1">{TABS.map(([k, l]) => <button key={k} onClick={() => setTab(k)} className={`px-3 py-2 text-sm ${tab === k ? "border-b-2 border-accent font-bold text-content" : "text-muted hover:text-content"}`}>{l}</button>)}</div>
@@ -239,7 +246,7 @@ export default function CompetitionPage() {
         <div>
           <PhaseChips />
           {rounds.length > 1 && <div className="mb-4 flex flex-wrap gap-1"><button onClick={() => setRound("all")} className={`rounded-full border px-3 py-1 text-xs ${round === "all" ? "border-accent bg-accent/10 text-accent" : "border-line/20 text-muted"}`}>{L("filter.all", "Tout")}</button>{rounds.map((r) => <button key={r.key} onClick={() => setRound(r.key)} className={`rounded-full border px-3 py-1 text-xs ${round === r.key ? "border-accent bg-accent/10 text-accent" : "border-line/20 text-muted"}`}>{r.num != null ? `J${r.num}` : r.label}</button>)}</div>}
-          {grouped.map((g) => <div key={g.label} className="mb-5"><div className="mb-2 text-xs font-bold uppercase tracking-wider text-muted">{g.label}</div><div className="space-y-2">{g.items.map((m) => <MatchRow key={m.id} m={m} clubs={clubsMap} href={`/matchs/${m.id}`} />)}</div></div>)}
+          {grouped.map((g) => { const ds = g.items.map((m) => m.kickoff).filter(Boolean).sort(); const range = ds.length ? new Date(ds[0]).toLocaleDateString("fr-BE", { day: "numeric", month: "short" }) + (ds[0].slice(0, 10) !== ds[ds.length - 1].slice(0, 10) ? " – " + new Date(ds[ds.length - 1]).toLocaleDateString("fr-BE", { day: "numeric", month: "short" }) : "") : ""; return (<div key={g.label} className="mb-5"><div className="mb-2 flex items-baseline gap-2"><span className="text-xs font-bold uppercase tracking-wider text-muted">{g.label}</span>{range && <span className="text-[11px] text-muted/60">{range}</span>}</div><div className="space-y-2">{g.items.map((m) => <MatchRow key={m.id} m={m} clubs={clubsMap} href={`/matchs/${m.id}`} />)}</div></div>); })}
           {shownMatches.length === 0 && <p className="text-muted">{L("empty.matches", "Aucun match.")}</p>}
         </div>
       )}

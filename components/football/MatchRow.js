@@ -8,7 +8,7 @@ export default function MatchRow({ m, clubs, href, compact }) {
   const res = (mine, other) => (!fin ? "" : mine > other ? "text-green-400" : mine < other ? "text-red-400/60" : "text-content");
   const pad = compact ? "gap-2 p-1.5 text-xs" : "gap-2 p-3 text-sm";
   const lg = compact ? "h-5 w-5" : "h-7 w-7";
-  const sc = compact ? "px-2 py-0.5" : "px-3 py-1";
+  const sc = (compact ? "px-2 py-0.5" : "px-3 py-1") + " ring-1 ring-white/5 shadow-[0_2px_10px_-4px_rgba(40,110,220,0.5)]";
   const inner = (
     <div className={`flex items-center rounded-xl border border-line/10 bg-surface transition hover:border-accent/40 ${pad}`}>
       <div className="flex min-w-0 flex-1 items-center justify-end gap-2">

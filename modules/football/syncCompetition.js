@@ -65,7 +65,7 @@ export async function syncCompetition(db, competition, ctx = {}) {
       const info = await provider.fetchLeagueInfo(competition, ctx);
       if (info) {
         leagueName = info.name || leagueName;
-        const patch = { ext: { ...(competition.ext || {}), coverage: info.coverage, providerName: info.name, country: info.country } };
+        const patch = { ext: { ...(competition.ext || {}), coverage: info.coverage, providerName: info.name, country: info.country, country_flag: info.flag } };
         if (!competition.locked && info.logo && !competition.logo_url) patch.logo_url = info.logo;   // logo auto SEULEMENT si vide -> le logo manuel est prioritaire
         await db.from("competitions").update(patch).eq("id", competition.id);
       }

@@ -136,7 +136,7 @@ export function LabelsPanel() {
 
 
 export function TilesPanel() {
-  const KEYS = [["topscorer", "Meilleur buteur"], ["topassist", "Meilleur passeur"], ["toprating", "Meilleure note"], ["upcoming", "Prochains matchs"]];
+  const KEYS = [["topscorer", "Meilleur buteur"], ["topassist", "Meilleur passeur"], ["cleansheet", "Clean sheets"], ["note", "Meilleure note"], ["upcoming", "Prochains matchs"]];
   const [cfg, setCfg] = useState({});
   const load = () => supabase.from("site_settings").select("data").eq("id", 1).maybeSingle().then(({ data }) => setCfg((data?.data && data.data.tiles) || {}));
   useEffect(() => { load(); }, []);
@@ -151,8 +151,10 @@ export function TilesPanel() {
           <div key={k} className="rounded-xl border border-line/10 p-3">
             <div className="mb-2 font-semibold">{label}</div>
             <div className="flex flex-wrap items-end gap-4 text-sm">
+              <label className="flex items-center gap-2"><input type="checkbox" checked={t.enabled !== false} onChange={(e) => persist(upd(k, "enabled", e.target.checked))} />Fond/accent actif</label>
               <div><div className="mb-1 text-xs text-muted">Image de fond</div><ImageField value={t.background_url} onChange={(v) => persist(upd(k, "background_url", v))} /></div>
               <div><div className="mb-1 text-xs text-muted">Overlay (0–1)</div><input type="number" step="0.1" min="0" max="1" value={t.overlay ?? ""} onChange={(e) => setCfg(upd(k, "overlay", e.target.value === "" ? undefined : Number(e.target.value)))} onBlur={() => persist(cfg)} className="w-20 rounded border border-line/10 bg-surface2 px-2 py-1" /></div>
+              <div><div className="mb-1 text-xs text-muted">Accent</div><input type="color" value={t.accent || "#f4c430"} onChange={(e) => persist(upd(k, "accent", e.target.value))} className="h-8 w-10 rounded bg-transparent" /></div>
             </div>
           </div>); })}
       </div>
