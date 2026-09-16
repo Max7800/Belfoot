@@ -9,6 +9,7 @@ import StandingsTable from "@/components/football/StandingsTable";
 import CompetitionHeader from "@/components/football/CompetitionHeader";
 import { computeStandings } from "@/lib/standings";
 import { useLabels } from "@/lib/labels";
+import { useTiles } from "@/lib/tiles";
 
 const POS = { Goalkeeper: 0, Defender: 1, Midfielder: 2, Attacker: 3 };
 function clubForm(ms, clubId) {
@@ -21,6 +22,7 @@ function clubForm(ms, clubId) {
 export default function CompetitionPage() {
   const { slug } = useParams();
   const L = useLabels();
+  const tiles = useTiles();
   const [comp, setComp] = useState(undefined);
   const [tab, setTab] = useState("overview");
   const [seasons, setSeasons] = useState([]); const [seasonLabel, setSeasonLabel] = useState("");
@@ -98,8 +100,8 @@ export default function CompetitionPage() {
   const cleanSheets = Object.entries(csMap).map(([club, v]) => ({ club, v })).sort((a, b) => b.v - a.v).slice(0, 10);
 
   const ClubChip = ({ id }) => <Link href={`/clubs/${id}`} className="inline-flex min-w-0 items-center gap-2 hover:text-accent">{clubsMap[id]?.logo_url && <img src={clubsMap[id].logo_url} className="h-5 w-5 shrink-0 object-contain" alt="" />}<span className="truncate">{clubName(id)}</span></Link>;
-  const Card = ({ title, onSee, children }) => <div className="flex h-full flex-col rounded-2xl border border-line/10 bg-surface p-4"><div className="mb-2 flex shrink-0 items-center justify-between"><div className="text-xs font-bold uppercase tracking-wider text-muted">{title}</div>{onSee && <button onClick={onSee} className="text-xs text-accent hover:underline">{L("comp.seeall", "Voir tout")} →</button>}</div><div className="flex-1">{children}</div></div>;
-  const LeaderCard = ({ icon, title, x, unit, meta, onClick }) => <button onClick={onClick} className="w-full rounded-2xl border border-accent/30 bg-accent/5 p-4 text-left transition hover:border-accent/60"><div className="text-xs font-bold uppercase tracking-wider text-muted">{icon} {title}</div>{x ? <div className="mt-2 flex items-center gap-3"><img src={x.p.photo_url || ""} className="h-14 w-14 rounded-full object-cover" alt="" /><span className="min-w-0"><b className="block truncate">{x.p.name}</b><span className="flex items-center gap-1 text-xs text-muted">{clubsMap[x.p.club_id]?.logo_url && <img src={clubsMap[x.p.club_id].logo_url} className="h-3.5 w-3.5 object-contain" alt="" />}{clubName(x.p.club_id)}</span>{meta && <span className="block text-[11px] text-muted/70">{meta(x.st)}</span>}</span><b className="ml-auto text-2xl">{unit}</b></div> : <p className="mt-2 text-sm text-muted">—</p>}</button>;
+  const Card = ({ title, onSee, children, bgKey }) => { const t = bgKey ? tiles(bgKey) : null; const style = t?.background_url ? { backgroundImage: `url(${t.background_url})`, backgroundSize: "cover", backgroundPosition: "center" } : undefined; return <div className={`relative flex h-full flex-col overflow-hidden rounded-2xl border p-4 ${t?.cls || "border-line/10 bg-surface"}`} style={style}>{t?.background_url && <span className="absolute inset-0" style={{ background: `rgba(0,0,0,${t.overlay ?? 0.5})` }} />}{t?.wm && !t?.background_url && <span className="pointer-events-none absolute -bottom-4 -right-2 select-none text-7xl opacity-[0.07]">{t.wm}</span>}<div className="relative mb-2 flex shrink-0 items-center justify-between"><div className="text-xs font-bold uppercase tracking-wider text-muted">{title}</div>{onSee && <button onClick={onSee} className="text-xs text-accent hover:underline">{L("comp.seeall", "Voir tout")} →</button>}</div><div className="relative flex-1">{children}</div></div>; };
+  const LeaderCard = ({ icon, title, x, unit, meta, onClick, variant }) => { const t = tiles(variant); const style = t.background_url ? { backgroundImage: `url(${t.background_url})`, backgroundSize: "cover", backgroundPosition: "center" } : undefined; return <button onClick={onClick} className={`relative w-full overflow-hidden rounded-2xl border p-4 text-left transition hover:brightness-110 ${t.background_url ? "border-line/10" : t.cls}`} style={style}>{t.background_url && <span className="absolute inset-0" style={{ background: `rgba(0,0,0,${t.overlay ?? 0.55})` }} />}{t.wm && !t.background_url && <span className="pointer-events-none absolute -bottom-4 -right-2 select-none text-8xl opacity-[0.08]">{t.wm}</span>}<div className="relative"><div className="text-xs font-bold uppercase tracking-wider text-muted">{icon} {title}</div>{x ? <div className="mt-2 flex items-center gap-3"><img src={x.p.photo_url || ""} className="h-14 w-14 rounded-full object-cover" alt="" /><span className="min-w-0"><b className="block truncate">{x.p.name}</b><span className="flex items-center gap-1 text-xs text-muted">{clubsMap[x.p.club_id]?.logo_url && <img src={clubsMap[x.p.club_id].logo_url} className="h-3.5 w-3.5 object-contain" alt="" />}{clubName(x.p.club_id)}</span>{meta && <span className="block text-[11px] text-muted/70">{meta(x.st)}</span>}</span><b className="ml-auto text-2xl">{unit}</b></div> : <p className="mt-2 text-sm text-muted">—</p>}</div></button>; };
   const PhaseChips = () => phases.length > 1 ? <div className="mb-4 flex flex-wrap gap-1">{phases.map((ph) => <button key={ph} onClick={() => { setPhase(ph); setRound("all"); }} className={`rounded-full border px-3 py-1 text-xs ${curPhase === ph ? "border-accent bg-accent/10 text-accent" : "border-line/20 text-muted"}`}>{ph}</button>)}</div> : null;
 
   function TopCategory({ title, id, rows, fmt, meta }) {
@@ -158,7 +160,7 @@ export default function CompetitionPage() {
             <Card title={lastRound >= 0 ? `${L("comp.results", "Résultats")} — ${L("comp.round", "Journée")} ${lastRound}` : L("comp.results", "Derniers résultats")} onSee={() => setTab("matchs")}>
               <div className="space-y-1">{lastResults.map((m) => <MatchRow key={m.id} m={m} clubs={clubsMap} href={`/matchs/${m.id}`} compact />)}{lastResults.length === 0 && <p className="text-sm text-muted">—</p>}</div>
             </Card>
-            <Card title={Number.isFinite(nextRound) ? `${L("comp.upcoming", "Prochaine journée")} — J${nextRound}` : L("comp.upcoming", "Prochains matchs")} onSee={() => setTab("matchs")}>
+            <Card title={Number.isFinite(nextRound) ? `${L("comp.upcoming", "Prochaine journée")} — J${nextRound}` : L("comp.upcoming", "Prochains matchs")} onSee={() => setTab("matchs")} bgKey="upcoming">
               {upcoming.length ? <div className="space-y-1">{upcoming.map((m) => <MatchRow key={m.id} m={m} clubs={clubsMap} href={`/matchs/${m.id}`} compact />)}</div>
                 : <div className="flex flex-col items-center gap-2 py-8 text-muted"><Calendar className="h-6 w-6" /><span className="text-sm">{allFinished ? L("empty.season", "Saison terminée") : L("empty.upcoming", "Aucun match à venir")}</span></div>}
             </Card>
@@ -167,9 +169,9 @@ export default function CompetitionPage() {
           <div>
             <div className="mb-2 text-sm font-bold uppercase tracking-wider text-muted">{L("comp.leaders", "Les leaders")}</div>
             <div className="grid gap-3 sm:grid-cols-3">
-              <LeaderCard icon="⚽" title={L("comp.topscorer", "Meilleur buteur")} x={topScorer} unit={topScorer?.st.goals} onClick={() => goStats("buteurs")} />
-              <LeaderCard icon="🅰️" title={L("comp.topassist", "Meilleur passeur")} x={topAssist} unit={topAssist?.st.assists} onClick={() => goStats("passeurs")} />
-              <LeaderCard icon="⭐" title={L("comp.toprating", "Meilleure note")} x={topRate} unit={topRate?.st.rating?.toFixed?.(2)} meta={(s) => `${s.appearances || 0} app · ${s.minutes || 0} min`} onClick={() => goStats("notes")} />
+              <LeaderCard icon="⚽" title={L("comp.topscorer", "Meilleur buteur")} x={topScorer} unit={topScorer?.st.goals} onClick={() => goStats("buteurs")} variant="topscorer" />
+              <LeaderCard icon="🅰️" title={L("comp.topassist", "Meilleur passeur")} x={topAssist} unit={topAssist?.st.assists} onClick={() => goStats("passeurs")} variant="topassist" />
+              <LeaderCard icon="⭐" title={L("comp.toprating", "Meilleure note")} x={topRate} unit={topRate?.st.rating?.toFixed?.(2)} meta={(s) => `${s.appearances || 0} app · ${s.minutes || 0} min`} onClick={() => goStats("notes")} variant="toprating" />
             </div>
           </div>
 

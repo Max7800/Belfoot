@@ -12,6 +12,7 @@ export const FOOTBALL_ENTITIES = {
       { key: "banner_url", label: "Bannière (décor, sans texte)", type: "image" },
       { key: "zones", label: "Zones de classement", type: "zones" },
       { key: "rating_min", label: "Note : min. apparitions", type: "number" },
+      { key: "competition_type", label: "Type", type: "select", options: ["league", "cup"] },
     ],
   },
   seasons: {
@@ -22,12 +23,14 @@ export const FOOTBALL_ENTITIES = {
     ],
   },
   clubs: {
-    table: "clubs", title: "Clubs", singular: "Club", orderBy: "name", hasSource: true,
+    table: "clubs", title: "Clubs", singular: "Club", orderBy: "name", hasSource: true, search: true,
     fields: [
       { key: "name", label: "Nom", type: "text" },
       { key: "short_name", label: "Abréviation", type: "text" },
       { key: "city", label: "Ville", type: "text" },
       { key: "logo_url", label: "Logo", type: "image" },
+      { key: "team_type", label: "Type d'équipe", type: "select", options: ["first_team", "reserve", "u23", "women"] },
+      { key: "parent_club_id", label: "Club parent (réserve/U23)", type: "relation", table: "clubs", labelCol: "name" },
     ],
   },
   players: {

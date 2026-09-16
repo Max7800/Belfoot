@@ -34,6 +34,7 @@ export const adminSections = [
     { key: "media", label: "Médias" },
     { key: "seo", label: "SEO" },
     { key: "labels", label: "Textes" },
+    { key: "tilesbg", label: "Tuiles" },
     { key: "io", label: "Import / export" },
   ] },
 ];

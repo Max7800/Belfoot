@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import siteConfig from "@/config/site";
 import { jobKeys } from "@/lib/jobs";
+import ImageField from "@/components/ui/ImageField";
 
 export function ProfilesPanel() {
   const [rows, setRows] = useState([]);
@@ -37,8 +38,10 @@ export function JobsPanel() {
   const [season, setSeason] = useState("2025-2026");
   const [busy, setBusy] = useState(null);
   const [msg, setMsg] = useState("");
+  const [comps, setComps] = useState([]);
+  const [compId, setCompId] = useState("");   // "" = toutes
   const load = () => supabase.from("job_runs").select("*").order("started_at", { ascending: false }).limit(30).then(({ data }) => setRows(data || []));
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); supabase.from("competitions").select("id,name").order("name").then(({ data }) => setComps(data || [])); }, []);
   const run = async (key) => {
     setBusy(key); setMsg("");
     try {
@@ -46,7 +49,7 @@ export function JobsPanel() {
       const r = await fetch("/api/admin/run-job", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token}` },
-        body: JSON.stringify({ key, season }),
+        body: JSON.stringify({ key, season, competitionId: compId || null }),
       });
       const txt = await r.text();
       if (!r.ok) throw new Error(txt || ("HTTP " + r.status));
@@ -58,6 +61,7 @@ export function JobsPanel() {
   return (<div>
     <h2 className="mb-4 text-lg font-bold">Jobs & synchronisation</h2>
     <div className="mb-3 flex flex-wrap items-center gap-2">
+      <select value={compId} onChange={(e) => setCompId(e.target.value)} className="rounded border border-line/10 bg-surface2 px-2 py-1 text-sm"><option value="">Toutes les compétitions</option>{comps.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
       <label className="text-xs text-muted">Saison</label>
       <input value={season} onChange={(e) => setSeason(e.target.value)} className="w-28 rounded border border-line/10 bg-surface2 px-2 py-1 text-sm" />
       {jobKeys().map((k) => (
@@ -124,6 +128,32 @@ export function LabelsPanel() {
           </div>
         ))}
         {Object.keys(labels).length === 0 && <p className="text-sm text-muted">Aucun texte personnalisé (les défauts s'appliquent).</p>}
+      </div>
+    </div>
+  );
+}
+
+
+export function TilesPanel() {
+  const KEYS = [["topscorer", "Meilleur buteur"], ["topassist", "Meilleur passeur"], ["toprating", "Meilleure note"], ["upcoming", "Prochains matchs"]];
+  const [cfg, setCfg] = useState({});
+  const load = () => supabase.from("site_settings").select("data").eq("id", 1).maybeSingle().then(({ data }) => setCfg((data?.data && data.data.tiles) || {}));
+  useEffect(() => { load(); }, []);
+  const persist = async (obj) => { const { data } = await supabase.from("site_settings").select("data").eq("id", 1).maybeSingle(); await supabase.from("site_settings").update({ data: { ...(data?.data || {}), tiles: obj } }).eq("id", 1); setCfg(obj); };
+  const upd = (k, field, v) => ({ ...cfg, [k]: { ...(cfg[k] || {}), [field]: v } });
+  return (
+    <div>
+      <h2 className="mb-2 text-lg font-bold">Tuiles (fonds)</h2>
+      <p className="mb-4 text-xs text-muted">Fond décoratif par tuile (image), overlay sombre pour la lisibilité. Le texte/les données restent par-dessus. Vide = accent par défaut. Non touché par les syncs.</p>
+      <div className="space-y-3">
+        {KEYS.map(([k, label]) => { const t = cfg[k] || {}; return (
+          <div key={k} className="rounded-xl border border-line/10 p-3">
+            <div className="mb-2 font-semibold">{label}</div>
+            <div className="flex flex-wrap items-end gap-4 text-sm">
+              <div><div className="mb-1 text-xs text-muted">Image de fond</div><ImageField value={t.background_url} onChange={(v) => persist(upd(k, "background_url", v))} /></div>
+              <div><div className="mb-1 text-xs text-muted">Overlay (0–1)</div><input type="number" step="0.1" min="0" max="1" value={t.overlay ?? ""} onChange={(e) => setCfg(upd(k, "overlay", e.target.value === "" ? undefined : Number(e.target.value)))} onBlur={() => persist(cfg)} className="w-20 rounded border border-line/10 bg-surface2 px-2 py-1" /></div>
+            </div>
+          </div>); })}
       </div>
     </div>
   );
