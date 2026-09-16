@@ -4,6 +4,7 @@ import { supabase } from "@/lib/supabaseClient";
 import siteConfig from "@/config/site";
 import { jobKeys } from "@/lib/jobs";
 import ImageField from "@/components/ui/ImageField";
+import { CLUB_SECTIONS } from "@/lib/clubSections";
 
 export function ProfilesPanel() {
   const [rows, setRows] = useState([]);
@@ -154,6 +155,33 @@ export function TilesPanel() {
               <div><div className="mb-1 text-xs text-muted">Overlay (0–1)</div><input type="number" step="0.1" min="0" max="1" value={t.overlay ?? ""} onChange={(e) => setCfg(upd(k, "overlay", e.target.value === "" ? undefined : Number(e.target.value)))} onBlur={() => persist(cfg)} className="w-20 rounded border border-line/10 bg-surface2 px-2 py-1" /></div>
             </div>
           </div>); })}
+      </div>
+    </div>
+  );
+}
+
+
+export function ClubSectionsPanel() {
+  const [items, setItems] = useState(CLUB_SECTIONS.map((s, i) => ({ ...s, enabled: true, order: i })));
+  useEffect(() => { supabase.from("site_settings").select("data").eq("id", 1).maybeSingle().then(({ data }) => {
+    const conf = (data?.data && data.data.club_sections) || {};
+    setItems(CLUB_SECTIONS.map((s, i) => ({ ...s, enabled: conf[s.key]?.enabled !== false, order: conf[s.key]?.order ?? i })).sort((a, b) => a.order - b.order));
+  }); }, []);
+  const persist = async (next) => { const arr = next.map((s, i) => ({ ...s, order: i })); setItems(arr); const { data } = await supabase.from("site_settings").select("data").eq("id", 1).maybeSingle(); const obj = Object.fromEntries(arr.map((s) => [s.key, { enabled: s.enabled, order: s.order }])); await supabase.from("site_settings").update({ data: { ...(data?.data || {}), club_sections: obj } }).eq("id", 1); };
+  const toggle = (i) => persist(items.map((s, j) => (j === i ? { ...s, enabled: !s.enabled } : s)));
+  const move = (i, d) => { const j = i + d; if (j < 0 || j >= items.length) return; const a = [...items]; [a[i], a[j]] = [a[j], a[i]]; persist(a); };
+  return (
+    <div>
+      <h2 className="mb-2 text-lg font-bold">Fiche club — sections</h2>
+      <p className="mb-4 text-xs text-muted">Active/masque et ordonne les sections de la fiche club publique. Masquer ne supprime aucune donnée. (Les visiteurs peuvent aussi plier/déplier chaque section.)</p>
+      <div className="space-y-1">
+        {items.map((s, i) => (
+          <div key={s.key} className="flex items-center gap-2 rounded border border-line/10 bg-surface p-2 text-sm">
+            <label className="flex flex-1 items-center gap-2"><input type="checkbox" checked={s.enabled} onChange={() => toggle(i)} />{s.label}</label>
+            <button onClick={() => move(i, -1)} className="px-1 text-muted hover:text-content">↑</button>
+            <button onClick={() => move(i, 1)} className="px-1 text-muted hover:text-content">↓</button>
+          </div>
+        ))}
       </div>
     </div>
   );
