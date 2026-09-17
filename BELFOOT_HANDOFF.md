@@ -151,7 +151,8 @@ Trigger `handle_new_user` : crée un `profiles` (role member) à chaque inscript
 - `match_events` : match_id, minute, type (goal|assist|yellow|red|sub), player_id, club_id,
   **player_name/assist_name/detail** (dénormalisés, timeline lisible), source.
 - `player_season_stats` : player_id, competition_id, season, appearances, lineups, minutes, goals,
-  assists, yellow, red, rating, source/external_id/synced_at, unique(player_id,season).
+  assists, yellow, red, rating, source/external_id/synced_at,
+  **unique(player_id,competition_id,season)** depuis la migration `0012`.
 - Vues dérivées : `standings`, `top_scorers`, `top_assists` (⚠️ **phase-blind** : on privilégie le
   **calcul client** `lib/standings.computeStandings` scoppé par phase, cf. pièges).
 
@@ -162,15 +163,16 @@ Trigger `handle_new_user` : crée un `profiles` (role member) à chaque inscript
 ## 6. Migrations (fichiers présents)
 
 Socle : `supabase/schema.sql` (= `supabase/migrations/0001_core.sql`).
-Football : `modules/football/migrations/0001_init` → `0011_types_relations` (init, players_tracking,
+Football : `modules/football/migrations/0001_init` → `0012_stats_by_competition` (init, players_tracking,
 competition_slug, player_stats, players_events, events_names, rounds_phases, competition_position,
-banner_zones, rating_min, types_relations).
+banner_zones, rating_min, types_relations, statistiques joueur séparées par compétition).
 Autres : `modules/votw/migrations/0001_init`, `modules/forum/migrations/0001_init`.
 
 ⚠️ **Migrations passées à la main** dans Supabase. Le code est tolérant (tri client, fill-if-empty)
 mais certaines fonctions restent inactives tant que la colonne n'existe pas. **Vérifier que TOUTES
-les migrations football 0001→0011 sont passées** sur le projet (surtout position/banner/zones/
-rating_min/competition_type/parent_club_id/team_type). Une colonne manquante n'affiche plus de page
+les migrations football 0001→0012 sont passées** sur le projet (surtout position/banner/zones/
+rating_min/competition_type/parent_club_id/team_type et `0012` avant toute nouvelle synchro des
+effectifs/stats). Une colonne manquante n'affiche plus de page
 blanche (résilience ajoutée) mais désactive la feature liée.
 
 ---
@@ -191,7 +193,8 @@ compétition choisit son provider (colonne `provider`) → **aucune logique JPL 
 
 **Orchestrateurs** : `syncCompetition` (mode full = clubs dérivés des matchs + enrichis + tous les
 matchs + coverage + logo/nom/pays/drapeau si vide ; mode live = matchs en direct only),
-`syncSquads` (effectifs + `player_season_stats` en même temps, 0 requête en plus — met `tracked=true`),
+`syncSquads` (effectifs + `player_season_stats` scoppées par compétition/saison en même temps,
+0 requête en plus — met `tracked=true`),
 `syncEvents` (événements par match, incrémental + plafonné 40/run), `discoverBelgians`/`trackPlayers`
 (scaffold suivi belges à l'étranger : discovery légère + tracking ciblé `tracked=true`).
 
@@ -328,6 +331,12 @@ Côté Supabase : Site URL = domaine + Redirect URLs (`/auth/callback`, `/reset`
   synchronisées.
 - **Notes** : seuil d'apparitions `rating_min` obligatoire (sinon un joueur à faible temps de jeu
   ressort premier).
+- **Stats joueur par compétition** : le front filtre toujours `player_season_stats` par
+  `competition_id` + saison. Ne jamais revenir à une map par `player_id` seul. La migration `0012`
+  doit être passée avant les jobs `football.squads`/`football.track-belgians`, puis il faut relancer
+  ces jobs pour chaque compétition afin de reconstruire les lignes séparées. Les anciennes lignes
+  sans `competition_id` restent visibles comme « Non attribuée » sur la fiche joueur, mais sont
+  volontairement ignorées sur les pages compétition.
 - **Ne pas trier en base par une colonne potentiellement absente** (ex. `order("position")`) → tri
   **client** avec fallback, sinon page vide si migration en retard.
 - **`NEXT_PUBLIC_*` en Secret sur Vercel** = 500. Toujours Config + redeploy sans cache.
@@ -416,6 +425,25 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
 
 ## CHANGELOG_DE_PASSATION
 
+### 2026-09-17 — ChatGPT — statistiques séparées par compétition
+
+- Reproduction visuelle sur la page Croky : les cartes Leaders reprenaient les chiffres Pro League
+  (ex. 21 buts/12 passes), car les stats étaient chargées par joueur sans filtre compétition.
+- La page compétition filtre désormais les stats par `competition_id` et par année de saison ; une
+  donnée absente produit `—` au lieu d'afficher une statistique provenant d'une autre compétition.
+- Migration `0012_stats_by_competition.sql` : remplacement de l'unicité `(player_id, season)` par
+  `(player_id, competition_id, season)` + index compétition/saison.
+- `syncSquads` et `trackPlayers` utilisent la nouvelle clé d'upsert et remontent les erreurs SQL au
+  lieu d'annoncer silencieusement un succès. Le tracking peut être scoppé par compétition et filtre
+  la réponse API-Football sur l'ID de la ligue/coupe.
+- La fiche joueur affiche maintenant la compétition de chaque ligne statistique ; les anciennes
+  lignes non scoppées sont libellées « Non attribuée ».
+- **Ordre de mise en production obligatoire** : appliquer `0012`, puis lancer `football.squads`
+  avec saison `2024` séparément pour Pro League et Croky Cup. Les anciennes lignes ayant pu être
+  écrasées, les deux synchronisations sont nécessaires.
+- Vérification : `npm run build` réussi sous Next.js 14.2.35 + `git diff --check` réussi.
+- Socle : **aucune modification**.
+
 ### 2026-09-17 — ChatGPT — accès canonique aux pages de compétition
 
 - Reproduction sur le site public : la carte Croky Cup existait, mais pointait vers
@@ -450,10 +478,11 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
 ## CURRENT_GIT_STATE
 
 - **Branche** : `main`
-- **Dernier commit fonctionnel** : `fa4aaf9` — URLs canoniques des compétitions et résolution
-  rétrocompatible ; la page Croky devient accessible via `/competitions/croky-cup`.
-- **Commit précédent** : `4bc5e57` — actualisation de la passation après le lot coupes.
+- **Dernier commit fonctionnel** : `14cd294` — statistiques joueur séparées par compétition/saison,
+  lectures publiques scoppées et synchronisations corrigées.
+- **Commit précédent** : `74b872a` — documentation des routes compétition canoniques.
 - **Commits importants récents** :
+  - `14cd294` migration `0012` + stats compétition/saison + tracking scoppé + fiche joueur enrichie
   - `fa4aaf9` liens compétition centralisés + résolution des anciens slugs/IDs/noms
   - `47be978` distinction générique ligue/coupe + vue tours Croky + erreurs de chargement explicites
   - `df59dfa` header/identité + fond global + tuiles (accent/enabled) + dates journées
@@ -465,9 +494,10 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
   - `5d57095` cartes cliquables → ancres Stats + note fiabilisée (seuil) + clean sheets
   - `a6213f5` rounds/phases génériques (fin du mélange journées/barrages)
   - `39267e2`/`150db4d` couche compétition (effectifs+stats, événements, journées, fiches)
-- **Migrations encore à passer** (si le projet Supabase n'est pas à jour) : vérifier que
-  `modules/football/migrations/0001→0011` sont **toutes** passées (surtout `0008` position,
-  `0009` banner_url/zones, `0010` rating_min, `0011` competition_type/parent_club_id/team_type).
+- **Migrations encore à passer** (si le projet Supabase n'est pas à jour) : appliquer maintenant
+  `0012_stats_by_competition.sql`, puis vérifier que `modules/football/migrations/0001→0012` sont
+  **toutes** passées (surtout `0008` position, `0009` banner_url/zones, `0010` rating_min,
+  `0011` competition_type/parent_club_id/team_type, `0012` unicité des stats par compétition).
   Le code est tolérant mais ces features restent inactives sinon.
 
 ---
