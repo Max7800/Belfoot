@@ -742,13 +742,29 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
 - Nouvelle migration : **aucune**. Vérification : build Next.js 14.2.35 réussi avec variables
   Supabase factices de compilation + `git diff --check` réussi. Socle : **aucune modification**.
 
+### 2026-09-17 — ChatGPT — Belges à l'étranger V2 administrable
+
+- La base existante de `/belges-a-l-etranger` est conservée : bandeau, compteurs, filtres et cartes
+  joueurs. La page devient un vrai hub avec cinq modules ordonnables : prochains matchs, forme,
+  championnats, dernières performances et annuaire complet.
+- Les cartes de championnat servent de filtre et amènent directement à l'annuaire. Les prochains
+  matchs sont détectés via les clubs des joueurs suivis, sans requête API depuis le public.
+- Le bloc Forme utilise en priorité les cinq dernières lignes `match_player_stats` et retombe sur
+  les statistiques de saison tant que les performances par match ne sont pas alimentées. Le récap
+  reste dans un état d'attente propre si la migration `0020` n'est pas encore passée.
+- Nouveau panneau Admin → Réglages → Belges à l'étranger : textes et image du bandeau, overlay,
+  joueur mis en avant manuellement ou automatiquement, visibilité/ordre/textes/couleur de chaque
+  module. Stockage dans `site_settings.data.belgians_abroad`, donc aucune migration supplémentaire.
+- Vérification : build Next.js 14.2.35 réussi avec variables Supabase factices de compilation +
+  `git diff --check` réussi. Socle : **aucune modification**.
+
 ---
 
 ## CURRENT_GIT_STATE
 
 - **Branche** : `main`
-- **HEAD local avant le lot portail** : `5966786` — compositions et performances par match. Le lot
-  courant réorganise `/competitions` sans migration ni changement de données.
+- **Dernier commit distant avant le lot courant** : `ef6d917` — hiérarchie du portail Compétitions.
+  Le lot courant construit Belges à l'étranger V2 sans migration ni appel API public.
 - **Commits importants récents** :
   - `2c71e35` documentation clubs liés / Europe
   - `69578a5` automatisation des stades + simplification des équipes liées
@@ -773,7 +789,8 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
   comme appliquée par l'utilisateur ; vérifier `0013_competition_header_texts.sql`, puis appliquer
   `0014_belgians_abroad.sql`, `0015_season_phase_zones.sql`, `0016_club_profiles.sql`, puis
   `0017_protect_manual_coaches.sql`, `0018_challenger_pro_league.sql`, puis
-  `0019_competition_portal_style.sql`, et vérifier que `modules/football/migrations/0001→0019` sont
+  `0019_competition_portal_style.sql`, puis `0020_match_lineups.sql`, et vérifier que
+  `modules/football/migrations/0001→0020` sont
   **toutes** passées (surtout `0008` position, `0009` banner_url/zones, `0010` rating_min,
   `0011` competition_type/parent_club_id/team_type, `0012` unicité des stats par compétition et
   `0013` textes des bandeaux, `0014` visibilité/pays du suivi international, `0015` zones par
