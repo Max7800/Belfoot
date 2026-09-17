@@ -772,6 +772,9 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
   compétitions mais alimente la page Belges à l'étranger.
 - Sur la page Belges, le module Annuaire retrouve la première position sous le bandeau par défaut,
   afin de préserver la base initiale et ses listes déroulantes sur desktop comme sur mobile.
+- Correction après validation visuelle : l'annuaire n'est plus présenté comme un module titré et
+  ordonnable. Sa barre de recherche, ses listes déroulantes et ses cartes sont épinglées directement
+  sous le bandeau, exactement comme dans la base initiale ; les nouveaux modules commencent après.
 - Coût estimé du test : une requête ligue, une équipe, une liste de matchs et la pagination de
   l'effectif ; aucun import des autres effectifs du Championship.
 - Vérification : build Next.js 14.2.35 réussi avec variables Supabase factices de compilation +

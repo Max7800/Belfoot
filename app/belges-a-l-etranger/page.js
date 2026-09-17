@@ -161,7 +161,10 @@ export default function BelgiansAbroadPage() {
       {data.loading && <div className="grid gap-4 sm:grid-cols-2"><div className="h-48 animate-pulse rounded-2xl bg-surface" /><div className="h-48 animate-pulse rounded-2xl bg-surface" /></div>}
       {!data.loading && data.error && <p className="rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">Impossible de charger les Belges à l'étranger : {data.error}</p>}
       {!data.loading && !data.error && view.enriched.length === 0 && <div className="rounded-3xl border border-dashed border-line/20 bg-surface/50 px-6 py-12 text-center"><div className="text-3xl">🇧🇪</div><h2 className="mt-3 text-xl font-black">Le suivi international est prêt</h2><p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-muted">Ajoutez une compétition étrangère dans l'admin, masquez-la du portail si nécessaire, puis activez « Suivi Belfoot » sur les joueurs retenus.</p></div>}
-      {!data.loading && !data.error && view.enriched.length > 0 && <div className="space-y-9">{config.sections.filter((section) => section.enabled).map((section) => <section key={section.key}><SectionHeader section={section} />{content[section.key]}</section>)}</div>}
+      {!data.loading && !data.error && view.enriched.length > 0 && <>
+        {config.sections.find((section) => section.key === "players")?.enabled !== false && <section>{content.players}</section>}
+        <div className="mt-9 space-y-9">{config.sections.filter((section) => section.enabled && section.key !== "players").map((section) => <section key={section.key}><SectionHeader section={section} />{content[section.key]}</section>)}</div>
+      </>}
     </div>
   );
 }
