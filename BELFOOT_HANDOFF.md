@@ -145,7 +145,8 @@ Trigger `handle_new_user` : crée un `profiles` (role member) à chaque inscript
   nationality, **country** (pays du championnat), competition, age, birth_date, photo_url, active,
   **tracked**, source/external_id/
   locked/synced_at/ext.
-- `coaches` : name, club_id, photo_url.
+- `coaches` : name, club_id, photo_url, source/external_id/locked/synced_at/ext. Les saisies manuelles
+  verrouillées sont prioritaires ; le job ciblé `football.coaches` alimente les autres.
 - `seasons` : competition_id, label, **zones_by_phase** jsonb (`{ "Regular Season": [...] }`) pour
   isoler les règles de classement par saison et phase.
 - `matches` : competition_id, season_id, home_club_id, away_club_id, home_score, away_score,
@@ -371,18 +372,16 @@ Côté Supabase : Site URL = domaine + Redirect URLs (`/auth/callback`, `/reset`
 
 ## 14. TODO ouverts (par priorité indicative)
 
-1. **Synchro entraîneurs** depuis le provider (table `coaches` remplie manuellement pour l'instant ;
-   afficher l'entraîneur actuel, surchargeable admin).
-2. **Équipes liées / réserves / U23** : peupler `parent_club_id`/`team_type` (mapping provider) ; la
+1. **Équipes liées / réserves / U23** : peupler `parent_club_id`/`team_type` (mapping provider) ; la
    section « Équipes liées » s'affiche déjà si des relations existent.
-3. **Suivi des Belges à l'étranger** (cœur produit) : exercer `discover-belgians` + `track-belgians`,
+2. **Suivi des Belges à l'étranger** (cœur produit) : exercer `discover-belgians` + `track-belgians`,
    page annuaire V1 construite ; prochaine étape = ajouter les compétitions étrangères masquées,
    exercer les jobs, puis construire le top/récap des Belges du week-end.
-4. **Lineups par match** (compos) → clean sheets GK exacts + titularisations réelles par match.
-5. **Home Belfoot** (pas encore construite) : hero « Les Belges. Partout dans le monde. », blocs
+3. **Lineups par match** (compos) → clean sheets GK exacts + titularisations réelles par match.
+4. **Home Belfoot** (pas encore construite) : hero « Les Belges. Partout dans le monde. », blocs
    JPL / Croky / Belges à suivre / en forme / Belge du moment / actus.
-6. **Passer en plan payant** API-Football pour la saison courante (le code est prêt : changer `season`).
-7. Régler les Zones JPL par saison/phase. Pour la Croky, renseigner idéalement Type = `cup` en admin ; le front est
+5. **Passer en plan payant** API-Football pour la saison courante (le code est prêt : changer `season`).
+6. Régler les Zones JPL par saison/phase. Pour la Croky, renseigner idéalement Type = `cup` en admin ; le front est
    désormais résilient et la détecte aussi via le provider/les tours si cette valeur manque encore.
 
 ---
@@ -440,6 +439,21 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
 ---
 
 ## CHANGELOG_DE_PASSATION
+
+### 2026-09-17 — ChatGPT — synchronisation protégée des entraîneurs
+
+- Contrat provider étendu avec `fetchCurrentCoach`. API-Football interroge `/coachs?team=...` et
+  privilégie la carrière courante (pas de date de fin) pour le club demandé.
+- Nouveau synchroniseur `syncCoaches` et job `football.coaches`, exposé dans Admin → Jobs sous
+  « Entraîneurs ». Il reste séparé de l'import complet : environ une requête API par club, avec
+  sélection d'une compétition fortement recommandée pour le quota gratuit.
+- Les entraîneurs verrouillés sont détectés **avant** l'appel provider et ne consomment donc aucune
+  requête. Les anciens coachs provider ne sont pas supprimés : ils sont simplement détachés du club.
+- Admin → Football → Entraîneurs expose la case « Protéger des synchronisations ». Sur la fiche club,
+  un coach verrouillé ou manuel reste prioritaire s'il coexiste avec une ligne provider.
+- Migration `0017_protect_manual_coaches.sql` : verrouille les entraîneurs déjà saisis manuellement.
+- Vérification : build Next.js 14.2.35 réussi avec variables Supabase factices + `git diff --check`.
+  Socle : **aucune modification**.
 
 ### 2026-09-17 — ChatGPT — Stats administrables, fiches clubs complètes et zones explicites
 
@@ -607,12 +621,12 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
   - `39267e2`/`150db4d` couche compétition (effectifs+stats, événements, journées, fiches)
 - **Migrations encore à passer** (si le projet Supabase n'est pas à jour) : `0012` est indiquée
   comme appliquée par l'utilisateur ; vérifier `0013_competition_header_texts.sql`, puis appliquer
-  `0014_belgians_abroad.sql`, `0015_season_phase_zones.sql`, puis `0016_club_profiles.sql`, et vérifier que
-  `modules/football/migrations/0001→0016` sont
+  `0014_belgians_abroad.sql`, `0015_season_phase_zones.sql`, `0016_club_profiles.sql`, puis
+  `0017_protect_manual_coaches.sql`, et vérifier que `modules/football/migrations/0001→0017` sont
   **toutes** passées (surtout `0008` position, `0009` banner_url/zones, `0010` rating_min,
   `0011` competition_type/parent_club_id/team_type, `0012` unicité des stats par compétition et
   `0013` textes des bandeaux, `0014` visibilité/pays du suivi international, `0015` zones par
-  saison/phase et `0016` contenu éditorial des fiches clubs).
+  saison/phase, `0016` contenu éditorial des fiches clubs et `0017` protection des coachs manuels).
   Le code est tolérant mais ces features restent inactives sinon.
 
 ---
