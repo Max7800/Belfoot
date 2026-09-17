@@ -284,6 +284,11 @@ sur sa page, l'onglet « Classement » devient « Tours ». La Vue d'ensemble re
 statistiques de championnat par le tour sélectionné et ses chiffres. Implémentation générique dans
 `lib/competitionType.js` + `components/football/CupRounds.js` (aucun nom de compétition en dur).
 
+**Routes compétition** : tous les liens passent par `lib/competitionRoutes.js`. L'URL publique est
+normalisée (`Croky Cup` → `/competitions/croky-cup`) même si une ancienne ligne possède un slug avec
+espaces/majuscules. La page détail résout aussi les anciens slugs, l'identifiant et le nom normalisé :
+aucune correction de donnée ou migration n'est requise pour conserver les anciens accès.
+
 ---
 
 ## 11. Admin existant
@@ -404,11 +409,26 @@ ligne de match = `components/football/MatchRow.js` ; classement UI = `components
 admin générique = `components/admin/EntityManager.js` + `config/football-admin.js` ;
 panneaux admin = `components/admin/panels.js` + `registry.js` ; page compétition (la plus riche) =
 `app/competitions/[slug]/page.js` ; détection ligue/coupe = `lib/competitionType.js` ; vue tours de
-coupe = `components/football/CupRounds.js`.
+coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible des compétitions =
+`lib/competitionRoutes.js`.
 
 ---
 
 ## CHANGELOG_DE_PASSATION
+
+### 2026-09-17 — ChatGPT — accès canonique aux pages de compétition
+
+- Reproduction sur le site public : la carte Croky Cup existait, mais pointait vers
+  `/competitions/Croky Cup` et finissait sur « Compétition introuvable ».
+- Centralisation des liens compétition avec une URL normalisée (`/competitions/croky-cup`).
+- Résolution rétrocompatible par slug exact, identifiant, slug normalisé ou nom normalisé ; le
+  correctif fonctionne pour les futures compétitions sans nom codé en dur.
+- Liens corrigés dans `/competitions` et dans l'appel à la page complète depuis `/classement`.
+- Comportement coupe conservé et vérifié : sélection par tours, finale par défaut, aucun classement
+  à points, onglet « Tours », matchs et clubs reliés à la compétition.
+- Nouvelle migration : **aucune**.
+- Vérification : `npm run build` réussi sous Next.js 14.2.35 + `git diff --check` réussi.
+- Socle : **aucune modification**.
 
 ### 2026-09-17 — ChatGPT — cohérence championnat/coupe
 
@@ -430,10 +450,11 @@ coupe = `components/football/CupRounds.js`.
 ## CURRENT_GIT_STATE
 
 - **Branche** : `main`
-- **Dernier commit fonctionnel** : `47be978` — cohérence championnat/coupe, Croky sans faux
-  classement à points, affichage par tours, détection provider/legacy et liste compétitions robuste.
-- **Commit précédent** : `ef247d9` — ajout de cette passation technique.
+- **Dernier commit fonctionnel** : `fa4aaf9` — URLs canoniques des compétitions et résolution
+  rétrocompatible ; la page Croky devient accessible via `/competitions/croky-cup`.
+- **Commit précédent** : `4bc5e57` — actualisation de la passation après le lot coupes.
 - **Commits importants récents** :
+  - `fa4aaf9` liens compétition centralisés + résolution des anciens slugs/IDs/noms
   - `47be978` distinction générique ligue/coupe + vue tours Croky + erreurs de chargement explicites
   - `df59dfa` header/identité + fond global + tuiles (accent/enabled) + dates journées
   - `a0512b2` fix Croky Cup (/competitions en client) + relation recherchable + clean sheets GK +
