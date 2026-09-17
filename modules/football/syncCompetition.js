@@ -40,6 +40,28 @@ async function fillMissingClubProfile(db, source, rows) {
   }
 }
 
+const RESERVE_LINKS = [
+  { children: ["club nxt"], parents: ["club brugge kv", "club brugge"], type: "u23" },
+  { children: ["jong genk"], parents: ["genk", "krc genk"], type: "u23" },
+  { children: ["rsca futures"], parents: ["anderlecht", "rsc anderlecht"], type: "u23" },
+  { children: ["jong kaa gent", "kaa gent u23"], parents: ["gent", "kaa gent"], type: "u23" },
+];
+const normalizeClubName = (value) => String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
+
+async function linkKnownReserveTeams(db) {
+  const { data: rows } = await db.from("clubs").select("id,name,locked,parent_club_id,team_type");
+  const clubs = rows || [];
+  for (const rule of RESERVE_LINKS) {
+    const child = clubs.find((club) => rule.children.includes(normalizeClubName(club.name)));
+    const parent = clubs.find((club) => rule.parents.includes(normalizeClubName(club.name)));
+    if (!child || !parent || child.locked || child.id === parent.id) continue;
+    const patch = {};
+    if (!child.parent_club_id) patch.parent_club_id = parent.id;
+    if (!child.team_type || child.team_type === "first_team") patch.team_type = rule.type;
+    if (Object.keys(patch).length) await db.from("clubs").update(patch).eq("id", child.id);
+  }
+}
+
 export async function syncCompetition(db, competition, ctx = {}) {
   const provider = getProvider(competition.provider);
   if (!provider) return `${competition.name}: aucun provider`;
@@ -71,6 +93,7 @@ export async function syncCompetition(db, competition, ctx = {}) {
       await fillMissingClubProfile(db, competition.provider, clubs);
     } catch {}
   }
+  await linkKnownReserveTeams(db);
   const map = await clubMap(db, competition.provider);
   const matchN = await upsertExternal(db, "matches", competition.provider, resolveMatches(matches, competition.id, map),
     ["competition_id", "home_club_id", "away_club_id", "home_score", "away_score", "status", "minute", "kickoff", "matchday", "round_raw", "phase", "round_number"]);

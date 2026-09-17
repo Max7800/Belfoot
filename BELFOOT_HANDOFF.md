@@ -190,8 +190,9 @@ blanche (résilience ajoutée) mais désactive la feature liée.
 **Provider principal = API-Football (`v3.football.api-sports.io`)** via `modules/football/apifootball.js`
 (header `x-apisports-key`). TheSportsDB = secondaire (contrat identique, `thesportsdb.js`).
 
-**IDs provider utilisés** : Jupiler Pro League `external_id = 144`, Croky Cup `external_id = 147`,
-provider `apifootball`. **Saison de dev = 2024** (le plan **gratuit** ne donne accès qu'aux saisons
+**IDs provider utilisés** : Jupiler Pro League `external_id = 144`, Challenger Pro League
+`external_id = 145`, Croky Cup `external_id = 147`, provider `apifootball`.
+**Saison de dev = 2024** (le plan **gratuit** ne donne accès qu'aux saisons
 **2022→2024** ; 2026 = plan payant). Le champ Saison des jobs accepte `2024` ou `2024-2025` (on
 extrait l'année).
 
@@ -387,9 +388,10 @@ Côté Supabase : Site URL = domaine + Redirect URLs (`/auth/callback`, `/reset`
 5. **Europe belge** : ajouter C1/C3/C4 comme compétitions synchronisées, mettre en avant tout match
    impliquant un club belge et créer un bloc/page coefficient UEFA (association + clubs). Prévoir
    une source coefficient vérifiable et une surcharge admin avant automatisation complète.
-6. **Challenger Pro League / réserves** : importer la D2 comme compétition distincte. Club NXT,
-   Jong Genk, RSCA Futures… conservent `parent_club_id` tout en ayant leurs propres matchs,
-   classement et fiche dans leur championnat.
+6. **Challenger Pro League / réserves** : migration `0018` prête (compétition 145 + saison
+   2024-2025). Après application, lancer `football.sync` puis `football.squads` uniquement sur la
+   Challenger. Club NXT, Jong Genk, RSCA Futures et Jong KAA Gent sont reliés automatiquement à
+   leur parent sans perdre leurs propres matchs, classement et fiche ; vérifier ensuite les liens.
 7. **Passer en plan payant** API-Football pour la saison courante (le code est prêt : changer `season`).
 8. Régler les Zones JPL par saison/phase. Pour la Croky, renseigner idéalement Type = `cup` en admin ; le front est
    désormais résilient et la détecte aussi via le provider/les tours si cette valeur manque encore.
@@ -449,6 +451,32 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
 ---
 
 ## CHANGELOG_DE_PASSATION
+
+### 2026-09-17 — ChatGPT — préparation Challenger Pro League
+
+- Migration `0018_challenger_pro_league.sql` : crée ou complète sans doublon la Challenger Pro
+  League (`apifootball`, ID 145), visible dans le portail, position 10, format championnat, texte
+  éditorial modifiable et saison `2024-2025` exploitable avec le quota gratuit.
+- Aucune zone de classement n'est préremplie : le format et les couleurs restent à valider puis à
+  saisir dans `seasons.zones_by_phase`, comme pour la JPL.
+- Après chaque synchronisation complète, Club NXT, Jong Genk, RSCA Futures et Jong KAA Gent sont
+  reliés au club parent connu et typés U23 si ces champs sont encore vides/génériques. Un club
+  verrouillé ou une relation déjà saisie n'est jamais écrasé.
+- Ordre après migration : lancer `football.sync` saison `2024`, compétition Challenger seulement,
+  puis `football.squads` quand le quota le permet. Aucun appel API n'est ajouté au chargement public.
+
+### 2026-09-17 — ChatGPT — portail Compétitions Belfoot
+
+- `/competitions` n'est plus une simple grille de petites tuiles utilitaires : nouveau bandeau
+  éditorial Belfoot et grandes « portes » visuelles utilisant logo, bannière et textes déjà
+  administrables de chaque compétition.
+- Les cartes différencient championnat et coupe et proposent des accès directs vers Vue d'ensemble,
+  Matchs, Classement/Tours et Clubs. Elles ne recopient volontairement ni résultats, ni classement,
+  ni statistiques : le portail oriente vers ces contenus sans faire doublon.
+- Le titre, l'introduction et les textes génériques du portail passent par `useLabels`
+  (`competitions.kicker`, `competitions.title`, `competitions.intro`, etc.).
+- Aucune migration et aucun appel provider supplémentaire. Les futures compétitions publiques
+  héritent automatiquement du même rendu.
 
 ### 2026-09-17 — ChatGPT — accueil Belfoot et fiche club mobile compacte
 
@@ -671,11 +699,13 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
 - **Migrations encore à passer** (si le projet Supabase n'est pas à jour) : `0012` est indiquée
   comme appliquée par l'utilisateur ; vérifier `0013_competition_header_texts.sql`, puis appliquer
   `0014_belgians_abroad.sql`, `0015_season_phase_zones.sql`, `0016_club_profiles.sql`, puis
-  `0017_protect_manual_coaches.sql`, et vérifier que `modules/football/migrations/0001→0017` sont
+  `0017_protect_manual_coaches.sql`, puis `0018_challenger_pro_league.sql`, et vérifier que
+  `modules/football/migrations/0001→0018` sont
   **toutes** passées (surtout `0008` position, `0009` banner_url/zones, `0010` rating_min,
   `0011` competition_type/parent_club_id/team_type, `0012` unicité des stats par compétition et
   `0013` textes des bandeaux, `0014` visibilité/pays du suivi international, `0015` zones par
-  saison/phase, `0016` contenu éditorial des fiches clubs et `0017` protection des coachs manuels).
+  saison/phase, `0016` contenu éditorial des fiches clubs, `0017` protection des coachs manuels et
+  `0018` création Challenger Pro League).
   Le code est tolérant mais ces features restent inactives sinon.
 
 ---
