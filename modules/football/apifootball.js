@@ -42,7 +42,14 @@ const provider = {
   async fetchClubs(competition, ctx = {}) {
     const y = seasonYear(competition.ext?.season || ctx.season);
     const rows = await api(`/teams?league=${competition.external_id}&season=${y}`, ctx);
-    return rows.map((x) => ({ external_id: String(x.team.id), name: x.team.name, logo_url: x.team.logo || null, city: x.venue?.city || null }));
+    return rows.map((x) => ({
+      external_id: String(x.team.id), name: x.team.name, logo_url: x.team.logo || null, city: x.venue?.city || null,
+      founded_year: x.team.founded ?? null,
+      stadium_name: x.venue?.name || null,
+      stadium_capacity: x.venue?.capacity ?? null,
+      stadium_address: [x.venue?.address, x.venue?.city].filter(Boolean).join(", ") || null,
+      stadium_image_url: x.venue?.image || null,
+    }));
   },
   async fetchMatches(competition, ctx = {}) {
     const y = seasonYear(competition.ext?.season || ctx.season);

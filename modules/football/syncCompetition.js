@@ -28,6 +28,18 @@ function resolveMatches(matches, competitionId, map) {
   });
 }
 
+async function fillMissingClubProfile(db, source, rows) {
+  const fields = ["founded_year", "stadium_name", "stadium_capacity", "stadium_address", "stadium_image_url"];
+  for (const row of rows) {
+    if (!row.external_id) continue;
+    const { data: current } = await db.from("clubs").select(`id,locked,${fields.join(",")}`).eq("source", source).eq("external_id", row.external_id).maybeSingle();
+    if (!current || current.locked) continue;
+    const patch = {};
+    for (const field of fields) if ((current[field] === null || current[field] === "") && row[field] !== null && row[field] !== undefined && row[field] !== "") patch[field] = row[field];
+    if (Object.keys(patch).length) await db.from("clubs").update(patch).eq("id", current.id);
+  }
+}
+
 export async function syncCompetition(db, competition, ctx = {}) {
   const provider = getProvider(competition.provider);
   if (!provider) return `${competition.name}: aucun provider`;
@@ -53,7 +65,11 @@ export async function syncCompetition(db, competition, ctx = {}) {
   }
   let clubsN = await upsertExternal(db, "clubs", competition.provider, [...derived.values()], ["name"]);
   if (provider.fetchClubs) {
-    try { const clubs = await provider.fetchClubs(competition, ctx); await upsertExternal(db, "clubs", competition.provider, clubs, ["name", "short_name", "logo_url", "city"]); } catch {}
+    try {
+      const clubs = await provider.fetchClubs(competition, ctx);
+      await upsertExternal(db, "clubs", competition.provider, clubs, ["name", "short_name", "logo_url", "city"]);
+      await fillMissingClubProfile(db, competition.provider, clubs);
+    } catch {}
   }
   const map = await clubMap(db, competition.provider);
   const matchN = await upsertExternal(db, "matches", competition.provider, resolveMatches(matches, competition.id, map),

@@ -1,12 +1,11 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import siteConfig from "@/config/site";
 import { jobKeys } from "@/lib/jobs";
 import ImageField from "@/components/ui/ImageField";
 import { CLUB_SECTIONS } from "@/lib/clubSections";
 import { normalizeStatsConfig } from "@/lib/statsSections";
-import { inferTeamRelation, suggestParentClub } from "@/lib/teamRelations";
 
 export function ProfilesPanel() {
   const [rows, setRows] = useState([]);
@@ -246,43 +245,6 @@ export function StatsSectionsPanel() {
         ))}
       </div>
       <div className="mt-4 flex items-center gap-3"><button onClick={save} disabled={status === "saving"} className="rounded-xl bg-accent px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{status === "saving" ? "Enregistrement…" : "Enregistrer"}</button>{status === "saved" && <span className="text-sm text-green-400">Enregistré</span>}{status === "error" && <span className="text-sm text-red-400">Erreur d'enregistrement</span>}</div>
-    </div>
-  );
-}
-
-export function TeamRelationsPanel() {
-  const [clubs, setClubs] = useState([]);
-  const [showAll, setShowAll] = useState(false);
-  const [status, setStatus] = useState("");
-  const load = () => supabase.from("clubs").select("id,name,short_name,logo_url,team_type,parent_club_id").order("name").then(({ data }) => setClubs(data || []));
-  useEffect(() => { load(); }, []);
-  const firstTeams = useMemo(() => clubs.filter((club) => (club.team_type || "first_team") === "first_team"), [clubs]);
-  const rows = useMemo(() => clubs.filter((club) => showAll || club.parent_club_id || (club.team_type && club.team_type !== "first_team") || inferTeamRelation(club.name).detected), [clubs, showAll]);
-  const updateLocal = (id, patch) => setClubs((current) => current.map((club) => club.id === id ? { ...club, ...patch } : club));
-  const save = async (club) => {
-    setStatus(`saving:${club.id}`);
-    const { error } = await supabase.from("clubs").update({ team_type: club.team_type || "first_team", parent_club_id: club.parent_club_id || null }).eq("id", club.id);
-    setStatus(error ? `error:${club.id}` : `saved:${club.id}`); if (!error) load();
-  };
-  const applySuggestion = (club) => {
-    const inferred = inferTeamRelation(club.name); const parent = suggestParentClub(club, clubs);
-    updateLocal(club.id, { team_type: inferred.type, parent_club_id: parent?.id || club.parent_club_id || null });
-  };
-  return (
-    <div>
-      <div className="mb-4 flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-lg font-bold">Réserves et U23</h2><p className="mt-1 max-w-2xl text-xs text-muted">Les noms sont analysés localement, sans appel API. Une suggestion n'est jamais enregistrée sans ta validation.</p></div><label className="flex items-center gap-2 text-sm text-muted"><input type="checkbox" checked={showAll} onChange={(event) => setShowAll(event.target.checked)} />Afficher tous les clubs</label></div>
-      <div className="space-y-2">
-        {rows.map((club) => { const inferred = inferTeamRelation(club.name); const suggested = suggestParentClub(club, clubs); return (
-          <div key={club.id} className="rounded-xl border border-line/10 bg-surface p-3">
-            <div className="mb-3 flex items-center gap-3">{club.logo_url && <img src={club.logo_url} className="h-9 w-9 object-contain" alt="" />}<div className="min-w-0 flex-1"><div className="truncate font-semibold">{club.name}</div><div className="text-[11px] text-muted">{inferred.detected ? `Détecté : ${inferred.type}` : "Aucun suffixe réserve/U23 détecté"}{suggested ? ` · parent proposé : ${suggested.name}` : ""}</div></div>{inferred.detected && <button onClick={() => applySuggestion(club)} className="rounded-lg border border-accent/30 px-2 py-1 text-xs text-accent hover:bg-accent/10">Appliquer la suggestion</button>}</div>
-            <div className="grid gap-2 sm:grid-cols-[150px_minmax(180px,1fr)_auto]">
-              <select value={club.team_type || "first_team"} onChange={(event) => updateLocal(club.id, { team_type: event.target.value, parent_club_id: event.target.value === "first_team" ? null : club.parent_club_id })} className="rounded border border-line/10 bg-surface2 px-2 py-1.5 text-sm"><option value="first_team">Équipe première</option><option value="reserve">Réserve</option><option value="u23">U23</option><option value="women">Féminines</option></select>
-              <select value={club.parent_club_id || ""} disabled={(club.team_type || "first_team") === "first_team"} onChange={(event) => updateLocal(club.id, { parent_club_id: event.target.value || null })} className="rounded border border-line/10 bg-surface2 px-2 py-1.5 text-sm disabled:opacity-40"><option value="">— Club parent —</option>{firstTeams.filter((parent) => parent.id !== club.id).map((parent) => <option key={parent.id} value={parent.id}>{parent.name}</option>)}</select>
-              <button onClick={() => save(club)} disabled={status === `saving:${club.id}`} className="rounded-lg bg-accent px-3 py-1.5 text-sm font-bold text-white disabled:opacity-50">{status === `saving:${club.id}` ? "…" : status === `saved:${club.id}` ? "Enregistré" : "Enregistrer"}</button>
-            </div>{status === `error:${club.id}` && <div className="mt-2 text-xs text-red-400">Impossible d'enregistrer cette relation.</div>}
-          </div>); })}
-        {rows.length === 0 && <div className="rounded-xl border border-dashed border-line/20 p-6 text-center text-sm text-muted">Aucune réserve ou U23 détectée. Active « Afficher tous les clubs » pour créer une relation manuellement.</div>}
-      </div>
     </div>
   );
 }

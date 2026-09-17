@@ -18,6 +18,11 @@ const provider = {
     return (d.teams || []).map((t) => ({
       external_id: String(t.idTeam), name: t.strTeam,
       short_name: t.strTeamShort || null, logo_url: t.strBadge || null, city: t.strLocation || null,
+      founded_year: t.intFormedYear ? Number(t.intFormedYear) : null,
+      stadium_name: t.strStadium || null,
+      stadium_capacity: t.intStadiumCapacity ? Number(String(t.intStadiumCapacity).replace(/[^0-9]/g, "")) : null,
+      stadium_address: t.strStadiumLocation || null,
+      stadium_image_url: t.strStadiumThumb || null,
     }));
   },
   async fetchMatches(competition, ctx = {}) {

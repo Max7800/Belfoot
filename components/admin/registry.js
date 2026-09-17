@@ -4,7 +4,7 @@ import EntityManager from "./EntityManager";
 import CollectionManager from "./CollectionManager";
 import CategoriesManager from "./CategoriesManager";
 import ContributionsQueue from "./ContributionsQueue";
-import { ProfilesPanel, ReportsPanel, JobsPanel, SyncHistoryPanel, ProvidersPanel, SettingsInfo, LabelsPanel, TilesPanel, ClubSectionsPanel, StatsSectionsPanel, TeamRelationsPanel, Placeholder } from "./panels";
+import { ProfilesPanel, ReportsPanel, JobsPanel, SyncHistoryPanel, ProvidersPanel, SettingsInfo, LabelsPanel, TilesPanel, ClubSectionsPanel, StatsSectionsPanel, Placeholder } from "./panels";
 import { FOOTBALL_ENTITIES } from "@/config/football-admin";
 
 export function panelComponent(key) {
@@ -23,7 +23,6 @@ export function panelComponent(key) {
   if (key === "tilesbg") return { Comp: TilesPanel, props: {} };
   if (key === "clubpage") return { Comp: ClubSectionsPanel, props: {} };
   if (key === "statspage") return { Comp: StatsSectionsPanel, props: {} };
-  if (key === "team-relations") return { Comp: TeamRelationsPanel, props: {} };
   if (["config", "modules", "flags"].includes(key)) return { Comp: SettingsInfo, props: { which: key === "config" ? "site" : key } };
   return { Comp: Placeholder, props: { title: key } };
 }
