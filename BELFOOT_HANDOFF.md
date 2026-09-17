@@ -145,7 +145,8 @@ Trigger `handle_new_user` : crée un `profiles` (role member) à chaque inscript
   **tracked**, source/external_id/
   locked/synced_at/ext.
 - `coaches` : name, club_id, photo_url.
-- `seasons` : competition_id, label.
+- `seasons` : competition_id, label, **zones_by_phase** jsonb (`{ "Regular Season": [...] }`) pour
+  isoler les règles de classement par saison et phase.
 - `matches` : competition_id, season_id, home_club_id, away_club_id, home_score, away_score,
   status (scheduled|live|finished|postponed), minute, kickoff, source/external_id/locked/synced_at,
   **round_raw** (libellé provider brut), **phase** (ex. "Regular Season"), **round_number**,
@@ -165,15 +166,16 @@ Trigger `handle_new_user` : crée un `profiles` (role member) à chaque inscript
 ## 6. Migrations (fichiers présents)
 
 Socle : `supabase/schema.sql` (= `supabase/migrations/0001_core.sql`).
-Football : `modules/football/migrations/0001_init` → `0014_belgians_abroad` (init, players_tracking,
+Football : `modules/football/migrations/0001_init` → `0015_season_phase_zones` (init, players_tracking,
 competition_slug, player_stats, players_events, events_names, rounds_phases, competition_position,
 banner_zones, rating_min, types_relations, statistiques joueur séparées par compétition, textes
-éditoriaux des bandeaux de compétition, visibilité publique des compétitions et pays du joueur).
+éditoriaux des bandeaux de compétition, visibilité publique des compétitions, pays du joueur,
+zones de classement par saison/phase).
 Autres : `modules/votw/migrations/0001_init`, `modules/forum/migrations/0001_init`.
 
 ⚠️ **Migrations passées à la main** dans Supabase. Le code est tolérant (tri client, fill-if-empty)
 mais certaines fonctions restent inactives tant que la colonne n'existe pas. **Vérifier que TOUTES
-les migrations football 0001→0014 sont passées** sur le projet (surtout position/banner/zones/
+les migrations football 0001→0015 sont passées** sur le projet (surtout position/banner/zones/
 rating_min/competition_type/parent_club_id/team_type et `0012` avant toute nouvelle synchro des
 effectifs/stats, puis `0013` pour éditer les titres de bandeau). Une colonne manquante n'affiche plus de page
 blanche (résilience ajoutée) mais désactive la feature liée.
@@ -257,8 +259,9 @@ football (bug déjà corrigé dans EntityManager).
 - **Ordre des compétitions** : `competitions.position` (0 = premier). Tri **côté client** partout
   (fallback nom) — `/competitions`, `/matchs`, `/classement`, sélecteurs.
 - **Zones de classement** : `competitions.zones` = `[{label,color,from,to}]`, éditeur dédié en admin
-  (type de champ `zones`). Rendu = bordure colorée + légende (`StandingsTable`) + positions colorées
-  dans le Top 5. **Aucune position en dur.**
+  reste le fallback historique. La configuration active vit dans `seasons.zones_by_phase` et se
+  modifie dans Admin → Football → Saisons. Rendu = rang coloré + légende (`StandingsTable`) +
+  positions colorées dans le Top 5. Une phase absente n'hérite d'aucune autre phase.
 - **Fiche club — sections** (`lib/clubSections.js` + admin Réglages → Fiche club) : activer/masquer/
   ordonner (Effectif, Équipes liées, Derniers matchs, Prochains matchs). Côté visiteur : sections
   **pliables/dépliables** (préférence mémorisée en `localStorage`). Masquer ≠ supprimer.
@@ -272,8 +275,9 @@ suivis hors Belgique, recherche, filtres pays/championnat/poste, cartes club + s
 état vide exploitable). `/competitions` (liste, client, état chargement/erreur explicite, type
 Championnat/Coupe) + `/competitions/[slug]` (header overlay, onglets Vue d'ensemble / Matchs /
 Classement pour une ligue ou Tours pour une coupe / Clubs / Joueurs / Stats, sélecteur de saison,
-fond global discret, poussoir direct entre les compétitions qui conserve l'onglet courant). `/matchs`
-(phase-aware, sélecteur compétition en tuiles + phase + tour, dates de
+fond global discret, poussoir direct entre les compétitions qui conserve l'onglet courant). Les
+matchs, classements, clubs et chiffres de cette page sont scoppés par la saison sélectionnée.
+`/matchs` (sélecteur compétition + saison + phase + tour, dates de
 journées) + `/matchs/[id]` (fiche + timeline lisible). `/classement` (sélecteur compétition + phase,
 calcul client, zones). `/clubs/[id]` (entraîneur en tête + sections pliables). `/players/[id]` (stats
 saison). `/recherche` (unifiée). Auth : `/login` (OAuth Google/Twitch/Discord + email + inscription +
@@ -346,6 +350,10 @@ Côté Supabase : Site URL = domaine + Redirect URLs (`/auth/callback`, `/reset`
   ces jobs pour chaque compétition afin de reconstruire les lignes séparées. Les anciennes lignes
   sans `competition_id` restent visibles comme « Non attribuée » sur la fiche joueur, mais sont
   volontairement ignorées sur les pages compétition.
+- **Classements multi-saisons** : ne jamais appliquer directement `competitions.zones` à toutes les
+  phases. Utiliser `zonesForPhase(competition, season, phase, primaryPhase)`. Depuis `0015`, une
+  phase absente de `seasons.zones_by_phase` n'affiche aucune couleur. Les pages compétition,
+  `/classement` et `/matchs` filtrent aussi les matchs via `season_id`.
 - **Ne pas trier en base par une colonne potentiellement absente** (ex. `order("position")`) → tri
   **client** avec fallback, sinon page vide si migration en retard.
 - **`NEXT_PUBLIC_*` en Secret sur Vercel** = 500. Toujours Config + redeploy sans cache.
@@ -434,6 +442,24 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
 ---
 
 ## CHANGELOG_DE_PASSATION
+
+### 2026-09-17 — ChatGPT — zones de classement par saison et phase
+
+- Correction du bug où les couleurs de la saison régulière restaient actives dans les Champions,
+  Europe et Relegation Play-offs. La cause était `competitions.zones`, unique pour toute l'histoire
+  et toutes les phases de la compétition.
+- Migration `0015_season_phase_zones.sql` : ajout de `seasons.zones_by_phase`. Transition des zones
+  existantes vers `Regular Season` pour les saisons antérieures à 2026 ; aucune règle 16 clubs
+  n'est copiée vers 2026-2027.
+- Nouvel éditeur Admin → Football → Saisons → Zones par phase. Les noms correspondent exactement
+  aux phases provider ; une phase non configurée n'affiche aucune zone ni légende.
+- Les pages compétition, `/classement` et `/matchs` filtrent désormais réellement les rencontres
+  avec `season_id`. Les sélecteurs choisissent la saison la plus récente et réinitialisent phase/tour.
+- Préparation du format JPL 2026-2027 : 18 clubs, 34 journées, aucun playoff ; les zones pourront
+  être définies uniquement sur `Regular Season` (Europe 1-4, relégation 17-18 selon la règle
+  officielle), sans toucher aux anciennes saisons.
+- Vérification : build Next.js 14.2.35 réussi avec variables Supabase factices de compilation +
+  `git diff --check` réussi. Socle : **aucune modification**.
 
 ### 2026-09-17 — ChatGPT — annuaire des Belges à l'étranger V1
 
@@ -524,10 +550,11 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
 ## CURRENT_GIT_STATE
 
 - **Branche** : `main`
-- **Dernier commit fonctionnel** : `39c6522` — annuaire des Belges à l'étranger V1, compétitions
-  techniques masquables, discovery scoppée et correction des rangs neutres.
-- **Commit précédent** : `d17793a` — documentation de la finition des compétitions.
+- **Dernier commit fonctionnel** : `819ba40` — matchs réellement scoppés par saison et zones de
+  classement configurables par saison/phase.
+- **Commit précédent** : `8c4452e` — documentation du suivi international.
 - **Commits importants récents** :
+  - `819ba40` migration `0015` + zones saison/phase + filtres saison sur Compétition/Classement/Matchs
   - `39c6522` page Belges + migration `0014` + visibilité publique + discovery économe
   - `0f75661` navigation directe Pro League/Croky + migration `0013` + finition des cartes
   - `14cd294` migration `0012` + stats compétition/saison + tracking scoppé + fiche joueur enrichie
@@ -544,10 +571,12 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
   - `39267e2`/`150db4d` couche compétition (effectifs+stats, événements, journées, fiches)
 - **Migrations encore à passer** (si le projet Supabase n'est pas à jour) : `0012` est indiquée
   comme appliquée par l'utilisateur ; vérifier `0013_competition_header_texts.sql`, puis appliquer
-  `0014_belgians_abroad.sql` et vérifier que `modules/football/migrations/0001→0014` sont
+  `0014_belgians_abroad.sql`, puis `0015_season_phase_zones.sql`, et vérifier que
+  `modules/football/migrations/0001→0015` sont
   **toutes** passées (surtout `0008` position, `0009` banner_url/zones, `0010` rating_min,
   `0011` competition_type/parent_club_id/team_type, `0012` unicité des stats par compétition et
-  `0013` textes des bandeaux, `0014` visibilité/pays du suivi international).
+  `0013` textes des bandeaux, `0014` visibilité/pays du suivi international et `0015` zones par
+  saison/phase).
   Le code est tolérant mais ces features restent inactives sinon.
 
 ---
