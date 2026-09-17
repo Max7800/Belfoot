@@ -1,0 +1,450 @@
+# BELFOOT — Passation technique
+
+> But de ce fichier : permettre à un autre modèle (ou dev) de **reprendre immédiatement** Belfoot
+> à partir du repo, sans perte de contexte. À lire en entier avant de coder.
+>
+> Principe produit central : **image = décor / contenu = dynamique et administrable**.
+> Le provider externe remplit la **donnée sportive** ; il ne doit **jamais** écraser les
+> **choix éditoriaux/admin** (logos manuels, bannières, ordre, zones, textes, fonds de tuiles,
+> relations de clubs, visibilité de blocs).
+
+---
+
+## 1. Vue d'ensemble
+
+**Belfoot** = site football belge. Cœur produit : le **suivi des joueurs belges** (surtout à
+l'étranger), avec l'actualité **autour** de cette logique data. C'est le **3ᵉ fork** du « socle »
+(moteur réutilisable) après VCH (fan-hub GTA VI) et Flo Potez (vitrine maçonnerie). Belfoot part
+d'un fork du socle et ne doit **pas** modifier le socle : les évolutions généralisables sont
+listées en fin de fichier (SOCLE_CANDIDATES) mais **pas** remontées pour l'instant.
+
+Compétitions V1 : **Jupiler Pro League** (championnat) + **Croky Cup** (coupe). Suivi ciblé des
+Belges à l'étranger + actu. Le reste vient plus tard.
+
+---
+
+## 2. Stack technique
+
+- **Next.js 14** (App Router, `app/`), React 18, JavaScript (pas de TypeScript).
+- **Tailwind CSS** avec des **tokens CSS** (thème clair/sombre) : couleurs `accent`, `bg`,
+  `surface`, `surface2`, `content`, `muted`, `line` (voir `app/globals.css` + `tailwind.config.js`).
+- **Supabase** (Postgres + Auth + Storage). Projet Supabase dédié « Joueurs Belge »
+  (ref `pfyugigtqkqhgwxbzsdv`).
+- **Vercel** (hébergement + déploiement auto sur push `main`).
+- Dépendances notables : `@supabase/supabase-js`, `lucide-react`, `@tiptap/*` (éditeur riche des
+  collections éditoriales).
+- **Aucune librairie de drag&drop** (reorder = boutons ↑/↓ ou HTML5 natif). Pas de state manager
+  externe (React state + hooks).
+
+Workflow de dev habituel : l'assistant édite dans un sandbox → `npm run build` → commit →
+l'utilisateur crée un **token GitHub classic usage-unique (scope `repo`)** → push sur `main` en
+première action → Vercel redéploie. Les migrations SQL sont passées **à la main** dans le SQL
+Editor de Supabase (⚠️ **migration d'abord, rechargement du site ensuite**).
+
+---
+
+## 3. Structure des dossiers
+
+```
+app/                     pages (App Router)
+  page.js                accueil (placeholder — home Belfoot pas encore construite)
+  layout.js              layout racine (ThemeModeProvider, Navbar, Footer, accent injecté)
+  globals.css            tokens de thème + styles .rich (éditeur) + scope [data-force-dark] (admin)
+  competitions/          liste + [slug] (LA page riche : header, onglets, stats…)
+  matchs/                liste (phase-aware) + [id] (fiche match + timeline)
+  clubs/[id]/            fiche club (sections pliables + config admin)
+  players/[id]/          fiche joueur (stats saison)
+  classement/           classement global (sélecteur compétition + phase, calcul client)
+  [collection]/          pages génériques des collections éditoriales (news…)
+  recherche/            recherche unifiée
+  login / reset / compte / auth/callback   auth (OAuth + email)
+  admin/                 shell admin (layout forcé sombre) + [key] (routeur de panneaux)
+  api/jobs/[key]/        runner de jobs protégé par JOBS_SECRET (cron)
+  api/admin/run-job/     runner de jobs déclenché depuis l'admin (auth = rôle admin via JWT)
+config/
+  site.js                identité, thème, locales, modules, flags, auth (providers OAuth)
+  collections.js         collections éditoriales déclaratives (moteur socle)
+  modules.js             modules métier activés (football, votw, forum, fm)
+  football-admin.js      SPEC des entités football pour l'admin générique (EntityManager)
+  admin.js               structure de l'admin (sections + panneaux) — Belfoot
+lib/
+  supabaseClient.js      client anon (browser + server components)
+  supabaseAdmin.js       client service-role (SERVEUR uniquement, getAdmin(), lazy) — bypass RLS
+  auth.js                useAuth() (session + rôle)
+  entries.js             CRUD collections éditoriales (table entries) + soft delete
+  standings.js           computeStandings(matches) — classement calculé client
+  labels.js              useLabels() -> L(key, fallback), textes administrables
+  tiles.js               useTiles() -> config visuelle des tuiles (fond/overlay/accent/enabled)
+  clubSections.js        config des sections de fiche club (enable/ordre)
+  jobs.js                registre des background jobs + runJob(key, ctx)
+  modules.js             registre unifié (collections + modules) : adminPanels/navItems/capabilities
+  media.js               abstraction upload (Supabase Storage bucket "media") + compression
+  seo.js, flags.js, permissions.js, io.js, interactions.js, contributions.js, categories.js, slugify.js
+components/
+  Navbar/Footer/ThemeModeProvider/CategoryBadge/RichContent/CollapsibleSection
+  auth/OAuthButtons.js
+  football/  MatchRow, StandingsTable, CompetitionHeader, Watermark
+  admin/     EntityManager (CRUD générique tables métier), CollectionManager (contenus éditoriaux),
+             registry.js (clé de panneau -> composant), panels.js (Jobs/Profils/Signalements/
+             Providers/Textes/Tuiles/FicheClub/SettingsInfo…), Dashboard, CategoriesManager,
+             ContributionsQueue, FieldInput, SortableList, ui/{ImageField,GalleryField,SaveStatus}
+modules/
+  football/  manifest, providers.js (contrat), apifootball.js, thesportsdb.js (secondaire),
+             syncCompetition.js, syncSquads.js, syncEvents.js, discoverPlayers.js, trackPlayers.js,
+             jobs/{sync,liveSync,squads,events,discoverBelgians,trackPlayers}.js, admin/, migrations/
+  votw/      "11 de la semaine" — design + schéma, désactivé
+  forum/     forum optionnel — manifest + schéma, désactivé
+  fm/        Football Manager (verticale future) — manifest stub, désactivé
+supabase/
+  schema.sql             socle : profiles, entries, site_settings, categories, contributions,
+                         interactions (comments/votes/reports), schema_migrations, audit_log,
+                         job_runs, RLS, trigger handle_new_user (auto-profil à l'inscription)
+  migrations/0001_core.sql   copie du core
+```
+
+---
+
+## 4. Variables d'environnement (⚠️ ne jamais committer les valeurs)
+
+Sur Vercel (Production + Preview) :
+- `NEXT_PUBLIC_SUPABASE_URL` — URL du projet Supabase (`https://pfyugigtqkqhgwxbzsdv.supabase.co`).
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY` — clé anon **public** (type **Config**, pas Secret : les
+  `NEXT_PUBLIC_*` doivent être exposées au client au build).
+- `NEXT_PUBLIC_ADMIN_EMAIL` — email admin (indicatif).
+- `SUPABASE_SERVICE_ROLE_KEY` — **secret**, serveur uniquement (jobs, bypass RLS). SANS `NEXT_PUBLIC_`.
+- `JOBS_SECRET` — protège l'endpoint `/api/jobs/[key]` (cron).
+- `APIFOOTBALL_KEY` — clé API-Football (provider principal).
+- `THESPORTSDB_KEY` — provider secondaire/test (défaut `3`).
+
+Piège vécu : mettre une `NEXT_PUBLIC_*` en type **Secret** sur Vercel → le client reçoit `undefined`
+→ client Supabase cassé → 500. Toujours en **Config**. Et **redeploy sans cache** après un changement d'env.
+
+---
+
+## 5. Base Supabase — tables importantes
+
+**Socle** (`supabase/schema.sql`) : `profiles` (id, username, role member|admin), `entries`
+(contenus éditoriaux polymorphes : collection, title, slug, body, cover_url, images, category, seo,
+published, **deleted_at** soft-delete, search tsvector `'simple'`), `site_settings` (id=1, `data`
+jsonb — y vivent **labels/tiles/club_sections**), `categories`, `contributions`, `comments/votes/
+reports` (interactions polymorphes target_type/target_id), `schema_migrations`, `audit_log`,
+`job_runs`. RLS partout (lecture publique du publié, écriture admin via `is_admin()`).
+Trigger `handle_new_user` : crée un `profiles` (role member) à chaque inscription.
+
+**Football** (`modules/football/migrations/*`) :
+- `competitions` : id, name, slug, provider ('apifootball'|'thesportsdb'), **external_id** (id ligue
+  provider), logo_url, **banner_url** (décor), **zones** jsonb `[{label,color,from,to}]`, **position**
+  (ordre, 0=premier), **rating_min** (seuil apparitions pour classement des notes),
+  **competition_type** ('league'|'cup'), source/**locked**/synced_at/**ext** (jsonb : coverage,
+  country, country_flag, providerName, season…).
+- `clubs` : name, short_name, city, logo_url, **team_type** (first_team|reserve|u23|women),
+  **parent_club_id** (réserves/U23), source/external_id/locked/synced_at/ext.
+- `players` : name, club_id, position (Goalkeeper/Defender/Midfielder/Attacker), number,
+  nationality, competition, age, birth_date, photo_url, active, **tracked**, source/external_id/
+  locked/synced_at/ext.
+- `coaches` : name, club_id, photo_url.
+- `seasons` : competition_id, label.
+- `matches` : competition_id, season_id, home_club_id, away_club_id, home_score, away_score,
+  status (scheduled|live|finished|postponed), minute, kickoff, source/external_id/locked/synced_at,
+  **round_raw** (libellé provider brut), **phase** (ex. "Regular Season"), **round_number**,
+  matchday (= round_number), provider, ext.
+- `match_events` : match_id, minute, type (goal|assist|yellow|red|sub), player_id, club_id,
+  **player_name/assist_name/detail** (dénormalisés, timeline lisible), source.
+- `player_season_stats` : player_id, competition_id, season, appearances, lineups, minutes, goals,
+  assists, yellow, red, rating, source/external_id/synced_at, unique(player_id,season).
+- Vues dérivées : `standings`, `top_scorers`, `top_assists` (⚠️ **phase-blind** : on privilégie le
+  **calcul client** `lib/standings.computeStandings` scoppé par phase, cf. pièges).
+
+`votw`, `forum` = schémas définis mais **modules désactivés**.
+
+---
+
+## 6. Migrations (fichiers présents)
+
+Socle : `supabase/schema.sql` (= `supabase/migrations/0001_core.sql`).
+Football : `modules/football/migrations/0001_init` → `0011_types_relations` (init, players_tracking,
+competition_slug, player_stats, players_events, events_names, rounds_phases, competition_position,
+banner_zones, rating_min, types_relations).
+Autres : `modules/votw/migrations/0001_init`, `modules/forum/migrations/0001_init`.
+
+⚠️ **Migrations passées à la main** dans Supabase. Le code est tolérant (tri client, fill-if-empty)
+mais certaines fonctions restent inactives tant que la colonne n'existe pas. **Vérifier que TOUTES
+les migrations football 0001→0011 sont passées** sur le projet (surtout position/banner/zones/
+rating_min/competition_type/parent_club_id/team_type). Une colonne manquante n'affiche plus de page
+blanche (résilience ajoutée) mais désactive la feature liée.
+
+---
+
+## 7. API-Football & sync
+
+**Provider principal = API-Football (`v3.football.api-sports.io`)** via `modules/football/apifootball.js`
+(header `x-apisports-key`). TheSportsDB = secondaire (contrat identique, `thesportsdb.js`).
+
+**IDs provider utilisés** : Jupiler Pro League `external_id = 144`, Croky Cup `external_id = 147`,
+provider `apifootball`. **Saison de dev = 2024** (le plan **gratuit** ne donne accès qu'aux saisons
+**2022→2024** ; 2026 = plan payant). Le champ Saison des jobs accepte `2024` ou `2024-2025` (on
+extrait l'année).
+
+**Contrat provider** (`providers.js`) : un provider expose `{ key, fetchLeagueInfo, fetchClubs,
+fetchMatches, fetchLiveMatches, fetchSquadPlayers, fetchPlayerSeason, fetchEvents }`. Chaque
+compétition choisit son provider (colonne `provider`) → **aucune logique JPL en dur**, multi-sources.
+
+**Orchestrateurs** : `syncCompetition` (mode full = clubs dérivés des matchs + enrichis + tous les
+matchs + coverage + logo/nom/pays/drapeau si vide ; mode live = matchs en direct only),
+`syncSquads` (effectifs + `player_season_stats` en même temps, 0 requête en plus — met `tracked=true`),
+`syncEvents` (événements par match, incrémental + plafonné 40/run), `discoverBelgians`/`trackPlayers`
+(scaffold suivi belges à l'étranger : discovery légère + tracking ciblé `tracked=true`).
+
+**Jobs** (`lib/jobs.js`) : `football.sync`, `football.live-sync`, `football.squads`,
+`football.events`, `football.discover-belgians`, `football.track-belgians`. Chaque job accepte un
+`competitionId` (sinon : toutes) → **sync indépendante par compétition** (« Sync Pro League » vs
+« Sync Croky Cup »). Déclenchement :
+- Admin → **Données & sync → Jobs** : sélecteur de compétition + saison + boutons (route
+  `/api/admin/run-job`, sécurisée par **rôle admin via JWT**, aucun secret côté client).
+- `/api/jobs/[key]?season=&competitionId=` protégée par `JOBS_SECRET` (pour cron Vercel).
+Les jobs écrivent via le client **service-role** (`getAdmin()`), seul moyen de contourner la RLS
+côté serveur. Le rapport de job affiche le **nom réel de la ligue** (auto-vérification de l'id) +
+compteurs. Traces dans `job_runs` + Dashboard.
+
+**Coverage flags** : stockés dans `competitions.ext.coverage` (via `/leagues`). Gating : la sync
+effectifs/events ne s'exécute que si la ligue expose la donnée.
+
+**Rounds/phases (générique)** : `league.round` provider (ex. "Regular Season - 1", "8th Finals") est
+parsé en `round_raw` + `phase` + `round_number`. Groupement/stats se font **par phase + tour** →
+championnat (journées) ET coupe (tours) sans hardcode ; les barrages ne polluent pas les stats du
+championnat principal.
+
+---
+
+## 8. Protection données manuelles vs provider (RÈGLE À NE PAS CASSER)
+
+- Champs **owned by provider** (upsert par `(source, external_id)`) : name/logo/score/status… Ils
+  sont écrasés à chaque sync **sauf** si la ligne est **`locked = true`** (verrou global, admin).
+  `upsertExternal` **saute** toute ligne verrouillée.
+- `competitions.logo_url` : rempli par la sync **seulement si vide** → **logo manuel prioritaire**.
+- **Jamais touchés par la sync** (hors `source/external_id/ext/synced_at/owned`) : `banner_url`,
+  `zones`, `position`, `competition_type`, `rating_min`, `parent_club_id`, `team_type`, et tout ce
+  qui vit dans `site_settings.data` (**labels, tiles, club_sections**). C'est structurel : ces
+  champs ne sont pas dans les `ownedFields` des upserts.
+- `ext` (jsonb) = payload brut provider **isolé** des champs éditoriaux.
+
+**À NE PAS FAIRE** : ajouter `logo_url`, `banner_url`, `zones`, etc. aux `ownedFields` d'un upsert ;
+faire écrire la sync dans `site_settings.data` ; ré-injecter `data/images/seo` dans les entités
+football (bug déjà corrigé dans EntityManager).
+
+---
+
+## 9. Systèmes administrables (image=décor / contenu=dynamique)
+
+- **Textes** (`lib/labels.js` + admin Réglages → Textes) : `L(key, fallback)` partout. Surcharge
+  dans `site_settings.data.labels`. Défauts inline dans le code (marche sans config).
+- **Bannière compétition** : `competitions.banner_url` (décor, aucun texte intégré). Défaut
+  `public/competition-banner.png`. Header = overlay HTML/CSS (`CompetitionHeader`).
+- **Logos** : compétition `logo_url` (auto si vide, sinon manuel prioritaire) ; clubs `logo_url`
+  (auto, protégé par verrou).
+- **Fonds de tuiles** (`lib/tiles.js` + admin Réglages → Tuiles) : par tuile (`topscorer`,
+  `topassist`, `cleansheet`, `note`, `upcoming`) → `background_url`, `overlay`, `accent`, `enabled`.
+  Stocké dans `site_settings.data.tiles`. Accents par défaut si non défini.
+- **Ordre des compétitions** : `competitions.position` (0 = premier). Tri **côté client** partout
+  (fallback nom) — `/competitions`, `/matchs`, `/classement`, sélecteurs.
+- **Zones de classement** : `competitions.zones` = `[{label,color,from,to}]`, éditeur dédié en admin
+  (type de champ `zones`). Rendu = bordure colorée + légende (`StandingsTable`) + positions colorées
+  dans le Top 5. **Aucune position en dur.**
+- **Fiche club — sections** (`lib/clubSections.js` + admin Réglages → Fiche club) : activer/masquer/
+  ordonner (Effectif, Équipes liées, Derniers matchs, Prochains matchs). Côté visiteur : sections
+  **pliables/dépliables** (préférence mémorisée en `localStorage`). Masquer ≠ supprimer.
+
+---
+
+## 10. Pages publiques existantes
+
+Accueil `/` (placeholder). `/competitions` (liste, client) + `/competitions/[slug]` (header overlay,
+onglets Vue d'ensemble / Matchs / Classement / Clubs / Joueurs / Stats, sélecteur de saison, fond
+global discret). `/matchs` (phase-aware, sélecteur compétition en tuiles + phase + tour, dates de
+journées) + `/matchs/[id]` (fiche + timeline lisible). `/classement` (sélecteur compétition + phase,
+calcul client, zones). `/clubs/[id]` (entraîneur en tête + sections pliables). `/players/[id]` (stats
+saison). `/recherche` (unifiée). Auth : `/login` (OAuth Google/Twitch/Discord + email + inscription +
+mot de passe oublié), `/reset`, `/compte`, `/auth/callback` (redirige selon rôle). `/[collection]`
++ `/[collection]/[slug]` (contenus éditoriaux génériques, ex. `news` → `/actus`). `/proposer/[collection]`
+(contribution membre).
+
+**Vue d'ensemble compétition** : Top 5 (forme V/N/D + positions colorées par zone + légende),
+Résultats (dernière journée complète, couleurs V/N/D, glow score), Prochains matchs (état vide propre
+« Saison terminée »/« Aucun match à venir »), bloc **Leaders** (Meilleur buteur / Meilleur passeur /
+**Clean sheets gardien**, cartes premium cliquables → ancres Stats `#buteurs/#passeurs/#cleansheets`),
+bloc **Autres statistiques** (Club en forme, Meilleure attaque/défense), chiffres secondaires.
+**Stats** : grille 3×2 (Buteurs, Passeurs, Clean sheets GK, Minutes, Titularisations, Meilleures
+notes) avec leader mis en avant (or/argent/bronze) ; notes filtrées par `rating_min`.
+
+---
+
+## 11. Admin existant
+
+Shell forcé sombre (`app/admin/layout.js`, `[data-force-dark]`), garde d'accès (rôle admin).
+Sections (`config/admin.js`) : **Tableau de bord** ; **Éditorial** (Actualités, Catégories,
+Contributions) ; **Football** (Compétitions, Saisons, Clubs, Joueurs, Entraîneurs, Matchs,
+Événements — via `EntityManager` + spec `config/football-admin.js`) ; **Données & sync** (Providers,
+Jobs [sélecteur compétition + saison + run], Historique sync, Erreurs) ; **Communauté** (Profils,
+Signalements, Modération, Forum) ; **Réglages** (Configuration, Modules, Feature flags, Médias, SEO,
+**Textes**, **Tuiles**, **Fiche club**). `EntityManager` : CRUD générique piloté par spec (types de
+champ : text, number, bool, image, select, relation **recherchable**, datetime, zones…), regroupement
+(Joueurs par club) + recherche, affichage source/verrou/synchro, auto-slug.
+
+---
+
+## 12. Auth
+
+OAuth Google/Twitch/Discord (repris de VCH, neutralisé, générique via `siteConfig.auth.providers`)
++ email/mot de passe + reset. Flux implicite (redirectTo `/auth/callback` qui redirige selon rôle :
+admin→`/admin`, sinon→`/compte`). `handle_new_user` crée le profil. Promotion admin manuelle :
+`update profiles set role='admin' where id=(select id from auth.users where email=...)`.
+URLs à configurer côté providers : redirect URI = `https://<REF>.supabase.co/auth/v1/callback`.
+Côté Supabase : Site URL = domaine + Redirect URLs (`/auth/callback`, `/reset`, localhost).
+
+---
+
+## 13. Bugs connus / pièges à NE PAS casser
+
+- **Vues SQL `standings`/`top_scorers`/`top_assists` sont phase-blind** (mélangent championnat +
+  barrages). Le front utilise le **calcul client par phase** (`computeStandings`) — ne pas revenir
+  aux vues pour l'affichage compétition.
+- **Meilleure attaque/défense** : filtrer sur un **nombre de matchs représentatif** (sinon un club à
+  2-3 barrages ressort). Déjà fait (`eligible = played >= max(3, maxPlayed*0.5)`).
+- **Clean sheets = gardien** : on n'a **pas** les compos par match → clean sheets club attribués au
+  **GK n°1** (plus de minutes). Heuristique assumée ; à améliorer quand les lineups par match seront
+  synchronisées.
+- **Notes** : seuil d'apparitions `rating_min` obligatoire (sinon un joueur à faible temps de jeu
+  ressort premier).
+- **Ne pas trier en base par une colonne potentiellement absente** (ex. `order("position")`) → tri
+  **client** avec fallback, sinon page vide si migration en retard.
+- **`NEXT_PUBLIC_*` en Secret sur Vercel** = 500. Toujours Config + redeploy sans cache.
+- **`getAdmin()`/service-role** : SERVEUR uniquement (jamais importé côté client). Les jobs échouent
+  sans lui (RLS bloque les écritures anon).
+- **EntityManager** : ne pas réintroduire l'injection `data/images/seo` (colonnes inexistantes sur
+  les tables football → erreur « Could not find the 'data' column »).
+- **Quota API-Football gratuit** : effectifs = 1 requête/club (paginé) → l'import des ~18 clubs peut
+  taper la limite (100/jour). Étaler, ou sync par compétition. Saisons gratuites 2022→2024 seulement.
+- **Bannière** ~2 Mo (`public/competition-banner.png`) : à compresser/WebP un jour.
+
+---
+
+## 14. TODO ouverts (par priorité indicative)
+
+1. **Vraie vue calendrier** de la saison (grille par journée/tour + dates + navigation). Aujourd'hui :
+   groupement par journée + dates dans l'onglet Matchs seulement.
+2. **Fiche club — blocs administrables complets** : ajouter les sections manquantes (Identité détaillée,
+   Classement du club, Stats club, Stade, Palmarès) au système `clubSections` (activer/ordre + pliable).
+3. **Synchro entraîneurs** depuis le provider (table `coaches` remplie manuellement pour l'instant ;
+   afficher l'entraîneur actuel, surchargeable admin).
+4. **Équipes liées / réserves / U23** : peupler `parent_club_id`/`team_type` (mapping provider) ; la
+   section « Équipes liées » s'affiche déjà si des relations existent.
+5. **Suivi des Belges à l'étranger** (cœur produit) : exercer `discover-belgians` + `track-belgians`,
+   construire les pages/briques (joueur, top des Belges du week-end).
+6. **Lineups par match** (compos) → clean sheets GK exacts + titularisations réelles par match.
+7. **Home Belfoot** (pas encore construite) : hero « Les Belges. Partout dans le monde. », blocs
+   JPL / Croky / Belges à suivre / en forme / Belge du moment / actus.
+8. **Passer en plan payant** API-Football pour la saison courante (le code est prêt : changer `season`).
+9. Compléter Type = `cup` sur Croky Cup en admin ; régler les Zones JPL.
+
+---
+
+## 15. Dernières décisions produit / UI
+
+- Header compétition : logo plus gros, drapeau pays, liseré tricolore belge subtil, style sombre/premium.
+- Fond global discret sur la page compétition (profondeur, liant entre blocs).
+- Tuiles leaders : contour d'accent gardé **même avec image de fond** ; filigranes teintés
+  (ballon doré / chaussure rouge / gant cyan / étoile violette) ; **fonds administrables** (accent,
+  overlay, image, on/off).
+- Leaders = Meilleur buteur / Meilleur passeur / **Clean sheets gardien** (la note reste en Stats).
+- « Voir tout » et cartes de la Vue d'ensemble **restent dans la compétition courante** (onglets +
+  ancres), plus jamais de saut vers une autre compétition.
+- Résultats/Prochains matchs en **mode compact**, blocs à **hauteur égale**.
+- Sync **indépendante par compétition** ; aucune compétition « par défaut » dans le code.
+
+---
+
+## HOW_TO_RESUME
+
+```bash
+# 1. Installer
+npm install
+
+# 2. Env local (ne pas committer)
+cp .env.local.example .env.local   # remplir avec les clés Supabase + APIFOOTBALL_KEY…
+
+# 3. Lancer en dev
+npm run dev                        # http://localhost:3000
+
+# 4. Build (toujours vérifier avant de pousser)
+npm run build
+
+# 5. Migrations : SQL Editor de Supabase, dans l'ordre :
+#    supabase/schema.sql (socle), puis modules/football/migrations/0001_init → 0011.
+#    (⚠️ migration d'abord, rechargement du site ensuite)
+
+# 6. Git : brancher, committer, pousser sur main -> Vercel redéploie
+git add -A && git commit -m "..."
+git push origin main
+```
+
+**Où sont les pièces clés** : provider API-Football = `modules/football/apifootball.js` ;
+orchestrateurs = `modules/football/sync*.js` ; jobs = `modules/football/jobs/` + `lib/jobs.js` ;
+runners = `app/api/jobs/[key]/route.js` (secret) + `app/api/admin/run-job/route.js` (rôle admin) ;
+classement client = `lib/standings.js` ; header = `components/football/CompetitionHeader.js` ;
+ligne de match = `components/football/MatchRow.js` ; classement UI = `components/football/StandingsTable.js` ;
+admin générique = `components/admin/EntityManager.js` + `config/football-admin.js` ;
+panneaux admin = `components/admin/panels.js` + `registry.js` ; page compétition (la plus riche) =
+`app/competitions/[slug]/page.js`.
+
+---
+
+## CURRENT_GIT_STATE
+
+- **Branche** : `main`
+- **Dernier commit** : `df59dfa` — header identité belge + fond global page + fonds de tuiles admin
+  enrichis + dates de journées + glow score.
+- **Commits importants récents** :
+  - `df59dfa` header/identité + fond global + tuiles (accent/enabled) + dates journées
+  - `a0512b2` fix Croky Cup (/competitions en client) + relation recherchable + clean sheets GK +
+    tuiles premium + Vue d'ensemble premium
+  - `64c60d9` sync indépendante par compétition + tuiles/fonds admin + logo manuel prioritaire +
+    competition_type + fondation équipes liées + entraîneur
+  - `8a665d8` fiche club en sections pliables + config admin (activer/ordre)
+  - `5d57095` cartes cliquables → ancres Stats + note fiabilisée (seuil) + clean sheets
+  - `a6213f5` rounds/phases génériques (fin du mélange journées/barrages)
+  - `39267e2`/`150db4d` couche compétition (effectifs+stats, événements, journées, fiches)
+- **Migrations encore à passer** (si le projet Supabase n'est pas à jour) : vérifier que
+  `modules/football/migrations/0001→0011` sont **toutes** passées (surtout `0008` position,
+  `0009` banner_url/zones, `0010` rating_min, `0011` competition_type/parent_club_id/team_type).
+  Le code est tolérant mais ces features restent inactives sinon.
+
+---
+
+## SOCLE_CANDIDATES  (documenter seulement — NE PAS remonter au socle maintenant)
+
+Fonctionnalités Belfoot qui seraient de bons candidats à généraliser dans le socle plus tard :
+
+1. **Textes administrables** (`lib/labels.js` + panneau Textes) — `L(key, fallback)` + surcharge
+   `site_settings.data.labels`. Très générique.
+2. **Ordre d'affichage administrable** (`position` + tri client fallback nom) — pattern réutilisable
+   pour toute liste d'entités.
+3. **image = décor / contenu = dynamique** (CompetitionHeader overlay, bannière décorative) — modèle
+   d'en-tête réutilisable pour n'importe quel type de page.
+4. **Blocs activables/désactivables + ordonnables + pliables** (`clubSections` + `CollapsibleSection`)
+   — moteur de « page à sections configurables » utile pour fiches produit/joueur/club/article.
+5. **Fonds visuels administrables par tuile** (`lib/tiles.js` + panneau Tuiles : bg/overlay/accent/
+   enabled) — système de « KPI/leader cards » thématisables.
+6. **Priorité des overrides manuels sur les données externes** (verrou `locked`, `logo_url`
+   fill-if-empty, `ext` isolé, champs admin hors `ownedFields`) — règle d'or de tout module à sync.
+7. **Navigation contextualisée** (« Voir tout » / cartes qui restent dans l'entité courante via
+   onglets + ancres, pas de « première compétition » par défaut).
+8. **Composants génériques** : `EntityManager` (CRUD table + spec + relation recherchable +
+   regroupement), cartes **Leader/KPI** avec accent + filigrane + fond admin, `StandingsTable` avec
+   zones, `MatchRow`.
+9. **Contrat de provider + sync par entité + jobs scoppés** (`competitionId` explicite, service-role,
+   runner sécurisé par rôle admin, coverage gating, upsert par `(source, external_id)`).
+10. **Rounds/phases génériques** (parsing `round_raw`/`phase`/`round_number`) — modèle pour toute
+    donnée à phases (championnat/coupe, saisons, sous-périodes).
+
+> Rappel : ne pas modifier le socle pour l'instant. Ceci est une **liste de candidats** à valider
+> une fois éprouvés par l'usage sur Belfoot.
