@@ -430,10 +430,11 @@ coupe = `components/football/CupRounds.js`.
 ## CURRENT_GIT_STATE
 
 - **Branche** : `main`
-- **Dernier commit avant ce lot** : `ef247d9` — ajout de cette passation technique.
-- **Lot courant** : cohérence championnat/coupe, à committer après validation du diff. Le SHA du
-  commit code sera reporté ici dans le commit de documentation qui suivra.
+- **Dernier commit fonctionnel** : `47be978` — cohérence championnat/coupe, Croky sans faux
+  classement à points, affichage par tours, détection provider/legacy et liste compétitions robuste.
+- **Commit précédent** : `ef247d9` — ajout de cette passation technique.
 - **Commits importants récents** :
+  - `47be978` distinction générique ligue/coupe + vue tours Croky + erreurs de chargement explicites
   - `df59dfa` header/identité + fond global + tuiles (accent/enabled) + dates journées
   - `a0512b2` fix Croky Cup (/competitions en client) + relation recherchable + clean sheets GK +
     tuiles premium + Vue d'ensemble premium
