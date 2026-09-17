@@ -500,10 +500,11 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
 ## CURRENT_GIT_STATE
 
 - **Branche** : `main`
-- **Dernier commit fonctionnel** : `14cd294` — statistiques joueur séparées par compétition/saison,
-  lectures publiques scoppées et synchronisations corrigées.
-- **Commit précédent** : `74b872a` — documentation des routes compétition canoniques.
+- **Dernier commit fonctionnel** : `0f75661` — poussoir de compétitions, textes de bandeau
+  administrables, zones fiabilisées et finition classement/résultats.
+- **Commit précédent** : `3ff105b` — documentation de la séparation des statistiques.
 - **Commits importants récents** :
+  - `0f75661` navigation directe Pro League/Croky + migration `0013` + finition des cartes
   - `14cd294` migration `0012` + stats compétition/saison + tracking scoppé + fiche joueur enrichie
   - `fa4aaf9` liens compétition centralisés + résolution des anciens slugs/IDs/noms
   - `47be978` distinction générique ligue/coupe + vue tours Croky + erreurs de chargement explicites
