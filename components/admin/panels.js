@@ -5,6 +5,7 @@ import siteConfig from "@/config/site";
 import { jobKeys } from "@/lib/jobs";
 import ImageField from "@/components/ui/ImageField";
 import { CLUB_SECTIONS } from "@/lib/clubSections";
+import { normalizeStatsConfig } from "@/lib/statsSections";
 
 export function ProfilesPanel() {
   const [rows, setRows] = useState([]);
@@ -167,9 +168,9 @@ export function ClubSectionsPanel() {
   const [items, setItems] = useState(CLUB_SECTIONS.map((s, i) => ({ ...s, enabled: true, order: i })));
   useEffect(() => { supabase.from("site_settings").select("data").eq("id", 1).maybeSingle().then(({ data }) => {
     const conf = (data?.data && data.data.club_sections) || {};
-    setItems(CLUB_SECTIONS.map((s, i) => ({ ...s, enabled: conf[s.key]?.enabled !== false, order: conf[s.key]?.order ?? i })).sort((a, b) => a.order - b.order));
+    setItems(CLUB_SECTIONS.map((s, i) => ({ ...s, label: conf[s.key]?.label || s.label, enabled: conf[s.key]?.enabled !== false, order: conf[s.key]?.order ?? i })).sort((a, b) => a.order - b.order));
   }); }, []);
-  const persist = async (next) => { const arr = next.map((s, i) => ({ ...s, order: i })); setItems(arr); const { data } = await supabase.from("site_settings").select("data").eq("id", 1).maybeSingle(); const obj = Object.fromEntries(arr.map((s) => [s.key, { enabled: s.enabled, order: s.order }])); await supabase.from("site_settings").update({ data: { ...(data?.data || {}), club_sections: obj } }).eq("id", 1); };
+  const persist = async (next) => { const arr = next.map((s, i) => ({ ...s, order: i })); setItems(arr); const { data } = await supabase.from("site_settings").select("data").eq("id", 1).maybeSingle(); const obj = Object.fromEntries(arr.map((s) => [s.key, { enabled: s.enabled, order: s.order, label: s.label }])); await supabase.from("site_settings").update({ data: { ...(data?.data || {}), club_sections: obj } }).eq("id", 1); };
   const toggle = (i) => persist(items.map((s, j) => (j === i ? { ...s, enabled: !s.enabled } : s)));
   const move = (i, d) => { const j = i + d; if (j < 0 || j >= items.length) return; const a = [...items]; [a[i], a[j]] = [a[j], a[i]]; persist(a); };
   return (
@@ -179,12 +180,70 @@ export function ClubSectionsPanel() {
       <div className="space-y-1">
         {items.map((s, i) => (
           <div key={s.key} className="flex items-center gap-2 rounded border border-line/10 bg-surface p-2 text-sm">
-            <label className="flex flex-1 items-center gap-2"><input type="checkbox" checked={s.enabled} onChange={() => toggle(i)} />{s.label}</label>
+            <label className="flex items-center gap-2"><input type="checkbox" checked={s.enabled} onChange={() => toggle(i)} />Visible</label>
+            <input value={s.label} onChange={(event) => setItems(items.map((item, itemIndex) => itemIndex === i ? { ...item, label: event.target.value } : item))} onBlur={() => persist(items)} className="min-w-0 flex-1 rounded border border-line/10 bg-surface2 px-2 py-1" />
             <button onClick={() => move(i, -1)} className="px-1 text-muted hover:text-content">↑</button>
             <button onClick={() => move(i, 1)} className="px-1 text-muted hover:text-content">↓</button>
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+export function StatsSectionsPanel() {
+  const [competitions, setCompetitions] = useState([]);
+  const [competitionId, setCompetitionId] = useState("");
+  const [allConfig, setAllConfig] = useState({});
+  const [draft, setDraft] = useState(normalizeStatsConfig());
+  const [status, setStatus] = useState("");
+
+  useEffect(() => {
+    Promise.all([
+      supabase.from("competitions").select("id,name").order("position", { ascending: true, nullsFirst: false }),
+      supabase.from("site_settings").select("data").eq("id", 1).maybeSingle(),
+    ]).then(([competitionResult, settingsResult]) => {
+      const rows = competitionResult.data || [];
+      const stored = (settingsResult.data?.data && settingsResult.data.data.competition_stats) || {};
+      setCompetitions(rows); setAllConfig(stored);
+      const first = rows[0]?.id || "default"; setCompetitionId(first); setDraft(normalizeStatsConfig(stored[first] || stored.default || {}));
+    });
+  }, []);
+
+  const selectCompetition = (id) => { setCompetitionId(id); setDraft(normalizeStatsConfig(allConfig[id] || allConfig.default || {})); setStatus(""); };
+  const updateSection = (key, field, value) => setDraft((current) => ({ ...current, sections: current.sections.map((section) => section.key === key ? { ...section, [field]: value } : section) }));
+  const move = (index, direction) => setDraft((current) => { const next = [...current.sections]; const target = index + direction; if (target < 0 || target >= next.length) return current; [next[index], next[target]] = [next[target], next[index]]; return { ...current, sections: next }; });
+  const save = async () => {
+    setStatus("saving");
+    const storedSections = Object.fromEntries(draft.sections.map((section, index) => [section.key, { enabled: section.enabled, order: index, label: section.label, accent: section.accent }]));
+    const nextAll = { ...allConfig, [competitionId]: { title: draft.title, subtitle: draft.subtitle, sections: storedSections } };
+    const { data } = await supabase.from("site_settings").select("data").eq("id", 1).maybeSingle();
+    const { error } = await supabase.from("site_settings").update({ data: { ...(data?.data || {}), competition_stats: nextAll } }).eq("id", 1);
+    if (error) setStatus("error"); else { setAllConfig(nextAll); setDraft(normalizeStatsConfig(nextAll[competitionId])); setStatus("saved"); }
+  };
+
+  return (
+    <div>
+      <h2 className="mb-2 text-lg font-bold">Page Stats</h2>
+      <p className="mb-4 text-xs text-muted">Chaque compétition possède ses propres textes, blocs, couleurs et ordre. Les chiffres restent calculés automatiquement.</p>
+      <select value={competitionId} onChange={(event) => selectCompetition(event.target.value)} className="mb-4 w-full rounded-xl border border-line/10 bg-surface2 px-3 py-2 text-sm sm:w-auto">
+        {competitions.map((competition) => <option key={competition.id} value={competition.id}>{competition.name}</option>)}
+      </select>
+      <div className="mb-5 grid gap-3 sm:grid-cols-2">
+        <label className="text-xs font-semibold uppercase tracking-wider text-muted">Titre<input value={draft.title} onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))} className="mt-1 w-full rounded border border-line/10 bg-surface2 px-3 py-2 text-sm normal-case tracking-normal text-content" /></label>
+        <label className="text-xs font-semibold uppercase tracking-wider text-muted">Sous-titre<input value={draft.subtitle} onChange={(event) => setDraft((current) => ({ ...current, subtitle: event.target.value }))} className="mt-1 w-full rounded border border-line/10 bg-surface2 px-3 py-2 text-sm normal-case tracking-normal text-content" /></label>
+      </div>
+      <div className="space-y-2">
+        {draft.sections.map((section, index) => (
+          <div key={section.key} className="grid gap-2 rounded-xl border border-line/10 bg-surface p-3 sm:grid-cols-[auto_minmax(180px,1fr)_90px_auto] sm:items-center">
+            <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={section.enabled} onChange={(event) => updateSection(section.key, "enabled", event.target.checked)} />Visible</label>
+            <input value={section.label} onChange={(event) => updateSection(section.key, "label", event.target.value)} className="rounded border border-line/10 bg-surface2 px-2 py-1.5 text-sm" />
+            <label className="flex items-center gap-2 text-xs text-muted"><input type="color" value={section.accent} onChange={(event) => updateSection(section.key, "accent", event.target.value)} className="h-8 w-10 rounded bg-transparent" />Accent</label>
+            <div className="flex justify-end gap-1"><button onClick={() => move(index, -1)} className="rounded px-2 py-1 text-muted hover:bg-white/5 hover:text-content">↑</button><button onClick={() => move(index, 1)} className="rounded px-2 py-1 text-muted hover:bg-white/5 hover:text-content">↓</button></div>
+          </div>
+        ))}
+      </div>
+      <div className="mt-4 flex items-center gap-3"><button onClick={save} disabled={status === "saving"} className="rounded-xl bg-accent px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{status === "saving" ? "Enregistrement…" : "Enregistrer"}</button>{status === "saved" && <span className="text-sm text-green-400">Enregistré</span>}{status === "error" && <span className="text-sm text-red-400">Erreur d'enregistrement</span>}</div>
     </div>
   );
 }

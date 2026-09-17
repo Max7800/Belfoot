@@ -15,6 +15,7 @@ import { competitionPath, resolveCompetitionRoute } from "@/lib/competitionRoute
 import { useLabels } from "@/lib/labels";
 import { useTiles } from "@/lib/tiles";
 import { zoneAt, zonesForPhase } from "@/lib/standingsZones";
+import { useStatsSections } from "@/lib/statsSections";
 
 const POS = { Goalkeeper: 0, Defender: 1, Midfielder: 2, Attacker: 3 };
 const VARIANTS = {
@@ -47,6 +48,7 @@ export default function CompetitionPage() {
   const [anchor, setAnchor] = useState(null);
   const competitionType = getCompetitionType(comp, matches);
   const isCup = competitionType === "cup";
+  const statsConfig = useStatsSections(comp?.id);
   useEffect(() => { if (tab === "stats" && anchor) { const el = document.getElementById(anchor); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); setAnchor(null); } }, [tab, anchor]);
   const goStats = (sec) => { setTab("stats"); setAnchor(sec); };
 
@@ -192,23 +194,48 @@ export default function CompetitionPage() {
   const FormDots = ({ res }) => <span className="hidden gap-0.5 sm:flex">{res.map((r, i) => <span key={i} className={`h-2 w-2 rounded-full ${r === "V" ? "bg-green-400" : r === "N" ? "bg-white/25" : "bg-red-400"}`} title={r} />)}</span>;
   const PhaseChips = () => phases.length > 1 ? <div className="mb-4 flex flex-wrap gap-1">{phases.map((ph) => <button key={ph} onClick={() => { setPhase(ph); setRound("all"); }} className={`rounded-full border px-3 py-1 text-xs ${curPhase === ph ? "border-accent bg-accent/10 text-accent" : "border-line/20 text-muted"}`}>{ph}</button>)}</div> : null;
 
-  function TopCategory({ title, id, rows, fmt, meta }) {
-    if (!rows.length) return <div id={id}><h3 className="mb-2 font-bold">{title}</h3><p className="text-sm text-muted">—</p></div>;
+  function TopCategory({ title, id, rows, fmt, meta, accent = "#ef4444" }) {
+    if (!rows.length) return <div id={id} className="h-full rounded-2xl border border-line/10 bg-gradient-to-b from-surface to-bg/35 p-4"><h3 className="mb-2 font-bold" style={{ color: accent }}>{title}</h3><p className="text-sm text-muted">—</p></div>;
     const [a, b, c, ...rest] = rows;
     const Sub = ({ cid }) => <span className="flex items-center gap-1 text-[11px] text-muted">{clubsMap[cid]?.logo_url && <img src={clubsMap[cid].logo_url} className="h-3.5 w-3.5 object-contain" alt="" />}{clubName(cid)}</span>;
     const Med = ({ x, tone, ring }) => <Link href={`/players/${x.p.id}`} className={`flex items-center gap-2 rounded-xl border p-2 ${tone}`}><img src={x.p.photo_url || ""} className={`h-9 w-9 rounded-full object-cover ring-1 ${ring}`} alt="" /><span className="min-w-0 flex-1"><span className="block truncate text-sm font-bold">{x.p.name}</span><Sub cid={x.p.club_id} /></span><b>{fmt(x.st)}</b></Link>;
     return (
-      <div id={id}>
-        <h3 className="mb-2 font-bold">{title}</h3>
-        <Link href={`/players/${a.p.id}`} className="mb-2 flex items-center gap-3 rounded-2xl border border-amber-400/40 bg-amber-400/10 p-3">
-          <img src={a.p.photo_url || ""} className="h-14 w-14 rounded-full object-cover ring-2 ring-amber-400/60" alt="" />
+      <div id={id} className="h-full rounded-2xl border bg-gradient-to-b from-surface to-bg/35 p-4 shadow-[0_18px_45px_-34px_rgba(0,0,0,0.95)]" style={{ borderColor: `${accent}45` }}>
+        <div className="mb-3 flex items-center gap-2"><span className="h-4 w-1 rounded-full" style={{ background: accent }} /><h3 className="font-black">{title}</h3></div>
+        <Link href={`/players/${a.p.id}`} className="mb-2 flex items-center gap-3 rounded-2xl border p-3 transition hover:brightness-110" style={{ borderColor: `${accent}60`, background: `${accent}12` }}>
+          <img src={a.p.photo_url || ""} className="h-14 w-14 rounded-full object-cover ring-2" style={{ "--tw-ring-color": `${accent}90` }} alt="" />
           <span className="min-w-0 flex-1"><span className="block truncate font-black">{a.p.name}</span><Sub cid={a.p.club_id} />{meta && <span className="block text-[11px] text-muted/70">{meta(a.st)}</span>}</span>
-          <b className="text-2xl text-amber-300">{fmt(a.st)}</b>
+          <b className="text-2xl" style={{ color: accent }}>{fmt(a.st)}</b>
         </Link>
         {(b || c) && <div className="mb-2 grid grid-cols-2 gap-2">{b && <Med x={b} tone="border-slate-300/25 bg-slate-300/5" ring="ring-slate-300/40" />}{c && <Med x={c} tone="border-amber-700/30 bg-amber-700/5" ring="ring-amber-700/40" />}</div>}
         {rest.length > 0 && <ol className="space-y-1 text-sm">{rest.map((x, i) => <li key={x.p.id} className="flex items-center gap-2"><span className="w-4 text-muted">{i + 4}</span><Link href={`/players/${x.p.id}`} className="min-w-0 flex-1 truncate hover:text-accent">{x.p.name}</Link><b>{fmt(x.st)}</b></li>)}</ol>}
       </div>
     );
+  }
+
+  function StatsBlock({ section }) {
+    if (section.key === "overview") return (
+      <div className="sm:col-span-2 lg:col-span-3">
+        <div className="mb-3 flex items-center gap-2"><span className="h-4 w-1 rounded-full" style={{ background: section.accent }} /><h3 className="font-black">{section.label}</h3></div>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {[
+            [phaseFinished.length, L("stat.played", "Matchs joués")],
+            [goals, L("stat.goals", "Buts")],
+            [phaseFinished.length ? (goals / phaseFinished.length).toFixed(2) : "0", L("stat.avg", "Buts / match")],
+            [`${homeW}/${draw}/${awayW}`, L("stat.hda", "Dom/Nul/Ext")],
+          ].map(([value, label]) => <div key={label} className="relative overflow-hidden rounded-2xl border border-line/10 bg-gradient-to-br from-surface to-bg/45 p-4"><span className="absolute inset-y-0 left-0 w-1" style={{ background: section.accent }} /><div className="text-2xl font-black">{value}</div><div className="mt-1 text-xs text-muted">{label}</div></div>)}
+        </div>
+      </div>
+    );
+    const props = {
+      scorers: { id: "buteurs", rows: topBy("goals"), fmt: (stat) => stat.goals },
+      assists: { id: "passeurs", rows: topBy("assists"), fmt: (stat) => stat.assists },
+      clean_sheets: { id: "cleansheets", rows: gkCleanSheets, fmt: (stat) => stat.cs, meta: () => "gardien" },
+      minutes: { id: "minutes", rows: topBy("minutes"), fmt: (stat) => stat.minutes },
+      lineups: { id: "titu", rows: topBy("lineups"), fmt: (stat) => stat.lineups },
+      ratings: { id: "notes", rows: topRating, fmt: (stat) => stat.rating?.toFixed?.(2) ?? stat.rating, meta: (stat) => `${stat.appearances || 0} app · ${stat.minutes || 0} min` },
+    }[section.key];
+    return props ? <TopCategory {...props} title={section.label} accent={section.accent} /> : null;
   }
 
   return (
@@ -352,16 +379,14 @@ export default function CompetitionPage() {
       )}
 
       {tab === "stats" && (
-        <div className="space-y-6">
+        <div className="space-y-5">
           <PhaseChips />
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4"><div className="rounded-xl border border-line/10 bg-surface p-4"><div className="text-2xl font-black">{phaseFinished.length}</div><div className="text-xs text-muted">{L("stat.played", "Matchs joués")}</div></div><div className="rounded-xl border border-line/10 bg-surface p-4"><div className="text-2xl font-black">{goals}</div><div className="text-xs text-muted">{L("stat.goals", "Buts")}</div></div><div className="rounded-xl border border-line/10 bg-surface p-4"><div className="text-2xl font-black">{phaseFinished.length ? (goals / phaseFinished.length).toFixed(2) : "0"}</div><div className="text-xs text-muted">{L("stat.avg", "Buts / match")}</div></div><div className="rounded-xl border border-line/10 bg-surface p-4"><div className="text-2xl font-black">{homeW}/{draw}/{awayW}</div><div className="text-xs text-muted">{L("stat.hda", "Dom/Nul/Ext")}</div></div></div>
-          <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
-            <TopCategory id="buteurs" title={L("comp.topscorer", "Buteurs")} rows={topBy("goals")} fmt={(s) => s.goals} />
-            <TopCategory id="passeurs" title={L("comp.topassist", "Passeurs")} rows={topBy("assists")} fmt={(s) => s.assists} />
-            <TopCategory id="cleansheets" title={L("comp.cleansheets", "Clean sheets")} rows={gkCleanSheets} fmt={(s) => s.cs} meta={() => "gardien"} />
-            <TopCategory id="minutes" title={L("stat.minutes", "Minutes")} rows={topBy("minutes")} fmt={(s) => s.minutes} />
-            <TopCategory id="titu" title={L("stat.lineups", "Titularisations")} rows={topBy("lineups")} fmt={(s) => s.lineups} />
-            <TopCategory id="notes" title={L("stat.ratings", "Meilleures notes")} rows={topRating} fmt={(s) => s.rating?.toFixed?.(2) ?? s.rating} meta={(s) => `${s.appearances || 0} app · ${s.minutes || 0} min`} />
+          <div className="relative overflow-hidden rounded-3xl border border-line/10 bg-gradient-to-r from-surface to-bg/40 px-5 py-6 sm:px-7">
+            <div className="absolute -right-12 -top-20 h-48 w-48 rounded-full bg-accent/10 blur-3xl" />
+            <div className="relative"><div className="text-[10px] font-bold uppercase tracking-[0.24em] text-accent">{seasonLabel}{curPhase ? ` · ${curPhase}` : ""}</div><h2 className="mt-1 text-2xl font-black sm:text-3xl">{statsConfig.title}</h2>{statsConfig.subtitle && <p className="mt-2 max-w-2xl text-sm text-muted">{statsConfig.subtitle}</p>}</div>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {statsConfig.sections.filter((section) => section.enabled).map((section) => <StatsBlock key={section.key} section={section} />)}
           </div>
         </div>
       )}

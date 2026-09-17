@@ -36,6 +36,7 @@ export const adminSections = [
     { key: "labels", label: "Textes" },
     { key: "tilesbg", label: "Tuiles" },
     { key: "clubpage", label: "Fiche club" },
+    { key: "statspage", label: "Page Stats" },
     { key: "io", label: "Import / export" },
   ] },
 ];

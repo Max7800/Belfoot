@@ -156,6 +156,7 @@ function Field({ f, value, onChange, options }) {
   const box = "w-full rounded border border-line/10 bg-surface2 px-3 py-2 text-sm outline-none focus:border-accent";
   if (f.type === "bool") return <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!value} onChange={(e) => onChange(e.target.checked)} />{f.label}</label>;
   if (f.type === "image") return <div>{label}<ImageField value={value} onChange={onChange} /></div>;
+  if (f.type === "color") return <div>{label}<div className="flex items-center gap-2"><input type="color" value={/^#[0-9a-f]{6}$/i.test(value || "") ? value : "#1e3a8a"} onChange={(e) => onChange(e.target.value)} className="h-9 w-12 rounded bg-transparent" /><input value={value || ""} onChange={(e) => onChange(e.target.value)} placeholder="#1e3a8a" className={box} /></div></div>;
   if (f.type === "relation") return <div>{label}<RelationField value={value} options={options} onChange={onChange} /></div>;
   if (f.type === "select") return <div>{label}<select value={value || ""} onChange={(e) => onChange(e.target.value)} className={box}><option value="">—</option>{f.options.map((o) => <option key={o} value={o}>{o}</option>)}</select></div>;
   if (f.type === "number") return <div>{label}<input type="number" value={value ?? ""} onChange={(e) => onChange(e.target.value === "" ? null : Number(e.target.value))} className={box} /></div>;
@@ -163,14 +164,20 @@ function Field({ f, value, onChange, options }) {
   if (f.type === "zones") {
     const arr = Array.isArray(value) ? value : [];
     const upd = (i, k, v) => onChange(arr.map((z, j) => (j === i ? { ...z, [k]: v } : z)));
-    return (<div>{label}<div className="space-y-1">{arr.map((z, i) => (
-      <div key={i} className="flex items-center gap-1">
-        <input value={z.label || ""} onChange={(e) => upd(i, "label", e.target.value)} placeholder="Label (ex. Ligue des Champions)" className="flex-1 rounded border border-line/10 bg-surface2 px-2 py-1 text-xs" />
-        <input type="color" value={z.color || "#3b82f6"} onChange={(e) => upd(i, "color", e.target.value)} className="h-7 w-8 rounded bg-transparent" />
-        <input type="number" value={z.from ?? ""} onChange={(e) => upd(i, "from", Number(e.target.value))} placeholder="de" className="w-12 rounded border border-line/10 bg-surface2 px-1 py-1 text-xs" />
-        <input type="number" value={z.to ?? ""} onChange={(e) => upd(i, "to", Number(e.target.value))} placeholder="à" className="w-12 rounded border border-line/10 bg-surface2 px-1 py-1 text-xs" />
-        <button type="button" onClick={() => onChange(arr.filter((_, j) => j !== i))} className="px-1 text-red-400">×</button>
-      </div>))}
+    return (<div>{label}<p className="mb-2 text-xs text-muted">Pour un seul club, mets le même rang dans les deux cases (ex. 16 → 16).</p><div className="space-y-2">{arr.map((z, i) => {
+      const from = Number(z.from); const to = Number(z.to); const valid = Number.isFinite(from) && Number.isFinite(to) && from > 0 && to >= from;
+      return (
+      <div key={i} className={`rounded-xl border p-2 ${valid ? "border-line/10 bg-surface/40" : "border-red-500/40 bg-red-500/5"}`}>
+        <div className="grid gap-2 sm:grid-cols-[minmax(160px,1fr)_56px_90px_90px_auto] sm:items-end">
+          <label className="text-[10px] font-semibold uppercase tracking-wider text-muted">Nom de la zone<input value={z.label || ""} onChange={(e) => upd(i, "label", e.target.value)} placeholder="Ex. Relégable" className="mt-1 w-full rounded border border-line/10 bg-surface2 px-2 py-1.5 text-xs normal-case tracking-normal text-content" /></label>
+          <label className="text-[10px] font-semibold uppercase tracking-wider text-muted">Couleur<input type="color" value={z.color || "#3b82f6"} onChange={(e) => upd(i, "color", e.target.value)} className="mt-1 h-8 w-full rounded bg-transparent" /></label>
+          <label className="text-[10px] font-semibold uppercase tracking-wider text-muted">Du rang<input min="1" type="number" value={z.from ?? ""} onChange={(e) => upd(i, "from", e.target.value === "" ? null : Number(e.target.value))} className="mt-1 w-full rounded border border-line/10 bg-surface2 px-2 py-1.5 text-xs normal-case tracking-normal text-content" /></label>
+          <label className="text-[10px] font-semibold uppercase tracking-wider text-muted">Au rang<input min="1" type="number" value={z.to ?? ""} onChange={(e) => upd(i, "to", e.target.value === "" ? null : Number(e.target.value))} className="mt-1 w-full rounded border border-line/10 bg-surface2 px-2 py-1.5 text-xs normal-case tracking-normal text-content" /></label>
+          <button type="button" onClick={() => onChange(arr.filter((_, j) => j !== i))} className="h-8 rounded px-2 text-red-400 hover:bg-red-500/10">Supprimer</button>
+        </div>
+        <div className={`mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px] ${valid ? "text-muted" : "text-red-300"}`}><span>{valid ? <span className="inline-flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded" style={{ background: z.color || "#3b82f6" }} />{from === to ? `Uniquement le rang ${from}` : `Rangs ${from} à ${to}`}</span> : "La zone ne sera pas affichée : vérifie les deux rangs."}</span>{valid && from !== to && <button type="button" onClick={() => upd(i, "from", to)} className="rounded border border-line/20 px-2 py-1 text-content hover:border-accent/40">Seulement le rang {to}</button>}</div>
+      </div>);
+    })}
       <button type="button" onClick={() => onChange([...arr, { label: "", color: "#3b82f6", from: 1, to: 1 }])} className="rounded border border-line/20 px-2 py-1 text-xs text-muted hover:text-content">+ zone</button>
     </div></div>);
   }
@@ -191,6 +198,18 @@ function Field({ f, value, onChange, options }) {
         <Field f={{ key: `${f.key}.${phase}`, label: "Zones de cette phase", type: "zones" }} value={zones} onChange={(nextZones) => onChange({ ...obj, [phase]: nextZones })} />
       </div>
     ))}<button type="button" onClick={addPhase} className="rounded border border-line/20 px-3 py-1.5 text-xs text-muted hover:text-content">+ Ajouter une phase</button>{Object.keys(obj).length === 0 && <span className="ml-3 text-xs text-muted">Aucune zone : aucun rang ne sera coloré.</span>}</div></div>);
+  }
+  if (f.type === "honours") {
+    const arr = Array.isArray(value) ? value : [];
+    const upd = (index, key, nextValue) => onChange(arr.map((item, itemIndex) => itemIndex === index ? { ...item, [key]: nextValue } : item));
+    return (<div className="sm:col-span-2">{label}<p className="mb-2 text-xs text-muted">Une ligne par trophée. Les années restent libres : « 2019, 2022 » ou « 11 titres ».</p><div className="space-y-2">{arr.map((item, index) => (
+      <div key={index} className="grid gap-2 rounded-xl border border-line/10 bg-surface/40 p-2 sm:grid-cols-[minmax(170px,1fr)_80px_minmax(160px,1fr)_auto]">
+        <input value={item.title || ""} onChange={(e) => upd(index, "title", e.target.value)} placeholder="Compétition / trophée" className={box} />
+        <input type="number" min="1" value={item.count ?? ""} onChange={(e) => upd(index, "count", e.target.value === "" ? null : Number(e.target.value))} placeholder="Nombre" className={box} />
+        <input value={item.years || ""} onChange={(e) => upd(index, "years", e.target.value)} placeholder="Années ou précision" className={box} />
+        <button type="button" onClick={() => onChange(arr.filter((_, itemIndex) => itemIndex !== index))} className="rounded px-2 text-red-400 hover:bg-red-500/10">Supprimer</button>
+      </div>
+    ))}<button type="button" onClick={() => onChange([...arr, { title: "", count: 1, years: "" }])} className="rounded border border-line/20 px-3 py-1.5 text-xs text-muted hover:text-content">+ Ajouter un trophée</button></div></div>);
   }
   if (f.type === "textarea") return <div>{label}<textarea value={value || ""} onChange={(e) => onChange(e.target.value)} rows={3} className={box} /></div>;
   return <div>{label}<input value={value || ""} onChange={(e) => onChange(e.target.value)} className={box} /></div>;
