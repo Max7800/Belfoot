@@ -1,15 +1,18 @@
 -- Prépare la Challenger Pro League comme compétition autonome.
 -- API-Football : league id 145. La saison 2024 reste accessible avec le plan gratuit.
 -- Aucun classement/zones n'est imposé ici : ces règles restent éditables par saison/phase.
+-- Garde-fou pour les bases historiques où la migration 0014 n'a pas été jouée.
+alter table competitions add column if not exists public_visible boolean not null default true;
+
 do $$
 declare
   challenger_id uuid;
 begin
   select id into challenger_id
   from competitions
-  where (provider = 'apifootball' and external_id = '145')
+  where external_id = '145'
      or slug = 'challenger-pro-league'
-  order by case when provider = 'apifootball' and external_id = '145' then 0 else 1 end
+  order by case when slug = 'challenger-pro-league' then 0 else 1 end
   limit 1;
 
   if challenger_id is null then
@@ -23,12 +26,13 @@ begin
     ) returning id into challenger_id;
   else
     update competitions set
-      slug = coalesce(slug, 'challenger-pro-league'),
-      provider = coalesce(provider, 'apifootball'),
-      external_id = coalesce(external_id, '145'),
+      name = 'Challenger Pro League',
+      slug = 'challenger-pro-league',
+      provider = 'apifootball',
+      external_id = '145',
       position = coalesce(position, 10),
       competition_type = coalesce(competition_type, 'league'),
-      public_visible = coalesce(public_visible, true),
+      public_visible = true,
       header_title = coalesce(header_title, 'Challenger Pro League'),
       header_subtitle = coalesce(header_subtitle, 'L''antichambre du football belge, entre ambitions et jeunes talents.')
     where id = challenger_id;

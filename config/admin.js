@@ -14,6 +14,8 @@ export const adminSections = [
     { key: "coaches", label: "Entraîneurs" },
     { key: "matches", label: "Matchs" },
     { key: "events", label: "Événements" },
+    { key: "lineups", label: "Formations" },
+    { key: "matchPlayerStats", label: "Compositions joueurs" },
   ] },
   { label: "Données & sync", panels: [
     { key: "providers", label: "Providers" },

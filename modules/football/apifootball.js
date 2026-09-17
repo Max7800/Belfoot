@@ -114,6 +114,66 @@ const provider = {
       ext: current,
     };
   },
+  // Une requête par match : formation et ordre officiel des titulaires/remplaçants.
+  async fetchMatchLineups(match, ctx = {}) {
+    if (!match?.external_id) return [];
+    const rows = await api(`/fixtures/lineups?fixture=${match.external_id}`, ctx);
+    return rows.map((row) => {
+      const teamExt = row.team?.id ? String(row.team.id) : null;
+      const mapPlayer = (entry, starter) => ({
+        team_ext: teamExt,
+        player_ext: entry.player?.id ? String(entry.player.id) : null,
+        player_name: entry.player?.name || null,
+        number: entry.player?.number ?? null,
+        position: entry.player?.pos || null,
+        grid: entry.player?.grid || null,
+        starter,
+        substitute: !starter,
+        ext: entry,
+      });
+      return {
+        team_ext: teamExt,
+        formation: row.formation || null,
+        players: [
+          ...(row.startXI || []).map((entry) => mapPlayer(entry, true)),
+          ...(row.substitutes || []).map((entry) => mapPlayer(entry, false)),
+        ],
+        ext: row,
+      };
+    });
+  },
+  // Une seconde requête, uniquement via le job plafonné : minutes, note et actions du joueur.
+  async fetchMatchPlayerStats(match, ctx = {}) {
+    if (!match?.external_id) return [];
+    const teams = await api(`/fixtures/players?fixture=${match.external_id}`, ctx);
+    const output = [];
+    for (const team of teams) {
+      const teamExt = team.team?.id ? String(team.team.id) : null;
+      for (const row of team.players || []) {
+        const stat = row.statistics?.[0] || {};
+        output.push({
+          team_ext: teamExt,
+          player_ext: row.player?.id ? String(row.player.id) : null,
+          player_name: row.player?.name || null,
+          number: stat.games?.number ?? null,
+          position: stat.games?.position || null,
+          starter: stat.games?.substitute === false,
+          substitute: stat.games?.substitute === true,
+          captain: !!stat.games?.captain,
+          minutes: stat.games?.minutes ?? null,
+          rating: stat.games?.rating ? Number(stat.games.rating) : null,
+          goals: stat.goals?.total || 0,
+          assists: stat.goals?.assists || 0,
+          saves: stat.goals?.saves || 0,
+          goals_conceded: stat.goals?.conceded ?? null,
+          yellow: stat.cards?.yellow || 0,
+          red: stat.cards?.red || 0,
+          ext: row,
+        });
+      }
+    }
+    return output;
+  },
 };
 provider.fetchEvents = async function (match, ctx = {}) {
   const raw = await api(`/fixtures/events?fixture=${match.external_id}`, ctx);

@@ -92,8 +92,9 @@ components/
              ContributionsQueue, FieldInput, SortableList, ui/{ImageField,GalleryField,SaveStatus}
 modules/
   football/  manifest, providers.js (contrat), apifootball.js, thesportsdb.js (secondaire),
-             syncCompetition.js, syncSquads.js, syncEvents.js, discoverPlayers.js, trackPlayers.js,
-             jobs/{sync,liveSync,squads,events,discoverBelgians,trackPlayers}.js, admin/, migrations/
+             syncCompetition.js, syncSquads.js, syncEvents.js, syncLineups.js, discoverPlayers.js,
+             trackPlayers.js, jobs/{sync,liveSync,squads,events,lineups,discoverBelgians,trackPlayers}.js,
+             admin/, migrations/
   votw/      "11 de la semaine" — design + schéma, désactivé
   forum/     forum optionnel — manifest + schéma, désactivé
   fm/        Football Manager (verticale future) — manifest stub, désactivé
@@ -159,6 +160,12 @@ Trigger `handle_new_user` : crée un `profiles` (role member) à chaque inscript
   matchday (= round_number), provider, ext.
 - `match_events` : match_id, minute, type (goal|assist|yellow|red|sub), player_id, club_id,
   **player_name/assist_name/detail** (dénormalisés, timeline lisible), source.
+- `match_lineups` : formation officielle par match et club, avec source/verrou/synchro. Une correction
+  admin verrouillée n'est jamais remplacée par le provider.
+- `match_player_stats` : composition et performance individuelle par match : titulaire/remplaçant,
+  numéro, poste/grille, capitaine, minutes, note, buts, passes, arrêts, buts encaissés et cartons.
+  Le lien `player_id` peut rester vide si l'effectif n'a pas encore été importé ; le nom provider est
+  conservé pour que la composition reste lisible.
 - `player_season_stats` : player_id, competition_id, season, appearances, lineups, minutes, goals,
   assists, yellow, red, rating, source/external_id/synced_at,
   **unique(player_id,competition_id,season)** depuis la migration `0012`.
@@ -172,7 +179,7 @@ Trigger `handle_new_user` : crée un `profiles` (role member) à chaque inscript
 ## 6. Migrations (fichiers présents)
 
 Socle : `supabase/schema.sql` (= `supabase/migrations/0001_core.sql`).
-Football : `modules/football/migrations/0001_init` → `0015_season_phase_zones` (init, players_tracking,
+Football : `modules/football/migrations/0001_init` → `0020_match_lineups` (init, players_tracking,
 competition_slug, player_stats, players_events, events_names, rounds_phases, competition_position,
 banner_zones, rating_min, types_relations, statistiques joueur séparées par compétition, textes
 éditoriaux des bandeaux de compétition, visibilité publique des compétitions, pays du joueur,
@@ -207,12 +214,15 @@ compétition choisit son provider (colonne `provider`) → **aucune logique JPL 
 matchs + coverage + logo/nom/pays/drapeau si vide ; mode live = matchs en direct only),
 `syncSquads` (effectifs + `player_season_stats` scoppées par compétition/saison en même temps,
 0 requête en plus — met `tracked=true`),
-`syncEvents` (événements par match, incrémental + plafonné 40/run), `discoverBelgians`/`trackPlayers`
+`syncEvents` (événements par match, incrémental + plafonné 40/run), `syncLineups` (formations +
+performances individuelles, incrémental, matchs récents d'abord et **3 matchs/run par défaut**),
+`discoverBelgians`/`trackPlayers`
 (suivi belges à l'étranger : discovery limitée aux clubs de la compétition demandée + tracking
 ciblé `tracked=true`, tous deux scoppables avec `competitionId`).
 
 **Jobs** (`lib/jobs.js`) : `football.sync`, `football.live-sync`, `football.squads`,
-`football.events`, `football.discover-belgians`, `football.track-belgians`. Chaque job accepte un
+`football.events`, `football.lineups`, `football.discover-belgians`, `football.track-belgians`.
+Chaque job accepte un
 `competitionId` (sinon : toutes) → **sync indépendante par compétition** (« Sync Pro League » vs
 « Sync Croky Cup »). Déclenchement :
 - Admin → **Données & sync → Jobs** : sélecteur de compétition + saison + boutons (route
@@ -285,7 +295,8 @@ Classement pour une ligue ou Tours pour une coupe / Clubs / Joueurs / Stats, sé
 fond global discret, poussoir direct entre les compétitions qui conserve l'onglet courant). Les
 matchs, classements, clubs et chiffres de cette page sont scoppés par la saison sélectionnée.
 `/matchs` (sélecteur compétition + saison + phase, vraie vue Calendrier avec navigation entre
-journées/tours + ancienne vue Liste) + `/matchs/[id]` (fiche + timeline lisible). `/classement`
+journées/tours + ancienne vue Liste) + `/matchs/[id]` (fiche premium, composition responsive,
+formations, performances et timeline lisible). `/classement`
 (sélecteur compétition + saison + phase,
 calcul client, zones). `/clubs/[id]` (entraîneur en tête + sections pliables). `/players/[id]` (stats
 saison). `/recherche` (unifiée). Auth : `/login` (OAuth Google/Twitch/Discord + email + inscription +
@@ -320,7 +331,8 @@ aucune correction de donnée ou migration n'est requise pour conserver les ancie
 Shell forcé sombre (`app/admin/layout.js`, `[data-force-dark]`), garde d'accès (rôle admin).
 Sections (`config/admin.js`) : **Tableau de bord** ; **Éditorial** (Actualités, Catégories,
 Contributions) ; **Football** (Compétitions, Saisons, Clubs, Joueurs, Entraîneurs, Matchs,
-Événements — via `EntityManager` + spec `config/football-admin.js`) ; **Données & sync** (Providers,
+Événements, Formations, Compositions joueurs — via `EntityManager` + spec
+`config/football-admin.js`) ; **Données & sync** (Providers,
 Jobs [sélecteur compétition + saison + run], Historique sync, Erreurs) ; **Communauté** (Profils,
 Signalements, Modération, Forum) ; **Réglages** (Configuration, Modules, Feature flags, Médias, SEO,
 **Page d'accueil**, **Portail compétitions**, **Textes**, **Tuiles**, **Fiche club**, **Page Stats**).
@@ -351,9 +363,9 @@ Côté Supabase : Site URL = domaine + Redirect URLs (`/auth/callback`, `/reset`
   aux vues pour l'affichage compétition.
 - **Meilleure attaque/défense** : filtrer sur un **nombre de matchs représentatif** (sinon un club à
   2-3 barrages ressort). Déjà fait (`eligible = played >= max(3, maxPlayed*0.5)`).
-- **Clean sheets = gardien** : on n'a **pas** les compos par match → clean sheets club attribués au
-  **GK n°1** (plus de minutes). Heuristique assumée ; à améliorer quand les lineups par match seront
-  synchronisées.
+- **Clean sheets = gardien** : dès que `football.lineups` a traité les matchs, ils sont attribués au
+  gardien réellement titulaire avec 0 but encaissé. Tant qu'aucune performance par match n'existe,
+  le front garde l'ancien fallback (clean sheets du club attribués au GK n°1 par minutes).
 - **Notes** : seuil d'apparitions `rating_min` obligatoire (sinon un joueur à faible temps de jeu
   ressort premier).
 - **Stats joueur par compétition** : le front filtre toujours `player_season_stats` par
@@ -375,6 +387,9 @@ Côté Supabase : Site URL = domaine + Redirect URLs (`/auth/callback`, `/reset`
   les tables football → erreur « Could not find the 'data' column »).
 - **Quota API-Football gratuit** : effectifs = 1 requête/club (paginé) → l'import des ~18 clubs peut
   taper la limite (100/jour). Étaler, ou sync par compétition. Saisons gratuites 2022→2024 seulement.
+- **Compositions & performances** = jusqu'à 2 requêtes/match (`/fixtures/lineups` et
+  `/fixtures/players`). Le job est séparé, exige une compétition et reste plafonné à 3 matchs par défaut
+  (20 maximum). Ne jamais le remettre dans `football.sync` ni le lancer sans filtre avec un gros plafond.
 - **Bannière** ~2 Mo (`public/competition-banner.png`) : à compresser/WebP un jour.
 
 ---
@@ -389,7 +404,8 @@ Côté Supabase : Site URL = domaine + Redirect URLs (`/auth/callback`, `/reset`
    exercer les jobs, puis construire le top/récap des Belges du week-end.
 3. **Éditorial** : structurer Mercato (Vérifié/Rumeur/Démenti), En bref, analyses et scouting ;
    l'accueil consomme déjà automatiquement les actualités publiées.
-4. **Lineups par match** (compos) → clean sheets GK exacts + titularisations réelles par match.
+4. **Récap des Belges du week-end** : exploiter `match_player_stats` maintenant disponible pour
+   construire une sélection datée (buts, passes, notes, minutes), avec seuils/sélection éditables.
 5. **Europe belge** : ajouter C1/C3/C4 comme compétitions synchronisées, mettre en avant tout match
    impliquant un club belge et créer un bloc/page coefficient UEFA (association + clubs). Prévoir
    une source coefficient vérifiable et une surcharge admin avant automatisation complète.
@@ -434,7 +450,7 @@ npm run dev                        # http://localhost:3000
 npm run build
 
 # 5. Migrations : SQL Editor de Supabase, dans l'ordre :
-#    supabase/schema.sql (socle), puis modules/football/migrations/0001_init → 0011.
+#    supabase/schema.sql (socle), puis modules/football/migrations/0001_init → 0020.
 #    (⚠️ migration d'abord, rechargement du site ensuite)
 
 # 6. Git : brancher, committer, pousser sur main -> Vercel redéploie
@@ -447,6 +463,7 @@ orchestrateurs = `modules/football/sync*.js` ; jobs = `modules/football/jobs/` +
 runners = `app/api/jobs/[key]/route.js` (secret) + `app/api/admin/run-job/route.js` (rôle admin) ;
 classement client = `lib/standings.js` ; header = `components/football/CompetitionHeader.js` ;
 ligne de match = `components/football/MatchRow.js` ; classement UI = `components/football/StandingsTable.js` ;
+compositions = `components/football/MatchLineups.js` + `modules/football/syncLineups.js` ;
 admin générique = `components/admin/EntityManager.js` + `config/football-admin.js` ;
 panneaux admin = `components/admin/panels.js` + `registry.js` ; page compétition (la plus riche) =
 `app/competitions/[slug]/page.js` ; détection ligue/coupe = `lib/competitionType.js` ; vue tours de
@@ -456,6 +473,27 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
 ---
 
 ## CHANGELOG_DE_PASSATION
+
+### 2026-09-17 — ChatGPT — compositions et performances individuelles par match
+
+- Migration `0020_match_lineups.sql` : nouvelles tables publiques/admin `match_lineups` et
+  `match_player_stats`, avec relations match/compétition/club/joueur, champs provider isolés,
+  verrouillage manuel, index et RLS.
+- API-Football expose maintenant les formations/titulaires/remplaçants via `/fixtures/lineups` et
+  les minutes, notes, buts, passes, arrêts, buts encaissés et cartons via `/fixtures/players`.
+- Nouveau job indépendant `football.lineups` : compétition obligatoire,
+  matchs terminés/récents d'abord, import incrémental, 3 matchs par run par défaut et 20 maximum.
+  Le plafond est éditable dans Admin → Jobs. Aucun appel n'est effectué depuis une page publique.
+- La fiche match affiche les deux compositions côte à côte sur desktop et via un poussoir domicile/
+  extérieur sur mobile, avec formation, banc et performances. Les intitulés passent par les Textes.
+- La page compétition calcule désormais les clean sheets avec le gardien réellement titulaire dès
+  que les performances existent, sinon elle garde le fallback historique. La fiche joueur affiche
+  ses dernières performances et renvoie vers les matchs.
+- Admin → Football permet de corriger/verrouiller formations et joueurs d'une composition.
+- `0018_challenger_pro_league.sql` est rendu compatible avec une ancienne ligne possédant déjà
+  `external_id=145` et ajoute son propre garde-fou `public_visible`.
+- Vérification : build Next.js 14.2.35 réussi avec variables Supabase factices + `git diff --check`.
+  Socle : **aucune modification**.
 
 ### 2026-09-17 — ChatGPT — personnalisation complète du portail et des Leaders
 

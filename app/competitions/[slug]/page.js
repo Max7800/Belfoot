@@ -43,6 +43,7 @@ export default function CompetitionPage() {
   const [matches, setMatches] = useState([]);
   const [clubsMap, setClubsMap] = useState({});
   const [players, setPlayers] = useState([]); const [playerStats, setPlayerStats] = useState([]);
+  const [matchPlayerStats, setMatchPlayerStats] = useState([]);
   const [phase, setPhase] = useState(null); const [round, setRound] = useState("all");
   const [selClub, setSelClub] = useState(null); const [posFilter, setPosFilter] = useState("all");
   const [anchor, setAnchor] = useState(null);
@@ -61,18 +62,20 @@ export default function CompetitionPage() {
 
   useEffect(() => { (async () => {
     setPlayerStats([]);
+    setMatchPlayerStats([]);
     const { data: competitionRows, error: competitionError } = await supabase.from("competitions").select("*");
     if (competitionError) throw competitionError;
     setCompetitions([...(competitionRows || [])].filter((item) => item.public_visible !== false).sort((a, b) => (a.position ?? 999) - (b.position ?? 999) || (a.name || "").localeCompare(b.name || "")));
     const c = resolveCompetitionRoute(competitionRows || [], slug);
     if (!c) { setComp(null); return; }
     setComp(c);
-    const [se, ma] = await Promise.all([
+    const [se, ma, matchStats] = await Promise.all([
       supabase.from("seasons").select("*").eq("competition_id", c.id),
       supabase.from("matches").select("*").eq("competition_id", c.id).order("round_number", { ascending: true, nullsFirst: false }).order("kickoff", { ascending: true }),
+      supabase.from("match_player_stats").select("*").eq("competition_id", c.id),
     ]);
     const orderedSeasons = [...(se.data || [])].sort((a, b) => (b.label || "").localeCompare(a.label || ""));
-    setSeasons(orderedSeasons); setSeasonLabel(orderedSeasons[0]?.label || ""); setMatches(ma.data || []);
+    setSeasons(orderedSeasons); setSeasonLabel(orderedSeasons[0]?.label || ""); setMatches(ma.data || []); setMatchPlayerStats(matchStats.data || []);
     const ids = [...new Set((ma.data || []).flatMap((m) => [m.home_club_id, m.away_club_id]).filter(Boolean))];
     if (ids.length) {
       const { data: cl } = await supabase.from("clubs").select("*").in("id", ids);
@@ -132,15 +135,24 @@ export default function CompetitionPage() {
   const inForm = standings.map((r) => ({ club: r.club, res: clubForm(phaseFinished, r.club) })).map((r) => ({ ...r, pts: r.res.filter((x) => x === "V").length * 3 + r.res.filter((x) => x === "N").length })).sort((a, b) => b.pts - a.pts)[0];
   const topScorer = topBy("goals")[0]; const topAssist = topBy("assists")[0];
 
-  // Clean sheets attribués au gardien n°1 de chaque club (heuristique : GK avec le plus de minutes)
+  // Priorité aux performances par match : on sait alors quel gardien a réellement joué.
+  // Tant que le job Compositions n'a rien importé, l'ancienne heuristique reste le fallback.
+  const phaseMatchIds = new Set(phaseFinished.map((match) => match.id));
+  const exactKeeperRows = matchPlayerStats.filter((row) => phaseMatchIds.has(row.match_id) && row.player_id && row.starter && /^(g|gk|goalkeeper|gardien)$/i.test(row.position || "") && (row.minutes || 0) > 0 && row.goals_conceded === 0);
   const csMap = {};
   for (const m of phaseFinished) { if (m.away_score === 0 && m.home_club_id) csMap[m.home_club_id] = (csMap[m.home_club_id] || 0) + 1; if (m.home_score === 0 && m.away_club_id) csMap[m.away_club_id] = (csMap[m.away_club_id] || 0) + 1; }
-  const gkCleanSheets = Object.entries(csMap).map(([club, v]) => {
+  const exactCsMap = exactKeeperRows.reduce((acc, row) => ({ ...acc, [row.player_id]: (acc[row.player_id] || 0) + 1 }), {});
+  const exactCleanSheets = Object.entries(exactCsMap).map(([playerId, v]) => {
+    const p = players.find((player) => player.id === playerId);
+    return p ? { p, st: { cs: v }, v } : null;
+  }).filter(Boolean).sort((a, b) => b.v - a.v).slice(0, 10);
+  const estimatedCleanSheets = Object.entries(csMap).map(([club, v]) => {
     const gks = players.filter((p) => p.club_id === club && p.position === "Goalkeeper");
     if (!gks.length) return null;
     const gk = gks.map((p) => ({ p, min: pss[p.id]?.minutes || 0 })).sort((a, b) => b.min - a.min)[0].p;
     return { p: gk, st: { cs: v }, v };
   }).filter(Boolean).sort((a, b) => b.v - a.v).slice(0, 10);
+  const gkCleanSheets = exactCleanSheets.length ? exactCleanSheets : estimatedCleanSheets;
   const topCS = gkCleanSheets[0];
 
   const lastRound = Math.max(-1, ...phaseFinished.map((m) => m.round_number ?? -1));
