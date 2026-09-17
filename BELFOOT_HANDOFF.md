@@ -135,12 +135,14 @@ Trigger `handle_new_user` : crée un `profiles` (role member) à chaque inscript
 - `competitions` : id, name, slug, provider ('apifootball'|'thesportsdb'), **external_id** (id ligue
   provider), logo_url, **banner_url** (décor), **zones** jsonb `[{label,color,from,to}]`, **position**
   (ordre, 0=premier), **rating_min** (seuil apparitions pour classement des notes),
-  **competition_type** ('league'|'cup'), source/**locked**/synced_at/**ext** (jsonb : coverage,
+  **competition_type** ('league'|'cup'), **public_visible** (permet de synchroniser une ligue
+  étrangère sans l'afficher dans les sélecteurs publics), source/**locked**/synced_at/**ext** (jsonb : coverage,
   country, country_flag, providerName, season…).
 - `clubs` : name, short_name, city, logo_url, **team_type** (first_team|reserve|u23|women),
   **parent_club_id** (réserves/U23), source/external_id/locked/synced_at/ext.
 - `players` : name, club_id, position (Goalkeeper/Defender/Midfielder/Attacker), number,
-  nationality, competition, age, birth_date, photo_url, active, **tracked**, source/external_id/
+  nationality, **country** (pays du championnat), competition, age, birth_date, photo_url, active,
+  **tracked**, source/external_id/
   locked/synced_at/ext.
 - `coaches` : name, club_id, photo_url.
 - `seasons` : competition_id, label.
@@ -163,15 +165,15 @@ Trigger `handle_new_user` : crée un `profiles` (role member) à chaque inscript
 ## 6. Migrations (fichiers présents)
 
 Socle : `supabase/schema.sql` (= `supabase/migrations/0001_core.sql`).
-Football : `modules/football/migrations/0001_init` → `0013_competition_header_texts` (init, players_tracking,
+Football : `modules/football/migrations/0001_init` → `0014_belgians_abroad` (init, players_tracking,
 competition_slug, player_stats, players_events, events_names, rounds_phases, competition_position,
 banner_zones, rating_min, types_relations, statistiques joueur séparées par compétition, textes
-éditoriaux des bandeaux de compétition).
+éditoriaux des bandeaux de compétition, visibilité publique des compétitions et pays du joueur).
 Autres : `modules/votw/migrations/0001_init`, `modules/forum/migrations/0001_init`.
 
 ⚠️ **Migrations passées à la main** dans Supabase. Le code est tolérant (tri client, fill-if-empty)
 mais certaines fonctions restent inactives tant que la colonne n'existe pas. **Vérifier que TOUTES
-les migrations football 0001→0013 sont passées** sur le projet (surtout position/banner/zones/
+les migrations football 0001→0014 sont passées** sur le projet (surtout position/banner/zones/
 rating_min/competition_type/parent_club_id/team_type et `0012` avant toute nouvelle synchro des
 effectifs/stats, puis `0013` pour éditer les titres de bandeau). Une colonne manquante n'affiche plus de page
 blanche (résilience ajoutée) mais désactive la feature liée.
@@ -197,7 +199,8 @@ matchs + coverage + logo/nom/pays/drapeau si vide ; mode live = matchs en direct
 `syncSquads` (effectifs + `player_season_stats` scoppées par compétition/saison en même temps,
 0 requête en plus — met `tracked=true`),
 `syncEvents` (événements par match, incrémental + plafonné 40/run), `discoverBelgians`/`trackPlayers`
-(scaffold suivi belges à l'étranger : discovery légère + tracking ciblé `tracked=true`).
+(suivi belges à l'étranger : discovery limitée aux clubs de la compétition demandée + tracking
+ciblé `tracked=true`, tous deux scoppables avec `competitionId`).
 
 **Jobs** (`lib/jobs.js`) : `football.sync`, `football.live-sync`, `football.squads`,
 `football.events`, `football.discover-belgians`, `football.track-belgians`. Chaque job accepte un
@@ -264,7 +267,9 @@ football (bug déjà corrigé dans EntityManager).
 
 ## 10. Pages publiques existantes
 
-Accueil `/` (placeholder). `/competitions` (liste, client, état chargement/erreur explicite, type
+Accueil `/` (placeholder). `/belges-a-l-etranger` (première page cœur produit : joueurs belges
+suivis hors Belgique, recherche, filtres pays/championnat/poste, cartes club + stats saison,
+état vide exploitable). `/competitions` (liste, client, état chargement/erreur explicite, type
 Championnat/Coupe) + `/competitions/[slug]` (header overlay, onglets Vue d'ensemble / Matchs /
 Classement pour une ligue ou Tours pour une coupe / Clubs / Joueurs / Stats, sélecteur de saison,
 fond global discret, poussoir direct entre les compétitions qui conserve l'onglet courant). `/matchs`
@@ -365,7 +370,8 @@ Côté Supabase : Site URL = domaine + Redirect URLs (`/auth/callback`, `/reset`
 4. **Équipes liées / réserves / U23** : peupler `parent_club_id`/`team_type` (mapping provider) ; la
    section « Équipes liées » s'affiche déjà si des relations existent.
 5. **Suivi des Belges à l'étranger** (cœur produit) : exercer `discover-belgians` + `track-belgians`,
-   construire les pages/briques (joueur, top des Belges du week-end).
+   page annuaire V1 construite ; prochaine étape = ajouter les compétitions étrangères masquées,
+   exercer les jobs, puis construire le top/récap des Belges du week-end.
 6. **Lineups par match** (compos) → clean sheets GK exacts + titularisations réelles par match.
 7. **Home Belfoot** (pas encore construite) : hero « Les Belges. Partout dans le monde. », blocs
    JPL / Croky / Belges à suivre / en forme / Belge du moment / actus.
@@ -428,6 +434,24 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
 ---
 
 ## CHANGELOG_DE_PASSATION
+
+### 2026-09-17 — ChatGPT — annuaire des Belges à l'étranger V1
+
+- Nouvelle page `/belges-a-l-etranger`, accessible par « Belges » dans la navigation : joueurs
+  belges suivis hors Belgique uniquement, recherche, filtres pays/championnat/poste, regroupement
+  de leurs statistiques de la saison la plus récente et état vide explicite avant import.
+- Migration `0014_belgians_abroad.sql` : ajout de `players.country` et de
+  `competitions.public_visible` (vrai par défaut), avec index de lecture du suivi.
+- Une compétition étrangère peut désormais rester disponible dans l'admin et les jobs tout en étant
+  masquée du hub Compétitions, du poussoir, de Matchs et de Classement.
+- La découverte des Belges est maintenant réellement scoppée : seulement les clubs de la
+  compétition choisie, `leagueId` transmis au provider et `competitionId` respecté par le job. Cela
+  évite de brûler le quota sur tous les clubs partageant le même provider.
+- Correction visuelle mobile du classement : les positions sans zone utilisent un gris ardoise
+  lisible ; elles ne ressemblent plus à la zone noire « Relégable ». Navigation rendue défilable
+  horizontalement pour accueillir « Belges » sur petit écran.
+- Vérification : build Next.js 14.2.35 réussi avec variables Supabase factices de compilation +
+  `git diff --check` réussi. Socle : **aucune modification**.
 
 ### 2026-09-17 — ChatGPT — navigation et finition des pages compétition
 
@@ -500,10 +524,11 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
 ## CURRENT_GIT_STATE
 
 - **Branche** : `main`
-- **Dernier commit fonctionnel** : `0f75661` — poussoir de compétitions, textes de bandeau
-  administrables, zones fiabilisées et finition classement/résultats.
-- **Commit précédent** : `3ff105b` — documentation de la séparation des statistiques.
+- **Dernier commit fonctionnel** : `39c6522` — annuaire des Belges à l'étranger V1, compétitions
+  techniques masquables, discovery scoppée et correction des rangs neutres.
+- **Commit précédent** : `d17793a` — documentation de la finition des compétitions.
 - **Commits importants récents** :
+  - `39c6522` page Belges + migration `0014` + visibilité publique + discovery économe
   - `0f75661` navigation directe Pro League/Croky + migration `0013` + finition des cartes
   - `14cd294` migration `0012` + stats compétition/saison + tracking scoppé + fiche joueur enrichie
   - `fa4aaf9` liens compétition centralisés + résolution des anciens slugs/IDs/noms
@@ -518,11 +543,11 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
   - `a6213f5` rounds/phases génériques (fin du mélange journées/barrages)
   - `39267e2`/`150db4d` couche compétition (effectifs+stats, événements, journées, fiches)
 - **Migrations encore à passer** (si le projet Supabase n'est pas à jour) : `0012` est indiquée
-  comme appliquée par l'utilisateur ; appliquer `0013_competition_header_texts.sql`, puis vérifier
-  que `modules/football/migrations/0001→0013` sont
+  comme appliquée par l'utilisateur ; vérifier `0013_competition_header_texts.sql`, puis appliquer
+  `0014_belgians_abroad.sql` et vérifier que `modules/football/migrations/0001→0014` sont
   **toutes** passées (surtout `0008` position, `0009` banner_url/zones, `0010` rating_min,
   `0011` competition_type/parent_club_id/team_type, `0012` unicité des stats par compétition et
-  `0013` textes des bandeaux).
+  `0013` textes des bandeaux, `0014` visibilité/pays du suivi international).
   Le code est tolérant mais ces features restent inactives sinon.
 
 ---
