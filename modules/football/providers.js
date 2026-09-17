@@ -8,6 +8,7 @@
 //     async fetchMatches(ctx),   // -> [{ external_id, home, away, score, status, minute, events... }]
 //     async fetchStandings(ctx), // optionnel
 //     async fetchSquad(ctx),     // optionnel (effectifs)
+//     async fetchCurrentCoach(club, ctx), // optionnel (entraîneur actuel)
 //   }
 //
 // Chaque compétition choisit son provider (colonne competitions.provider),

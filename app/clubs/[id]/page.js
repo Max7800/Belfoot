@@ -41,11 +41,12 @@ export default function ClubPage() {
     const [clubResult, playerResult, coachResult, linkedResult] = await Promise.all([
       ids.length ? supabase.from("clubs").select("id,name,logo_url").in("id", ids) : Promise.resolve({ data: [] }),
       supabase.from("players").select("*").eq("club_id", id).order("name"),
-      supabase.from("coaches").select("*").eq("club_id", id).limit(1).maybeSingle(),
+      supabase.from("coaches").select("*").eq("club_id", id),
       supabase.from("clubs").select("id,name,logo_url,team_type").or(`parent_club_id.eq.${id},id.eq.${c.parent_club_id || "00000000-0000-0000-0000-000000000000"}`),
     ]);
     setClubsMap(Object.fromEntries((clubResult.data || []).map((item) => [item.id, item])));
-    setPlayers(playerResult.data || []); setCoach(coachResult.data || null); setLinked((linkedResult.data || []).filter((item) => item.id !== id));
+    const coaches = coachResult.data || [];
+    setPlayers(playerResult.data || []); setCoach([...coaches].sort((a, b) => Number(!!b.locked) - Number(!!a.locked) || Number(b.source === "manual") - Number(a.source === "manual"))[0] || null); setLinked((linkedResult.data || []).filter((item) => item.id !== id));
 
     if (contextMatch) {
       const [competitionResult, seasonResult, allMatchesResult] = await Promise.all([

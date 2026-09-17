@@ -33,7 +33,7 @@ export function ReportsPanel() {
     </div></div>);
 }
 
-const JOB_LABELS = { "football.sync": "🔄 Synchroniser (import complet)", "football.live-sync": "🔄 Live (scores)", "football.discover-belgians": "🔎 Découvrir les Belges", "football.track-belgians": "📊 MAJ Belges suivis", "football.squads": "👥 Effectifs (joueurs)", "football.events": "⚽ Événements de match" };
+const JOB_LABELS = { "football.sync": "🔄 Synchroniser (import complet)", "football.live-sync": "🔄 Live (scores)", "football.discover-belgians": "🔎 Découvrir les Belges", "football.track-belgians": "📊 MAJ Belges suivis", "football.squads": "👥 Effectifs (joueurs)", "football.events": "⚽ Événements de match", "football.coaches": "🧑‍🏫 Entraîneurs" };
 
 export function JobsPanel() {
   const [rows, setRows] = useState([]);
@@ -62,6 +62,7 @@ export function JobsPanel() {
   };
   return (<div>
     <h2 className="mb-4 text-lg font-bold">Jobs & synchronisation</h2>
+    <p className="mb-3 text-xs text-muted">Le job Entraîneurs coûte environ une requête API par club. Choisis une compétition pour préserver le quota gratuit.</p>
     <div className="mb-3 flex flex-wrap items-center gap-2">
       <select value={compId} onChange={(e) => setCompId(e.target.value)} className="rounded border border-line/10 bg-surface2 px-2 py-1 text-sm"><option value="">Toutes les compétitions</option>{comps.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
       <label className="text-xs text-muted">Saison</label>

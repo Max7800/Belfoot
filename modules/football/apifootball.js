@@ -93,6 +93,20 @@ const provider = {
     }
     return { season: y, ...a };
   },
+  // API-Football utilise historiquement la route `/coachs`. On ne conserve que
+  // l'entraîneur dont la carrière dans ce club n'a pas de date de fin.
+  async fetchCurrentCoach(club, ctx = {}) {
+    if (!club?.external_id) return null;
+    const rows = await api(`/coachs?team=${club.external_id}`, ctx);
+    const current = rows.find((coach) => (coach.career || []).some((career) => String(career.team?.id) === String(club.external_id) && !career.end)) || rows[0];
+    if (!current?.id) return null;
+    return {
+      external_id: String(current.id),
+      name: current.name || [current.firstname, current.lastname].filter(Boolean).join(" ") || "Entraîneur",
+      photo_url: current.photo || null,
+      ext: current,
+    };
+  },
 };
 provider.fetchEvents = async function (match, ctx = {}) {
   const raw = await api(`/fixtures/events?fixture=${match.external_id}`, ctx);

@@ -65,11 +65,12 @@ export const FOOTBALL_ENTITIES = {
     ],
   },
   coaches: {
-    table: "coaches", title: "Entraîneurs", singular: "Entraîneur", orderBy: "name",
+    table: "coaches", title: "Entraîneurs", singular: "Entraîneur", orderBy: "name", hasSource: true,
     fields: [
       { key: "name", label: "Nom", type: "text" },
       { key: "club_id", label: "Club", type: "relation", table: "clubs", labelCol: "name" },
       { key: "photo_url", label: "Photo", type: "image" },
+      { key: "locked", label: "Protéger des synchronisations", type: "bool" },
     ],
   },
   matches: {
