@@ -775,6 +775,9 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
 - Correction après validation visuelle : l'annuaire n'est plus présenté comme un module titré et
   ordonnable. Sa barre de recherche, ses listes déroulantes et ses cartes sont épinglées directement
   sous le bandeau, exactement comme dans la base initiale ; les nouveaux modules commencent après.
+- Deuxième correction après test mobile avec base vide : les filtres restent désormais visibles
+  même lorsqu'aucun joueur étranger n'est encore importé. L'état « suivi international prêt » se
+  place sous les listes au lieu de remplacer l'annuaire ; Burnley remplira ensuite cette grille.
 - Coût estimé du test : une requête ligue, une équipe, une liste de matchs et la pagination de
   l'effectif ; aucun import des autres effectifs du Championship.
 - Vérification : build Next.js 14.2.35 réussi avec variables Supabase factices de compilation +
