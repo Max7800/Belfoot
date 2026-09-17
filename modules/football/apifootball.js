@@ -37,7 +37,7 @@ const provider = {
     const rows = await api(`/leagues?id=${competition.external_id}&season=${y}`, ctx);
     const L = rows[0]; if (!L) return null;
     const seas = L.seasons?.find((s) => String(s.year) === String(y)) || L.seasons?.[0];
-    return { name: L.league?.name, logo: L.league?.logo || null, country: L.country?.name, flag: L.country?.flag || null, coverage: seas?.coverage || null };
+    return { name: L.league?.name, logo: L.league?.logo || null, type: L.league?.type || null, country: L.country?.name, flag: L.country?.flag || null, coverage: seas?.coverage || null };
   },
   async fetchClubs(competition, ctx = {}) {
     const y = seasonYear(competition.ext?.season || ctx.season);

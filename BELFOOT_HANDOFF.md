@@ -258,9 +258,10 @@ football (bug déjà corrigé dans EntityManager).
 
 ## 10. Pages publiques existantes
 
-Accueil `/` (placeholder). `/competitions` (liste, client) + `/competitions/[slug]` (header overlay,
-onglets Vue d'ensemble / Matchs / Classement / Clubs / Joueurs / Stats, sélecteur de saison, fond
-global discret). `/matchs` (phase-aware, sélecteur compétition en tuiles + phase + tour, dates de
+Accueil `/` (placeholder). `/competitions` (liste, client, état chargement/erreur explicite, type
+Championnat/Coupe) + `/competitions/[slug]` (header overlay, onglets Vue d'ensemble / Matchs /
+Classement pour une ligue ou Tours pour une coupe / Clubs / Joueurs / Stats, sélecteur de saison,
+fond global discret). `/matchs` (phase-aware, sélecteur compétition en tuiles + phase + tour, dates de
 journées) + `/matchs/[id]` (fiche + timeline lisible). `/classement` (sélecteur compétition + phase,
 calcul client, zones). `/clubs/[id]` (entraîneur en tête + sections pliables). `/players/[id]` (stats
 saison). `/recherche` (unifiée). Auth : `/login` (OAuth Google/Twitch/Discord + email + inscription +
@@ -275,6 +276,13 @@ Résultats (dernière journée complète, couleurs V/N/D, glow score), Prochains
 bloc **Autres statistiques** (Club en forme, Meilleure attaque/défense), chiffres secondaires.
 **Stats** : grille 3×2 (Buteurs, Passeurs, Clean sheets GK, Minutes, Titularisations, Meilleures
 notes) avec leader mis en avant (or/argent/bronze) ; notes filtrées par `rating_min`.
+
+**Comportement Coupe** : le type effectif est déterminé par `competition_type`, le type remonté par
+le provider (`ext.providerType`) ou, pour les anciennes lignes, les libellés de tours. Une coupe ne
+produit jamais de classement à points. Dans `/classement`, elle affiche une vue par tours/matchs ;
+sur sa page, l'onglet « Classement » devient « Tours ». La Vue d'ensemble remplace le Top 5 et les
+statistiques de championnat par le tour sélectionné et ses chiffres. Implémentation générique dans
+`lib/competitionType.js` + `components/football/CupRounds.js` (aucun nom de compétition en dur).
 
 ---
 
@@ -344,7 +352,8 @@ Côté Supabase : Site URL = domaine + Redirect URLs (`/auth/callback`, `/reset`
 7. **Home Belfoot** (pas encore construite) : hero « Les Belges. Partout dans le monde. », blocs
    JPL / Croky / Belges à suivre / en forme / Belge du moment / actus.
 8. **Passer en plan payant** API-Football pour la saison courante (le code est prêt : changer `season`).
-9. Compléter Type = `cup` sur Croky Cup en admin ; régler les Zones JPL.
+9. Régler les Zones JPL. Pour la Croky, renseigner idéalement Type = `cup` en admin ; le front est
+   désormais résilient et la détecte aussi via le provider/les tours si cette valeur manque encore.
 
 ---
 
@@ -394,15 +403,36 @@ classement client = `lib/standings.js` ; header = `components/football/Competiti
 ligne de match = `components/football/MatchRow.js` ; classement UI = `components/football/StandingsTable.js` ;
 admin générique = `components/admin/EntityManager.js` + `config/football-admin.js` ;
 panneaux admin = `components/admin/panels.js` + `registry.js` ; page compétition (la plus riche) =
-`app/competitions/[slug]/page.js`.
+`app/competitions/[slug]/page.js` ; détection ligue/coupe = `lib/competitionType.js` ; vue tours de
+coupe = `components/football/CupRounds.js`.
+
+---
+
+## CHANGELOG_DE_PASSATION
+
+### 2026-09-17 — ChatGPT — cohérence championnat/coupe
+
+- Reproduction sur le site public : Croky Cup visible dans `/competitions`, mais `/classement`
+  fabriquait un faux classement du 1er tour (140 clubs, victoire = 3 points).
+- Ajout d'une détection générique du format (`competition_type` → type provider → analyse des tours).
+- API-Football conserve maintenant `league.type` dans `competitions.ext.providerType`, sans écraser
+  `competition_type` ni aucun choix admin.
+- `/classement` affiche les matchs tour par tour pour une coupe, jamais `J/G/N/P/Pts`.
+- Page compétition : onglet « Tours », tour le plus récent par défaut, Vue d'ensemble adaptée aux
+  éliminations directes, suppression des blocs Top 5/meilleure attaque/défense pour les coupes.
+- `/competitions` : chargement et erreurs explicites + libellé Championnat/Coupe.
+- Nouvelle migration : **aucune**.
+- Vérification : `npm run build` réussi sous Next.js 14.2.35.
+- Socle : **aucune modification**.
 
 ---
 
 ## CURRENT_GIT_STATE
 
 - **Branche** : `main`
-- **Dernier commit** : `df59dfa` — header identité belge + fond global page + fonds de tuiles admin
-  enrichis + dates de journées + glow score.
+- **Dernier commit avant ce lot** : `ef247d9` — ajout de cette passation technique.
+- **Lot courant** : cohérence championnat/coupe, à committer après validation du diff. Le SHA du
+  commit code sera reporté ici dans le commit de documentation qui suivra.
 - **Commits importants récents** :
   - `df59dfa` header/identité + fond global + tuiles (accent/enabled) + dates journées
   - `a0512b2` fix Croky Cup (/competitions en client) + relation recherchable + clean sheets GK +
