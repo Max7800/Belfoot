@@ -372,16 +372,14 @@ Côté Supabase : Site URL = domaine + Redirect URLs (`/auth/callback`, `/reset`
 
 ## 14. TODO ouverts (par priorité indicative)
 
-1. **Équipes liées / réserves / U23** : peupler `parent_club_id`/`team_type` (mapping provider) ; la
-   section « Équipes liées » s'affiche déjà si des relations existent.
-2. **Suivi des Belges à l'étranger** (cœur produit) : exercer `discover-belgians` + `track-belgians`,
+1. **Suivi des Belges à l'étranger** (cœur produit) : exercer `discover-belgians` + `track-belgians`,
    page annuaire V1 construite ; prochaine étape = ajouter les compétitions étrangères masquées,
    exercer les jobs, puis construire le top/récap des Belges du week-end.
-3. **Lineups par match** (compos) → clean sheets GK exacts + titularisations réelles par match.
-4. **Home Belfoot** (pas encore construite) : hero « Les Belges. Partout dans le monde. », blocs
+2. **Lineups par match** (compos) → clean sheets GK exacts + titularisations réelles par match.
+3. **Home Belfoot** (pas encore construite) : hero « Les Belges. Partout dans le monde. », blocs
    JPL / Croky / Belges à suivre / en forme / Belge du moment / actus.
-5. **Passer en plan payant** API-Football pour la saison courante (le code est prêt : changer `season`).
-6. Régler les Zones JPL par saison/phase. Pour la Croky, renseigner idéalement Type = `cup` en admin ; le front est
+4. **Passer en plan payant** API-Football pour la saison courante (le code est prêt : changer `season`).
+5. Régler les Zones JPL par saison/phase. Pour la Croky, renseigner idéalement Type = `cup` en admin ; le front est
    désormais résilient et la détecte aussi via le provider/les tours si cette valeur manque encore.
 
 ---
@@ -439,6 +437,20 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
 ---
 
 ## CHANGELOG_DE_PASSATION
+
+### 2026-09-17 — ChatGPT — validation guidée des réserves et U23
+
+- Nouveau panneau Admin → Football → Réserves / U23. Il détecte localement les noms contenant
+  `Jong`, `U23`, `Espoirs`, `Réserve`, `B`, `II` ou `2`, propose un type d'équipe et cherche un club
+  parent vraisemblable.
+- Aucune relation n'est enregistrée automatiquement : l'admin applique la suggestion, la corrige si
+  nécessaire puis valide. Cela évite qu'une ressemblance de nom relie deux clubs sans rapport.
+- Le panneau permet aussi d'afficher tous les clubs pour créer/corriger manuellement n'importe quelle
+  relation `team_type` / `parent_club_id`. Aucun appel provider, aucun quota API et aucune migration.
+- La section publique « Équipes liées » déjà présente sur les fiches clubs exploite immédiatement les
+  relations validées.
+- Vérification : build Next.js 14.2.35 réussi avec variables Supabase factices + `git diff --check`.
+  Socle : **aucune modification**.
 
 ### 2026-09-17 — ChatGPT — synchronisation protégée des entraîneurs
 
