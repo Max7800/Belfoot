@@ -2,13 +2,14 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { Building2, ExternalLink, MapPin, Shield, Trophy } from "lucide-react";
+import { ArrowLeft, Building2, ExternalLink, MapPin, Shield, Trophy } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import MatchRow from "@/components/football/MatchRow";
 import CollapsibleSection from "@/components/CollapsibleSection";
 import { useClubSections } from "@/lib/clubSections";
 import { computeStandings } from "@/lib/standings";
 import { competitionPhases, getCompetitionType } from "@/lib/competitionType";
+import { competitionPath } from "@/lib/competitionRoutes";
 
 const POS = { Goalkeeper: 0, Defender: 1, Midfielder: 2, Attacker: 3 };
 const safeColor = (value, fallback) => /^#[0-9a-f]{6}$/i.test(value || "") ? value : fallback;
@@ -24,6 +25,12 @@ export default function ClubPage() {
   const [coach, setCoach] = useState(null);
   const [linked, setLinked] = useState([]);
   const [sport, setSport] = useState(null);
+  const [mobileSection, setMobileSection] = useState(null);
+
+  useEffect(() => {
+    const available = sections.filter((section) => section.key !== "linked" || linked.length > 0);
+    if (!available.some((section) => section.key === mobileSection)) setMobileSection(available[0]?.key || null);
+  }, [sections, linked, mobileSection]);
 
   useEffect(() => { (async () => {
     const { data: c } = await supabase.from("clubs").select("*").eq("id", id).maybeSingle();
@@ -92,16 +99,26 @@ export default function ClubPage() {
     next: upcoming.length ? <div className="space-y-2">{upcoming.slice(0, 10).map((match) => <MatchRow key={match.id} m={match} clubs={clubsMap} href={`/matchs/${match.id}`} />)}</div> : <p className="text-muted">Aucun match à venir.</p>,
   };
   const counts = { honours: honours.length, squad: squad.length, linked: linked.length, last: finished.length, next: upcoming.length };
+  const visibleSections = sections.filter((section) => section.key !== "linked" || linked.length > 0);
+  const activeMobileSection = visibleSections.find((section) => section.key === mobileSection) || visibleSections[0];
+  const clubsHref = sport?.competition ? `${competitionPath(sport.competition)}?tab=clubs` : "/competitions";
 
   return (
     <div>
-      <div className="relative mb-6 overflow-hidden rounded-3xl border border-line/10 p-5 sm:p-7" style={{ background: `linear-gradient(120deg, ${primary}26, ${secondary}12 58%, rgba(15,23,42,0.2))` }}>
+      <Link href={clubsHref} className="mb-3 inline-flex items-center gap-1.5 text-sm font-semibold text-muted transition hover:text-content"><ArrowLeft className="h-4 w-4" /> Clubs{sport?.competition?.name ? ` · ${sport.competition.name}` : ""}</Link>
+      <div className="relative mb-5 overflow-hidden rounded-3xl border border-line/10 p-4 sm:mb-6 sm:p-7" style={{ background: `linear-gradient(120deg, ${primary}26, ${secondary}12 58%, rgba(15,23,42,0.2))` }}>
         <Shield className="pointer-events-none absolute -bottom-12 -right-8 h-44 w-44 opacity-[0.05]" />
-        <div className="relative flex items-center gap-4">{club.logo_url && <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-black/15 p-2"><img src={club.logo_url} className="h-full w-full object-contain" alt="" /></div>}<div className="min-w-0"><div className="text-[10px] font-bold uppercase tracking-[0.22em] text-muted">{club.nickname || club.city || "Club"}</div><h1 className="truncate text-3xl font-black sm:text-4xl">{club.name}</h1>{coach && <div className="mt-2 flex items-center gap-2 text-sm text-muted">{coach.photo_url && <img src={coach.photo_url} className="h-6 w-6 rounded-full object-cover" alt="" />}Entraîneur : <b className="text-content">{coach.name}</b></div>}</div></div>
+        <div className="relative flex items-center gap-3 sm:gap-4">{club.logo_url && <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-black/15 p-2 sm:h-20 sm:w-20"><img src={club.logo_url} className="h-full w-full object-contain" alt="" /></div>}<div className="min-w-0"><div className="text-[10px] font-bold uppercase tracking-[0.22em] text-muted">{club.nickname || club.city || "Club"}</div><h1 className="truncate text-2xl font-black sm:text-4xl">{club.name}</h1>{coach && <div className="mt-1.5 flex items-center gap-2 text-xs text-muted sm:mt-2 sm:text-sm">{coach.photo_url && <img src={coach.photo_url} className="h-6 w-6 rounded-full object-cover" alt="" />}<span className="truncate">Entraîneur : <b className="text-content">{coach.name}</b></span></div>}</div></div>
       </div>
-      {sections.filter((section) => section.key !== "linked" || linked.length > 0).map((section) => (
-        <CollapsibleSection key={section.key} id={`club-${section.key}`} title={section.label} count={counts[section.key]}>{content[section.key]}</CollapsibleSection>
-      ))}
+      <div className="sm:hidden">
+        <div className="-mx-4 mb-3 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {visibleSections.map((section) => <button key={section.key} onClick={() => setMobileSection(section.key)} className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-bold transition ${activeMobileSection?.key === section.key ? "border-accent bg-accent/15 text-accent" : "border-line/15 bg-surface text-muted"}`}>{section.label}{counts[section.key] != null ? ` · ${counts[section.key]}` : ""}</button>)}
+        </div>
+        {activeMobileSection && <section className="overflow-hidden rounded-2xl border border-line/10 bg-surface"><div className="border-b border-line/10 px-4 py-3"><h2 className="font-black">{activeMobileSection.label}{counts[activeMobileSection.key] != null && <span className="ml-2 text-xs font-normal text-muted">({counts[activeMobileSection.key]})</span>}</h2></div><div className="p-4">{content[activeMobileSection.key]}</div></section>}
+      </div>
+      <div className="hidden sm:block">
+        {visibleSections.map((section) => <CollapsibleSection key={section.key} id={`club-${section.key}`} title={section.label} count={counts[section.key]}>{content[section.key]}</CollapsibleSection>)}
+      </div>
     </div>
   );
 }

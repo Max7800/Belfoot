@@ -47,7 +47,7 @@ Editor de Supabase (⚠️ **migration d'abord, rechargement du site ensuite**).
 
 ```
 app/                     pages (App Router)
-  page.js                accueil (placeholder — home Belfoot pas encore construite)
+  page.js                accueil Belfoot (hero + matchs + Belges + JPL + actus, blocs configurables)
   layout.js              layout racine (ThemeModeProvider, Navbar, Footer, accent injecté)
   globals.css            tokens de thème + styles .rich (éditeur) + scope [data-force-dark] (admin)
   competitions/          liste + [slug] (LA page riche : header, onglets, stats…)
@@ -76,6 +76,7 @@ lib/
   labels.js              useLabels() -> L(key, fallback), textes administrables
   tiles.js               useTiles() -> config visuelle des tuiles (fond/overlay/accent/enabled)
   clubSections.js        config des sections de fiche club (enable/ordre)
+  homeSections.js        textes, visibilité et ordre des blocs de l'accueil
   jobs.js                registre des background jobs + runJob(key, ctx)
   modules.js             registre unifié (collections + modules) : adminPanels/navItems/capabilities
   media.js               abstraction upload (Supabase Storage bucket "media") + compression
@@ -126,7 +127,7 @@ Piège vécu : mettre une `NEXT_PUBLIC_*` en type **Secret** sur Vercel → le c
 **Socle** (`supabase/schema.sql`) : `profiles` (id, username, role member|admin), `entries`
 (contenus éditoriaux polymorphes : collection, title, slug, body, cover_url, images, category, seo,
 published, **deleted_at** soft-delete, search tsvector `'simple'`), `site_settings` (id=1, `data`
-jsonb — y vivent **labels/tiles/club_sections**), `categories`, `contributions`, `comments/votes/
+jsonb — y vivent **labels/tiles/club_sections/home**), `categories`, `contributions`, `comments/votes/
 reports` (interactions polymorphes target_type/target_id), `schema_migrations`, `audit_log`,
 `job_runs`. RLS partout (lecture publique du publié, écriture admin via `is_admin()`).
 Trigger `handle_new_user` : crée un `profiles` (role member) à chaque inscription.
@@ -318,7 +319,9 @@ Contributions) ; **Football** (Compétitions, Saisons, Clubs, Joueurs, Entraîne
 Événements — via `EntityManager` + spec `config/football-admin.js`) ; **Données & sync** (Providers,
 Jobs [sélecteur compétition + saison + run], Historique sync, Erreurs) ; **Communauté** (Profils,
 Signalements, Modération, Forum) ; **Réglages** (Configuration, Modules, Feature flags, Médias, SEO,
-**Textes**, **Tuiles**, **Fiche club**). `EntityManager` : CRUD générique piloté par spec (types de
+**Page d'accueil**, **Textes**, **Tuiles**, **Fiche club**, **Page Stats**). Le panneau Accueil édite
+le hero, les appels à l'action, les titres/sous-titres, l'ordre et la visibilité des blocs sans
+modifier le code. `EntityManager` : CRUD générique piloté par spec (types de
 champ : text, number, bool, image, select, relation **recherchable**, datetime, zones…), regroupement
 (Joueurs par club) + recherche, affichage source/verrou/synchro, auto-slug.
 
@@ -372,20 +375,23 @@ Côté Supabase : Site URL = domaine + Redirect URLs (`/auth/callback`, `/reset`
 
 ## 14. TODO ouverts (par priorité indicative)
 
-1. **Europe belge** : ajouter C1/C3/C4 comme compétitions synchronisées, mettre en avant tout match
-   impliquant un club belge et créer un bloc/page coefficient UEFA (association + clubs). Prévoir
-   une source coefficient vérifiable et une surcharge admin avant automatisation complète.
+1. **Valider le nouvel accueil sur données réelles** et ajuster les sélections éditoriales. Le hero,
+   les matchs, les Belges suivis, la JPL et les actus sont construits ; le bloc Europe existe mais
+   reste masqué par défaut. Aucun appel provider n'est effectué par l'accueil.
 2. **Suivi des Belges à l'étranger** (cœur produit) : exercer `discover-belgians` + `track-belgians`,
    page annuaire V1 construite ; prochaine étape = ajouter les compétitions étrangères masquées,
    exercer les jobs, puis construire le top/récap des Belges du week-end.
-3. **Challenger Pro League / réserves** : importer la D2 comme compétition distincte. Club NXT,
+3. **Éditorial** : structurer Mercato (Vérifié/Rumeur/Démenti), En bref, analyses et scouting ;
+   l'accueil consomme déjà automatiquement les actualités publiées.
+4. **Lineups par match** (compos) → clean sheets GK exacts + titularisations réelles par match.
+5. **Europe belge** : ajouter C1/C3/C4 comme compétitions synchronisées, mettre en avant tout match
+   impliquant un club belge et créer un bloc/page coefficient UEFA (association + clubs). Prévoir
+   une source coefficient vérifiable et une surcharge admin avant automatisation complète.
+6. **Challenger Pro League / réserves** : importer la D2 comme compétition distincte. Club NXT,
    Jong Genk, RSCA Futures… conservent `parent_club_id` tout en ayant leurs propres matchs,
    classement et fiche dans leur championnat.
-4. **Lineups par match** (compos) → clean sheets GK exacts + titularisations réelles par match.
-5. **Home Belfoot** (pas encore construite) : hero « Les Belges. Partout dans le monde. », blocs
-   JPL / Croky / Belges à suivre / en forme / Belge du moment / actus.
-6. **Passer en plan payant** API-Football pour la saison courante (le code est prêt : changer `season`).
-7. Régler les Zones JPL par saison/phase. Pour la Croky, renseigner idéalement Type = `cup` en admin ; le front est
+7. **Passer en plan payant** API-Football pour la saison courante (le code est prêt : changer `season`).
+8. Régler les Zones JPL par saison/phase. Pour la Croky, renseigner idéalement Type = `cup` en admin ; le front est
    désormais résilient et la détecte aussi via le provider/les tours si cette valeur manque encore.
 
 ---
@@ -443,6 +449,24 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
 ---
 
 ## CHANGELOG_DE_PASSATION
+
+### 2026-09-17 — ChatGPT — accueil Belfoot et fiche club mobile compacte
+
+- La fiche club propose maintenant un retour contextualisé vers l'onglet Clubs de sa compétition.
+- Sur mobile, la longue pile d'accordéons est remplacée par des pastilles horizontales et une seule
+  rubrique visible à la fois. Le rendu desktop en accordéons reste inchangé ; le hero mobile est
+  aussi légèrement compacté.
+- L'ancien accueil placeholder est remplacé par une vraie home Belfoot fidèle à la maquette produit
+  historique : hero « Les Belges. Partout dans le monde. » avec compteurs, grand bloc JPL en trois
+  colonnes, Belges à suivre, En forme + Belge du moment, tour des championnats, actualités et En bref.
+- Tous ces contenus réutilisent uniquement Supabase ; la page ne déclenche aucun appel API-Football.
+  Les états vides restent présentables quand le quota empêche encore d'alimenter une donnée.
+- Admin → Réglages → Page d'accueil permet d'éditer tous les textes du hero et des boutons, son grand
+  visuel, ainsi que titre, sous-titre, lien, visibilité et ordre de chaque bloc. Le bloc Europe est
+  prêt mais masqué par défaut.
+- Nouvelle migration : **aucune** (`site_settings.data.home` est un jsonb existant).
+- Vérification : build Next.js 14.2.35 réussi avec variables Supabase factices + `git diff --check`.
+  Socle : **aucune modification**.
 
 ### 2026-09-17 — ChatGPT — stades automatisés et clarification Club NXT/D2
 
@@ -622,10 +646,12 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
 ## CURRENT_GIT_STATE
 
 - **Branche** : `main`
-- **Dernier commit fonctionnel** : `0642506` — vraie vue calendrier avec navigation entre les
-  journées/tours, dates et états.
-- **Commit précédent** : `4f9d5ad` — documentation des formats de classement.
+- **Dernier commit distant au début du lot** : `2c71e35` — documentation des clubs liés et du
+  chantier Europe. Le lot courant ajoute l'accueil administrable et la navigation mobile des clubs.
 - **Commits importants récents** :
+  - `2c71e35` documentation clubs liés / Europe
+  - `69578a5` automatisation des stades + simplification des équipes liées
+  - `251c4ab` documentation de la synchronisation des entraîneurs
   - `0642506` calendrier responsive + navigation + bascule liste
   - `819ba40` migration `0015` + zones saison/phase + filtres saison sur Compétition/Classement/Matchs
   - `39c6522` page Belges + migration `0014` + visibilité publique + discovery économe

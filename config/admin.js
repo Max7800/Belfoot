@@ -28,6 +28,7 @@ export const adminSections = [
     { key: "forum", label: "Forum" },
   ] },
   { label: "Réglages", panels: [
+    { key: "homepage", label: "Page d'accueil" },
     { key: "config", label: "Configuration" },
     { key: "modules", label: "Modules" },
     { key: "flags", label: "Feature flags" },

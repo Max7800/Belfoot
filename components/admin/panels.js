@@ -6,6 +6,7 @@ import { jobKeys } from "@/lib/jobs";
 import ImageField from "@/components/ui/ImageField";
 import { CLUB_SECTIONS } from "@/lib/clubSections";
 import { normalizeStatsConfig } from "@/lib/statsSections";
+import { normalizeHomeConfig } from "@/lib/homeSections";
 
 export function ProfilesPanel() {
   const [rows, setRows] = useState([]);
@@ -188,6 +189,34 @@ export function ClubSectionsPanel() {
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+export function HomePanel() {
+  const [draft, setDraft] = useState(normalizeHomeConfig());
+  const [status, setStatus] = useState("");
+  useEffect(() => { supabase.from("site_settings").select("data").eq("id", 1).maybeSingle().then(({ data }) => setDraft(normalizeHomeConfig(data?.data?.home || {}))); }, []);
+  const setHero = (key, value) => setDraft((current) => ({ ...current, hero: { ...current.hero, [key]: value } }));
+  const setSection = (key, field, value) => setDraft((current) => ({ ...current, sections: current.sections.map((section) => section.key === key ? { ...section, [field]: value } : section) }));
+  const move = (index, direction) => setDraft((current) => { const next = [...current.sections]; const target = index + direction; if (target < 0 || target >= next.length) return current; [next[index], next[target]] = [next[target], next[index]]; return { ...current, sections: next }; });
+  const save = async () => {
+    setStatus("saving");
+    const { data } = await supabase.from("site_settings").select("data").eq("id", 1).maybeSingle();
+    const sections = Object.fromEntries(draft.sections.map((section, index) => [section.key, { enabled: section.enabled, order: index, label: section.label, subtitle: section.subtitle, action: section.action }]));
+    const { error } = await supabase.from("site_settings").update({ data: { ...(data?.data || {}), home: { hero: draft.hero, sections } } }).eq("id", 1);
+    setStatus(error ? "error" : "saved");
+  };
+  return (
+    <div>
+      <div className="mb-5 flex items-center justify-between gap-3"><div><h2 className="text-lg font-bold">Page d'accueil</h2><p className="mt-1 text-xs text-muted">Tous les textes, la visibilité et l'ordre des blocs sont modifiables. Les données viennent de la base Belfoot, sans appel API supplémentaire.</p></div><button onClick={save} disabled={status === "saving"} className="shrink-0 rounded bg-accent px-3 py-2 text-sm font-bold text-white disabled:opacity-50">{status === "saving" ? "Enregistrement…" : status === "saved" ? "✓ Enregistré" : "Enregistrer"}</button></div>
+      {status === "error" && <p className="mb-4 text-sm text-red-400">Impossible d'enregistrer les réglages.</p>}
+      <div className="mb-6 rounded-xl border border-line/10 bg-surface p-4"><h3 className="mb-3 font-bold">Bandeau principal</h3><div className="grid gap-3 sm:grid-cols-2">
+        {[["kicker", "Sur-titre"], ["title", "Grand titre"], ["primary_label", "Bouton principal"], ["primary_url", "Lien principal"], ["secondary_label", "Bouton secondaire"], ["secondary_url", "Lien secondaire"]].map(([key, label]) => <label key={key} className="text-xs text-muted">{label}<input value={draft.hero[key] || ""} onChange={(event) => setHero(key, event.target.value)} className="mt-1 w-full rounded border border-line/10 bg-surface2 px-2 py-2 text-sm text-content" /></label>)}
+        <label className="text-xs text-muted sm:col-span-2">Introduction<textarea rows="3" value={draft.hero.subtitle || ""} onChange={(event) => setHero("subtitle", event.target.value)} className="mt-1 w-full rounded border border-line/10 bg-surface2 px-2 py-2 text-sm text-content" /></label>
+        <div className="sm:col-span-2"><div className="mb-1 text-xs text-muted">Visuel du bandeau (facultatif)</div><ImageField value={draft.hero.image_url} onChange={(value) => setHero("image_url", value)} /></div>
+      </div></div>
+      <h3 className="mb-2 font-bold">Blocs de la page</h3><div className="space-y-2">{draft.sections.map((section, index) => <div key={section.key} className="rounded-xl border border-line/10 bg-surface p-3"><div className="flex items-center gap-2"><label className="flex shrink-0 items-center gap-2 text-xs"><input type="checkbox" checked={section.enabled} onChange={(event) => setSection(section.key, "enabled", event.target.checked)} />Visible</label><input value={section.label} onChange={(event) => setSection(section.key, "label", event.target.value)} className="min-w-0 flex-1 rounded border border-line/10 bg-surface2 px-2 py-1.5 text-sm font-semibold" /><button onClick={() => move(index, -1)} className="px-1 text-muted hover:text-content">↑</button><button onClick={() => move(index, 1)} className="px-1 text-muted hover:text-content">↓</button></div><textarea rows="2" value={section.subtitle || ""} onChange={(event) => setSection(section.key, "subtitle", event.target.value)} className="mt-2 w-full rounded border border-line/10 bg-surface2 px-2 py-1.5 text-xs text-content" /><label className="mt-2 block text-[11px] text-muted">Texte du lien<input value={section.action || ""} onChange={(event) => setSection(section.key, "action", event.target.value)} className="mt-1 w-full rounded border border-line/10 bg-surface2 px-2 py-1.5 text-xs text-content" /></label></div>)}</div>
     </div>
   );
 }
