@@ -10,6 +10,7 @@ export const adminSections = [
     { key: "competitions", label: "Compétitions" },
     { key: "seasons", label: "Saisons" },
     { key: "clubs", label: "Clubs" },
+    { key: "team-relations", label: "Réserves / U23" },
     { key: "players", label: "Joueurs" },
     { key: "coaches", label: "Entraîneurs" },
     { key: "matches", label: "Matchs" },
