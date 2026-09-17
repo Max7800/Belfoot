@@ -16,7 +16,7 @@ export default function CompetitionsPage() {
     if (competitionsResult.error) throw competitionsResult.error;
     const byCompetition = {};
     for (const match of matchesResult.data || []) (byCompetition[match.competition_id] ||= []).push(match);
-    const rows = (competitionsResult.data || []).map((competition) => ({
+    const rows = (competitionsResult.data || []).filter((competition) => competition.public_visible !== false).map((competition) => ({
       ...competition,
       display_type: getCompetitionType(competition, byCompetition[competition.id] || []),
     })).sort((a, b) => (a.position ?? 999) - (b.position ?? 999) || (a.name || "").localeCompare(b.name || ""));

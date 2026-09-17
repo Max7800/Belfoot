@@ -19,7 +19,7 @@ export default function StandingsTable({ standings, clubs, zones = [], L = (k, d
                 <tr key={r.club} className="border-t border-line/10 text-center transition-colors hover:bg-white/[0.035]">
                   <td className="p-2.5 text-left">
                     <span className="inline-flex items-center gap-2">
-                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border text-xs font-black" style={z ? { borderColor: `${z.color}80`, background: `${z.color}22`, color: z.color } : { borderColor: "rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.05)", color: "rgba(255,255,255,0.7)" }}>{i + 1}</span>
+                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border text-xs font-black" style={z ? { borderColor: `${z.color}80`, background: `${z.color}22`, color: z.color } : { borderColor: "rgba(148,163,184,0.5)", background: "rgba(148,163,184,0.2)", color: "rgb(226,232,240)" }}>{i + 1}</span>
                       <Link href={`/clubs/${r.club}`} className="inline-flex items-center gap-2 font-semibold hover:text-accent">{clubs[r.club]?.logo_url && <img src={clubs[r.club].logo_url} className="h-6 w-6 object-contain" alt="" />}{name(r.club)}</Link>
                     </span>
                   </td>

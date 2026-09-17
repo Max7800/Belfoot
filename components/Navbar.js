@@ -12,9 +12,9 @@ export default function Navbar() {
   const { session, isAdmin } = useAuth();
   return (
     <header className="border-b border-line/10">
-      <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
-        <Link href="/" className="text-lg font-black">{siteConfig.name}</Link>
-        <nav className="flex items-center gap-4 text-sm">
+      <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
+        <Link href="/" className="shrink-0 text-lg font-black">{siteConfig.name}</Link>
+        <nav className="flex min-w-0 items-center gap-3 overflow-x-auto whitespace-nowrap text-xs sm:gap-4 sm:text-sm">
           {navItems().map((i) => <Link key={i.to} href={i.to} className="text-muted hover:text-content">{i.label}</Link>)}
           {siteConfig.modules?.search && <Link href="/recherche" className="text-muted hover:text-content" title="Rechercher"><Search className="h-4 w-4" /></Link>}
           {isAdmin && <Link href="/admin" className="text-muted hover:text-content" title="Admin"><Shield className="h-4 w-4" /></Link>}

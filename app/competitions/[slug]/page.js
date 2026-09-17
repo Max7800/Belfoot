@@ -60,7 +60,7 @@ export default function CompetitionPage() {
     setPlayerStats([]);
     const { data: competitionRows, error: competitionError } = await supabase.from("competitions").select("*");
     if (competitionError) throw competitionError;
-    setCompetitions([...(competitionRows || [])].sort((a, b) => (a.position ?? 999) - (b.position ?? 999) || (a.name || "").localeCompare(b.name || "")));
+    setCompetitions([...(competitionRows || [])].filter((item) => item.public_visible !== false).sort((a, b) => (a.position ?? 999) - (b.position ?? 999) || (a.name || "").localeCompare(b.name || "")));
     const c = resolveCompetitionRoute(competitionRows || [], slug);
     if (!c) { setComp(null); return; }
     setComp(c);
@@ -244,7 +244,7 @@ export default function CompetitionPage() {
                   <div className="flex flex-1 flex-col justify-between gap-1">
                   {standings.slice(0, 5).map((r, i) => { const z = zoneFor(i + 1); return (
                     <div key={r.club} className="group flex items-center gap-2 rounded-xl border border-white/[0.035] bg-gradient-to-r from-white/[0.045] to-transparent px-2 py-1.5 transition hover:border-accent/20 hover:bg-white/[0.06]">
-                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border text-xs font-black" style={z ? { borderColor: `${z.color}80`, background: `${z.color}22`, color: z.color } : { borderColor: "rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.05)", color: "rgba(255,255,255,0.7)" }}>{i + 1}</span>
+                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border text-xs font-black" style={z ? { borderColor: `${z.color}80`, background: `${z.color}22`, color: z.color } : { borderColor: "rgba(148,163,184,0.5)", background: "rgba(148,163,184,0.2)", color: "rgb(226,232,240)" }}>{i + 1}</span>
                       {clubsMap[r.club]?.logo_url && <img src={clubsMap[r.club].logo_url} className="h-6 w-6 shrink-0 object-contain" alt="" />}
                       <Link href={`/clubs/${r.club}`} className="min-w-0 flex-1 truncate font-semibold hover:text-accent">{clubName(r.club)}</Link>
                       <FormDots res={clubForm(phaseFinished, r.club)} />

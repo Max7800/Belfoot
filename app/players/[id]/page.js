@@ -31,7 +31,7 @@ export default function PlayerPage() {
         {p.photo_url && <img src={p.photo_url} className="h-20 w-20 rounded-full object-cover" alt="" />}
         <div>
           <h1 className="text-3xl font-black">{p.name}</h1>
-          <div className="text-sm text-muted">{[p.position, p.nationality, p.age ? `${p.age} ans` : null].filter(Boolean).join(" · ")}</div>
+          <div className="text-sm text-muted">{[p.position, p.nationality, p.country, p.age ? `${p.age} ans` : null].filter(Boolean).join(" · ")}</div>
           {club && <Link href={`/clubs/${club.id}`} className="mt-1 inline-flex items-center gap-2 text-sm hover:text-accent">{club.logo_url && <img src={club.logo_url} className="h-5 w-5 object-contain" alt="" />}{club.name}</Link>}
         </div>
       </div>

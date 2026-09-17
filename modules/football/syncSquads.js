@@ -18,7 +18,7 @@ export async function syncSquads(db, competition, ctx = {}) {
     for (const p of players) {
       const { data: existing } = await db.from("players").select("id,locked").eq("source", competition.provider).eq("external_id", p.external_id).maybeSingle();
       if (existing?.locked) continue;
-      const patch = { source: competition.provider, external_id: p.external_id, name: p.name, nationality: p.nationality, position: p.position, photo_url: p.photo_url, age: p.age, birth_date: p.birth_date, club_id: club.id, competition: competition.name, tracked: true, synced_at: now };
+      const patch = { source: competition.provider, external_id: p.external_id, name: p.name, nationality: p.nationality, position: p.position, photo_url: p.photo_url, age: p.age, birth_date: p.birth_date, club_id: club.id, country: competition.ext?.country || null, competition: competition.name, tracked: true, synced_at: now };
       let pid = existing?.id;
       if (existing) await db.from("players").update(patch).eq("id", existing.id);
       else { const { data: ins } = await db.from("players").insert({ ...patch, active: true }).select("id").single(); pid = ins?.id; }

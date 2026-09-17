@@ -16,7 +16,7 @@ export default function ClassementPage() {
   const [error, setError] = useState("");
   useEffect(() => { supabase.from("competitions").select("*").order("name").then(({ data, error: loadError }) => {
     if (loadError) { setError(loadError.message); return; }
-    const arr = (data || []).sort((a, b) => (a.position ?? 999) - (b.position ?? 999) || (a.name || "").localeCompare(b.name || ""));
+    const arr = (data || []).filter((c) => c.public_visible !== false).sort((a, b) => (a.position ?? 999) - (b.position ?? 999) || (a.name || "").localeCompare(b.name || ""));
     setComps(arr); if (arr[0]) setCid(arr[0].id);
   }); }, []);
   useEffect(() => { if (!cid) return; (async () => {
