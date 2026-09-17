@@ -372,14 +372,20 @@ Côté Supabase : Site URL = domaine + Redirect URLs (`/auth/callback`, `/reset`
 
 ## 14. TODO ouverts (par priorité indicative)
 
-1. **Suivi des Belges à l'étranger** (cœur produit) : exercer `discover-belgians` + `track-belgians`,
+1. **Europe belge** : ajouter C1/C3/C4 comme compétitions synchronisées, mettre en avant tout match
+   impliquant un club belge et créer un bloc/page coefficient UEFA (association + clubs). Prévoir
+   une source coefficient vérifiable et une surcharge admin avant automatisation complète.
+2. **Suivi des Belges à l'étranger** (cœur produit) : exercer `discover-belgians` + `track-belgians`,
    page annuaire V1 construite ; prochaine étape = ajouter les compétitions étrangères masquées,
    exercer les jobs, puis construire le top/récap des Belges du week-end.
-2. **Lineups par match** (compos) → clean sheets GK exacts + titularisations réelles par match.
-3. **Home Belfoot** (pas encore construite) : hero « Les Belges. Partout dans le monde. », blocs
+3. **Challenger Pro League / réserves** : importer la D2 comme compétition distincte. Club NXT,
+   Jong Genk, RSCA Futures… conservent `parent_club_id` tout en ayant leurs propres matchs,
+   classement et fiche dans leur championnat.
+4. **Lineups par match** (compos) → clean sheets GK exacts + titularisations réelles par match.
+5. **Home Belfoot** (pas encore construite) : hero « Les Belges. Partout dans le monde. », blocs
    JPL / Croky / Belges à suivre / en forme / Belge du moment / actus.
-4. **Passer en plan payant** API-Football pour la saison courante (le code est prêt : changer `season`).
-5. Régler les Zones JPL par saison/phase. Pour la Croky, renseigner idéalement Type = `cup` en admin ; le front est
+6. **Passer en plan payant** API-Football pour la saison courante (le code est prêt : changer `season`).
+7. Régler les Zones JPL par saison/phase. Pour la Croky, renseigner idéalement Type = `cup` en admin ; le front est
    désormais résilient et la détecte aussi via le provider/les tours si cette valeur manque encore.
 
 ---
@@ -438,17 +444,22 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
 
 ## CHANGELOG_DE_PASSATION
 
-### 2026-09-17 — ChatGPT — validation guidée des réserves et U23
+### 2026-09-17 — ChatGPT — stades automatisés et clarification Club NXT/D2
 
-- Nouveau panneau Admin → Football → Réserves / U23. Il détecte localement les noms contenant
-  `Jong`, `U23`, `Espoirs`, `Réserve`, `B`, `II` ou `2`, propose un type d'équipe et cherche un club
-  parent vraisemblable.
-- Aucune relation n'est enregistrée automatiquement : l'admin applique la suggestion, la corrige si
-  nécessaire puis valide. Cela évite qu'une ressemblance de nom relie deux clubs sans rapport.
-- Le panneau permet aussi d'afficher tous les clubs pour créer/corriger manuellement n'importe quelle
-  relation `team_type` / `parent_club_id`. Aucun appel provider, aucun quota API et aucune migration.
-- La section publique « Équipes liées » déjà présente sur les fiches clubs exploite immédiatement les
-  relations validées.
+- Le panneau Réserves/U23 préparé localement a été retiré avant push : `team_type` et
+  `parent_club_id` étaient déjà éditables dans Football → Clubs.
+- Une équipe liée reste une entité sportive autonome. Exemple : Club NXT peut garder Club Brugge
+  comme parent **et** jouer en Challenger Pro League ; ce sont les matchs/`competition_id` qui
+  déterminent sa compétition, son classement et ses statistiques. Le vrai chantier est donc
+  l'import D2, pas une deuxième interface de relation parent.
+- L'import clubs récupère maintenant automatiquement, sans requête supplémentaire, l'année de
+  fondation et les données de stade déjà renvoyées par API-Football/TheSportsDB : nom, capacité,
+  adresse et image.
+- Ces informations remplissent seulement les champs vides et ne remplacent jamais un club verrouillé
+  ni une correction éditoriale. Elles nécessitent la migration `0016_club_profiles.sql`.
+- Le classement d'une fiche club reste déjà automatique à partir des matchs de sa compétition/saison.
+- Palmarès : pas de source équipe fiable dans le provider actuel ; conserver l'éditeur manuel en
+  attendant un import historique contrôlé. Europe/coefficient UEFA ajoutés à la roadmap.
 - Vérification : build Next.js 14.2.35 réussi avec variables Supabase factices + `git diff --check`.
   Socle : **aucune modification**.
 
