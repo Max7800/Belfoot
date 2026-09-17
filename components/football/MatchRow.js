@@ -5,12 +5,12 @@ import Link from "next/link";
 export default function MatchRow({ m, clubs, href, compact }) {
   const h = clubs[m.home_club_id] || {}, a = clubs[m.away_club_id] || {};
   const fin = m.status === "finished" && m.home_score != null;
-  const res = (mine, other) => (!fin ? "" : mine > other ? "text-green-400" : mine < other ? "text-red-400/60" : "text-content");
+  const res = (mine, other) => (!fin ? "text-content/80" : mine > other ? "font-semibold text-emerald-300" : mine < other ? "text-content/45" : "text-content/80");
   const pad = compact ? "gap-2 p-1.5 text-xs" : "gap-2 p-3 text-sm";
   const lg = compact ? "h-5 w-5" : "h-7 w-7";
-  const sc = (compact ? "px-2 py-0.5" : "px-3 py-1") + " ring-1 ring-white/5 shadow-[0_2px_10px_-4px_rgba(40,110,220,0.5)]";
+  const sc = (compact ? "min-w-[48px] px-2 py-0.5" : "min-w-[58px] px-3 py-1") + " border border-white/10 bg-gradient-to-b from-white/[0.09] to-black/10 shadow-[0_5px_16px_-7px_rgba(45,120,255,0.7)]";
   const inner = (
-    <div className={`flex items-center rounded-xl border border-line/10 bg-surface transition hover:border-accent/40 ${pad}`}>
+    <div className={`group flex items-center rounded-xl border border-line/10 bg-gradient-to-r from-surface via-surface2/70 to-surface transition duration-200 hover:-translate-y-px hover:border-accent/35 hover:shadow-[0_10px_24px_-18px_rgba(50,125,255,0.9)] ${pad}`}>
       <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
         <span className={`truncate text-right ${res(m.home_score, m.away_score)}`}>{h.name || "—"}</span>
         {h.logo_url && <img src={h.logo_url} className={`shrink-0 object-contain ${lg}`} alt="" />}

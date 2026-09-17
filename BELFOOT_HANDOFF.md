@@ -163,16 +163,17 @@ Trigger `handle_new_user` : crée un `profiles` (role member) à chaque inscript
 ## 6. Migrations (fichiers présents)
 
 Socle : `supabase/schema.sql` (= `supabase/migrations/0001_core.sql`).
-Football : `modules/football/migrations/0001_init` → `0012_stats_by_competition` (init, players_tracking,
+Football : `modules/football/migrations/0001_init` → `0013_competition_header_texts` (init, players_tracking,
 competition_slug, player_stats, players_events, events_names, rounds_phases, competition_position,
-banner_zones, rating_min, types_relations, statistiques joueur séparées par compétition).
+banner_zones, rating_min, types_relations, statistiques joueur séparées par compétition, textes
+éditoriaux des bandeaux de compétition).
 Autres : `modules/votw/migrations/0001_init`, `modules/forum/migrations/0001_init`.
 
 ⚠️ **Migrations passées à la main** dans Supabase. Le code est tolérant (tri client, fill-if-empty)
 mais certaines fonctions restent inactives tant que la colonne n'existe pas. **Vérifier que TOUTES
-les migrations football 0001→0012 sont passées** sur le projet (surtout position/banner/zones/
+les migrations football 0001→0013 sont passées** sur le projet (surtout position/banner/zones/
 rating_min/competition_type/parent_club_id/team_type et `0012` avant toute nouvelle synchro des
-effectifs/stats). Une colonne manquante n'affiche plus de page
+effectifs/stats, puis `0013` pour éditer les titres de bandeau). Une colonne manquante n'affiche plus de page
 blanche (résilience ajoutée) mais désactive la feature liée.
 
 ---
@@ -242,7 +243,9 @@ football (bug déjà corrigé dans EntityManager).
 - **Textes** (`lib/labels.js` + admin Réglages → Textes) : `L(key, fallback)` partout. Surcharge
   dans `site_settings.data.labels`. Défauts inline dans le code (marche sans config).
 - **Bannière compétition** : `competitions.banner_url` (décor, aucun texte intégré). Défaut
-  `public/competition-banner.png`. Header = overlay HTML/CSS (`CompetitionHeader`).
+  `public/competition-banner.png`. Header = overlay HTML/CSS (`CompetitionHeader`). Son titre et son
+  sous-titre sont modifiables par compétition avec `header_title`/`header_subtitle` ; les valeurs
+  vides retombent automatiquement sur le nom puis sur « pays · saison ».
 - **Logos** : compétition `logo_url` (auto si vide, sinon manuel prioritaire) ; clubs `logo_url`
   (auto, protégé par verrou).
 - **Fonds de tuiles** (`lib/tiles.js` + admin Réglages → Tuiles) : par tuile (`topscorer`,
@@ -264,7 +267,8 @@ football (bug déjà corrigé dans EntityManager).
 Accueil `/` (placeholder). `/competitions` (liste, client, état chargement/erreur explicite, type
 Championnat/Coupe) + `/competitions/[slug]` (header overlay, onglets Vue d'ensemble / Matchs /
 Classement pour une ligue ou Tours pour une coupe / Clubs / Joueurs / Stats, sélecteur de saison,
-fond global discret). `/matchs` (phase-aware, sélecteur compétition en tuiles + phase + tour, dates de
+fond global discret, poussoir direct entre les compétitions qui conserve l'onglet courant). `/matchs`
+(phase-aware, sélecteur compétition en tuiles + phase + tour, dates de
 journées) + `/matchs/[id]` (fiche + timeline lisible). `/classement` (sélecteur compétition + phase,
 calcul client, zones). `/clubs/[id]` (entraîneur en tête + sections pliables). `/players/[id]` (stats
 saison). `/recherche` (unifiée). Auth : `/login` (OAuth Google/Twitch/Discord + email + inscription +
@@ -425,6 +429,24 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
 
 ## CHANGELOG_DE_PASSATION
 
+### 2026-09-17 — ChatGPT — navigation et finition des pages compétition
+
+- Ajout sous le bandeau d'un poussoir visuel avec logo pour passer directement de la Pro League à
+  la Croky Cup (et aux futures compétitions), dans l'ordre administrable `position`. L'onglet courant
+  est conservé ; « Classement » devient naturellement « Tours » pour une coupe.
+- Migration `0013_competition_header_texts.sql` : `header_title` et `header_subtitle` sont éditables
+  dans Admin → Football → Compétitions. Ils ne sont pas possédés par le provider et ne sont donc
+  jamais écrasés par une synchronisation. Valeurs vides = fallback nom puis pays/saison.
+- Correction visuelle des zones : une position sans zone reçoit maintenant un état neutre lisible,
+  au lieu d'une pastille noire pouvant faire croire que la 5e place était relégable. Les bornes
+  `from`/`to` sont converties et validées explicitement.
+- La tuile Top 5 occupe désormais toute sa hauteur sans afficher artificiellement les 16 équipes.
+  Le classement complet et les lignes de résultats ont reçu une finition légère : rangs, points,
+  contraste du vainqueur, score central, survol et comportement horizontal mobile.
+- Vérification : build Next.js 14.2.35 réussi avec variables Supabase factices de compilation +
+  `git diff --check` réussi. La validation finale sur données réelles reste à faire après déploiement.
+- Socle : **aucune modification**.
+
 ### 2026-09-17 — ChatGPT — statistiques séparées par compétition
 
 - Reproduction visuelle sur la page Croky : les cartes Leaders reprenaient les chiffres Pro League
@@ -494,10 +516,12 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
   - `5d57095` cartes cliquables → ancres Stats + note fiabilisée (seuil) + clean sheets
   - `a6213f5` rounds/phases génériques (fin du mélange journées/barrages)
   - `39267e2`/`150db4d` couche compétition (effectifs+stats, événements, journées, fiches)
-- **Migrations encore à passer** (si le projet Supabase n'est pas à jour) : appliquer maintenant
-  `0012_stats_by_competition.sql`, puis vérifier que `modules/football/migrations/0001→0012` sont
+- **Migrations encore à passer** (si le projet Supabase n'est pas à jour) : `0012` est indiquée
+  comme appliquée par l'utilisateur ; appliquer `0013_competition_header_texts.sql`, puis vérifier
+  que `modules/football/migrations/0001→0013` sont
   **toutes** passées (surtout `0008` position, `0009` banner_url/zones, `0010` rating_min,
-  `0011` competition_type/parent_club_id/team_type, `0012` unicité des stats par compétition).
+  `0011` competition_type/parent_club_id/team_type, `0012` unicité des stats par compétition et
+  `0013` textes des bandeaux).
   Le code est tolérant mais ces features restent inactives sinon.
 
 ---

@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { Calendar } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import MatchRow from "@/components/football/MatchRow";
 import StandingsTable from "@/components/football/StandingsTable";
@@ -11,7 +11,7 @@ import CompetitionHeader from "@/components/football/CompetitionHeader";
 import Watermark from "@/components/football/Watermark";
 import { computeStandings } from "@/lib/standings";
 import { competitionPhases, getCompetitionType } from "@/lib/competitionType";
-import { resolveCompetitionRoute } from "@/lib/competitionRoutes";
+import { competitionPath, resolveCompetitionRoute } from "@/lib/competitionRoutes";
 import { useLabels } from "@/lib/labels";
 import { useTiles } from "@/lib/tiles";
 
@@ -31,9 +31,11 @@ function clubForm(ms, clubId) {
 
 export default function CompetitionPage() {
   const { slug } = useParams();
+  const searchParams = useSearchParams();
   const L = useLabels();
   const tiles = useTiles();
   const [comp, setComp] = useState(undefined);
+  const [competitions, setCompetitions] = useState([]);
   const [tab, setTab] = useState("overview");
   const [seasons, setSeasons] = useState([]); const [seasonLabel, setSeasonLabel] = useState("");
   const [matches, setMatches] = useState([]);
@@ -49,10 +51,16 @@ export default function CompetitionPage() {
 
   const TABS = [["overview", L("comp.tab.overview", "Vue d'ensemble")], ["matchs", L("nav.matchs", "Matchs")], ["classement", isCup ? L("cup.rounds", "Tours") : L("nav.classement", "Classement")], ["clubs", L("nav.clubs", "Clubs")], ["joueurs", L("nav.joueurs", "Joueurs")], ["stats", L("comp.tab.stats", "Stats")]];
 
+  useEffect(() => {
+    const requestedTab = searchParams.get("tab");
+    if (["overview", "matchs", "classement", "clubs", "joueurs", "stats"].includes(requestedTab)) setTab(requestedTab);
+  }, [searchParams]);
+
   useEffect(() => { (async () => {
     setPlayerStats([]);
     const { data: competitionRows, error: competitionError } = await supabase.from("competitions").select("*");
     if (competitionError) throw competitionError;
+    setCompetitions([...(competitionRows || [])].sort((a, b) => (a.position ?? 999) - (b.position ?? 999) || (a.name || "").localeCompare(b.name || "")));
     const c = resolveCompetitionRoute(competitionRows || [], slug);
     if (!c) { setComp(null); return; }
     setComp(c);
@@ -101,7 +109,10 @@ export default function CompetitionPage() {
   if (comp === null) return <p className="text-muted">Compétition introuvable.</p>;
   const clubsList = Object.values(clubsMap);
   const zones = comp.zones || [];
-  const zoneFor = (pos) => zones.find((z) => pos >= (z.from || 0) && pos <= (z.to || 0));
+  const zoneFor = (pos) => zones.find((z) => {
+    const from = Number(z.from); const to = Number(z.to);
+    return Number.isFinite(from) && Number.isFinite(to) && pos >= from && pos <= to;
+  });
 
   const goals = phaseFinished.reduce((s, m) => s + m.home_score + m.away_score, 0);
   let homeW = 0, draw = 0, awayW = 0;
@@ -201,6 +212,16 @@ export default function CompetitionPage() {
         <div className="absolute inset-0" style={{ background: "radial-gradient(760px 420px at 100% 110%, rgba(18,48,110,0.14), transparent 70%)" }} />
       </div>
       <CompetitionHeader comp={comp} seasonLabel={seasonLabel} kicker={L("comp.kicker", "Compétitions")} />
+      {competitions.length > 1 && (
+        <div className="-mt-2 mb-5 flex justify-center">
+          <div className="inline-flex max-w-full items-center gap-1 overflow-x-auto rounded-full border border-line/10 bg-surface2/80 p-1 shadow-[0_12px_30px_-20px_rgba(0,0,0,0.9)] backdrop-blur">
+            {competitions.map((item) => {
+              const active = item.id === comp.id;
+              return <Link key={item.id} href={`${competitionPath(item)}?tab=${tab}`} aria-current={active ? "page" : undefined} className={`group flex shrink-0 items-center gap-2 rounded-full px-3 py-1.5 text-xs font-bold transition sm:px-4 ${active ? "bg-accent text-white shadow-[0_5px_18px_-8px_rgba(239,68,68,0.9)]" : "text-muted hover:bg-white/[0.05] hover:text-content"}`}>{item.logo_url && <img src={item.logo_url} className="h-5 w-5 object-contain" alt="" />}<span>{item.header_title?.trim() || item.name}</span></Link>;
+            })}
+          </div>
+        </div>
+      )}
       <div className="mb-6 flex items-center justify-between gap-2 border-b border-line/10">
         <div className="flex flex-wrap gap-1">{TABS.map(([k, l]) => <button key={k} onClick={() => setTab(k)} className={`px-3 py-2 text-sm ${tab === k ? "border-b-2 border-accent font-bold text-content" : "text-muted hover:text-content"}`}>{l}</button>)}</div>
         {seasons.length > 0 && <select value={seasonLabel} onChange={(e) => setSeasonLabel(e.target.value)} className="shrink-0 rounded border border-line/10 bg-surface px-2 py-1 text-xs">{seasons.map((s) => <option key={s.id}>{s.label}</option>)}</select>}
@@ -219,18 +240,20 @@ export default function CompetitionPage() {
               </Card>
             ) : (
               <Card title={L("comp.top5", "Classement — Top 5")} onSee={() => setTab("classement")}>
-                <div className="space-y-1">
+                <div className="flex h-full flex-col">
+                  <div className="flex flex-1 flex-col justify-between gap-1">
                   {standings.slice(0, 5).map((r, i) => { const z = zoneFor(i + 1); return (
-                    <div key={r.club} className="flex items-center gap-2 rounded-lg bg-white/[0.02] px-2 py-1.5">
-                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-xs font-bold text-white" style={{ background: z?.color || "rgba(255,255,255,0.12)" }}>{i + 1}</span>
-                      {clubsMap[r.club]?.logo_url && <img src={clubsMap[r.club].logo_url} className="h-5 w-5 shrink-0 object-contain" alt="" />}
+                    <div key={r.club} className="group flex items-center gap-2 rounded-xl border border-white/[0.035] bg-gradient-to-r from-white/[0.045] to-transparent px-2 py-1.5 transition hover:border-accent/20 hover:bg-white/[0.06]">
+                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border text-xs font-black" style={z ? { borderColor: `${z.color}80`, background: `${z.color}22`, color: z.color } : { borderColor: "rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.05)", color: "rgba(255,255,255,0.7)" }}>{i + 1}</span>
+                      {clubsMap[r.club]?.logo_url && <img src={clubsMap[r.club].logo_url} className="h-6 w-6 shrink-0 object-contain" alt="" />}
                       <Link href={`/clubs/${r.club}`} className="min-w-0 flex-1 truncate font-semibold hover:text-accent">{clubName(r.club)}</Link>
                       <FormDots res={clubForm(phaseFinished, r.club)} />
-                      <b className="w-7 text-right">{r.pts}</b>
+                      <b className="min-w-9 rounded-lg bg-white/[0.06] px-1.5 py-1 text-center tabular-nums">{r.pts}</b>
                     </div>); })}
                   {standings.length === 0 && <p className="text-muted">—</p>}
+                  </div>
+                  {zones.length > 0 && <div className="mt-3 flex flex-wrap gap-x-2 gap-y-1 border-t border-line/10 pt-2 text-[10px] text-muted">{zones.map((z, i) => <span key={i} className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full" style={{ background: z.color }} />{z.label}</span>)}</div>}
                 </div>
-                {zones.length > 0 && <div className="mt-3 flex flex-wrap gap-2 text-[10px] text-muted">{zones.map((z, i) => <span key={i} className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full" style={{ background: z.color }} />{z.label}</span>)}</div>}
               </Card>
             )}
             <Card title={isCup ? `${L("comp.results", "Résultats")} — ${curPhase || L("cup.round", "Tour")}` : (lastRound >= 0 ? `${L("comp.results", "Résultats")} — ${L("comp.round", "Journée")} ${lastRound}` : L("comp.results", "Derniers résultats"))} onSee={() => setTab("matchs")}>
