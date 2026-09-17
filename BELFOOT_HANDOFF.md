@@ -83,7 +83,7 @@ lib/
 components/
   Navbar/Footer/ThemeModeProvider/CategoryBadge/RichContent/CollapsibleSection
   auth/OAuthButtons.js
-  football/  MatchRow, StandingsTable, CompetitionHeader, Watermark
+  football/  MatchRow, StandingsTable, CompetitionHeader, SeasonCalendar, Watermark
   admin/     EntityManager (CRUD générique tables métier), CollectionManager (contenus éditoriaux),
              registry.js (clé de panneau -> composant), panels.js (Jobs/Profils/Signalements/
              Providers/Textes/Tuiles/FicheClub/SettingsInfo…), Dashboard, CategoriesManager,
@@ -277,8 +277,9 @@ Championnat/Coupe) + `/competitions/[slug]` (header overlay, onglets Vue d'ensem
 Classement pour une ligue ou Tours pour une coupe / Clubs / Joueurs / Stats, sélecteur de saison,
 fond global discret, poussoir direct entre les compétitions qui conserve l'onglet courant). Les
 matchs, classements, clubs et chiffres de cette page sont scoppés par la saison sélectionnée.
-`/matchs` (sélecteur compétition + saison + phase + tour, dates de
-journées) + `/matchs/[id]` (fiche + timeline lisible). `/classement` (sélecteur compétition + phase,
+`/matchs` (sélecteur compétition + saison + phase, vraie vue Calendrier avec navigation entre
+journées/tours + ancienne vue Liste) + `/matchs/[id]` (fiche + timeline lisible). `/classement`
+(sélecteur compétition + saison + phase,
 calcul client, zones). `/clubs/[id]` (entraîneur en tête + sections pliables). `/players/[id]` (stats
 saison). `/recherche` (unifiée). Auth : `/login` (OAuth Google/Twitch/Discord + email + inscription +
 mot de passe oublié), `/reset`, `/compte`, `/auth/callback` (redirige selon rôle). `/[collection]`
@@ -369,22 +370,20 @@ Côté Supabase : Site URL = domaine + Redirect URLs (`/auth/callback`, `/reset`
 
 ## 14. TODO ouverts (par priorité indicative)
 
-1. **Vraie vue calendrier** de la saison (grille par journée/tour + dates + navigation). Aujourd'hui :
-   groupement par journée + dates dans l'onglet Matchs seulement.
-2. **Fiche club — blocs administrables complets** : ajouter les sections manquantes (Identité détaillée,
+1. **Fiche club — blocs administrables complets** : ajouter les sections manquantes (Identité détaillée,
    Classement du club, Stats club, Stade, Palmarès) au système `clubSections` (activer/ordre + pliable).
-3. **Synchro entraîneurs** depuis le provider (table `coaches` remplie manuellement pour l'instant ;
+2. **Synchro entraîneurs** depuis le provider (table `coaches` remplie manuellement pour l'instant ;
    afficher l'entraîneur actuel, surchargeable admin).
-4. **Équipes liées / réserves / U23** : peupler `parent_club_id`/`team_type` (mapping provider) ; la
+3. **Équipes liées / réserves / U23** : peupler `parent_club_id`/`team_type` (mapping provider) ; la
    section « Équipes liées » s'affiche déjà si des relations existent.
-5. **Suivi des Belges à l'étranger** (cœur produit) : exercer `discover-belgians` + `track-belgians`,
+4. **Suivi des Belges à l'étranger** (cœur produit) : exercer `discover-belgians` + `track-belgians`,
    page annuaire V1 construite ; prochaine étape = ajouter les compétitions étrangères masquées,
    exercer les jobs, puis construire le top/récap des Belges du week-end.
-6. **Lineups par match** (compos) → clean sheets GK exacts + titularisations réelles par match.
-7. **Home Belfoot** (pas encore construite) : hero « Les Belges. Partout dans le monde. », blocs
+5. **Lineups par match** (compos) → clean sheets GK exacts + titularisations réelles par match.
+6. **Home Belfoot** (pas encore construite) : hero « Les Belges. Partout dans le monde. », blocs
    JPL / Croky / Belges à suivre / en forme / Belge du moment / actus.
-8. **Passer en plan payant** API-Football pour la saison courante (le code est prêt : changer `season`).
-9. Régler les Zones JPL. Pour la Croky, renseigner idéalement Type = `cup` en admin ; le front est
+7. **Passer en plan payant** API-Football pour la saison courante (le code est prêt : changer `season`).
+8. Régler les Zones JPL par saison/phase. Pour la Croky, renseigner idéalement Type = `cup` en admin ; le front est
    désormais résilient et la détecte aussi via le provider/les tours si cette valeur manque encore.
 
 ---
@@ -442,6 +441,20 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
 ---
 
 ## CHANGELOG_DE_PASSATION
+
+### 2026-09-17 — ChatGPT — vraie vue calendrier
+
+- `/matchs` s'ouvre désormais en vue Calendrier, avec une bascule vers la vue Liste historique.
+- Bandeau de journées/tours horizontal et responsive : vert = terminé, jaune = à venir, rouge =
+  direct. La première journée non terminée est sélectionnée automatiquement ; si tout est terminé,
+  la dernière journée s'ouvre.
+- Carte centrale avec précédent/suivant, plage de dates, compteur de rencontres terminées/directes,
+  date et heure de chaque match. Le composant est générique et reste compatible avec les phases de
+  championnat et de coupe.
+- Filtres compétition, saison et phase conservés ; chaque changement réinitialise proprement la
+  journée sélectionnée. Aucune migration supplémentaire.
+- Vérification : build Next.js 14.2.35 réussi avec variables Supabase factices de compilation +
+  `git diff --check` réussi. Socle : **aucune modification**.
 
 ### 2026-09-17 — ChatGPT — zones de classement par saison et phase
 
@@ -550,10 +563,11 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
 ## CURRENT_GIT_STATE
 
 - **Branche** : `main`
-- **Dernier commit fonctionnel** : `819ba40` — matchs réellement scoppés par saison et zones de
-  classement configurables par saison/phase.
-- **Commit précédent** : `8c4452e` — documentation du suivi international.
+- **Dernier commit fonctionnel** : `0642506` — vraie vue calendrier avec navigation entre les
+  journées/tours, dates et états.
+- **Commit précédent** : `4f9d5ad` — documentation des formats de classement.
 - **Commits importants récents** :
+  - `0642506` calendrier responsive + navigation + bascule liste
   - `819ba40` migration `0015` + zones saison/phase + filtres saison sur Compétition/Classement/Matchs
   - `39c6522` page Belges + migration `0014` + visibilité publique + discovery économe
   - `0f75661` navigation directe Pro League/Croky + migration `0013` + finition des cartes
