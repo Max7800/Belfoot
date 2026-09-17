@@ -9,6 +9,7 @@ export default function PlayerPage() {
   const [p, setP] = useState(undefined);
   const [club, setClub] = useState(null);
   const [stats, setStats] = useState([]);
+  const [competitions, setCompetitions] = useState({});
   useEffect(() => { (async () => {
     const { data: pl } = await supabase.from("players").select("*").eq("id", id).maybeSingle();
     if (!pl) { setP(null); return; }
@@ -16,6 +17,11 @@ export default function PlayerPage() {
     if (pl.club_id) { const { data: c } = await supabase.from("clubs").select("id,name,logo_url").eq("id", pl.club_id).maybeSingle(); setClub(c || null); }
     const { data: s } = await supabase.from("player_season_stats").select("*").eq("player_id", id).order("season", { ascending: false });
     setStats(s || []);
+    const competitionIds = [...new Set((s || []).map((row) => row.competition_id).filter(Boolean))];
+    if (competitionIds.length) {
+      const { data: rows } = await supabase.from("competitions").select("id,name").in("id", competitionIds);
+      setCompetitions(Object.fromEntries((rows || []).map((competition) => [competition.id, competition.name])));
+    }
   })().catch(() => setP(null)); }, [id]);
   if (p === undefined) return <p className="text-muted">Chargement…</p>;
   if (p === null) return <p className="text-muted">Joueur introuvable.</p>;
@@ -32,8 +38,8 @@ export default function PlayerPage() {
       <h2 className="mb-3 text-sm font-bold uppercase tracking-wider text-muted">Statistiques de saison</h2>
       {stats.length === 0
         ? <p className="text-sm text-muted">Pas encore de stats. Coche « Suivi Belfoot » sur ce joueur (admin) puis lance « 📊 MAJ Belges suivis ».</p>
-        : <div className="overflow-hidden rounded-xl border border-line/10"><table className="w-full text-sm"><thead className="bg-surface2 text-muted"><tr><th className="p-2 text-left">Saison</th><th>Matchs</th><th>Titu.</th><th>Min.</th><th>Buts</th><th>Passes</th><th>🟨</th><th>🟥</th></tr></thead>
-          <tbody>{stats.map((s) => <tr key={s.id} className="border-t border-line/10 text-center"><td className="p-2 text-left">{s.season}</td><td>{s.appearances ?? 0}</td><td>{s.lineups ?? 0}</td><td>{s.minutes ?? 0}</td><td className="font-bold">{s.goals ?? 0}</td><td>{s.assists ?? 0}</td><td>{s.yellow ?? 0}</td><td>{s.red ?? 0}</td></tr>)}</tbody></table></div>}
+        : <div className="overflow-x-auto rounded-xl border border-line/10"><table className="w-full min-w-[680px] text-sm"><thead className="bg-surface2 text-muted"><tr><th className="p-2 text-left">Compétition</th><th className="p-2 text-left">Saison</th><th>Matchs</th><th>Titu.</th><th>Min.</th><th>Buts</th><th>Passes</th><th>🟨</th><th>🟥</th></tr></thead>
+          <tbody>{stats.map((s) => <tr key={s.id} className="border-t border-line/10 text-center"><td className="p-2 text-left font-semibold">{competitions[s.competition_id] || "Non attribuée"}</td><td className="p-2 text-left">{s.season}</td><td>{s.appearances ?? 0}</td><td>{s.lineups ?? 0}</td><td>{s.minutes ?? 0}</td><td className="font-bold">{s.goals ?? 0}</td><td>{s.assists ?? 0}</td><td>{s.yellow ?? 0}</td><td>{s.red ?? 0}</td></tr>)}</tbody></table></div>}
     </div>
   );
 }

@@ -21,6 +21,7 @@ const VARIANTS = {
   topassist: { border: "border-red-500/50", glow: "shadow-[0_0_34px_-12px_rgba(239,68,68,0.45)]", grad: "from-red-500/10", accent: "#ef4444", wm: "boot", icon: "👟" },
   cleansheet: { border: "border-sky-400/50", glow: "shadow-[0_0_34px_-12px_rgba(56,189,248,0.45)]", grad: "from-sky-400/10", accent: "#38bdf8", wm: "glove", icon: "🧤" },
 };
+function seasonKey(value) { return (String(value || "").match(/\d{4}/) || [String(value || "")])[0]; }
 function clubForm(ms, clubId) {
   const rel = ms.filter((m) => m.home_score != null && (m.home_club_id === clubId || m.away_club_id === clubId)).sort((a, b) => new Date(b.kickoff) - new Date(a.kickoff)).slice(0, 5).reverse();
   const res = [];
@@ -37,7 +38,7 @@ export default function CompetitionPage() {
   const [seasons, setSeasons] = useState([]); const [seasonLabel, setSeasonLabel] = useState("");
   const [matches, setMatches] = useState([]);
   const [clubsMap, setClubsMap] = useState({});
-  const [players, setPlayers] = useState([]); const [pss, setPss] = useState({});
+  const [players, setPlayers] = useState([]); const [playerStats, setPlayerStats] = useState([]);
   const [phase, setPhase] = useState(null); const [round, setRound] = useState("all");
   const [selClub, setSelClub] = useState(null); const [posFilter, setPosFilter] = useState("all");
   const [anchor, setAnchor] = useState(null);
@@ -49,6 +50,7 @@ export default function CompetitionPage() {
   const TABS = [["overview", L("comp.tab.overview", "Vue d'ensemble")], ["matchs", L("nav.matchs", "Matchs")], ["classement", isCup ? L("cup.rounds", "Tours") : L("nav.classement", "Classement")], ["clubs", L("nav.clubs", "Clubs")], ["joueurs", L("nav.joueurs", "Joueurs")], ["stats", L("comp.tab.stats", "Stats")]];
 
   useEffect(() => { (async () => {
+    setPlayerStats([]);
     const { data: competitionRows, error: competitionError } = await supabase.from("competitions").select("*");
     if (competitionError) throw competitionError;
     const c = resolveCompetitionRoute(competitionRows || [], slug);
@@ -66,10 +68,19 @@ export default function CompetitionPage() {
       const { data: pl } = await supabase.from("players").select("*").in("club_id", ids).order("name");
       setPlayers(pl || []);
       const pids = (pl || []).map((p) => p.id);
-      if (pids.length) { const { data: s } = await supabase.from("player_season_stats").select("*").in("player_id", pids); setPss(Object.fromEntries((s || []).map((x) => [x.player_id, x]))); }
+      if (pids.length) {
+        const { data: s, error: statsError } = await supabase.from("player_season_stats").select("*").eq("competition_id", c.id).in("player_id", pids);
+        if (statsError) throw statsError;
+        setPlayerStats(s || []);
+      } else setPlayerStats([]);
     }
   })().catch(() => setComp(null)); }, [slug]);
 
+  const pss = useMemo(() => {
+    const activeSeason = seasonKey(seasonLabel);
+    const rows = activeSeason ? playerStats.filter((stat) => seasonKey(stat.season) === activeSeason) : playerStats;
+    return Object.fromEntries(rows.map((stat) => [stat.player_id, stat]));
+  }, [playerStats, seasonLabel]);
   const phases = useMemo(() => competitionPhases(matches, competitionType), [matches, competitionType]);
   const curPhase = phase || (isCup ? phases[phases.length - 1] : phases[0]) || null;
   const phaseMatches = useMemo(() => matches.filter((m) => (m.phase || "—") === curPhase), [matches, curPhase]);

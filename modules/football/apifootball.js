@@ -82,8 +82,10 @@ const provider = {
     const y = seasonYear(ctx.season);
     const row = (await api(`/players?id=${player.external_id}&season=${y}`, ctx))[0];
     if (!row) return null;
+    const stats = (row.statistics || []).filter((st) => !ctx.leagueId || String(st.league?.id) === String(ctx.leagueId));
+    if (!stats.length) return null;
     const a = { appearances: 0, lineups: 0, minutes: 0, goals: 0, assists: 0, yellow: 0, red: 0, rating: null };
-    for (const st of row.statistics || []) {
+    for (const st of stats) {
       a.appearances += st.games?.appearences || 0; a.lineups += st.games?.lineups || 0; a.minutes += st.games?.minutes || 0;
       a.goals += st.goals?.total || 0; a.assists += st.goals?.assists || 0;
       a.yellow += st.cards?.yellow || 0; a.red += st.cards?.red || 0;
