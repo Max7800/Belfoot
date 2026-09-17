@@ -726,13 +726,29 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
 - Vérification : `npm run build` réussi sous Next.js 14.2.35.
 - Socle : **aucune modification**.
 
+### 2026-09-17 — ChatGPT — hiérarchie visuelle du portail Compétitions
+
+- La première compétition selon l'ordre administrable `position` devient la porte principale du
+  portail et occupe toute la largeur sur desktop ; les suivantes restent en grille de deux. Aucune
+  compétition ni aucun nom n'est codé en dur : changer l'ordre dans l'admin change aussi la mise en
+  avant.
+- Bandeau global compacté pour laisser davantage de place aux portes, sans retirer ses textes,
+  son image ou son overlay administrables.
+- Cartes rééquilibrées : logo principal agrandi, accent du badge et halo dérivés de la couleur de
+  contour administrable, filet supérieur coloré, contraste du sous-titre renforcé et navigation
+  basse plus légère avec effet de verre.
+- Le mobile conserve une pile uniforme : la carte principale ne devient large et plus éditoriale
+  qu'à partir du breakpoint desktop.
+- Nouvelle migration : **aucune**. Vérification : build Next.js 14.2.35 réussi avec variables
+  Supabase factices de compilation + `git diff --check` réussi. Socle : **aucune modification**.
+
 ---
 
 ## CURRENT_GIT_STATE
 
 - **Branche** : `main`
-- **Dernier commit distant au début du lot** : `2c71e35` — documentation des clubs liés et du
-  chantier Europe. Le lot courant ajoute l'accueil administrable et la navigation mobile des clubs.
+- **HEAD local avant le lot portail** : `5966786` — compositions et performances par match. Le lot
+  courant réorganise `/competitions` sans migration ni changement de données.
 - **Commits importants récents** :
   - `2c71e35` documentation clubs liés / Europe
   - `69578a5` automatisation des stades + simplification des équipes liées

@@ -38,15 +38,15 @@ export default function CompetitionsPage() {
   return (
     <div className="relative">
       <div className="pointer-events-none absolute inset-x-0 -top-8 -z-10 h-80 bg-[radial-gradient(circle_at_50%_0%,rgba(56,189,248,.15),transparent_68%)]" />
-      <header className="relative mb-7 overflow-hidden rounded-3xl border border-sky-400/15 bg-[linear-gradient(120deg,rgba(6,23,42,.98),rgba(9,35,59,.94),rgba(5,18,34,.98))] px-5 py-8 sm:px-8 sm:py-10">
+      <header className="relative mb-6 overflow-hidden rounded-3xl border border-sky-400/15 bg-[linear-gradient(120deg,rgba(6,23,42,.98),rgba(9,35,59,.94),rgba(5,18,34,.98))] px-5 py-6 sm:px-8 sm:py-8">
         {hub.banner_url && <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${hub.banner_url})` }} />}
         {hub.banner_url && <div className="absolute inset-0 bg-[#06172a]" style={{ opacity: safeOverlay(hub.overlay) }} />}
         <div className="pointer-events-none absolute inset-0 opacity-20 [background-image:linear-gradient(rgba(255,255,255,.05)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.05)_1px,transparent_1px)] [background-size:38px_38px]" />
-        <Trophy className="pointer-events-none absolute -bottom-12 -right-5 h-48 w-48 text-white opacity-[0.025]" />
+        <Trophy className="pointer-events-none absolute -bottom-16 -right-5 h-48 w-48 text-white opacity-[0.025]" />
         <div className="relative max-w-2xl">
           <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.24em] text-amber-300"><Sparkles className="h-3.5 w-3.5" />{hub.kicker}</div>
-          <h1 className="mt-3 text-3xl font-black sm:text-5xl">{hub.title}</h1>
-          <p className="mt-3 text-sm leading-6 text-slate-300 sm:text-base">{hub.intro}</p>
+          <h1 className="mt-2 text-3xl font-black sm:text-4xl">{hub.title}</h1>
+          <p className="mt-2 max-w-xl text-sm leading-6 text-slate-300 sm:text-[15px]">{hub.intro}</p>
         </div>
       </header>
 
@@ -62,28 +62,38 @@ export default function CompetitionsPage() {
           const title = competition.portal_title?.trim() || competition.header_title?.trim() || competition.name;
           const subtitle = competition.portal_subtitle?.trim() || competition.header_subtitle?.trim() || (isCup ? L("competitions.cupFallback", "La coupe nationale, sans droit à l'erreur.") : L("competitions.leagueFallback", "Une saison entière pour écrire la hiérarchie."));
           const country = competition.ext?.country;
-          const accent = isCup ? "text-amber-300" : index % 2 ? "text-sky-300" : "text-fuchsia-400";
+          const featured = index === 0;
           const borderColor = safeColor(competition.portal_border_color, isCup ? "#fcd34d" : index % 2 ? "#7dd3fc" : "#e879f9");
           return (
-            <article key={competition.id} className="group relative min-h-[340px] overflow-hidden rounded-3xl border bg-[#07182b] transition duration-300 hover:-translate-y-1 hover:shadow-[0_28px_70px_-42px_rgba(56,189,248,.65)]" style={{ borderColor: `${borderColor}80` }}>
+            <article
+              key={competition.id}
+              className={`group relative min-h-[340px] overflow-hidden rounded-3xl border bg-[#07182b] transition duration-300 hover:-translate-y-1 ${featured ? "lg:col-span-2 lg:min-h-[310px]" : ""}`}
+              style={{ borderColor: `${borderColor}8c`, boxShadow: `0 26px 70px -48px ${borderColor}` }}
+            >
               <div className="absolute inset-0 bg-cover bg-center transition duration-500 group-hover:scale-[1.025]" style={{ backgroundImage: `url(${banner})` }} />
               <div className="absolute inset-0 bg-[#061426]" style={{ opacity: safeOverlay(competition.portal_overlay, 0.35) }} />
               <div className="absolute inset-0 bg-gradient-to-t from-[#061426] via-[#07182b]/85 to-black/15" />
-              <Link href={path} className="relative flex min-h-[270px] flex-col p-5 sm:p-6">
+              <div className="pointer-events-none absolute inset-x-0 top-0 h-px opacity-90" style={{ background: `linear-gradient(90deg, transparent, ${borderColor}, transparent)` }} />
+              <div className="pointer-events-none absolute -right-16 -top-20 h-52 w-52 rounded-full opacity-[0.15] blur-3xl" style={{ backgroundColor: borderColor }} />
+              <Link href={path} className={`relative flex flex-col p-5 sm:p-6 ${featured ? "min-h-[270px] lg:min-h-[240px] lg:px-8" : "min-h-[270px]"}`}>
                 <div className="flex items-start justify-between gap-4">
-                  <span className={`inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-black/25 px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] ${accent}`}>{isCup ? <Trophy className="h-3.5 w-3.5" /> : <Shield className="h-3.5 w-3.5" />}{isCup ? L("competitions.cup", "Coupe") : L("competitions.league", "Championnat")}</span>
+                  <span className="inline-flex items-center gap-1.5 rounded-full border bg-black/30 px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] backdrop-blur-sm" style={{ borderColor: `${borderColor}80`, color: borderColor }}>{isCup ? <Trophy className="h-3.5 w-3.5" /> : <Shield className="h-3.5 w-3.5" />}{isCup ? L("competitions.cup", "Coupe") : L("competitions.league", "Championnat")}</span>
                   <span className="text-sm text-white/75">{competition.ext?.country_flag ? <img src={competition.ext.country_flag} className="h-4 w-6 rounded-sm object-cover" alt="" /> : FLAG[country] || "🇧🇪"}</span>
                 </div>
-                <div className="mt-auto flex items-end gap-4 pt-16">
-                  {competition.logo_url && <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-black/30 p-2 backdrop-blur-sm"><img src={competition.logo_url} className="h-full w-full object-contain drop-shadow-xl" alt="" /></div>}
-                  <div className="min-w-0 flex-1"><h2 className="text-3xl font-black leading-none text-white sm:text-4xl">{title}</h2><p className="mt-2 line-clamp-2 text-sm leading-5 text-white/65">{subtitle}</p></div>
+                <div className={`mt-auto flex items-end gap-4 ${featured ? "pt-12 lg:gap-6 lg:pt-8" : "pt-16"}`}>
+                  {competition.logo_url && <div className={`flex shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-black/30 p-2 backdrop-blur-sm ${featured ? "h-20 w-20 lg:h-24 lg:w-24" : "h-20 w-20"}`}><img src={competition.logo_url} className="h-full w-full object-contain drop-shadow-xl" alt="" /></div>}
+                  <div className="min-w-0 flex-1">
+                    <h2 className={`font-black leading-none text-white ${featured ? "text-3xl sm:text-4xl lg:text-5xl" : "text-3xl sm:text-4xl"}`}>{title}</h2>
+                    <p className={`mt-2 line-clamp-2 leading-5 text-white/70 ${featured ? "max-w-2xl text-sm sm:text-base" : "text-sm"}`}>{subtitle}</p>
+                  </div>
+                  {featured && <ArrowRight className="mb-2 hidden h-7 w-7 shrink-0 text-white/55 transition group-hover:translate-x-1 group-hover:text-white lg:block" />}
                 </div>
               </Link>
-              <div className="relative grid grid-cols-2 border-t border-white/10 bg-black/20 p-2 sm:grid-cols-4">
-                <Link href={path} className="flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-[11px] font-bold text-white transition hover:bg-white/[0.07]"><ArrowRight className="h-3.5 w-3.5" />{L("comp.tab.overview", "Vue d'ensemble")}</Link>
-                <Link href={`${path}?tab=matchs`} className="flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-[11px] font-bold text-white transition hover:bg-white/[0.07]"><CalendarDays className="h-3.5 w-3.5" />{L("nav.matchs", "Matchs")}</Link>
-                <Link href={`${path}?tab=classement`} className="flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-[11px] font-bold text-white transition hover:bg-white/[0.07]"><ListOrdered className="h-3.5 w-3.5" />{isCup ? L("cup.rounds", "Tours") : L("nav.classement", "Classement")}</Link>
-                <Link href={`${path}?tab=clubs`} className="flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-[11px] font-bold text-white transition hover:bg-white/[0.07]"><UsersRound className="h-3.5 w-3.5" />{L("nav.clubs", "Clubs")}</Link>
+              <div className="relative grid grid-cols-2 border-t border-white/10 bg-[#020b15]/60 p-2 backdrop-blur-md sm:grid-cols-4">
+                <Link href={path} className="flex items-center justify-center gap-1.5 rounded-xl px-2 py-2.5 text-[11px] font-bold text-white/90 transition hover:bg-white/[0.08] hover:text-white"><ArrowRight className="h-3.5 w-3.5" />{L("comp.tab.overview", "Vue d'ensemble")}</Link>
+                <Link href={`${path}?tab=matchs`} className="flex items-center justify-center gap-1.5 rounded-xl px-2 py-2.5 text-[11px] font-bold text-white/90 transition hover:bg-white/[0.08] hover:text-white"><CalendarDays className="h-3.5 w-3.5" />{L("nav.matchs", "Matchs")}</Link>
+                <Link href={`${path}?tab=classement`} className="flex items-center justify-center gap-1.5 rounded-xl px-2 py-2.5 text-[11px] font-bold text-white/90 transition hover:bg-white/[0.08] hover:text-white"><ListOrdered className="h-3.5 w-3.5" />{isCup ? L("cup.rounds", "Tours") : L("nav.classement", "Classement")}</Link>
+                <Link href={`${path}?tab=clubs`} className="flex items-center justify-center gap-1.5 rounded-xl px-2 py-2.5 text-[11px] font-bold text-white/90 transition hover:bg-white/[0.08] hover:text-white"><UsersRound className="h-3.5 w-3.5" />{L("nav.clubs", "Clubs")}</Link>
               </div>
             </article>
           );
