@@ -153,7 +153,7 @@ export default function CompetitionPage() {
 
   const Card = ({ title, onSee, children, bgKey }) => {
     const t = bgKey ? tiles(bgKey) : null;
-    const style = t?.background_url ? { backgroundImage: `url(${t.background_url})`, backgroundSize: "cover", backgroundPosition: "center" } : undefined;
+    const style = { ...(t?.background_url ? { backgroundImage: `url(${t.background_url})`, backgroundSize: "cover", backgroundPosition: "center" } : {}), ...(t?.border_color ? { borderColor: t.border_color } : {}) };
     return (
       <div className={`relative flex h-full flex-col overflow-hidden rounded-2xl border border-line/10 p-4 shadow-[0_18px_40px_-24px_rgba(0,0,0,0.8)] ${t?.background_url ? "" : "bg-gradient-to-b from-surface to-bg/40"}`} style={style}>
         {t?.background_url && <span className="absolute inset-0" style={{ background: `rgba(0,0,0,${t.overlay ?? 0.5})` }} />}
@@ -172,7 +172,7 @@ export default function CompetitionPage() {
     const on = t.enabled !== false;
     const accent = (on && t.accent) || v.accent;
     const bg = on ? t.background_url : null;
-    const style = { ...(bg ? { backgroundImage: `url(${bg})`, backgroundSize: "cover", backgroundPosition: "center" } : {}), ...(on && !bg ? { borderColor: accent + "80" } : {}) };
+    const style = { ...(bg ? { backgroundImage: `url(${bg})`, backgroundSize: "cover", backgroundPosition: "center" } : {}), ...(on ? { borderColor: t.border_color || accent } : {}) };
     return (
       <button onClick={onClick} className={`relative w-full overflow-hidden rounded-2xl border p-4 text-left transition hover:brightness-110 ${on ? v.glow : "border-line/10"} ${on && !bg ? `bg-gradient-to-br ${v.grad} to-transparent` : (bg ? "" : "bg-surface")}`} style={style}>
         {bg && <span className="absolute inset-0" style={{ background: `rgba(0,0,0,${t.overlay ?? 0.55})` }} />}

@@ -7,6 +7,7 @@ import ImageField from "@/components/ui/ImageField";
 import { CLUB_SECTIONS } from "@/lib/clubSections";
 import { normalizeStatsConfig } from "@/lib/statsSections";
 import { normalizeHomeConfig } from "@/lib/homeSections";
+import { DEFAULT_COMPETITION_HUB } from "@/lib/competitionHub";
 
 export function ProfilesPanel() {
   const [rows, setRows] = useState([]);
@@ -140,6 +141,7 @@ export function LabelsPanel() {
 
 export function TilesPanel() {
   const KEYS = [["topscorer", "Meilleur buteur"], ["topassist", "Meilleur passeur"], ["cleansheet", "Clean sheets"], ["note", "Meilleure note"], ["upcoming", "Prochains matchs"]];
+  const DEFAULT_COLORS = { topscorer: "#f4c430", topassist: "#ef4444", cleansheet: "#38bdf8", note: "#a78bfa", upcoming: "#2563eb" };
   const [cfg, setCfg] = useState({});
   const load = () => supabase.from("site_settings").select("data").eq("id", 1).maybeSingle().then(({ data }) => setCfg((data?.data && data.data.tiles) || {}));
   useEffect(() => { load(); }, []);
@@ -157,7 +159,8 @@ export function TilesPanel() {
               <label className="flex items-center gap-2"><input type="checkbox" checked={t.enabled !== false} onChange={(e) => persist(upd(k, "enabled", e.target.checked))} />Fond/accent actif</label>
               <div><div className="mb-1 text-xs text-muted">Image de fond</div><ImageField value={t.background_url} onChange={(v) => persist(upd(k, "background_url", v))} /></div>
               <div><div className="mb-1 text-xs text-muted">Overlay (0–1)</div><input type="number" step="0.1" min="0" max="1" value={t.overlay ?? ""} onChange={(e) => setCfg(upd(k, "overlay", e.target.value === "" ? undefined : Number(e.target.value)))} onBlur={() => persist(cfg)} className="w-20 rounded border border-line/10 bg-surface2 px-2 py-1" /></div>
-              <div><div className="mb-1 text-xs text-muted">Accent</div><input type="color" value={t.accent || "#f4c430"} onChange={(e) => persist(upd(k, "accent", e.target.value))} className="h-8 w-10 rounded bg-transparent" /></div>
+              <div><div className="mb-1 text-xs text-muted">Reflet / accent</div><input type="color" value={t.accent || DEFAULT_COLORS[k]} onChange={(e) => persist(upd(k, "accent", e.target.value))} className="h-8 w-10 rounded bg-transparent" /></div>
+              <div><div className="mb-1 text-xs text-muted">Contour</div><input type="color" value={t.border_color || t.accent || DEFAULT_COLORS[k]} onChange={(e) => persist(upd(k, "border_color", e.target.value))} className="h-8 w-10 rounded bg-transparent" /></div>
             </div>
           </div>); })}
       </div>
@@ -217,6 +220,32 @@ export function HomePanel() {
         <div className="sm:col-span-2"><div className="mb-1 text-xs text-muted">Visuel du bandeau (facultatif)</div><ImageField value={draft.hero.image_url} onChange={(value) => setHero("image_url", value)} /></div>
       </div></div>
       <h3 className="mb-2 font-bold">Blocs de la page</h3><div className="space-y-2">{draft.sections.map((section, index) => <div key={section.key} className="rounded-xl border border-line/10 bg-surface p-3"><div className="flex items-center gap-2"><label className="flex shrink-0 items-center gap-2 text-xs"><input type="checkbox" checked={section.enabled} onChange={(event) => setSection(section.key, "enabled", event.target.checked)} />Visible</label><input value={section.label} onChange={(event) => setSection(section.key, "label", event.target.value)} className="min-w-0 flex-1 rounded border border-line/10 bg-surface2 px-2 py-1.5 text-sm font-semibold" /><button onClick={() => move(index, -1)} className="px-1 text-muted hover:text-content">↑</button><button onClick={() => move(index, 1)} className="px-1 text-muted hover:text-content">↓</button></div><textarea rows="2" value={section.subtitle || ""} onChange={(event) => setSection(section.key, "subtitle", event.target.value)} className="mt-2 w-full rounded border border-line/10 bg-surface2 px-2 py-1.5 text-xs text-content" /><label className="mt-2 block text-[11px] text-muted">Texte du lien<input value={section.action || ""} onChange={(event) => setSection(section.key, "action", event.target.value)} className="mt-1 w-full rounded border border-line/10 bg-surface2 px-2 py-1.5 text-xs text-content" /></label></div>)}</div>
+    </div>
+  );
+}
+
+export function CompetitionHubPanel() {
+  const [draft, setDraft] = useState(DEFAULT_COMPETITION_HUB);
+  const [status, setStatus] = useState("");
+  useEffect(() => { supabase.from("site_settings").select("data").eq("id", 1).maybeSingle().then(({ data }) => setDraft({ ...DEFAULT_COMPETITION_HUB, ...(data?.data?.competition_hub || {}) })); }, []);
+  const update = (key, value) => setDraft((current) => ({ ...current, [key]: value }));
+  const save = async () => {
+    setStatus("saving");
+    const { data } = await supabase.from("site_settings").select("data").eq("id", 1).maybeSingle();
+    const { error } = await supabase.from("site_settings").update({ data: { ...(data?.data || {}), competition_hub: draft } }).eq("id", 1);
+    setStatus(error ? "error" : "saved");
+  };
+  return (
+    <div>
+      <div className="mb-5 flex items-start justify-between gap-3"><div><h2 className="text-lg font-bold">Portail Compétitions</h2><p className="mt-1 text-xs text-muted">Personnalise le bandeau général de la page. Les fonds, contours et textes de chaque porte se règlent dans Football → Compétitions.</p></div><button onClick={save} disabled={status === "saving"} className="shrink-0 rounded bg-accent px-3 py-2 text-sm font-bold text-white disabled:opacity-50">{status === "saving" ? "Enregistrement…" : status === "saved" ? "✓ Enregistré" : "Enregistrer"}</button></div>
+      {status === "error" && <p className="mb-4 text-sm text-red-400">Impossible d'enregistrer les réglages.</p>}
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="text-xs text-muted">Sur-titre<input value={draft.kicker || ""} onChange={(event) => update("kicker", event.target.value)} className="mt-1 w-full rounded border border-line/10 bg-surface2 px-3 py-2 text-sm text-content" /></label>
+        <label className="text-xs text-muted">Titre<input value={draft.title || ""} onChange={(event) => update("title", event.target.value)} className="mt-1 w-full rounded border border-line/10 bg-surface2 px-3 py-2 text-sm text-content" /></label>
+        <label className="text-xs text-muted sm:col-span-2">Introduction<textarea rows="3" value={draft.intro || ""} onChange={(event) => update("intro", event.target.value)} className="mt-1 w-full rounded border border-line/10 bg-surface2 px-3 py-2 text-sm text-content" /></label>
+        <div className="sm:col-span-2"><div className="mb-1 text-xs text-muted">Image du bandeau</div><ImageField value={draft.banner_url} onChange={(value) => update("banner_url", value)} /></div>
+        <label className="text-xs text-muted">Assombrissement de l'image (0 à 1)<input type="number" step="0.05" min="0" max="1" value={draft.overlay ?? 0.62} onChange={(event) => update("overlay", Number(event.target.value))} className="mt-1 w-28 rounded border border-line/10 bg-surface2 px-3 py-2 text-sm text-content" /></label>
+      </div>
     </div>
   );
 }

@@ -5,13 +5,17 @@ import { ArrowRight, CalendarDays, ListOrdered, Shield, Sparkles, Trophy, UsersR
 import { useEffect, useState } from "react";
 import { getCompetitionType } from "@/lib/competitionType";
 import { competitionPath } from "@/lib/competitionRoutes";
+import { useCompetitionHub } from "@/lib/competitionHub";
 import { useLabels } from "@/lib/labels";
 import { supabase } from "@/lib/supabaseClient";
 
 const FLAG = { Belgium: "🇧🇪", France: "🇫🇷", England: "🏴", Spain: "🇪🇸", Italy: "🇮🇹", Germany: "🇩🇪", Netherlands: "🇳🇱", Portugal: "🇵🇹" };
+const safeColor = (value, fallback) => /^#[0-9a-f]{6}$/i.test(value || "") ? value : fallback;
+const safeOverlay = (value, fallback = 0.62) => value === null || value === undefined || value === "" ? fallback : Number.isFinite(Number(value)) ? Math.min(1, Math.max(0, Number(value))) : fallback;
 
 export default function CompetitionsPage() {
   const L = useLabels();
+  const hub = useCompetitionHub();
   const [comps, setComps] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -35,12 +39,14 @@ export default function CompetitionsPage() {
     <div className="relative">
       <div className="pointer-events-none absolute inset-x-0 -top-8 -z-10 h-80 bg-[radial-gradient(circle_at_50%_0%,rgba(56,189,248,.15),transparent_68%)]" />
       <header className="relative mb-7 overflow-hidden rounded-3xl border border-sky-400/15 bg-[linear-gradient(120deg,rgba(6,23,42,.98),rgba(9,35,59,.94),rgba(5,18,34,.98))] px-5 py-8 sm:px-8 sm:py-10">
+        {hub.banner_url && <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${hub.banner_url})` }} />}
+        {hub.banner_url && <div className="absolute inset-0 bg-[#06172a]" style={{ opacity: safeOverlay(hub.overlay) }} />}
         <div className="pointer-events-none absolute inset-0 opacity-20 [background-image:linear-gradient(rgba(255,255,255,.05)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.05)_1px,transparent_1px)] [background-size:38px_38px]" />
         <Trophy className="pointer-events-none absolute -bottom-12 -right-5 h-48 w-48 text-white opacity-[0.025]" />
         <div className="relative max-w-2xl">
-          <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.24em] text-amber-300"><Sparkles className="h-3.5 w-3.5" />{L("competitions.kicker", "Le football belge")}</div>
-          <h1 className="mt-3 text-3xl font-black sm:text-5xl">{L("competitions.title", "Chaque compétition a son histoire.")}</h1>
-          <p className="mt-3 text-sm leading-6 text-slate-300 sm:text-base">{L("competitions.intro", "Entrez dans l'univers des compétitions suivies par Belfoot : calendrier, clubs, classements et statistiques, réunis sans mélanger les formats.")}</p>
+          <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.24em] text-amber-300"><Sparkles className="h-3.5 w-3.5" />{hub.kicker}</div>
+          <h1 className="mt-3 text-3xl font-black sm:text-5xl">{hub.title}</h1>
+          <p className="mt-3 text-sm leading-6 text-slate-300 sm:text-base">{hub.intro}</p>
         </div>
       </header>
 
@@ -52,15 +58,16 @@ export default function CompetitionsPage() {
         {comps.map((competition, index) => {
           const path = competitionPath(competition);
           const isCup = competition.display_type === "cup";
-          const banner = competition.banner_url || "/competition-banner.png";
-          const title = competition.header_title?.trim() || competition.name;
-          const subtitle = competition.header_subtitle?.trim() || (isCup ? L("competitions.cupFallback", "La coupe nationale, sans droit à l'erreur.") : L("competitions.leagueFallback", "Une saison entière pour écrire la hiérarchie."));
+          const banner = competition.portal_background_url || competition.banner_url || "/competition-banner.png";
+          const title = competition.portal_title?.trim() || competition.header_title?.trim() || competition.name;
+          const subtitle = competition.portal_subtitle?.trim() || competition.header_subtitle?.trim() || (isCup ? L("competitions.cupFallback", "La coupe nationale, sans droit à l'erreur.") : L("competitions.leagueFallback", "Une saison entière pour écrire la hiérarchie."));
           const country = competition.ext?.country;
           const accent = isCup ? "text-amber-300" : index % 2 ? "text-sky-300" : "text-fuchsia-400";
-          const border = isCup ? "hover:border-amber-300/45" : "hover:border-sky-300/45";
+          const borderColor = safeColor(competition.portal_border_color, isCup ? "#fcd34d" : index % 2 ? "#7dd3fc" : "#e879f9");
           return (
-            <article key={competition.id} className={`group relative min-h-[340px] overflow-hidden rounded-3xl border border-line/10 bg-[#07182b] transition duration-300 hover:-translate-y-1 hover:shadow-[0_28px_70px_-42px_rgba(56,189,248,.65)] ${border}`}>
-              <div className="absolute inset-0 bg-cover bg-center opacity-50 transition duration-500 group-hover:scale-[1.025] group-hover:opacity-60" style={{ backgroundImage: `url(${banner})` }} />
+            <article key={competition.id} className="group relative min-h-[340px] overflow-hidden rounded-3xl border bg-[#07182b] transition duration-300 hover:-translate-y-1 hover:shadow-[0_28px_70px_-42px_rgba(56,189,248,.65)]" style={{ borderColor: `${borderColor}80` }}>
+              <div className="absolute inset-0 bg-cover bg-center transition duration-500 group-hover:scale-[1.025]" style={{ backgroundImage: `url(${banner})` }} />
+              <div className="absolute inset-0 bg-[#061426]" style={{ opacity: safeOverlay(competition.portal_overlay, 0.35) }} />
               <div className="absolute inset-0 bg-gradient-to-t from-[#061426] via-[#07182b]/85 to-black/15" />
               <Link href={path} className="relative flex min-h-[270px] flex-col p-5 sm:p-6">
                 <div className="flex items-start justify-between gap-4">

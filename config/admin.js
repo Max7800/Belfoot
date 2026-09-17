@@ -29,6 +29,7 @@ export const adminSections = [
   ] },
   { label: "Réglages", panels: [
     { key: "homepage", label: "Page d'accueil" },
+    { key: "competitionhub", label: "Portail compétitions" },
     { key: "config", label: "Configuration" },
     { key: "modules", label: "Modules" },
     { key: "flags", label: "Feature flags" },

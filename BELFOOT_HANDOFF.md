@@ -77,6 +77,7 @@ lib/
   tiles.js               useTiles() -> config visuelle des tuiles (fond/overlay/accent/enabled)
   clubSections.js        config des sections de fiche club (enable/ordre)
   homeSections.js        textes, visibilité et ordre des blocs de l'accueil
+  competitionHub.js      bandeau et textes administrables du portail Compétitions
   jobs.js                registre des background jobs + runJob(key, ctx)
   modules.js             registre unifié (collections + modules) : adminPanels/navItems/capabilities
   media.js               abstraction upload (Supabase Storage bucket "media") + compression
@@ -127,7 +128,7 @@ Piège vécu : mettre une `NEXT_PUBLIC_*` en type **Secret** sur Vercel → le c
 **Socle** (`supabase/schema.sql`) : `profiles` (id, username, role member|admin), `entries`
 (contenus éditoriaux polymorphes : collection, title, slug, body, cover_url, images, category, seo,
 published, **deleted_at** soft-delete, search tsvector `'simple'`), `site_settings` (id=1, `data`
-jsonb — y vivent **labels/tiles/club_sections/home**), `categories`, `contributions`, `comments/votes/
+jsonb — y vivent **labels/tiles/club_sections/home/competition_hub**), `categories`, `contributions`, `comments/votes/
 reports` (interactions polymorphes target_type/target_id), `schema_migrations`, `audit_log`,
 `job_runs`. RLS partout (lecture publique du publié, écriture admin via `is_admin()`).
 Trigger `handle_new_user` : crée un `profiles` (role member) à chaque inscription.
@@ -138,7 +139,9 @@ Trigger `handle_new_user` : crée un `profiles` (role member) à chaque inscript
   (ordre, 0=premier), **rating_min** (seuil apparitions pour classement des notes),
   **competition_type** ('league'|'cup'), **public_visible** (permet de synchroniser une ligue
   étrangère sans l'afficher dans les sélecteurs publics), source/**locked**/synced_at/**ext** (jsonb : coverage,
-  country, country_flag, providerName, season…).
+  country, country_flag, providerName, season…). Depuis `0019`, le portail possède ses champs
+  séparés : `portal_background_url`, `portal_border_color`, `portal_overlay`, `portal_title` et
+  `portal_subtitle`, sans modifier le bandeau de la page détail.
 - `clubs` : name, short_name, city, logo_url, **team_type** (first_team|reserve|u23|women),
   **parent_club_id** (réserves/U23), source/external_id/locked/synced_at/ext. Depuis `0016` :
   nickname, founded_year, description, website_url, couleurs, informations du stade et honours jsonb.
@@ -178,7 +181,7 @@ Autres : `modules/votw/migrations/0001_init`, `modules/forum/migrations/0001_ini
 
 ⚠️ **Migrations passées à la main** dans Supabase. Le code est tolérant (tri client, fill-if-empty)
 mais certaines fonctions restent inactives tant que la colonne n'existe pas. **Vérifier que TOUTES
-les migrations football 0001→0015 sont passées** sur le projet (surtout position/banner/zones/
+les migrations football 0001→0019 sont passées** sur le projet (surtout position/banner/zones/
 rating_min/competition_type/parent_club_id/team_type et `0012` avant toute nouvelle synchro des
 effectifs/stats, puis `0013` pour éditer les titres de bandeau). Une colonne manquante n'affiche plus de page
 blanche (résilience ajoutée) mais désactive la feature liée.
@@ -320,7 +323,9 @@ Contributions) ; **Football** (Compétitions, Saisons, Clubs, Joueurs, Entraîne
 Événements — via `EntityManager` + spec `config/football-admin.js`) ; **Données & sync** (Providers,
 Jobs [sélecteur compétition + saison + run], Historique sync, Erreurs) ; **Communauté** (Profils,
 Signalements, Modération, Forum) ; **Réglages** (Configuration, Modules, Feature flags, Médias, SEO,
-**Page d'accueil**, **Textes**, **Tuiles**, **Fiche club**, **Page Stats**). Le panneau Accueil édite
+**Page d'accueil**, **Portail compétitions**, **Textes**, **Tuiles**, **Fiche club**, **Page Stats**).
+Le panneau Portail compétitions édite son bandeau général, ses textes et son overlay ; les portes
+individuelles restent dans Football → Compétitions. Le panneau Accueil édite
 le hero, les appels à l'action, les titres/sous-titres, l'ordre et la visibilité des blocs sans
 modifier le code. `EntityManager` : CRUD générique piloté par spec (types de
 champ : text, number, bool, image, select, relation **recherchable**, datetime, zones…), regroupement
@@ -451,6 +456,20 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
 ---
 
 ## CHANGELOG_DE_PASSATION
+
+### 2026-09-17 — ChatGPT — personnalisation complète du portail et des Leaders
+
+- Migration `0019_competition_portal_style.sql` : chaque compétition peut avoir un fond, un contour,
+  un overlay, un titre et un texte spécifiques à sa porte du portail, indépendamment du bandeau et
+  des textes de sa page détail. Vide = fallback automatique sur le bandeau existant.
+- Admin → Football → Compétitions expose clairement les deux ensembles de champs. Cela permet par
+  exemple d'avoir un bandeau Croky sur la page détail et une composition différente sur sa porte.
+- Nouveau panneau Admin → Réglages → Portail compétitions : sur-titre, titre, introduction, image
+  générale et assombrissement du bandeau de `/competitions`.
+- Admin → Réglages → Tuiles sépare maintenant « Reflet / accent » et « Contour ». Le contour choisi
+  reste appliqué même lorsqu'une image de fond est présente ; il n'est plus forcé en blanc.
+- Aucune consommation API supplémentaire. Les anciennes configurations restent valides grâce aux
+  fallbacks.
 
 ### 2026-09-17 — ChatGPT — préparation Challenger Pro League
 
@@ -699,13 +718,13 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
 - **Migrations encore à passer** (si le projet Supabase n'est pas à jour) : `0012` est indiquée
   comme appliquée par l'utilisateur ; vérifier `0013_competition_header_texts.sql`, puis appliquer
   `0014_belgians_abroad.sql`, `0015_season_phase_zones.sql`, `0016_club_profiles.sql`, puis
-  `0017_protect_manual_coaches.sql`, puis `0018_challenger_pro_league.sql`, et vérifier que
-  `modules/football/migrations/0001→0018` sont
+  `0017_protect_manual_coaches.sql`, `0018_challenger_pro_league.sql`, puis
+  `0019_competition_portal_style.sql`, et vérifier que `modules/football/migrations/0001→0019` sont
   **toutes** passées (surtout `0008` position, `0009` banner_url/zones, `0010` rating_min,
   `0011` competition_type/parent_club_id/team_type, `0012` unicité des stats par compétition et
   `0013` textes des bandeaux, `0014` visibilité/pays du suivi international, `0015` zones par
   saison/phase, `0016` contenu éditorial des fiches clubs, `0017` protection des coachs manuels et
-  `0018` création Challenger Pro League).
+  `0018` création Challenger Pro League et `0019` style séparé des portes du portail).
   Le code est tolérant mais ces features restent inactives sinon.
 
 ---
