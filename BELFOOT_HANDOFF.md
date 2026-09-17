@@ -139,7 +139,8 @@ Trigger `handle_new_user` : crée un `profiles` (role member) à chaque inscript
   étrangère sans l'afficher dans les sélecteurs publics), source/**locked**/synced_at/**ext** (jsonb : coverage,
   country, country_flag, providerName, season…).
 - `clubs` : name, short_name, city, logo_url, **team_type** (first_team|reserve|u23|women),
-  **parent_club_id** (réserves/U23), source/external_id/locked/synced_at/ext.
+  **parent_club_id** (réserves/U23), source/external_id/locked/synced_at/ext. Depuis `0016` :
+  nickname, founded_year, description, website_url, couleurs, informations du stade et honours jsonb.
 - `players` : name, club_id, position (Goalkeeper/Defender/Midfielder/Attacker), number,
   nationality, **country** (pays du championnat), competition, age, birth_date, photo_url, active,
   **tracked**, source/external_id/
@@ -370,20 +371,18 @@ Côté Supabase : Site URL = domaine + Redirect URLs (`/auth/callback`, `/reset`
 
 ## 14. TODO ouverts (par priorité indicative)
 
-1. **Fiche club — blocs administrables complets** : ajouter les sections manquantes (Identité détaillée,
-   Classement du club, Stats club, Stade, Palmarès) au système `clubSections` (activer/ordre + pliable).
-2. **Synchro entraîneurs** depuis le provider (table `coaches` remplie manuellement pour l'instant ;
+1. **Synchro entraîneurs** depuis le provider (table `coaches` remplie manuellement pour l'instant ;
    afficher l'entraîneur actuel, surchargeable admin).
-3. **Équipes liées / réserves / U23** : peupler `parent_club_id`/`team_type` (mapping provider) ; la
+2. **Équipes liées / réserves / U23** : peupler `parent_club_id`/`team_type` (mapping provider) ; la
    section « Équipes liées » s'affiche déjà si des relations existent.
-4. **Suivi des Belges à l'étranger** (cœur produit) : exercer `discover-belgians` + `track-belgians`,
+3. **Suivi des Belges à l'étranger** (cœur produit) : exercer `discover-belgians` + `track-belgians`,
    page annuaire V1 construite ; prochaine étape = ajouter les compétitions étrangères masquées,
    exercer les jobs, puis construire le top/récap des Belges du week-end.
-5. **Lineups par match** (compos) → clean sheets GK exacts + titularisations réelles par match.
-6. **Home Belfoot** (pas encore construite) : hero « Les Belges. Partout dans le monde. », blocs
+4. **Lineups par match** (compos) → clean sheets GK exacts + titularisations réelles par match.
+5. **Home Belfoot** (pas encore construite) : hero « Les Belges. Partout dans le monde. », blocs
    JPL / Croky / Belges à suivre / en forme / Belge du moment / actus.
-7. **Passer en plan payant** API-Football pour la saison courante (le code est prêt : changer `season`).
-8. Régler les Zones JPL par saison/phase. Pour la Croky, renseigner idéalement Type = `cup` en admin ; le front est
+6. **Passer en plan payant** API-Football pour la saison courante (le code est prêt : changer `season`).
+7. Régler les Zones JPL par saison/phase. Pour la Croky, renseigner idéalement Type = `cup` en admin ; le front est
    désormais résilient et la détecte aussi via le provider/les tours si cette valeur manque encore.
 
 ---
@@ -442,9 +441,32 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
 
 ## CHANGELOG_DE_PASSATION
 
+### 2026-09-17 — ChatGPT — Stats administrables, fiches clubs complètes et zones explicites
+
+- `/matchs` garde les deux modes mais s'ouvre désormais sur **Liste** ; le bouton Liste passe aussi
+  avant Calendrier, conformément à la priorité produit.
+- L'éditeur des zones montre « Du rang » / « Au rang », un résumé immédiat (« rangs 5 à 16 » ou
+  « uniquement le rang 16 »), la validation des bornes et un raccourci « Seulement le rang N ».
+  Le cas observé venait d'une plage 5→16 restée enregistrée : changer seulement sa couleur colorait
+  logiquement les douze rangs.
+- Page Stats refondue : bandeau contextualisé saison/phase, KPI plus lisibles et classements joueurs
+  en cartes premium. Nouveau panneau Admin → Réglages → Page Stats, **par compétition**, pour éditer
+  titre, sous-titre, noms, accents, visibilité et ordre des sept blocs. Les données restent calculées.
+- Fiches clubs enrichies : hero aux couleurs du club, Identité, Classement du club, Statistiques,
+  Stade et Palmarès, en plus de l'effectif, équipes liées et matchs. Le classement/stats sont calculés
+  sur le couple compétition/saison le plus représenté, afin qu'un seul match de coupe ne remplace pas
+  le championnat.
+- Admin → Football → Clubs expose tous les contenus éditoriaux ; Admin → Réglages → Fiche club permet
+  aussi d'éditer le nom, l'ordre et la visibilité de chaque section.
+- Migration `0016_club_profiles.sql` : surnom, fondation, présentation, site, couleurs, informations
+  du stade et palmarès jsonb. À appliquer avant d'enregistrer ces champs dans l'admin.
+- Vérification : build Next.js 14.2.35 réussi avec variables Supabase factices de compilation +
+  `git diff --check` réussi. Socle : **aucune modification**.
+
 ### 2026-09-17 — ChatGPT — vraie vue calendrier
 
-- `/matchs` s'ouvre désormais en vue Calendrier, avec une bascule vers la vue Liste historique.
+- `/matchs` propose une vue Calendrier, avec une bascule vers la vue Liste historique (la Liste est
+  redevenue la vue par défaut dans le lot suivant).
 - Bandeau de journées/tours horizontal et responsive : vert = terminé, jaune = à venir, rouge =
   direct. La première journée non terminée est sélectionnée automatiquement ; si tout est terminé,
   la dernière journée s'ouvre.
@@ -585,12 +607,12 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
   - `39267e2`/`150db4d` couche compétition (effectifs+stats, événements, journées, fiches)
 - **Migrations encore à passer** (si le projet Supabase n'est pas à jour) : `0012` est indiquée
   comme appliquée par l'utilisateur ; vérifier `0013_competition_header_texts.sql`, puis appliquer
-  `0014_belgians_abroad.sql`, puis `0015_season_phase_zones.sql`, et vérifier que
-  `modules/football/migrations/0001→0015` sont
+  `0014_belgians_abroad.sql`, `0015_season_phase_zones.sql`, puis `0016_club_profiles.sql`, et vérifier que
+  `modules/football/migrations/0001→0016` sont
   **toutes** passées (surtout `0008` position, `0009` banner_url/zones, `0010` rating_min,
   `0011` competition_type/parent_club_id/team_type, `0012` unicité des stats par compétition et
-  `0013` textes des bandeaux, `0014` visibilité/pays du suivi international et `0015` zones par
-  saison/phase).
+  `0013` textes des bandeaux, `0014` visibilité/pays du suivi international, `0015` zones par
+  saison/phase et `0016` contenu éditorial des fiches clubs).
   Le code est tolérant mais ces features restent inactives sinon.
 
 ---
