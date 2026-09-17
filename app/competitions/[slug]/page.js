@@ -11,6 +11,7 @@ import CompetitionHeader from "@/components/football/CompetitionHeader";
 import Watermark from "@/components/football/Watermark";
 import { computeStandings } from "@/lib/standings";
 import { competitionPhases, getCompetitionType } from "@/lib/competitionType";
+import { resolveCompetitionRoute } from "@/lib/competitionRoutes";
 import { useLabels } from "@/lib/labels";
 import { useTiles } from "@/lib/tiles";
 
@@ -48,8 +49,9 @@ export default function CompetitionPage() {
   const TABS = [["overview", L("comp.tab.overview", "Vue d'ensemble")], ["matchs", L("nav.matchs", "Matchs")], ["classement", isCup ? L("cup.rounds", "Tours") : L("nav.classement", "Classement")], ["clubs", L("nav.clubs", "Clubs")], ["joueurs", L("nav.joueurs", "Joueurs")], ["stats", L("comp.tab.stats", "Stats")]];
 
   useEffect(() => { (async () => {
-    let c = (await supabase.from("competitions").select("*").eq("slug", slug).maybeSingle()).data;
-    if (!c) c = (await supabase.from("competitions").select("*").eq("id", slug).maybeSingle()).data;
+    const { data: competitionRows, error: competitionError } = await supabase.from("competitions").select("*");
+    if (competitionError) throw competitionError;
+    const c = resolveCompetitionRoute(competitionRows || [], slug);
     if (!c) { setComp(null); return; }
     setComp(c);
     const [se, ma] = await Promise.all([

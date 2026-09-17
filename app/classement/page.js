@@ -7,6 +7,7 @@ import { competitionPhases, getCompetitionType } from "@/lib/competitionType";
 import StandingsTable from "@/components/football/StandingsTable";
 import CupRounds from "@/components/football/CupRounds";
 import { useLabels } from "@/lib/labels";
+import { competitionPath } from "@/lib/competitionRoutes";
 
 export default function ClassementPage() {
   const L = useLabels();
@@ -49,7 +50,7 @@ export default function ClassementPage() {
       {isCup ? (
         <div>
           <CupRounds matches={matches} clubs={clubs} phases={phases} activePhase={cur} onPhaseChange={setPhase} L={L} />
-          {comp && <Link href={`/competitions/${comp.slug || comp.id}`} className="mt-4 inline-flex rounded-xl border border-accent/30 px-3 py-2 text-sm font-semibold text-accent hover:bg-accent/10">Voir la page complète de la coupe →</Link>}
+          {comp && <Link href={competitionPath(comp)} className="mt-4 inline-flex rounded-xl border border-accent/30 px-3 py-2 text-sm font-semibold text-accent hover:bg-accent/10">Voir la page complète de la coupe →</Link>}
         </div>
       ) : (
         <>
