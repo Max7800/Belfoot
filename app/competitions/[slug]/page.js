@@ -14,6 +14,7 @@ import { competitionPhases, getCompetitionType } from "@/lib/competitionType";
 import { competitionPath, resolveCompetitionRoute } from "@/lib/competitionRoutes";
 import { useLabels } from "@/lib/labels";
 import { useTiles } from "@/lib/tiles";
+import { zoneAt, zonesForPhase } from "@/lib/standingsZones";
 
 const POS = { Goalkeeper: 0, Defender: 1, Midfielder: 2, Attacker: 3 };
 const VARIANTS = {
@@ -68,7 +69,8 @@ export default function CompetitionPage() {
       supabase.from("seasons").select("*").eq("competition_id", c.id),
       supabase.from("matches").select("*").eq("competition_id", c.id).order("round_number", { ascending: true, nullsFirst: false }).order("kickoff", { ascending: true }),
     ]);
-    setSeasons(se.data || []); setSeasonLabel((se.data || [])[0]?.label || ""); setMatches(ma.data || []);
+    const orderedSeasons = [...(se.data || [])].sort((a, b) => (b.label || "").localeCompare(a.label || ""));
+    setSeasons(orderedSeasons); setSeasonLabel(orderedSeasons[0]?.label || ""); setMatches(ma.data || []);
     const ids = [...new Set((ma.data || []).flatMap((m) => [m.home_club_id, m.away_club_id]).filter(Boolean))];
     if (ids.length) {
       const { data: cl } = await supabase.from("clubs").select("*").in("id", ids);
@@ -89,9 +91,16 @@ export default function CompetitionPage() {
     const rows = activeSeason ? playerStats.filter((stat) => seasonKey(stat.season) === activeSeason) : playerStats;
     return Object.fromEntries(rows.map((stat) => [stat.player_id, stat]));
   }, [playerStats, seasonLabel]);
-  const phases = useMemo(() => competitionPhases(matches, competitionType), [matches, competitionType]);
-  const curPhase = phase || (isCup ? phases[phases.length - 1] : phases[0]) || null;
-  const phaseMatches = useMemo(() => matches.filter((m) => (m.phase || "—") === curPhase), [matches, curPhase]);
+  const activeSeason = seasons.find((season) => season.label === seasonLabel) || null;
+  const seasonMatches = useMemo(() => {
+    if (!activeSeason || !matches.some((match) => match.season_id)) return matches;
+    return matches.filter((match) => match.season_id === activeSeason.id);
+  }, [matches, activeSeason]);
+  const phases = useMemo(() => competitionPhases(seasonMatches, competitionType), [seasonMatches, competitionType]);
+  const primaryPhase = (isCup ? phases[phases.length - 1] : phases[0]) || null;
+  const curPhase = phase && phases.includes(phase) ? phase : primaryPhase;
+  const phaseMatches = useMemo(() => seasonMatches.filter((m) => (m.phase || "—") === curPhase), [seasonMatches, curPhase]);
+  const zones = zonesForPhase(comp, activeSeason, curPhase, primaryPhase);
   const phaseFinished = phaseMatches.filter((m) => m.status === "finished" && m.home_score != null);
   const standings = useMemo(() => isCup ? [] : computeStandings(phaseFinished), [phaseFinished, isCup]);
   const rounds = useMemo(() => { const seen = new Map(); for (const m of phaseMatches) { const k = m.round_number != null ? String(m.round_number) : (m.round_raw || "?"); if (!seen.has(k)) seen.set(k, { key: k, num: m.round_number, label: m.round_number != null ? `${L("comp.round", "Journée")} ${m.round_number}` : (m.round_raw || "Tour") }); } return [...seen.values()].sort((a, b) => (a.num ?? 999) - (b.num ?? 999)); }, [phaseMatches]);
@@ -107,12 +116,9 @@ export default function CompetitionPage() {
 
   if (comp === undefined) return <p className="text-muted">Chargement…</p>;
   if (comp === null) return <p className="text-muted">Compétition introuvable.</p>;
-  const clubsList = Object.values(clubsMap);
-  const zones = comp.zones || [];
-  const zoneFor = (pos) => zones.find((z) => {
-    const from = Number(z.from); const to = Number(z.to);
-    return Number.isFinite(from) && Number.isFinite(to) && pos >= from && pos <= to;
-  });
+  const seasonClubIds = new Set(seasonMatches.flatMap((match) => [match.home_club_id, match.away_club_id]).filter(Boolean));
+  const clubsList = Object.values(clubsMap).filter((club) => seasonClubIds.has(club.id));
+  const zoneFor = (pos) => zoneAt(zones, pos);
 
   const goals = phaseFinished.reduce((s, m) => s + m.home_score + m.away_score, 0);
   let homeW = 0, draw = 0, awayW = 0;
@@ -138,8 +144,8 @@ export default function CompetitionPage() {
   const lastRound = Math.max(-1, ...phaseFinished.map((m) => m.round_number ?? -1));
   const lastResults = lastRound >= 0 ? phaseMatches.filter((m) => (m.round_number ?? -1) === lastRound) : [...phaseFinished].sort((a, b) => new Date(b.kickoff) - new Date(a.kickoff)).slice(0, 10);
   const nextRound = Math.min(Infinity, ...phaseMatches.filter((m) => m.status !== "finished" && m.round_number != null).map((m) => m.round_number));
-  const upcoming = Number.isFinite(nextRound) ? phaseMatches.filter((m) => m.round_number === nextRound) : [...matches].filter((m) => m.status !== "finished").sort((a, b) => new Date(a.kickoff || 0) - new Date(b.kickoff || 0)).slice(0, 10);
-  const allFinished = matches.length > 0 && matches.every((m) => m.status === "finished");
+  const upcoming = Number.isFinite(nextRound) ? phaseMatches.filter((m) => m.round_number === nextRound) : [...seasonMatches].filter((m) => m.status !== "finished").sort((a, b) => new Date(a.kickoff || 0) - new Date(b.kickoff || 0)).slice(0, 10);
+  const allFinished = seasonMatches.length > 0 && seasonMatches.every((m) => m.status === "finished");
 
   const ClubChip = ({ id }) => <Link href={`/clubs/${id}`} className="inline-flex min-w-0 items-center gap-2 hover:text-accent">{clubsMap[id]?.logo_url && <img src={clubsMap[id].logo_url} className="h-5 w-5 shrink-0 object-contain" alt="" />}<span className="truncate">{clubName(id)}</span></Link>;
 
@@ -224,7 +230,7 @@ export default function CompetitionPage() {
       )}
       <div className="mb-6 flex items-center justify-between gap-2 border-b border-line/10">
         <div className="flex flex-wrap gap-1">{TABS.map(([k, l]) => <button key={k} onClick={() => setTab(k)} className={`px-3 py-2 text-sm ${tab === k ? "border-b-2 border-accent font-bold text-content" : "text-muted hover:text-content"}`}>{l}</button>)}</div>
-        {seasons.length > 0 && <select value={seasonLabel} onChange={(e) => setSeasonLabel(e.target.value)} className="shrink-0 rounded border border-line/10 bg-surface px-2 py-1 text-xs">{seasons.map((s) => <option key={s.id}>{s.label}</option>)}</select>}
+        {seasons.length > 0 && <select value={seasonLabel} onChange={(e) => { setSeasonLabel(e.target.value); setPhase(null); setRound("all"); }} className="shrink-0 rounded border border-line/10 bg-surface px-2 py-1 text-xs">{seasons.map((s) => <option key={s.id}>{s.label}</option>)}</select>}
       </div>
 
       {tab === "overview" && (
@@ -293,7 +299,7 @@ export default function CompetitionPage() {
 
           <div className="grid grid-cols-2 gap-2 border-t border-line/10 pt-4 text-center text-xs text-muted sm:grid-cols-4">
             <div><b className="block text-base text-content">{clubsList.length}</b>{L("nav.clubs", "clubs")}</div>
-            <div><b className="block text-base text-content">{matches.length}</b>{L("nav.matchs", "matchs")}</div>
+            <div><b className="block text-base text-content">{seasonMatches.length}</b>{L("nav.matchs", "matchs")}</div>
             <div><b className="block text-base text-content">{players.length}</b>{L("nav.joueurs", "joueurs")}</div>
             <div><b className="block text-base text-content">{seasons.length}</b>saisons</div>
           </div>
@@ -310,7 +316,7 @@ export default function CompetitionPage() {
       )}
 
       {tab === "classement" && (isCup
-        ? <CupRounds matches={matches} clubs={clubsMap} phases={phases} activePhase={curPhase} onPhaseChange={(next) => { setPhase(next); setRound("all"); }} L={L} />
+        ? <CupRounds matches={seasonMatches} clubs={clubsMap} phases={phases} activePhase={curPhase} onPhaseChange={(next) => { setPhase(next); setRound("all"); }} L={L} />
         : <div><PhaseChips /><StandingsTable standings={standings} clubs={clubsMap} zones={zones} L={L} /></div>)}
 
       {tab === "clubs" && (

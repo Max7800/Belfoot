@@ -174,6 +174,24 @@ function Field({ f, value, onChange, options }) {
       <button type="button" onClick={() => onChange([...arr, { label: "", color: "#3b82f6", from: 1, to: 1 }])} className="rounded border border-line/20 px-2 py-1 text-xs text-muted hover:text-content">+ zone</button>
     </div></div>);
   }
+  if (f.type === "phaseZones") {
+    const obj = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+    const rename = (oldName, nextName) => {
+      const name = nextName.trim(); if (!name || name === oldName) return;
+      const next = {}; for (const [key, zones] of Object.entries(obj)) next[key === oldName ? name : key] = zones;
+      onChange(next);
+    };
+    const addPhase = () => {
+      const name = window.prompt("Nom exact de la phase (ex. Regular Season)")?.trim();
+      if (name && !Object.prototype.hasOwnProperty.call(obj, name)) onChange({ ...obj, [name]: [] });
+    };
+    return (<div className="sm:col-span-2">{label}<p className="mb-2 text-xs text-muted">Les noms doivent correspondre aux phases du provider. Une phase absente n'affiche aucune couleur.</p><div className="space-y-3">{Object.entries(obj).map(([phase, zones]) => (
+      <div key={phase} className="rounded-xl border border-line/10 bg-surface/40 p-3">
+        <div className="mb-2 flex items-center gap-2"><input defaultValue={phase} onBlur={(e) => rename(phase, e.target.value)} className="min-w-0 flex-1 rounded border border-line/10 bg-surface2 px-2 py-1 text-sm font-bold" /><button type="button" onClick={() => { const next = { ...obj }; delete next[phase]; onChange(next); }} className="text-sm text-red-400">Supprimer la phase</button></div>
+        <Field f={{ key: `${f.key}.${phase}`, label: "Zones de cette phase", type: "zones" }} value={zones} onChange={(nextZones) => onChange({ ...obj, [phase]: nextZones })} />
+      </div>
+    ))}<button type="button" onClick={addPhase} className="rounded border border-line/20 px-3 py-1.5 text-xs text-muted hover:text-content">+ Ajouter une phase</button>{Object.keys(obj).length === 0 && <span className="ml-3 text-xs text-muted">Aucune zone : aucun rang ne sera coloré.</span>}</div></div>);
+  }
   if (f.type === "textarea") return <div>{label}<textarea value={value || ""} onChange={(e) => onChange(e.target.value)} rows={3} className={box} /></div>;
   return <div>{label}<input value={value || ""} onChange={(e) => onChange(e.target.value)} className={box} /></div>;
 }

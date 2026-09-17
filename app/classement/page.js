@@ -8,11 +8,13 @@ import StandingsTable from "@/components/football/StandingsTable";
 import CupRounds from "@/components/football/CupRounds";
 import { useLabels } from "@/lib/labels";
 import { competitionPath } from "@/lib/competitionRoutes";
+import { zonesForPhase } from "@/lib/standingsZones";
 
 export default function ClassementPage() {
   const L = useLabels();
   const [comps, setComps] = useState([]); const [cid, setCid] = useState("");
   const [matches, setMatches] = useState([]); const [clubs, setClubs] = useState({}); const [phase, setPhase] = useState(null);
+  const [seasons, setSeasons] = useState([]); const [seasonLabel, setSeasonLabel] = useState("");
   const [error, setError] = useState("");
   useEffect(() => { supabase.from("competitions").select("*").order("name").then(({ data, error: loadError }) => {
     if (loadError) { setError(loadError.message); return; }
@@ -21,20 +23,32 @@ export default function ClassementPage() {
   }); }, []);
   useEffect(() => { if (!cid) return; (async () => {
     setError(""); setClubs({}); setMatches([]);
-    const { data: m, error: matchError } = await supabase.from("matches").select("*").eq("competition_id", cid);
+    const [{ data: m, error: matchError }, { data: seasonRows, error: seasonError }] = await Promise.all([
+      supabase.from("matches").select("*").eq("competition_id", cid),
+      supabase.from("seasons").select("*").eq("competition_id", cid),
+    ]);
     if (matchError) throw matchError;
+    if (seasonError) throw seasonError;
     setMatches(m || []); setPhase(null);
+    const orderedSeasons = [...(seasonRows || [])].sort((a, b) => (b.label || "").localeCompare(a.label || ""));
+    setSeasons(orderedSeasons); setSeasonLabel(orderedSeasons[0]?.label || "");
     const ids = [...new Set((m || []).flatMap((x) => [x.home_club_id, x.away_club_id]).filter(Boolean))];
     if (ids.length) { const { data: cl } = await supabase.from("clubs").select("id,name,logo_url").in("id", ids); setClubs(Object.fromEntries((cl || []).map((x) => [x.id, x]))); }
   })().catch((e) => setError(e.message || String(e))); }, [cid]);
   const comp = comps.find((c) => c.id === cid) || null;
-  const type = getCompetitionType(comp, matches);
+  const activeSeason = seasons.find((season) => season.label === seasonLabel) || null;
+  const seasonMatches = useMemo(() => {
+    if (!activeSeason || !matches.some((match) => match.season_id)) return matches;
+    return matches.filter((match) => match.season_id === activeSeason.id);
+  }, [matches, activeSeason]);
+  const type = getCompetitionType(comp, seasonMatches);
   const isCup = type === "cup";
-  const phases = useMemo(() => competitionPhases(matches, type), [matches, type]);
-  const cur = phase || (isCup ? phases[phases.length - 1] : phases[0]) || null;
-  const finished = matches.filter((m) => (m.phase || "—") === cur && m.status === "finished" && m.home_score != null);
+  const phases = useMemo(() => competitionPhases(seasonMatches, type), [seasonMatches, type]);
+  const primaryPhase = (isCup ? phases[phases.length - 1] : phases[0]) || null;
+  const cur = phase && phases.includes(phase) ? phase : primaryPhase;
+  const finished = seasonMatches.filter((m) => (m.phase || "—") === cur && m.status === "finished" && m.home_score != null);
   const standings = useMemo(() => isCup ? [] : computeStandings(finished), [finished, isCup]);
-  const zones = comp?.zones || [];
+  const zones = zonesForPhase(comp, activeSeason, cur, primaryPhase);
   return (
     <div>
       <h1 className="mb-4 text-3xl font-black">{L("nav.classement", "Classement")}</h1>
@@ -46,10 +60,11 @@ export default function ClassementPage() {
           </button>
         ))}
       </div>
+      {seasons.length > 0 && <div className="mb-4 flex justify-end"><select value={seasonLabel} onChange={(e) => { setSeasonLabel(e.target.value); setPhase(null); }} className="rounded-xl border border-line/10 bg-surface px-3 py-2 text-sm">{seasons.map((season) => <option key={season.id}>{season.label}</option>)}</select></div>}
       {error && <p className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">{error}</p>}
       {isCup ? (
         <div>
-          <CupRounds matches={matches} clubs={clubs} phases={phases} activePhase={cur} onPhaseChange={setPhase} L={L} />
+          <CupRounds matches={seasonMatches} clubs={clubs} phases={phases} activePhase={cur} onPhaseChange={setPhase} L={L} />
           {comp && <Link href={competitionPath(comp)} className="mt-4 inline-flex rounded-xl border border-accent/30 px-3 py-2 text-sm font-semibold text-accent hover:bg-accent/10">Voir la page complète de la coupe →</Link>}
         </div>
       ) : (

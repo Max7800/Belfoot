@@ -23,6 +23,7 @@ export const FOOTBALL_ENTITIES = {
     fields: [
       { key: "competition_id", label: "Compétition", type: "relation", table: "competitions", labelCol: "name" },
       { key: "label", label: "Libellé (ex. 2026-2027)", type: "text" },
+      { key: "zones_by_phase", label: "Zones par phase", type: "phaseZones" },
     ],
   },
   clubs: {

@@ -1,11 +1,9 @@
 "use client";
 import Link from "next/link";
+import { zoneAt } from "@/lib/standingsZones";
 
 export default function StandingsTable({ standings, clubs, zones = [], L = (k, d) => d }) {
-  const zoneFor = (pos) => (zones || []).find((z) => {
-    const from = Number(z.from); const to = Number(z.to);
-    return Number.isFinite(from) && Number.isFinite(to) && pos >= from && pos <= to;
-  });
+  const zoneFor = (pos) => zoneAt(zones, pos);
   const name = (id) => clubs[id]?.name || "—";
   return (
     <div>
