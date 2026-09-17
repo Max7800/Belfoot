@@ -6,7 +6,7 @@ export async function POST(req, { params }) {
   const secret = req.headers.get("x-jobs-secret");
   if (!process.env.JOBS_SECRET || secret !== process.env.JOBS_SECRET) return new Response("Unauthorized", { status: 401 });
   try {
-    const url = new URL(req.url); const season = url.searchParams.get("season") || undefined; const competitionId = url.searchParams.get("competitionId") || null; const matchCap = url.searchParams.get("matchCap") || undefined;
-    return Response.json(await runJob(params.key, { db: getAdmin(), season, competitionId, matchCap, thesportsdbKey: process.env.THESPORTSDB_KEY, apifootballKey: process.env.APIFOOTBALL_KEY }));
+    const url = new URL(req.url); const season = url.searchParams.get("season") || undefined; const competitionId = url.searchParams.get("competitionId") || null; const matchCap = url.searchParams.get("matchCap") || undefined; const teamExternalId = url.searchParams.get("teamExternalId") || null;
+    return Response.json(await runJob(params.key, { db: getAdmin(), season, competitionId, matchCap, teamExternalId, thesportsdbKey: process.env.THESPORTSDB_KEY, apifootballKey: process.env.APIFOOTBALL_KEY }));
   } catch (e) { return new Response(String(e.message), { status: 500 }); }
 }

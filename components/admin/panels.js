@@ -36,7 +36,7 @@ export function ReportsPanel() {
     </div></div>);
 }
 
-const JOB_LABELS = { "football.sync": "🔄 Synchroniser (import complet)", "football.live-sync": "🔄 Live (scores)", "football.discover-belgians": "🔎 Découvrir les Belges", "football.track-belgians": "📊 MAJ Belges suivis", "football.squads": "👥 Effectifs (joueurs)", "football.events": "⚽ Événements de match", "football.coaches": "🧑‍🏫 Entraîneurs", "football.lineups": "📋 Compositions & performances" };
+const JOB_LABELS = { "football.sync": "🔄 Synchroniser (import complet)", "football.live-sync": "🔄 Live (scores)", "football.discover-belgians": "🔎 Découvrir les Belges", "football.track-belgians": "📊 MAJ Belges suivis", "football.squads": "👥 Effectifs (joueurs)", "football.events": "⚽ Événements de match", "football.coaches": "🧑‍🏫 Entraîneurs", "football.lineups": "📋 Compositions & performances", "football.team-test": "🧪 Importer l'équipe test" };
 
 export function JobsPanel() {
   const [rows, setRows] = useState([]);
@@ -46,6 +46,7 @@ export function JobsPanel() {
   const [comps, setComps] = useState([]);
   const [compId, setCompId] = useState("");   // "" = toutes
   const [matchCap, setMatchCap] = useState(3);
+  const [teamExternalId, setTeamExternalId] = useState("44");
   const load = () => supabase.from("job_runs").select("*").order("started_at", { ascending: false }).limit(30).then(({ data }) => setRows(data || []));
   useEffect(() => { load(); supabase.from("competitions").select("id,name").order("name").then(({ data }) => setComps(data || [])); }, []);
   const run = async (key) => {
@@ -55,7 +56,7 @@ export function JobsPanel() {
       const r = await fetch("/api/admin/run-job", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token}` },
-        body: JSON.stringify({ key, season, competitionId: compId || null, matchCap }),
+        body: JSON.stringify({ key, season, competitionId: compId || null, matchCap, teamExternalId }),
       });
       const txt = await r.text();
       if (!r.ok) throw new Error(txt || ("HTTP " + r.status));
@@ -66,13 +67,15 @@ export function JobsPanel() {
   };
   return (<div>
     <h2 className="mb-4 text-lg font-bold">Jobs & synchronisation</h2>
-    <p className="mb-3 text-xs text-muted">Entraîneurs coûte environ une requête par club. Compositions & performances coûte jusqu'à deux requêtes par match : choisis une compétition et garde un petit plafond.</p>
+    <p className="mb-3 text-xs text-muted">Entraîneurs coûte environ une requête par club. Compositions & performances coûte jusqu'à deux requêtes par match. L'import équipe test ne synchronise qu'un club et ses Belges : sélectionne sa compétition avant de le lancer.</p>
     <div className="mb-3 flex flex-wrap items-center gap-2">
       <select value={compId} onChange={(e) => setCompId(e.target.value)} className="rounded border border-line/10 bg-surface2 px-2 py-1 text-sm"><option value="">Toutes les compétitions</option>{comps.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
       <label className="text-xs text-muted">Saison</label>
       <input value={season} onChange={(e) => setSeason(e.target.value)} className="w-28 rounded border border-line/10 bg-surface2 px-2 py-1 text-sm" />
       <label className="text-xs text-muted">Max matchs</label>
       <input type="number" min="1" max="20" value={matchCap} onChange={(e) => setMatchCap(Math.max(1, Math.min(20, Number(e.target.value) || 1)))} className="w-16 rounded border border-line/10 bg-surface2 px-2 py-1 text-sm" />
+      <label className="text-xs text-muted">ID équipe API</label>
+      <input value={teamExternalId} onChange={(e) => setTeamExternalId(e.target.value.replace(/\D/g, ""))} placeholder="44" className="w-20 rounded border border-line/10 bg-surface2 px-2 py-1 text-sm" />
       {jobKeys().map((k) => (
         <button key={k} disabled={!!busy} onClick={() => run(k)} className="rounded bg-accent px-3 py-1.5 text-sm font-bold text-white disabled:opacity-50">
           {(JOB_LABELS[k] || k)}{busy === k ? " …" : ""}

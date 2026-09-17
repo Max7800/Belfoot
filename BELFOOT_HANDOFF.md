@@ -758,13 +758,32 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
 - Vérification : build Next.js 14.2.35 réussi avec variables Supabase factices de compilation +
   `git diff --check` réussi. Socle : **aucune modification**.
 
+### 2026-09-17 — ChatGPT — import ciblé d'une équipe étrangère (test Burnley)
+
+- Nouveau job `football.team-test` : exige une compétition et un ID équipe API-Football, puis
+  importe uniquement le profil du club, ses matchs dans la compétition choisie, les adversaires
+  nécessaires à l'affichage et les joueurs belges du club avec leurs statistiques de saison.
+- Le provider API-Football expose désormais `fetchClubById` et `fetchTeamMatches`. Le filtre sur
+  l'ID de ligue empêche d'importer les matchs de coupe ou d'une autre compétition du même club.
+- Admin → Jobs reçoit un champ « ID équipe API » (Burnley `44` par défaut) et le bouton
+  « Importer l'équipe test ». Le job reste générique pour tester ensuite n'importe quel club.
+- Migration `0021_burnley_test.sql` : ajoute/normalise l'EFL Championship (`external_id=40`) comme
+  compétition étrangère masquée, saison `2024-2025`. Elle n'apparaît donc pas dans le portail des
+  compétitions mais alimente la page Belges à l'étranger.
+- Sur la page Belges, le module Annuaire retrouve la première position sous le bandeau par défaut,
+  afin de préserver la base initiale et ses listes déroulantes sur desktop comme sur mobile.
+- Coût estimé du test : une requête ligue, une équipe, une liste de matchs et la pagination de
+  l'effectif ; aucun import des autres effectifs du Championship.
+- Vérification : build Next.js 14.2.35 réussi avec variables Supabase factices de compilation +
+  `git diff --check` réussi. Socle : **aucune modification**.
+
 ---
 
 ## CURRENT_GIT_STATE
 
 - **Branche** : `main`
-- **Dernier commit distant avant le lot courant** : `ef6d917` — hiérarchie du portail Compétitions.
-  Le lot courant construit Belges à l'étranger V2 sans migration ni appel API public.
+- **Dernier commit distant avant le lot courant** : `acdf17d` — Belges à l'étranger V2. Le lot
+  courant ajoute l'import ciblé d'une équipe et prépare le test Burnley/Championship 2024.
 - **Commits importants récents** :
   - `2c71e35` documentation clubs liés / Europe
   - `69578a5` automatisation des stades + simplification des équipes liées
@@ -789,8 +808,8 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
   comme appliquée par l'utilisateur ; vérifier `0013_competition_header_texts.sql`, puis appliquer
   `0014_belgians_abroad.sql`, `0015_season_phase_zones.sql`, `0016_club_profiles.sql`, puis
   `0017_protect_manual_coaches.sql`, `0018_challenger_pro_league.sql`, puis
-  `0019_competition_portal_style.sql`, puis `0020_match_lineups.sql`, et vérifier que
-  `modules/football/migrations/0001→0020` sont
+  `0019_competition_portal_style.sql`, `0020_match_lineups.sql`, puis `0021_burnley_test.sql`, et
+  vérifier que `modules/football/migrations/0001→0021` sont
   **toutes** passées (surtout `0008` position, `0009` banner_url/zones, `0010` rating_min,
   `0011` competition_type/parent_club_id/team_type, `0012` unicité des stats par compétition et
   `0013` textes des bandeaux, `0014` visibilité/pays du suivi international, `0015` zones par

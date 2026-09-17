@@ -13,6 +13,7 @@ function mapFixture(f) {
     external_id: String(f.fixture.id),
     home_ext: String(f.teams.home.id), away_ext: String(f.teams.away.id),
     home_name: f.teams.home.name, away_name: f.teams.away.name,
+    home_logo: f.teams.home.logo || null, away_logo: f.teams.away.logo || null,
     home_score: f.goals.home, away_score: f.goals.away,
     status: mapStatus(f.fixture.status?.short), minute: f.fixture.status?.elapsed ?? null,
     round: f.league?.round || null,
@@ -51,9 +52,27 @@ const provider = {
       stadium_image_url: x.venue?.image || null,
     }));
   },
+  async fetchClubById(teamExternalId, ctx = {}) {
+    const rows = await api(`/teams?id=${teamExternalId}`, ctx);
+    const x = rows[0];
+    if (!x?.team?.id) return null;
+    return {
+      external_id: String(x.team.id), name: x.team.name, logo_url: x.team.logo || null, city: x.venue?.city || null,
+      founded_year: x.team.founded ?? null,
+      stadium_name: x.venue?.name || null,
+      stadium_capacity: x.venue?.capacity ?? null,
+      stadium_address: [x.venue?.address, x.venue?.city].filter(Boolean).join(", ") || null,
+      stadium_image_url: x.venue?.image || null,
+    };
+  },
   async fetchMatches(competition, ctx = {}) {
     const y = seasonYear(competition.ext?.season || ctx.season);
     return (await api(`/fixtures?league=${competition.external_id}&season=${y}`, ctx)).map(mapFixture);
+  },
+  async fetchTeamMatches(competition, teamExternalId, ctx = {}) {
+    const y = seasonYear(competition.ext?.season || ctx.season);
+    const rows = await api(`/fixtures?team=${teamExternalId}&season=${y}`, ctx);
+    return rows.filter((fixture) => String(fixture.league?.id) === String(competition.external_id)).map(mapFixture);
   },
   async fetchLiveMatches(competition, ctx = {}) {
     return (await api(`/fixtures?league=${competition.external_id}&live=all`, ctx)).map(mapFixture);
