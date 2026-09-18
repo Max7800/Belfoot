@@ -119,9 +119,9 @@ export default function LiveMatchCenter({ competitions = [] }) {
         {tabs.map(({ key, label, count, icon: Icon }) => <button key={key} type="button" onClick={() => setTab(key)} className={`flex shrink-0 items-center gap-2 border-b-2 px-3 py-2 text-xs font-bold transition ${tab === key ? "border-accent text-content" : "border-transparent text-muted hover:text-content"}`}><Icon size={13} className={key === "live" && count ? "text-red-400" : ""} />{label}<span className={`rounded-full px-1.5 py-0.5 text-[9px] ${key === "live" && count ? "bg-red-500/15 text-red-300" : "bg-white/5 text-muted"}`}>{count}</span></button>)}
       </div>
       <div className="p-4 sm:p-5">
-        {loading ? <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{[0, 1, 2].map((item) => <div key={item} className="h-32 animate-pulse rounded-2xl bg-surface2" />)}</div>
-          : current.length ? <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{current.map((match) => <LiveCard key={match.id} match={match} clubs={clubs} competitions={competitionMap} followedClubs={followedClubs} />)}</div>
-          : <div className="py-7 text-center"><Radio className="mx-auto h-7 w-7 text-muted/50" /><p className="mt-2 text-sm font-semibold">{tab === "live" ? "Aucun match en direct" : tab === "today" ? "Aucun match aujourd'hui" : "Aucun match programmé dans les sept prochains jours"}</p><p className="mt-1 text-xs text-muted">Le calendrier complet reste disponible juste en dessous.</p></div>}
+        {loading ? <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">{[0, 1, 2, 3].map((item) => <div key={item} className="h-32 animate-pulse rounded-2xl bg-surface2" />)}</div>
+          : current.length ? <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">{current.map((match) => <LiveCard key={match.id} match={match} clubs={clubs} competitions={competitionMap} followedClubs={followedClubs} />)}</div>
+          : <div className="py-7 text-center"><Radio className="mx-auto h-7 w-7 text-muted/50" /><p className="mt-2 text-sm font-semibold">{tab === "live" ? "Aucun match en direct" : tab === "today" ? "Aucun match aujourd'hui" : "Aucun match programmé dans les sept prochains jours"}</p><p className="mt-1 text-xs text-muted">Le calendrier complet reste disponible dans l'onglet Matchs.</p></div>}
       </div>
     </section>
   );

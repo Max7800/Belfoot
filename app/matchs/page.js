@@ -1,10 +1,10 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { CalendarDays, List } from "lucide-react";
+import Link from "next/link";
+import { ArrowRight, CalendarDays, List, Radio } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import MatchRow from "@/components/football/MatchRow";
 import SeasonCalendar from "@/components/football/SeasonCalendar";
-import LiveMatchCenter from "@/components/football/LiveMatchCenter";
 
 export default function MatchsPage() {
   const [comps, setComps] = useState([]); const [cid, setCid] = useState("");
@@ -50,9 +50,7 @@ export default function MatchsPage() {
   const grouped = useMemo(() => { const g = {}; for (const m of shown) { const k = m.round_number != null ? String(m.round_number) : (m.round_raw || "?"); (g[k] ||= { label: m.round_number != null ? `Journée ${m.round_number}` : (m.round_raw || "Tour"), num: m.round_number, items: [] }).items.push(m); } return Object.values(g).sort((a, b) => (a.num ?? 999) - (b.num ?? 999)); }, [shown]);
   return (
     <div>
-      <div className="mb-5"><p className="text-xs font-black uppercase tracking-[0.2em] text-accent">Belfoot en direct</p><h1 className="mt-1 text-3xl font-black sm:text-4xl">Match Center</h1><p className="mt-1 text-sm text-muted">Le direct, les matchs du jour et tout le calendrier du football belge.</p></div>
-      <LiveMatchCenter competitions={comps} />
-      <div className="mb-4 flex items-end justify-between gap-3"><div><h2 className="text-xl font-black">Calendrier complet</h2><p className="mt-1 text-xs text-muted">Choisis une compétition, une saison et une phase.</p></div></div>
+      <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-xs font-black uppercase tracking-[0.2em] text-accent">Calendrier Belfoot</p><h1 className="mt-1 text-3xl font-black sm:text-4xl">Matchs</h1><p className="mt-1 text-sm text-muted">Choisis une compétition, une saison et une phase.</p></div><Link href="/direct" className="inline-flex w-fit items-center gap-2 rounded-xl border border-red-500/25 bg-red-500/10 px-3 py-2 text-xs font-bold text-red-300 hover:border-red-400/50"><Radio size={15} />Ouvrir le direct<ArrowRight size={14} /></Link></div>
       <div className="-mx-4 mb-3 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:mx-0 sm:overflow-visible sm:px-0">
         <div className="flex w-max gap-2 sm:w-auto sm:flex-wrap">
           {comps.map((c) => (

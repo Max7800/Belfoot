@@ -12,8 +12,9 @@ import {
   Sparkles,
   Trophy,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import MatchRow from "@/components/football/MatchRow";
+import LiveScoreRibbon from "@/components/football/LiveScoreRibbon";
 import { competitionPath } from "@/lib/competitionRoutes";
 import { useHomeConfig } from "@/lib/homeSections";
 import { computeStandings } from "@/lib/standings";
@@ -139,8 +140,10 @@ export default function Home() {
   const sectionMap = Object.fromEntries(config.sections.map((section) => [section.key, section]));
   const heroPlayers = view.players.slice(0, 3);
   const featured = view.players[0];
+  const followedClubIds = useMemo(() => [...new Set(data.players.map((player) => player.club_id).filter(Boolean))], [data.players]);
 
   const content = {
+    live: <LiveScoreRibbon config={sectionMap.live} competitions={data.competitions} clubs={data.clubs} followedClubIds={followedClubIds} />,
     jpl: view.league ? (
       <div className="overflow-hidden rounded-2xl border border-sky-400/20 bg-[linear-gradient(145deg,rgba(12,31,52,.96),rgba(5,18,34,.96))] shadow-[0_22px_60px_-45px_rgba(56,189,248,.65)]">
         <div className="flex flex-wrap items-center gap-4 border-b border-line/10 px-4 py-4 sm:px-5">
@@ -188,7 +191,7 @@ export default function Home() {
         <div className="relative z-10 max-w-2xl"><div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.24em] text-sky-300"><Sparkles className="h-3.5 w-3.5" />{config.hero.kicker}</div><h1 className="mt-4 max-w-xl whitespace-pre-line text-4xl font-black uppercase leading-[.98] sm:text-6xl"><HeroTitle value={config.hero.title} /></h1><p className="mt-4 max-w-xl text-sm leading-6 text-slate-300 sm:text-base">{config.hero.subtitle}</p><div className="mt-6 flex flex-wrap gap-2">{config.hero.primary_label && config.hero.primary_url && <Link href={config.hero.primary_url} className="inline-flex items-center gap-2 rounded-xl bg-amber-400 px-4 py-2.5 text-sm font-black text-slate-950 transition hover:brightness-110">{config.hero.primary_label}<ArrowRight className="h-4 w-4" /></Link>}{config.hero.secondary_label && config.hero.secondary_url && <Link href={config.hero.secondary_url} className="inline-flex items-center gap-2 rounded-xl border border-white/20 bg-white/[0.035] px-4 py-2.5 text-sm font-bold transition hover:border-sky-300/50">{config.hero.secondary_label}</Link>}</div><div className="mt-7 flex max-w-md divide-x divide-white/10"><div className="pr-5"><b className="text-2xl text-amber-300">{view.players.length}</b><span className="block text-[10px] text-slate-400">Belges suivis</span></div><div className="px-5"><b className="text-2xl">{view.leagues.length}</b><span className="block text-[10px] text-slate-400">Championnats couverts</span></div><div className="pl-5"><b className="text-2xl">1</b><span className="block text-[10px] text-slate-400">Passion commune 🇧🇪</span></div></div></div>
       </section>
 
-      {data.loading ? <div className="grid gap-4 sm:grid-cols-2"><div className="h-48 animate-pulse rounded-2xl bg-surface" /><div className="h-48 animate-pulse rounded-2xl bg-surface" /></div> : <div className="space-y-9">{config.sections.filter((section) => section.enabled).map((section) => section.key === "jpl" ? <section key={section.key}>{content.jpl}</section> : <section key={section.key}><SectionTitle section={section} href={meta[section.key]?.href} icon={meta[section.key]?.icon} />{content[section.key]}</section>)}</div>}
+      {data.loading ? <div className="grid gap-4 sm:grid-cols-2"><div className="h-48 animate-pulse rounded-2xl bg-surface" /><div className="h-48 animate-pulse rounded-2xl bg-surface" /></div> : <div className="space-y-9">{config.sections.filter((section) => section.enabled).map((section) => section.key === "live" ? <Fragment key={section.key}>{content.live}</Fragment> : section.key === "jpl" ? <section key={section.key}>{content.jpl}</section> : <section key={section.key}><SectionTitle section={section} href={meta[section.key]?.href} icon={meta[section.key]?.icon} />{content[section.key]}</section>)}</div>}
     </div>
   );
 }

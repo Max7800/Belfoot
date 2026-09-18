@@ -10,7 +10,8 @@ Avant d'utiliser les nouveaux jobs protégés, appliquer `supabase/migrations/00
 `modules/football/migrations/0023_season_safe_sync.sql`, puis
 `modules/football/migrations/0024_player_team_seasons.sql` et
 `modules/football/migrations/0025_membership_backfill_repair.sql`, puis
-`modules/football/migrations/0026_match_center_live.sql`.
+`modules/football/migrations/0026_match_center_live.sql`. La migration `0026` est indiquée comme
+appliquée le 18 septembre 2026 ; la base de développement reste la saison 2024/2025.
 
 ## Origine du projet
 

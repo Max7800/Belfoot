@@ -55,7 +55,8 @@ app/                     pages (App Router)
   layout.js              layout racine (ThemeModeProvider, Navbar, Footer, accent injecté)
   globals.css            tokens de thème + styles .rich (éditeur) + scope [data-force-dark] (admin)
   competitions/          liste + [slug] (LA page riche : header, onglets, stats…)
-  matchs/                liste (phase-aware) + [id] (fiche match + timeline)
+  matchs/                calendrier/liste phase-aware + [id] (fiche match + timeline)
+  direct/                Match Center transversal (live, aujourd'hui, sept prochains jours)
   clubs/[id]/            fiche club (sections pliables + config admin)
   players/[id]/          fiche joueur (stats saison)
   classement/           classement global (sélecteur compétition + phase, calcul client)
@@ -1057,13 +1058,30 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
 - `/api/jobs/[key]` accepte désormais le GET sécurisé Bearer attendu par Vercel Cron tout en gardant
   le POST historique. ESLint sans erreur, build Next 16 réussi, aucun appel API effectué.
 
+### 2026-09-18 — ChatGPT — séparation Direct / calendrier et bandeau d'accueil
+
+- Le Match Center transversal quitte `/matchs` pour une page dédiée `/direct`. `/matchs` redevient
+  une page lisible centrée sur le calendrier et la liste, avec un bouton clair vers le direct.
+- L'accueil reçoit un bandeau horizontal `Scores en direct` sous le hero. Sa hauteur ne change pas
+  avec le nombre de rencontres : cartes glissables sur mobile, flèches sur desktop, plafond
+  administrable et tuile `+N` au-delà. Les clubs comportant un Belge suivi passent en priorité.
+- Sans direct, l'admin peut afficher les prochains matchs ou masquer le bandeau. Le titre,
+  sous-titre, texte du lien, position, visibilité, nombre maximum, fond et contour sont éditables
+  dans Apparence > Page d'accueil. La configuration reste dans `site_settings`, donc aucun SQL.
+- Le Match Center dédié conserve ses cartes premium et passe à quatre colonnes sur grand écran afin
+  d'absorber huit matchs simultanés sans alourdir la page calendrier. Realtime et polling base sont
+  conservés ; aucun appel provider supplémentaire n'est réalisé côté public.
+- Vérifications : ESLint sans erreur (`74` avertissements, principalement les `<img>` historiques),
+  build Next 16 réussi. Aucun appel API-Football effectué.
+
 ---
 
 ## CURRENT_GIT_STATE
 
 - **Branche** : `main`
-- **Dernier commit distant avant le lot courant** : `27a9e42` — espace joueur consolidé.
-  Le lot courant est le Match Center Live ; il n'est pas encore poussé.
+- **Dernier commit distant avant le lot courant** : `88ba327` — Match Center Live.
+  Le lot courant sépare le direct du calendrier et ajoute le bandeau live d'accueil ; il n'est pas
+  encore poussé.
 - **Commits importants récents** :
   - `2c71e35` documentation clubs liés / Europe
   - `69578a5` automatisation des stades + simplification des équipes liées
@@ -1094,7 +1112,7 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
   `0019_competition_portal_style.sql`, `0020_match_lineups.sql`, `0021_burnley_test.sql`, puis
   `0022_ensure_player_country.sql`, `0023_season_safe_sync.sql`, puis
   `0024_player_team_seasons.sql`, puis `0025_membership_backfill_repair.sql` (appliquée et contrôlée),
-  puis `0026_match_center_live.sql`, et vérifier que `modules/football/migrations/0001→0026` sont
+  puis `0026_match_center_live.sql` (**appliquée et confirmée par l'utilisateur**), et vérifier que `modules/football/migrations/0001→0026` sont
   **toutes** passées (surtout `0008` position, `0009` banner_url/zones, `0010` rating_min,
   `0011` competition_type/parent_club_id/team_type, `0012` unicité des stats par compétition et
   `0013` textes des bandeaux, `0014` visibilité/pays du suivi international, `0015` zones par
