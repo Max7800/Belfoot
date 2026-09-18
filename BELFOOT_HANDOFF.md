@@ -807,6 +807,24 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
   danger : clubs et matchs utilisent des upserts et ne seront pas dupliqués.
 - Nouvelle migration : **aucune**. Le test Burnley doit être relancé après déploiement du correctif.
 
+### 2026-09-18 — ChatGPT — calendrier dans la fiche compétition + réparation `players.country`
+
+- La première passe responsive avait corrigé `/matchs`, mais la capture utilisateur concernait
+  `/competitions/[slug]?tab=matchs`. Cet onglet dispose maintenant lui aussi de Calendrier/Liste :
+  Calendrier est placé en premier et sélectionné par défaut sur mobile, Liste reste première sur
+  desktop, et les journées deviennent un select sur mobile en mode Liste.
+- Les phases sont compactées dans un select mobile. Les onglets Vue d'ensemble/Matchs/Classement/
+  Clubs/Joueurs/Stats restent sur un rail horizontal balayable au lieu de former trois lignes ; le
+  sélecteur de saison passe sous ce rail sur mobile. Le poussoir de compétitions masque également sa
+  scrollbar native.
+- Le second test Burnley a révélé `Could not find the 'country' column of 'players' in the schema
+  cache` : la migration `0014` n'était pas entièrement appliquée sur la base réelle.
+- Migration de réparation `0022_ensure_player_country.sql` : ajoute la colonne et l'index de suivi
+  s'ils manquent, puis exécute `notify pgrst, 'reload schema'`. Après application, attendre quelques
+  secondes puis relancer l'import Burnley.
+- Vérification : build Next.js 14.2.35 réussi avec variables Supabase factices de compilation +
+  `git diff --check` réussi. Socle : **aucune modification**.
+
 ---
 
 ## CURRENT_GIT_STATE
@@ -838,8 +856,8 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
   comme appliquée par l'utilisateur ; vérifier `0013_competition_header_texts.sql`, puis appliquer
   `0014_belgians_abroad.sql`, `0015_season_phase_zones.sql`, `0016_club_profiles.sql`, puis
   `0017_protect_manual_coaches.sql`, `0018_challenger_pro_league.sql`, puis
-  `0019_competition_portal_style.sql`, `0020_match_lineups.sql`, puis `0021_burnley_test.sql`, et
-  vérifier que `modules/football/migrations/0001→0021` sont
+  `0019_competition_portal_style.sql`, `0020_match_lineups.sql`, `0021_burnley_test.sql`, puis
+  `0022_ensure_player_country.sql`, et vérifier que `modules/football/migrations/0001→0022` sont
   **toutes** passées (surtout `0008` position, `0009` banner_url/zones, `0010` rating_min,
   `0011` competition_type/parent_club_id/team_type, `0012` unicité des stats par compétition et
   `0013` textes des bandeaux, `0014` visibilité/pays du suivi international, `0015` zones par

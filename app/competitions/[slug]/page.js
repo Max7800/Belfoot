@@ -1,10 +1,11 @@
 "use client";
 import Link from "next/link";
-import { Calendar } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { Calendar, CalendarDays, List } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import MatchRow from "@/components/football/MatchRow";
+import SeasonCalendar from "@/components/football/SeasonCalendar";
 import StandingsTable from "@/components/football/StandingsTable";
 import CupRounds from "@/components/football/CupRounds";
 import CompetitionHeader from "@/components/football/CompetitionHeader";
@@ -45,11 +46,15 @@ export default function CompetitionPage() {
   const [players, setPlayers] = useState([]); const [playerStats, setPlayerStats] = useState([]);
   const [matchPlayerStats, setMatchPlayerStats] = useState([]);
   const [phase, setPhase] = useState(null); const [round, setRound] = useState("all");
+  const [matchView, setMatchView] = useState("list");
+  const matchViewChosen = useRef(false);
   const [selClub, setSelClub] = useState(null); const [posFilter, setPosFilter] = useState("all");
   const [anchor, setAnchor] = useState(null);
   const competitionType = getCompetitionType(comp, matches);
   const isCup = competitionType === "cup";
   const statsConfig = useStatsSections(comp?.id);
+  useEffect(() => { if (!matchViewChosen.current && window.matchMedia("(max-width: 639px)").matches) setMatchView("calendar"); }, []);
+  const chooseMatchView = (next) => { matchViewChosen.current = true; setMatchView(next); };
   useEffect(() => { if (tab === "stats" && anchor) { const el = document.getElementById(anchor); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); setAnchor(null); } }, [tab, anchor]);
   const goStats = (sec) => { setTab("stats"); setAnchor(sec); };
 
@@ -204,7 +209,7 @@ export default function CompetitionPage() {
   };
 
   const FormDots = ({ res }) => <span className="hidden gap-0.5 sm:flex">{res.map((r, i) => <span key={i} className={`h-2 w-2 rounded-full ${r === "V" ? "bg-green-400" : r === "N" ? "bg-white/25" : "bg-red-400"}`} title={r} />)}</span>;
-  const PhaseChips = () => phases.length > 1 ? <div className="mb-4 flex flex-wrap gap-1">{phases.map((ph) => <button key={ph} onClick={() => { setPhase(ph); setRound("all"); }} className={`rounded-full border px-3 py-1 text-xs ${curPhase === ph ? "border-accent bg-accent/10 text-accent" : "border-line/20 text-muted"}`}>{ph}</button>)}</div> : null;
+  const PhaseChips = () => phases.length > 1 ? <><select value={curPhase || ""} onChange={(event) => { setPhase(event.target.value); setRound("all"); }} className="mb-4 w-full rounded-xl border border-line/10 bg-surface px-3 py-2 text-sm sm:hidden">{phases.map((ph) => <option key={ph}>{ph}</option>)}</select><div className="mb-4 hidden flex-wrap gap-1 sm:flex">{phases.map((ph) => <button key={ph} onClick={() => { setPhase(ph); setRound("all"); }} className={`rounded-full border px-3 py-1 text-xs ${curPhase === ph ? "border-accent bg-accent/10 text-accent" : "border-line/20 text-muted"}`}>{ph}</button>)}</div></> : null;
 
   function TopCategory({ title, id, rows, fmt, meta, accent = "#ef4444" }) {
     if (!rows.length) return <div id={id} className="h-full rounded-2xl border border-line/10 bg-gradient-to-b from-surface to-bg/35 p-4"><h3 className="mb-2 font-bold" style={{ color: accent }}>{title}</h3><p className="text-sm text-muted">—</p></div>;
@@ -259,7 +264,7 @@ export default function CompetitionPage() {
       <CompetitionHeader comp={comp} seasonLabel={seasonLabel} kicker={L("comp.kicker", "Compétitions")} />
       {competitions.length > 1 && (
         <div className="-mt-2 mb-5 flex justify-center">
-          <div className="inline-flex max-w-full items-center gap-1 overflow-x-auto rounded-full border border-line/10 bg-surface2/80 p-1 shadow-[0_12px_30px_-20px_rgba(0,0,0,0.9)] backdrop-blur">
+          <div className="inline-flex max-w-full items-center gap-1 overflow-x-auto rounded-full border border-line/10 bg-surface2/80 p-1 shadow-[0_12px_30px_-20px_rgba(0,0,0,0.9)] backdrop-blur [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {competitions.map((item) => {
               const active = item.id === comp.id;
               return <Link key={item.id} href={`${competitionPath(item)}?tab=${tab}`} aria-current={active ? "page" : undefined} className={`group flex shrink-0 items-center gap-2 rounded-full px-3 py-1.5 text-xs font-bold transition sm:px-4 ${active ? "bg-accent text-white shadow-[0_5px_18px_-8px_rgba(239,68,68,0.9)]" : "text-muted hover:bg-white/[0.05] hover:text-content"}`}>{item.logo_url && <img src={item.logo_url} className="h-5 w-5 object-contain" alt="" />}<span>{item.header_title?.trim() || item.name}</span></Link>;
@@ -267,9 +272,12 @@ export default function CompetitionPage() {
           </div>
         </div>
       )}
-      <div className="mb-6 flex items-center justify-between gap-2 border-b border-line/10">
-        <div className="flex flex-wrap gap-1">{TABS.map(([k, l]) => <button key={k} onClick={() => setTab(k)} className={`px-3 py-2 text-sm ${tab === k ? "border-b-2 border-accent font-bold text-content" : "text-muted hover:text-content"}`}>{l}</button>)}</div>
-        {seasons.length > 0 && <select value={seasonLabel} onChange={(e) => { setSeasonLabel(e.target.value); setPhase(null); setRound("all"); }} className="shrink-0 rounded border border-line/10 bg-surface px-2 py-1 text-xs">{seasons.map((s) => <option key={s.id}>{s.label}</option>)}</select>}
+      <div className="mb-6 border-b border-line/10">
+        <div className="flex items-center gap-2">
+          <div className="-mx-1 min-w-0 flex-1 overflow-x-auto px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"><div className="flex w-max gap-1">{TABS.map(([k, l]) => <button key={k} onClick={() => setTab(k)} className={`shrink-0 px-3 py-2 text-sm ${tab === k ? "border-b-2 border-accent font-bold text-content" : "text-muted hover:text-content"}`}>{l}</button>)}</div></div>
+          {seasons.length > 0 && <select value={seasonLabel} onChange={(e) => { setSeasonLabel(e.target.value); setPhase(null); setRound("all"); }} className="hidden shrink-0 rounded border border-line/10 bg-surface px-2 py-1 text-xs sm:block">{seasons.map((s) => <option key={s.id}>{s.label}</option>)}</select>}
+        </div>
+        {seasons.length > 0 && <select value={seasonLabel} onChange={(e) => { setSeasonLabel(e.target.value); setPhase(null); setRound("all"); }} className="mb-3 mt-2 w-full rounded-xl border border-line/10 bg-surface px-3 py-2 text-sm sm:hidden">{seasons.map((s) => <option key={s.id}>{s.label}</option>)}</select>}
       </div>
 
       {tab === "overview" && (
@@ -348,9 +356,13 @@ export default function CompetitionPage() {
       {tab === "matchs" && (
         <div>
           <PhaseChips />
-          {rounds.length > 1 && <div className="mb-4 flex flex-wrap gap-1"><button onClick={() => setRound("all")} className={`rounded-full border px-3 py-1 text-xs ${round === "all" ? "border-accent bg-accent/10 text-accent" : "border-line/20 text-muted"}`}>{L("filter.all", "Tout")}</button>{rounds.map((r) => <button key={r.key} onClick={() => setRound(r.key)} className={`rounded-full border px-3 py-1 text-xs ${round === r.key ? "border-accent bg-accent/10 text-accent" : "border-line/20 text-muted"}`}>{r.num != null ? `J${r.num}` : r.label}</button>)}</div>}
-          {grouped.map((g) => { const ds = g.items.map((m) => m.kickoff).filter(Boolean).sort(); const range = ds.length ? new Date(ds[0]).toLocaleDateString("fr-BE", { day: "numeric", month: "short" }) + (ds[0].slice(0, 10) !== ds[ds.length - 1].slice(0, 10) ? " – " + new Date(ds[ds.length - 1]).toLocaleDateString("fr-BE", { day: "numeric", month: "short" }) : "") : ""; return (<div key={g.label} className="mb-5"><div className="mb-2 flex items-baseline gap-2"><span className="text-xs font-bold uppercase tracking-wider text-muted">{g.label}</span>{range && <span className="text-[11px] text-muted/60">{range}</span>}</div><div className="space-y-2">{g.items.map((m) => <MatchRow key={m.id} m={m} clubs={clubsMap} href={`/matchs/${m.id}`} />)}</div></div>); })}
-          {shownMatches.length === 0 && <p className="text-muted">{L("empty.matches", "Aucun match.")}</p>}
+          <div className="mb-4 flex sm:justify-end"><div className="inline-flex w-full rounded-xl border border-line/10 bg-surface p-1 sm:w-auto"><button onClick={() => chooseMatchView("calendar")} className={`order-1 flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold sm:order-2 sm:flex-none sm:py-1.5 ${matchView === "calendar" ? "bg-accent text-white" : "text-muted hover:text-content"}`}><CalendarDays className="h-3.5 w-3.5" />Calendrier</button><button onClick={() => chooseMatchView("list")} className={`order-2 flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold sm:order-1 sm:flex-none sm:py-1.5 ${matchView === "list" ? "bg-accent text-white" : "text-muted hover:text-content"}`}><List className="h-3.5 w-3.5" />Liste</button></div></div>
+          {matchView === "calendar" ? <SeasonCalendar matches={phaseMatches} clubs={clubsMap} selectedRound={round} onRoundChange={setRound} /> : <>
+            {rounds.length > 1 && <select value={round} onChange={(event) => setRound(event.target.value)} className="mb-4 w-full rounded-xl border border-line/10 bg-surface px-3 py-2 text-sm sm:hidden"><option value="all">{L("filter.allRounds", "Toutes les journées")}</option>{rounds.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}</select>}
+            {rounds.length > 1 && <div className="mb-4 hidden flex-wrap gap-1 sm:flex"><button onClick={() => setRound("all")} className={`rounded-full border px-3 py-1 text-xs ${round === "all" ? "border-accent bg-accent/10 text-accent" : "border-line/20 text-muted"}`}>{L("filter.all", "Tout")}</button>{rounds.map((r) => <button key={r.key} onClick={() => setRound(r.key)} className={`rounded-full border px-3 py-1 text-xs ${round === r.key ? "border-accent bg-accent/10 text-accent" : "border-line/20 text-muted"}`}>{r.num != null ? `J${r.num}` : r.label}</button>)}</div>}
+            {grouped.map((g) => { const ds = g.items.map((m) => m.kickoff).filter(Boolean).sort(); const range = ds.length ? new Date(ds[0]).toLocaleDateString("fr-BE", { day: "numeric", month: "short" }) + (ds[0].slice(0, 10) !== ds[ds.length - 1].slice(0, 10) ? " – " + new Date(ds[ds.length - 1]).toLocaleDateString("fr-BE", { day: "numeric", month: "short" }) : "") : ""; return (<div key={g.label} className="mb-5"><div className="mb-2 flex items-baseline gap-2"><span className="text-xs font-bold uppercase tracking-wider text-muted">{g.label}</span>{range && <span className="text-[11px] text-muted/60">{range}</span>}</div><div className="space-y-2">{g.items.map((m) => <MatchRow key={m.id} m={m} clubs={clubsMap} href={`/matchs/${m.id}`} />)}</div></div>); })}
+            {shownMatches.length === 0 && <p className="text-muted">{L("empty.matches", "Aucun match.")}</p>}
+          </>}
         </div>
       )}
 
