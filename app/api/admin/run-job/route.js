@@ -17,6 +17,6 @@ export async function POST(req) {
   const body = await req.json().catch(() => ({}));
   if (!body.key) return new Response("Missing job key", { status: 400 });
   try {
-    return Response.json(await runJob(body.key, { db: admin, season: body.season, competitionId: body.competitionId || null, matchCap: body.matchCap, teamExternalId: body.teamExternalId || null, thesportsdbKey: process.env.THESPORTSDB_KEY, apifootballKey: process.env.APIFOOTBALL_KEY }));
+    return Response.json(await runJob(body.key, { db: admin, season: body.season, competitionId: body.competitionId || null, matchCap: body.matchCap, requestLimit: body.requestLimit, teamExternalId: body.teamExternalId || null, thesportsdbKey: process.env.THESPORTSDB_KEY, apifootballKey: process.env.APIFOOTBALL_KEY }));
   } catch (e) { return new Response(String(e.message), { status: 500 }); }
 }

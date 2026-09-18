@@ -247,7 +247,13 @@ transaction globale ni preuve automatique de l'état de production. L'erreur `pl
 c'est raisonnable, enregistrer `(module, version, checksum)`, ajouter une commande `migration:status`
 et bloquer les jobs si une migration requise manque.
 
-### DATA-02 — HAUT — Les matchs provider n'ont pas de `season_id`
+### DATA-02 — HAUT — Les matchs provider n'ont pas de `season_id` — CORRIGÉ POUR LES IMPORTS 2026+
+
+**Correctif du 18 septembre 2026 :** les imports complets, live et équipe test résolvent/créent
+désormais la saison sélectionnée et posent son UUID sur chaque match. La saison saisie dans l'admin
+est prioritaire sur l'ancienne valeur de la compétition. `0023_season_safe_sync.sql` garantit
+l'unicité `(competition_id, label)`. La base 2024/2025 reste le jeu de données de développement ;
+elle ne sera remplacée par 2026/2027 qu'après souscription à une offre API-Football adaptée.
 
 `syncCompetition()` et `syncTeamTest()` enregistrent `competition_id` mais jamais `season_id`.
 Conséquences :
@@ -261,7 +267,11 @@ Conséquences :
 **À faire avant la saison suivante :** résoudre/créer la saison au début du job et poser son UUID
 sur chaque match upserté. Ajouter une migration de backfill fondée sur compétition + année provider.
 
-### DATA-03 — HAUT — `syncSquads` confond effectif et suivi Belfoot
+### DATA-03 — HAUT — `syncSquads` confond effectif et suivi Belfoot — CORRIGÉ
+
+**Correctif du 18 septembre 2026 :** l'import d'effectif conserve le choix éditorial `tracked` des
+joueurs existants et crée les nouveaux joueurs avec `tracked=false`. Seule une sélection explicite
+ou l'import ciblé d'un Belge active le suivi coûteux.
 
 Le job met `tracked: true` sur **tous** les joueurs de chaque effectif. Sur une ligue étrangère,
 `track-belgians` peut alors demander les statistiques de tous les joueurs, pas seulement des Belges,
@@ -275,7 +285,12 @@ Séparer :
 - import complet domestique nécessaire aux pages compétition ;
 - découverte étrangère qui laisse `tracked=false`, sauf import ciblé explicitement belge.
 
-### DATA-04 — HAUT — Succès de job potentiellement mensonger
+### DATA-04 — HAUT — Succès de job potentiellement mensonger — PARTIELLEMENT CORRIGÉ
+
+**Correctif du 18 septembre 2026 :** `upsertExternal()` lève maintenant les erreurs de lecture et
+d'écriture. La synchronisation principale remonte les erreurs DB critiques et conserve les échecs
+provider d'enrichissement facultatif comme avertissements visibles dans le détail du job. Les autres
+jobs historiques doivent encore être relus un par un.
 
 `upsertExternal()` n'inspecte pas les erreurs de `update/insert`. Plusieurs jobs ignorent aussi les
 erreurs de lecture/écriture, et `syncCompetition()` avale entièrement les erreurs d'enrichissement
@@ -285,14 +300,22 @@ Toutes les opérations critiques doivent lever sur `error`, avec un rapport stru
 lignes insérées/mises à jour/ignorées, avertissements et erreurs. Les enrichissements facultatifs
 peuvent rester non bloquants, mais doivent apparaître comme `warning`.
 
-### DATA-05 — MOYEN/HAUT — Protection `locked` incohérente
+### DATA-05 — MOYEN/HAUT — Protection `locked` incohérente — CORRIGÉ POUR LES EFFECTIFS
+
+**Correctif du 18 septembre 2026 :** `syncSquads` n'écrase plus les champs d'une fiche verrouillée,
+mais continue d'alimenter sa table séparée `player_season_stats`, comme `syncTeamTest`.
 
 Le correctif récent permet à `syncTeamTest` de mettre à jour `player_season_stats` même si la fiche
 joueur est verrouillée. `syncSquads` et `discoverPlayers` font encore `continue`, donc peuvent sauter
 les stats/découvertes. Formaliser une règle unique : le verrou protège les champs de la fiche, jamais
 les tables statistiques séparées.
 
-### DATA-06 — HAUT — Risque de quota par concurrence et répétitions
+### DATA-06 — HAUT — Risque de quota par concurrence et répétitions — GARDE-FOUS CODÉS
+
+**Correctif du 18 septembre 2026 :** `0004_job_execution_guardrails.sql` ajoute un verrou unique par
+job/cible, heartbeat, expiration après 20 minutes, compteur d'appels, budget et quota restant. Dans
+l'admin, chaque lancement affiche son coût estimé et demande confirmation avec un budget strict.
+Le traitement durable des réponses événements/compositions vides reste à ajouter.
 
 - aucun verrou n'empêche deux jobs identiques de tourner en parallèle ;
 - aucune estimation de coût n'est confirmée avant un job lourd ;
@@ -305,7 +328,11 @@ les tables statistiques séparées.
 Ajouter verrou/advisory lock, budget de requêtes, compteur journalier, `processed_at` même pour une
 réponse vide, reprise après timeout et bouton de confirmation affichant le coût maximal.
 
-### DATA-07 — MOYEN — Pas de timeout/retry provider
+### DATA-07 — MOYEN — Pas de timeout/retry provider — CORRIGÉ POUR API-FOOTBALL
+
+**Correctif du 18 septembre 2026 :** le provider utilise un timeout de 12 secondes, au plus une
+seconde tentative sur timeout/5xx, aucun retry sur 429, `cache: no-store`, validation HTTP/JSON et
+lecture du quota restant. Chaque tentative consomme le budget explicite du job.
 
 Les `fetch()` n'ont pas de `AbortController`, de timeout, de retry/backoff sur 429/5xx ni de contrôle
 HTTP complet côté API-Football avant `r.json()`. Ajouter un wrapper provider commun avec timeout,
@@ -450,9 +477,9 @@ le footer. À traiter avant communication large, même sans publicité ni analyt
 ### P1 — Fiabilité des données
 
 1. Automatiser les migrations et produire `migration:status`.
-2. Rattacher tous les matchs à une saison et backfill des données existantes.
-3. Corriger `tracked` dans `syncSquads` et harmoniser `locked`.
-4. Faire remonter toutes les erreurs DB/provider ; ajouter job locks/budget quota.
+2. ~~Rattacher les nouveaux matchs à une saison.~~ Codé pour 2024/2025 et les futures saisons ; backfill historique encore optionnel.
+3. ~~Corriger `tracked` dans `syncSquads` et harmoniser `locked`.~~ Corrigé pour les effectifs.
+4. Faire remonter toutes les erreurs DB/provider ; ~~ajouter job locks/budget quota.~~ Relire les jobs restants.
 5. Corriger le traitement des réponses vides et la transaction événements.
 
 ### P2 — Qualité et passage à l'échelle

@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import siteConfig from "@/config/site";
-import { jobKeys } from "@/lib/jobs";
+import { describeJobCost, JOB_CATALOG, jobKeys } from "@/lib/jobCatalog";
 import ImageField from "@/components/ui/ImageField";
 import { CLUB_SECTIONS } from "@/lib/clubSections";
 import { normalizeStatsConfig } from "@/lib/statsSections";
@@ -44,27 +44,28 @@ export function ReportsPanel() {
     </div></div>);
 }
 
-const JOB_LABELS = { "football.sync": "🔄 Synchroniser (import complet)", "football.live-sync": "🔄 Live (scores)", "football.discover-belgians": "🔎 Découvrir les Belges", "football.track-belgians": "📊 MAJ Belges suivis", "football.squads": "👥 Effectifs (joueurs)", "football.events": "⚽ Événements de match", "football.coaches": "🧑‍🏫 Entraîneurs", "football.lineups": "📋 Compositions & performances", "football.team-test": "🧪 Importer l'équipe test" };
-
 export function JobsPanel() {
   const [rows, setRows] = useState([]);
-  const [season, setSeason] = useState("2025-2026");
+  const [season, setSeason] = useState("2024-2025");
   const [busy, setBusy] = useState(null);
   const [msg, setMsg] = useState("");
   const [comps, setComps] = useState([]);
   const [compId, setCompId] = useState("");   // "" = toutes
   const [matchCap, setMatchCap] = useState(3);
+  const [requestLimit, setRequestLimit] = useState(10);
   const [teamExternalId, setTeamExternalId] = useState("44");
   const load = () => supabase.from("job_runs").select("*").order("started_at", { ascending: false }).limit(30).then(({ data }) => setRows(data || []));
   useEffect(() => { load(); supabase.from("competitions").select("id,name").order("name").then(({ data }) => setComps(data || [])); }, []);
   const run = async (key) => {
+    const cost = describeJobCost(key, { competitionId: compId, competitionCount: comps.length, matchCap });
+    if (!window.confirm(`${JOB_CATALOG[key]?.label || key}\n\nCoût estimé : ${cost}.\nBudget strict : ${requestLimit} appels API maximum.\n\nLancer la synchronisation ?`)) return;
     setBusy(key); setMsg("");
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const r = await fetch("/api/admin/run-job", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token}` },
-        body: JSON.stringify({ key, season, competitionId: compId || null, matchCap, teamExternalId }),
+        body: JSON.stringify({ key, season, competitionId: compId || null, matchCap, requestLimit, teamExternalId }),
       });
       const txt = await r.text();
       if (!r.ok) throw new Error(txt || ("HTTP " + r.status));
@@ -75,18 +76,20 @@ export function JobsPanel() {
   };
   return (<div>
     <h2 className="mb-4 text-lg font-bold">Jobs & synchronisation</h2>
-    <p className="mb-3 text-xs leading-5 text-muted">Entraîneurs coûte environ une requête par club. Compositions & performances coûte jusqu'à deux requêtes par match. L'import équipe test ne synchronise qu'un club, ses matchs et ses Belges : sélectionne sa compétition avant de le lancer. Pour alimenter ensuite les performances récentes, garde la même compétition, mets « Max matchs » à 1–3 et lance « Compositions & performances ».</p>
+    <p className="mb-3 text-xs leading-5 text-muted">Chaque lancement affiche maintenant son coût estimé et respecte un budget strict. Une relance identique est bloquée tant que le premier job travaille. La base 2024/2025 reste la référence de développement ; le passage à 2026/2027 se fera ici, compétition par compétition, lorsque l'abonnement API sera actif.</p>
     <div className="mb-3 flex flex-wrap items-center gap-2">
       <select value={compId} onChange={(e) => setCompId(e.target.value)} className="rounded border border-line/10 bg-surface2 px-2 py-1 text-sm"><option value="">Toutes les compétitions</option>{comps.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
       <label className="text-xs text-muted">Saison</label>
       <input value={season} onChange={(e) => setSeason(e.target.value)} className="w-28 rounded border border-line/10 bg-surface2 px-2 py-1 text-sm" />
       <label className="text-xs text-muted">Max matchs</label>
       <input type="number" min="1" max="20" value={matchCap} onChange={(e) => setMatchCap(Math.max(1, Math.min(20, Number(e.target.value) || 1)))} className="w-16 rounded border border-line/10 bg-surface2 px-2 py-1 text-sm" />
+      <label className="text-xs text-muted">Budget API</label>
+      <input type="number" min="1" max="100" value={requestLimit} onChange={(e) => setRequestLimit(Math.max(1, Math.min(100, Number(e.target.value) || 1)))} className="w-16 rounded border border-line/10 bg-surface2 px-2 py-1 text-sm" />
       <label className="text-xs text-muted">ID équipe API</label>
       <input value={teamExternalId} onChange={(e) => setTeamExternalId(e.target.value.replace(/\D/g, ""))} placeholder="44" className="w-20 rounded border border-line/10 bg-surface2 px-2 py-1 text-sm" />
       {jobKeys().map((k) => (
         <button key={k} disabled={!!busy} onClick={() => run(k)} className="rounded bg-accent px-3 py-1.5 text-sm font-bold text-white disabled:opacity-50">
-          {(JOB_LABELS[k] || k)}{busy === k ? " …" : ""}
+          {(JOB_CATALOG[k]?.label || k)}{busy === k ? " …" : ""}
         </button>
       ))}
     </div>

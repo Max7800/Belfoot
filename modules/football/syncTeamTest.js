@@ -1,5 +1,6 @@
 import { getProvider } from "./providers";
 import { upsertExternal } from "./sync";
+import { ensureSeason, seasonLabel, seasonYear } from "./season";
 
 function parseRound(raw) {
   if (!raw) return { round_raw: null, phase: null, round_number: null };
@@ -15,12 +16,14 @@ export async function syncTeamTest(db, competition, ctx = {}) {
   if (!provider?.fetchClubById || !provider?.fetchTeamMatches || !provider?.fetchSquadPlayers) throw new Error(`${competition.name}: import ciblé non supporté par ${competition.provider}`);
   const teamExternalId = String(ctx.teamExternalId || "").trim();
   if (!teamExternalId) throw new Error("Renseigne l'ID API-Football de l'équipe");
-  const season = (String(ctx.season || competition.ext?.season || "").match(/\d{4}/) || [])[0] || "2024";
+  const selectedSeason = seasonLabel(ctx.season || competition.ext?.season);
+  const season = seasonYear(selectedSeason);
+  const seasonRow = await ensureSeason(db, competition.id, selectedSeason);
 
   const leagueInfo = provider.fetchLeagueInfo ? await provider.fetchLeagueInfo(competition, { ...ctx, season }) : null;
   if (leagueInfo) {
     await db.from("competitions").update({
-      ext: { ...(competition.ext || {}), season, coverage: leagueInfo.coverage, providerName: leagueInfo.name, providerType: leagueInfo.type, country: leagueInfo.country, country_flag: leagueInfo.flag },
+      ext: { ...(competition.ext || {}), season, season_label: selectedSeason, coverage: leagueInfo.coverage, providerName: leagueInfo.name, providerType: leagueInfo.type, country: leagueInfo.country, country_flag: leagueInfo.flag },
     }).eq("id", competition.id);
   }
 
@@ -43,6 +46,7 @@ export async function syncTeamTest(db, competition, ctx = {}) {
     return {
       external_id: match.external_id,
       competition_id: competition.id,
+      season_id: seasonRow.id,
       home_club_id: clubMap[match.home_ext] || null,
       away_club_id: clubMap[match.away_ext] || null,
       home_score: match.home_score,
@@ -57,7 +61,7 @@ export async function syncTeamTest(db, competition, ctx = {}) {
       ext: match,
     };
   });
-  await upsertExternal(db, "matches", competition.provider, resolvedMatches, ["competition_id", "home_club_id", "away_club_id", "home_score", "away_score", "status", "minute", "kickoff", "matchday", "round_raw", "phase", "round_number"]);
+  await upsertExternal(db, "matches", competition.provider, resolvedMatches, ["competition_id", "season_id", "home_club_id", "away_club_id", "home_score", "away_score", "status", "minute", "kickoff", "matchday", "round_raw", "phase", "round_number"]);
 
   const teamClubId = clubMap[teamExternalId];
   if (!teamClubId) throw new Error(`${club.name}: club importé mais identifiant local introuvable`);

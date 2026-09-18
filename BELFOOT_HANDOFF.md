@@ -935,13 +935,37 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
   0 vulnérabilité. Le premier build a rencontré un cache Turbopack corrompu ; `.next` a été mis de
   côté dans `/tmp`, puis le build neuf a réussi.
 
+### 2026-09-18 — ChatGPT — fiabilisation des synchronisations et préparation 2026/2027
+
+- Décision produit corrigée : conserver les données synchronisées 2024/2025 comme base de
+  développement. Le passage à 2026/2027 aura lieu plus tard, compétition par compétition, après
+  souscription à une offre API-Football ; ne pas consommer le quota gratuit pour l'anticiper.
+- Nouvelle migration core `0004_job_execution_guardrails.sql` : verrou unique par job/cible,
+  heartbeat, expiration des exécutions interrompues, budget/compteur d'appels et quota restant.
+- Nouvelle migration football `0023_season_safe_sync.sql` : une seule saison par
+  `(competition_id, label)`. Les imports complet, live et équipe test créent/résolvent désormais la
+  saison et écrivent systématiquement `matches.season_id`.
+- La saison choisie dans l'admin est désormais prioritaire sur `competition.ext.season`; la valeur
+  par défaut reste `2024-2025` pour le développement et la compétition mémorise l'année/étiquette
+  retenue. Il suffira de choisir `2026-2027` au moment de la vraie bascule.
+- L'admin affiche le coût estimé, impose une confirmation et transmet un budget API strict (10 par
+  défaut, 100 maximum). Deux jobs identiques sur la même cible ne peuvent plus tourner ensemble.
+- API-Football : timeout 12 s, une seule seconde tentative sur timeout/5xx, aucun retry 429,
+  validation HTTP/JSON, `no-store`, comptage des tentatives et lecture du quota restant.
+- `syncSquads` ne met plus tous les joueurs en `tracked=true`; les nouvelles fiches restent non
+  suivies jusqu'à une sélection éditoriale. Une fiche verrouillée conserve ses champs, mais ses
+  statistiques de saison peuvent continuer à être synchronisées.
+- `upsertExternal` lève désormais les erreurs DB et les enrichissements provider facultatifs sont
+  remontés comme avertissements au lieu de disparaître silencieusement.
+- Vérifications : ESLint sans erreur (`69` avertissements historiques) et build Next 16 réussis.
+
 ---
 
 ## CURRENT_GIT_STATE
 
 - **Branche** : `main`
-- **Dernier commit distant avant le lot courant** : `29e477c` — upgrade Next 16 / React 19 / Tiptap 3.
-  Le lot courant durcit Storage et les headers ; il n'est pas encore poussé.
+- **Dernier commit distant avant le lot courant** : `e0dd7fa` — médias, policies Storage et headers.
+  Le lot courant prépare les jobs et les saisons 2026/2027 ; il n'est pas encore poussé.
 - **Commits importants récents** :
   - `2c71e35` documentation clubs liés / Europe
   - `69578a5` automatisation des stades + simplification des équipes liées
@@ -962,14 +986,16 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
   - `5d57095` cartes cliquables → ancres Stats + note fiabilisée (seuil) + clean sheets
   - `a6213f5` rounds/phases génériques (fin du mélange journées/barrages)
   - `39267e2`/`150db4d` couche compétition (effectifs+stats, événements, journées, fiches)
-- **Migrations encore à passer** (si le projet Supabase n'est pas à jour) : `0002` est indiquée
-  comme appliquée par l'utilisateur. Appliquer `supabase/migrations/0003_media_storage_hardening.sql`
-  puis inspecter les anciennes policies Storage. Pour le football, `0012` est indiquée comme
+- **Migrations encore à passer** (si le projet Supabase n'est pas à jour) : `0002` et `0003` sont
+  indiquées comme appliquées par l'utilisateur ; les anciennes policies Storage permissives ont été
+  identifiées et leur suppression a été demandée. Appliquer ensuite
+  `supabase/migrations/0004_job_execution_guardrails.sql`. Pour le football, `0012` est indiquée comme
   appliquée ; vérifier `0013_competition_header_texts.sql`, puis appliquer
   `0014_belgians_abroad.sql`, `0015_season_phase_zones.sql`, `0016_club_profiles.sql`, puis
   `0017_protect_manual_coaches.sql`, `0018_challenger_pro_league.sql`, puis
   `0019_competition_portal_style.sql`, `0020_match_lineups.sql`, `0021_burnley_test.sql`, puis
-  `0022_ensure_player_country.sql`, et vérifier que `modules/football/migrations/0001→0022` sont
+  `0022_ensure_player_country.sql`, puis `0023_season_safe_sync.sql`, et vérifier que
+  `modules/football/migrations/0001→0023` sont
   **toutes** passées (surtout `0008` position, `0009` banner_url/zones, `0010` rating_min,
   `0011` competition_type/parent_club_id/team_type, `0012` unicité des stats par compétition et
   `0013` textes des bandeaux, `0014` visibilité/pays du suivi international, `0015` zones par

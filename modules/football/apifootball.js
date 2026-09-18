@@ -1,7 +1,7 @@
 import { registerProvider } from "./providers";
+import { seasonYear } from "./season";
 
 const BASE = "https://v3.football.api-sports.io";
-function seasonYear(s) { const m = String(s ?? "").match(/\d{4}/); return m ? m[0] : String(new Date().getFullYear()); }
 function mapStatus(short) {
   if (["FT", "AET", "PEN"].includes(short)) return "finished";
   if (["PST", "CANC", "ABD", "SUSP", "INT"].includes(short)) return "postponed";
@@ -20,13 +20,51 @@ function mapFixture(f) {
     kickoff: f.fixture.date || null,
   };
 }
-async function apiFull(path, ctx) {
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function apiFull(path, ctx = {}) {
   const key = ctx.apifootballKey || process.env.APIFOOTBALL_KEY;
   if (!key) throw new Error("APIFOOTBALL_KEY manquante");
-  const r = await fetch(`${BASE}${path}`, { headers: { "x-apisports-key": key } });
-  const j = await r.json();
-  if (j.errors && (Array.isArray(j.errors) ? j.errors.length : Object.keys(j.errors).length)) throw new Error("API-Football: " + JSON.stringify(j.errors));
-  return j;
+  const timeoutMs = Math.max(3000, Math.min(Number(ctx.providerTimeoutMs) || 12000, 30000));
+  const maxAttempts = Math.max(1, Math.min(Number(ctx.providerAttempts) || 2, 2));
+  let lastError;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    await ctx.requestTracker?.beforeRequest?.(path);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetch(`${BASE}${path}`, {
+        headers: { "x-apisports-key": key },
+        signal: controller.signal,
+        cache: "no-store",
+      });
+      await ctx.requestTracker?.afterResponse?.(response.headers);
+      const text = await response.text();
+      let json;
+      try { json = text ? JSON.parse(text) : {}; }
+      catch { throw new Error(`API-Football: réponse invalide (HTTP ${response.status})`); }
+
+      const providerErrors = json.errors && (Array.isArray(json.errors) ? json.errors.length : Object.keys(json.errors).length);
+      if (response.status === 429) throw new Error("API-Football: quota ou limite de fréquence atteint (HTTP 429)");
+      if (!response.ok) {
+        const error = new Error(`API-Football indisponible (HTTP ${response.status})`);
+        error.retryable = response.status >= 500;
+        throw error;
+      }
+      if (providerErrors) throw new Error("API-Football: " + JSON.stringify(json.errors));
+      return json;
+    } catch (error) {
+      const timedOut = error?.name === "AbortError";
+      lastError = timedOut ? new Error(`API-Football: délai dépassé après ${timeoutMs / 1000}s`) : error;
+      const retryable = timedOut || error?.retryable;
+      if (!retryable || attempt >= maxAttempts) throw lastError;
+      await wait(350 * attempt);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  throw lastError || new Error("API-Football indisponible");
 }
 const api = async (path, ctx) => (await apiFull(path, ctx)).response || [];
 
@@ -34,14 +72,14 @@ const provider = {
   key: "apifootball",
   // Infos ligue : nom réel (auto-vérification de l'id) + pays + coverage flags.
   async fetchLeagueInfo(competition, ctx = {}) {
-    const y = seasonYear(competition.ext?.season || ctx.season);
+    const y = seasonYear(ctx.season || competition.ext?.season);
     const rows = await api(`/leagues?id=${competition.external_id}&season=${y}`, ctx);
     const L = rows[0]; if (!L) return null;
     const seas = L.seasons?.find((s) => String(s.year) === String(y)) || L.seasons?.[0];
     return { name: L.league?.name, logo: L.league?.logo || null, type: L.league?.type || null, country: L.country?.name, flag: L.country?.flag || null, coverage: seas?.coverage || null };
   },
   async fetchClubs(competition, ctx = {}) {
-    const y = seasonYear(competition.ext?.season || ctx.season);
+    const y = seasonYear(ctx.season || competition.ext?.season);
     const rows = await api(`/teams?league=${competition.external_id}&season=${y}`, ctx);
     return rows.map((x) => ({
       external_id: String(x.team.id), name: x.team.name, logo_url: x.team.logo || null, city: x.venue?.city || null,
@@ -66,11 +104,11 @@ const provider = {
     };
   },
   async fetchMatches(competition, ctx = {}) {
-    const y = seasonYear(competition.ext?.season || ctx.season);
+    const y = seasonYear(ctx.season || competition.ext?.season);
     return (await api(`/fixtures?league=${competition.external_id}&season=${y}`, ctx)).map(mapFixture);
   },
   async fetchTeamMatches(competition, teamExternalId, ctx = {}) {
-    const y = seasonYear(competition.ext?.season || ctx.season);
+    const y = seasonYear(ctx.season || competition.ext?.season);
     const rows = await api(`/fixtures?team=${teamExternalId}&season=${y}`, ctx);
     return rows.filter((fixture) => String(fixture.league?.id) === String(competition.external_id)).map(mapFixture);
   },

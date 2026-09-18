@@ -1,7 +1,8 @@
 import { registerProvider } from "./providers";
+import { seasonLabel } from "./season";
 
 const BASE = (key) => `https://www.thesportsdb.com/api/v1/json/${key || "3"}`;
-async function getJson(url) { const r = await fetch(url); if (!r.ok) throw new Error("HTTP " + r.status + " " + url); return r.json(); }
+async function getJson(url) { const r = await fetch(url, { cache: "no-store" }); if (!r.ok) throw new Error("TheSportsDB indisponible (HTTP " + r.status + ")"); return r.json(); }
 function mapStatus(s) {
   const v = (s || "").toLowerCase();
   if (v.includes("finished") || v === "ft" || v === "aet" || v === "pen") return "finished";
@@ -27,7 +28,7 @@ const provider = {
   },
   async fetchMatches(competition, ctx = {}) {
     const key = ctx.thesportsdbKey || process.env.THESPORTSDB_KEY;
-    const season = competition.ext?.season || ctx.season;   // ex "2025-2026" (requis)
+    const season = seasonLabel(ctx.season || competition.ext?.season);
     if (!season) return [];
     const d = await getJson(`${BASE(key)}/eventsseason.php?id=${competition.external_id}&s=${season}`);
     return (d.events || []).map((e) => ({

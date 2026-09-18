@@ -5,7 +5,7 @@ export async function syncEvents(db, competition, ctx = {}) {
   if (!provider?.fetchEvents) return `${competition.name}: events non supportés`;
   if (competition.ext?.coverage && competition.ext.coverage.fixtures?.events === false) return `${competition.name}: events non couverts`;
 
-  const cap = ctx.eventsCap || 40;   // plafond de matchs traités par run (quota)
+  const cap = Math.max(1, Math.min(Number(ctx.eventsCap || ctx.matchCap) || 3, 40));
   // matchs terminés SANS événements encore importés (incrémental)
   const { data: finished } = await db.from("matches").select("id,external_id").eq("competition_id", competition.id).eq("status", "finished").limit(300);
   const { data: withEv } = await db.from("match_events").select("match_id").eq("source", competition.provider);
