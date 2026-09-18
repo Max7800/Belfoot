@@ -28,6 +28,7 @@ export const adminSections = [
     { key: "jobs", label: "Jobs et historique" },
     { key: "providers", label: "Sources de données" },
     { key: "sync-errors", label: "Erreurs de synchronisation" },
+    { key: "system-status", label: "Préparation 2026" },
   ] },
   { label: "Apparence du site", icon: "palette", panels: [
     { key: "homepage", label: "Page d'accueil" },

@@ -477,7 +477,8 @@ le footer. À traiter avant communication large, même sans publicité ni analyt
 
 ### P1 — Fiabilité des données
 
-1. Automatiser les migrations et produire `migration:status`.
+1. Automatiser l'application des migrations. Le panneau admin **Préparation 2026** fournit désormais
+   le `migration:status`, les probes de schéma et l'état des variables sans lancer de job.
 2. ~~Rattacher les nouveaux matchs à une saison.~~ Codé pour 2024/2025 et les futures saisons ; backfill historique encore optionnel.
 3. ~~Corriger `tracked` dans `syncSquads` et harmoniser `locked`.~~ Corrigé pour les effectifs.
 4. Faire remonter toutes les erreurs DB/provider ; ~~ajouter job locks/budget quota.~~ Relire les jobs restants.
@@ -492,7 +493,8 @@ le footer. À traiter avant communication large, même sans publicité ni analyt
 
 ### P2 — Qualité et passage à l'échelle
 
-1. Tests + CI + secret scan + build obligatoire avant `main`.
+1. ~~Ajouter une CI minimale avec secret scan, lint et build avant `main`.~~ Workflow GitHub Actions
+   ajouté le 18/09 ; activer ensuite la protection de branche pour le rendre réellement obligatoire.
 2. Error boundaries et monitoring.
 3. Pagination/agrégations Supabase et suppression des `select("*")` lourds. **Admin volumineux
    paginé le 18/09 ; reste les pages publiques.**
@@ -509,6 +511,8 @@ le footer. À traiter avant communication large, même sans publicité ni analyt
 5. Nouvelles ligues étrangères par imports ciblés, puis plan API payant pour la saison courante.
 6. Activer le direct compétition par compétition après abonnement, régler le cron et valider un match
    réel de bout en bout (score, événements, coup de sifflet final).
+7. Transformer la contribution générique en portail Belfoot : une entrée `Proposer`, quatre parcours
+   (actualité, mercato, scouting/joueur, correction de fiche) et une file de modération unique.
 
 ---
 

@@ -1074,14 +1074,33 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
 - Vérifications : ESLint sans erreur (`74` avertissements, principalement les `<img>` historiques),
   build Next 16 réussi. Aucun appel API-Football effectué.
 
+### 2026-09-18 — ChatGPT — contrôle de préparation 2026 et CI
+
+- Nouveau panneau admin `Synchronisation > Préparation 2026`. Il contrôle en lecture seule les
+  variables Vercel indispensables, les migrations récentes enregistrées, les capacités réellement
+  présentes dans le schéma et quelques compteurs utiles (saisons 2026, compétitions live, joueurs
+  suivis). Il ne lance aucun job et n'appelle jamais API-Football.
+- La route serveur `/api/admin/system-status` exige une session admin et utilise la service-role sans
+  jamais exposer ses valeurs. Les anciennes migrations, historiquement non enregistrées dans
+  `schema_migrations`, sont vérifiées par des probes de colonnes/tables plutôt que déclarées absentes.
+- Workflow GitHub Actions `.github/workflows/quality.yml` : installation reproductible, détection
+  d'un PAT GitHub commité, ESLint et build Next avec variables publiques factices sur chaque push et
+  pull request vers `main`.
+- Le prochain chantier produit envisagé est la contribution Belfoot : un point d'entrée public
+  `Proposer`, puis des formulaires contextuels pour actualité, rumeur mercato, joueur/scouting et
+  correction de fiche, réunis dans la file de modération existante. Ne pas encombrer la navigation
+  avec quatre entrées distinctes.
+- Vérifications locales : ESLint sans erreur (`74` avertissements historiques) et build Next 16
+  réussi. Aucun SQL ni appel provider.
+
 ---
 
 ## CURRENT_GIT_STATE
 
 - **Branche** : `main`
-- **Dernier commit distant avant le lot courant** : `88ba327` — Match Center Live.
-  Le lot courant sépare le direct du calendrier et ajoute le bandeau live d'accueil ; il n'est pas
-  encore poussé.
+- **Dernier commit distant avant le lot courant** : `0da9454` — séparation Direct/calendrier et
+  bandeau live d'accueil. Le lot courant ajoute le contrôle de préparation 2026 et la CI ; il n'est
+  pas encore poussé.
 - **Commits importants récents** :
   - `2c71e35` documentation clubs liés / Europe
   - `69578a5` automatisation des stades + simplification des équipes liées

@@ -1,0 +1,39 @@
+name: Qualite du projet
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder
+    steps:
+      - name: Recuperer le depot
+        uses: actions/checkout@v4
+      - name: Installer Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Installer les dependances
+        run: npm ci
+      - name: Detecter un token GitHub commite
+        shell: bash
+        run: |
+          if git grep -nE 'ghp_[A-Za-z0-9]{30,}' -- .; then
+            echo "Un token GitHub semble present dans le depot."
+            exit 1
+          fi
+      - name: Lint
+        run: npm run lint
+      - name: Build de production
+        run: npm run build

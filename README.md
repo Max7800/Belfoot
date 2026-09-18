@@ -40,5 +40,9 @@ nouveau site : tu ne touches en principe qu'à `/config`.
    `modules/football/migrations/0001_init.sql` → `0026_match_center_live.sql`.
 4. `npm run dev`
 
+L'administration propose aussi `Synchronisation > Préparation 2026` pour contrôler, sans appel
+provider, les migrations enregistrées, les capacités du schéma et la présence des variables Vercel.
+Le workflow GitHub Actions exécute automatiquement le secret scan, ESLint et le build sur `main`.
+
 Les migrations sont encore appliquées manuellement. L'audit demande de remplacer ce fonctionnement
 par un suivi automatisé avant d'étendre les données.
