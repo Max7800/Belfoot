@@ -125,7 +125,13 @@ const provider = {
       pages = j.paging?.total || 1;
       for (const x of j.response || []) {
         const arr = x.statistics || [];
-        const st = arr.find((z) => String(z.league?.id) === String(ctx.leagueId)) || arr[0] || null;
+        const st = ctx.leagueId
+          ? arr.find((z) => String(z.league?.id) === String(ctx.leagueId) && (!z.team?.id || String(z.team.id) === String(club.external_id)))
+          : arr.find((z) => !z.team?.id || String(z.team.id) === String(club.external_id)) || arr[0] || null;
+        // `/players?team=` peut remonter les statistiques d'autres équipes du
+        // même joueur. Sans ligne correspondant à CE club et CE championnat,
+        // il ne fait pas partie de l'effectif de compétition demandé.
+        if (ctx.leagueId && !st) continue;
         out.push({
           external_id: String(x.player.id), name: x.player.name, nationality: x.player.nationality,
           position: st?.games?.position || null, photo_url: x.player.photo || null,
@@ -141,6 +147,22 @@ const provider = {
       page++;
     } while (page <= pages && page <= pageCap);   // plan gratuit API-Football : page <= 3
     return out;
+  },
+  // Effectif actuel brut du club. Cette route est volontairement séparée des
+  // statistiques de compétition : elle servira au futur import payant sans
+  // mélanger automatiquement une équipe première avec son U23.
+  async fetchCurrentSquad(club, ctx = {}) {
+    const rows = await api(`/players/squads?team=${club.external_id}`, ctx);
+    const squad = rows.find((row) => String(row.team?.id) === String(club.external_id)) || rows[0];
+    return (squad?.players || []).map((player) => ({
+      external_id: String(player.id),
+      name: player.name,
+      age: player.age ?? null,
+      number: player.number ?? null,
+      position: player.position || null,
+      photo_url: player.photo || null,
+      ext: player,
+    }));
   },
   // TRACKING : stats agrégées de saison d'un joueur (1 requête).
   async fetchPlayerSeason(player, ctx = {}) {

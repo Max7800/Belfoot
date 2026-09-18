@@ -6,8 +6,9 @@ Fork football belge du socle réutilisable. Pour reprendre le projet, lire dans 
 2. `BELFOOT_AUDIT.md` — audit sécurité/qualité du 18 septembre 2026 et roadmap priorisée.
 
 **Important :** les migrations de sécurité `0002` et `0003` sont indiquées comme appliquées.
-Avant d'utiliser les nouveaux jobs protégés, appliquer `supabase/migrations/0004_job_execution_guardrails.sql`
-et `modules/football/migrations/0023_season_safe_sync.sql`.
+Avant d'utiliser les nouveaux jobs protégés, appliquer `supabase/migrations/0004_job_execution_guardrails.sql`,
+`modules/football/migrations/0023_season_safe_sync.sql`, puis
+`modules/football/migrations/0024_player_team_seasons.sql`.
 
 ## Origine du projet
 
@@ -33,7 +34,7 @@ nouveau site : tu ne touches en principe qu'à `/config`.
 1. `npm install`
 2. Copier `.env.local.example` → `.env.local` (clés Supabase).
 3. Passer `supabase/schema.sql`, puis les migrations core `0002` → `0004`, puis les migrations football dans l'ordre
-   `modules/football/migrations/0001_init.sql` → `0023_season_safe_sync.sql`.
+   `modules/football/migrations/0001_init.sql` → `0024_player_team_seasons.sql`.
 4. `npm run dev`
 
 Les migrations sont encore appliquées manuellement. L'audit demande de remplacer ce fonctionnement

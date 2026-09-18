@@ -1,6 +1,7 @@
 import { getProvider } from "./providers";
 import { upsertExternal } from "./sync";
 import { ensureSeason, seasonLabel, seasonYear } from "./season";
+import { upsertPlayerMembership } from "./playerMemberships";
 
 function parseRound(raw) {
   if (!raw) return { round_raw: null, phase: null, round_number: null };
@@ -38,7 +39,7 @@ export async function syncTeamTest(db, competition, ctx = {}) {
     if (match.away_ext) derivedClubs.set(match.away_ext, { external_id: match.away_ext, name: match.away_name || match.away_ext, logo_url: match.away_logo || null });
   }
   await upsertExternal(db, "clubs", competition.provider, [...derivedClubs.values()], ["name", "logo_url"]);
-  const { data: clubRows, error: clubError } = await db.from("clubs").select("id,external_id").eq("source", competition.provider);
+  const { data: clubRows, error: clubError } = await db.from("clubs").select("id,name,external_id,team_type,parent_club_id").eq("source", competition.provider);
   if (clubError) throw clubError;
   const clubMap = Object.fromEntries((clubRows || []).map((row) => [row.external_id, row.id]));
   const resolvedMatches = matches.map((match) => {
@@ -65,6 +66,7 @@ export async function syncTeamTest(db, competition, ctx = {}) {
 
   const teamClubId = clubMap[teamExternalId];
   if (!teamClubId) throw new Error(`${club.name}: club importé mais identifiant local introuvable`);
+  const teamClub = (clubRows || []).find((row) => row.id === teamClubId);
   const squad = await provider.fetchSquadPlayers({ external_id: teamExternalId }, { ...ctx, season, leagueId: competition.external_id });
   const belgians = squad.filter((player) => String(player.nationality || "").toLowerCase() === "belgium");
   const syncedAt = new Date().toISOString();
@@ -98,9 +100,20 @@ export async function syncTeamTest(db, competition, ctx = {}) {
       playerId = data?.id;
     }
     if (playerId && player.stats) {
-      const { error } = await db.from("player_season_stats").upsert({ player_id: playerId, competition_id: competition.id, season, ...player.stats, source: competition.provider, external_id: player.external_id, synced_at: syncedAt }, { onConflict: "player_id,competition_id,season" });
+      const { error } = await db.from("player_season_stats").upsert({ player_id: playerId, club_id: teamClubId, season_id: seasonRow.id, competition_id: competition.id, season, ...player.stats, source: competition.provider, external_id: player.external_id, synced_at: syncedAt }, { onConflict: "player_id,club_id,competition_id,season" });
       if (error) throw new Error(`${player.name}: ${error.message}`);
     }
+    if (playerId) await upsertPlayerMembership(db, {
+      playerId,
+      club: teamClub || { id: teamClubId },
+      season,
+      source: competition.provider,
+      externalId: player.external_id,
+      position: player.position,
+      shirtNumber: player.number ?? null,
+      ext: player.ext || {},
+      syncedAt,
+    });
   }
   return `${club.name}: ${matches.length} matchs ciblés, ${belgians.length} Belge${belgians.length > 1 ? "s" : ""} suivi${belgians.length > 1 ? "s" : ""} (${season})`;
 }

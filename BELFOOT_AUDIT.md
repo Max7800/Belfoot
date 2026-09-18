@@ -454,6 +454,7 @@ le footer. À traiter avant communication large, même sans publicité ni analyt
 - vue Calendrier/Liste responsive sur `/matchs` et dans la fiche compétition ;
 - fiches club responsive avec sections et club parent/réserve ;
 - fiches joueur enrichies ;
+- effectifs séparés par équipe et saison, avec historique de club éditable et clubs U23 liés ;
 - page Belges à l'étranger configurable, annuaire conservé et import Burnley validé ;
 - import ciblé d'une équipe et pagination API Free plafonnée à 3 ;
 - compositions/performance match par match incrémentales et plafonnées ;
@@ -481,6 +482,8 @@ le footer. À traiter avant communication large, même sans publicité ni analyt
 3. ~~Corriger `tracked` dans `syncSquads` et harmoniser `locked`.~~ Corrigé pour les effectifs.
 4. Faire remonter toutes les erreurs DB/provider ; ~~ajouter job locks/budget quota.~~ Relire les jobs restants.
 5. Corriger le traitement des réponses vides et la transaction événements.
+6. ~~Séparer personne, équipe et saison pour les effectifs/U23/transferts.~~ Codé dans `0024` ;
+   appliquer la migration puis contrôler les relations automatiques dans l'admin.
 
 ### P2 — Qualité et passage à l'échelle
 
@@ -534,7 +537,7 @@ rg --hidden --glob '!node_modules' --glob '!.git/**' \
   'ghp_|service_role|APIFOOTBALL_KEY=|JOBS_SECRET='
 ```
 
-**État au 18 septembre 2026 :** SEC-01, SEC-02, SEC-03 et le code de SEC-04 sont corrigés dans le
-dépôt. `0002_profile_role_hardening.sql` est indiquée comme appliquée. Il reste à appliquer
-`0003_media_storage_hardening.sql`, inspecter les anciennes policies Storage et réaliser les tests
-réels Supabase/Vercel.
+**État au 18 septembre 2026 :** SEC-01, SEC-02, SEC-03 et SEC-04 sont corrigés dans le dépôt. Les
+cinq policies Storage finales ont été contrôlées et les trois anciennes policies permissives ne sont
+plus présentes. Il reste les tests réels de rôles Supabase, le passage de la CSP en mode actif après
+observation Vercel et l'application/validation des migrations data `0004`, `0023` et `0024`.

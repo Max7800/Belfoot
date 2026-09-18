@@ -11,6 +11,8 @@ export const adminSections = [
     { key: "seasons", label: "Saisons" },
     { key: "clubs", label: "Clubs" },
     { key: "players", label: "Joueurs" },
+    { key: "playerMemberships", label: "Affectations joueurs" },
+    { key: "playerCareerStats", label: "Stats carrière" },
     { key: "coaches", label: "Entraîneurs" },
     { key: "matches", label: "Matchs" },
     { key: "events", label: "Événements" },

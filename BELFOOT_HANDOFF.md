@@ -959,13 +959,46 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
   remontés comme avertissements au lieu de disparaître silencieusement.
 - Vérifications : ESLint sans erreur (`69` avertissements historiques) et build Next 16 réussis.
 
+### 2026-09-18 — ChatGPT — effectifs multi-équipes et carrière par saison
+
+- Nouvelle migration football `0024_player_team_seasons.sql`. La table `player_team_seasons`
+  devient la relation canonique entre une personne, une équipe et une saison. Elle porte le groupe
+  (`first_team`, `u23`, `reserve`, etc.), le type d'affectation (permanent, prêt, jeunes), le numéro,
+  le poste, les dates, la priorité et le verrou manuel.
+- `players.club_id` est conservé comme instantané de compatibilité. Une synchro U23/réserve ne peut
+  plus écraser le club principal déjà connu. Une même personne peut être liée à l'équipe première et
+  à son U23 durant la même saison sans fusionner les effectifs.
+- `player_season_stats` mémorise maintenant `club_id` et `season_id`; son unicité devient
+  `(player_id, club_id, competition_id, season)`. Cela autorise un transfert en cours de saison et
+  empêche les statistiques de Club NXT d'être affichées comme celles du Club Brugge.
+- Backfill prudent : seules les lignes de statistiques existantes créent une affectation historique.
+  Aucun faux historique n'est inventé pour les joueurs sans saison connue.
+- Relations automatiques si les fiches existent : Club NXT/Club Brugge, RSCA Futures/Anderlecht,
+  Jong Genk/Genk, Jong KAA Gent/Gent et SL16/Standard. Le modèle et l'admin restent génériques pour
+  toutes les autres équipes liées.
+- API-Football : `/players?team=` exige désormais une statistique correspondant simultanément au
+  championnat et à l'équipe demandés; l'ancien fallback vers la première statistique, responsable
+  de mélanges U23, est supprimé. La route `/players/squads?team=` est préparée séparément pour le
+  futur import d'effectif actuel, mais aucun appel provider n'a été effectué dans ce lot.
+- Les imports effectifs, découverte des Belges, test d'équipe et tracking écrivent le club dans les
+  stats et entretiennent les affectations saisonnières. Les erreurs SQL sont remontées.
+- Pages publiques : la compétition utilise les joueurs ayant réellement une ligne de stats dans la
+  compétition/saison; la fiche club choisit son effectif par saison; la fiche joueur affiche le
+  parcours en club et le club de chaque ligne statistique.
+- Administration : nouveaux panneaux `Affectations joueurs` et `Stats carrière`. Club parent,
+  type d'équipe, rôle, prêt, saison, visibilité et verrou restent modifiables manuellement.
+- Compatibilité de déploiement : les pages publiques retombent sur `players.club_id` si `0024` n'est
+  pas encore passée. Les jobs de synchronisation, eux, exigent `0024` avant leur prochaine exécution.
+- Vérifications : ESLint sans erreur (`69` avertissements historiques), build Next 16 et
+  `git diff --check` réussis sans appel API-Football.
+
 ---
 
 ## CURRENT_GIT_STATE
 
 - **Branche** : `main`
-- **Dernier commit distant avant le lot courant** : `e0dd7fa` — médias, policies Storage et headers.
-  Le lot courant prépare les jobs et les saisons 2026/2027 ; il n'est pas encore poussé.
+- **Dernier commit distant avant le lot courant** : `9dd2c33` — synchronisations fiables et saisons.
+  Le lot courant sépare les effectifs par équipe/saison ; il n'est pas encore poussé.
 - **Commits importants récents** :
   - `2c71e35` documentation clubs liés / Europe
   - `69578a5` automatisation des stades + simplification des équipes liées
@@ -988,19 +1021,20 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
   - `39267e2`/`150db4d` couche compétition (effectifs+stats, événements, journées, fiches)
 - **Migrations encore à passer** (si le projet Supabase n'est pas à jour) : `0002` et `0003` sont
   indiquées comme appliquées par l'utilisateur ; les anciennes policies Storage permissives ont été
-  identifiées et leur suppression a été demandée. Appliquer ensuite
+  supprimées et la liste finale des cinq policies restrictives a été vérifiée. Appliquer/vérifier ensuite
   `supabase/migrations/0004_job_execution_guardrails.sql`. Pour le football, `0012` est indiquée comme
   appliquée ; vérifier `0013_competition_header_texts.sql`, puis appliquer
   `0014_belgians_abroad.sql`, `0015_season_phase_zones.sql`, `0016_club_profiles.sql`, puis
   `0017_protect_manual_coaches.sql`, `0018_challenger_pro_league.sql`, puis
   `0019_competition_portal_style.sql`, `0020_match_lineups.sql`, `0021_burnley_test.sql`, puis
-  `0022_ensure_player_country.sql`, puis `0023_season_safe_sync.sql`, et vérifier que
-  `modules/football/migrations/0001→0023` sont
+  `0022_ensure_player_country.sql`, `0023_season_safe_sync.sql`, puis
+  `0024_player_team_seasons.sql`, et vérifier que `modules/football/migrations/0001→0024` sont
   **toutes** passées (surtout `0008` position, `0009` banner_url/zones, `0010` rating_min,
   `0011` competition_type/parent_club_id/team_type, `0012` unicité des stats par compétition et
   `0013` textes des bandeaux, `0014` visibilité/pays du suivi international, `0015` zones par
   saison/phase, `0016` contenu éditorial des fiches clubs, `0017` protection des coachs manuels et
-  `0018` création Challenger Pro League et `0019` style séparé des portes du portail).
+  `0018` création Challenger Pro League, `0019` style séparé des portes du portail et `0024`
+  séparation personne/équipe/saison).
   Le code est tolérant mais ces features restent inactives sinon.
 
 ---

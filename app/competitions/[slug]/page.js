@@ -32,6 +32,30 @@ function clubForm(ms, clubId) {
   return res;
 }
 
+function statsByPlayer(rows) {
+  const totals = new Map();
+  for (const row of rows) {
+    const current = totals.get(row.player_id) || { ...row, appearances: 0, lineups: 0, minutes: 0, goals: 0, assists: 0, yellow: 0, red: 0, _clubAppearances: -1, _ratingWeight: 0, _ratingTotal: 0 };
+    for (const key of ["appearances", "lineups", "minutes", "goals", "assists", "yellow", "red"]) current[key] += Number(row[key]) || 0;
+    const rating = Number(row.rating);
+    const weight = Math.max(1, Number(row.appearances) || 0);
+    if (rating > 0) { current._ratingTotal += rating * weight; current._ratingWeight += weight; }
+    if (row.club_id && (Number(row.appearances) || 0) >= current._clubAppearances) {
+      current.club_id = row.club_id;
+      current._clubAppearances = Number(row.appearances) || 0;
+    }
+    current.rating = current._ratingWeight ? current._ratingTotal / current._ratingWeight : null;
+    totals.set(row.player_id, current);
+  }
+  return Object.fromEntries([...totals.entries()].map(([playerId, row]) => {
+    const clean = { ...row };
+    delete clean._clubAppearances;
+    delete clean._ratingTotal;
+    delete clean._ratingWeight;
+    return [playerId, clean];
+  }));
+}
+
 export default function CompetitionPage() {
   const { slug } = useParams();
   const searchParams = useSearchParams();
@@ -85,21 +109,22 @@ export default function CompetitionPage() {
     if (ids.length) {
       const { data: cl } = await supabase.from("clubs").select("*").in("id", ids);
       setClubsMap(Object.fromEntries((cl || []).map((x) => [x.id, x])));
-      const { data: pl } = await supabase.from("players").select("*").in("club_id", ids).order("name");
+      const { data: s, error: statsError } = await supabase.from("player_season_stats").select("*").eq("competition_id", c.id);
+      if (statsError) throw statsError;
+      const pids = [...new Set((s || []).map((row) => row.player_id).filter(Boolean))];
+      const { data: pl, error: playersError } = pids.length
+        ? await supabase.from("players").select("*").in("id", pids).order("name")
+        : await supabase.from("players").select("*").in("club_id", ids).order("name");
+      if (playersError) throw playersError;
       setPlayers(pl || []);
-      const pids = (pl || []).map((p) => p.id);
-      if (pids.length) {
-        const { data: s, error: statsError } = await supabase.from("player_season_stats").select("*").eq("competition_id", c.id).in("player_id", pids);
-        if (statsError) throw statsError;
-        setPlayerStats(s || []);
-      } else setPlayerStats([]);
+      setPlayerStats(s || []);
     }
   })().catch(() => setComp(null)); }, [slug]);
 
   const pss = useMemo(() => {
     const activeSeason = seasonKey(seasonLabel);
     const rows = activeSeason ? playerStats.filter((stat) => seasonKey(stat.season) === activeSeason) : playerStats;
-    return Object.fromEntries(rows.map((stat) => [stat.player_id, stat]));
+    return statsByPlayer(rows);
   }, [playerStats, seasonLabel]);
   const activeSeason = seasons.find((season) => season.label === seasonLabel) || null;
   const seasonMatches = useMemo(() => {
@@ -118,7 +143,9 @@ export default function CompetitionPage() {
   const grouped = useMemo(() => { const g = {}; for (const m of shownMatches) { const k = m.round_number != null ? String(m.round_number) : (m.round_raw || "?"); (g[k] ||= { label: m.round_number != null ? `${L("comp.round", "Journée")} ${m.round_number}` : (m.round_raw || "Tour"), num: m.round_number, items: [] }).items.push(m); } return Object.values(g).sort((a, b) => (a.num ?? 999) - (b.num ?? 999)); }, [shownMatches]);
 
   const clubName = (id) => clubsMap[id]?.name || "—";
-  const withStats = players.map((p) => ({ p, st: pss[p.id] })).filter((x) => x.st);
+  const playerClubId = (player) => pss[player.id]?.club_id || player.club_id || null;
+  const visiblePlayers = Object.keys(pss).length ? players.filter((player) => pss[player.id]) : players;
+  const withStats = visiblePlayers.map((p) => ({ p, st: pss[p.id] })).filter((x) => x.st);
   const topBy = (key) => withStats.filter((x) => x.st[key] != null).sort((a, b) => (b.st[key] || 0) - (a.st[key] || 0)).slice(0, 10);
   const maxApp = Math.max(0, ...withStats.map((x) => x.st.appearances || 0));
   const ratingThreshold = comp?.rating_min ?? Math.max(5, Math.round(maxApp * 0.4));
@@ -152,7 +179,7 @@ export default function CompetitionPage() {
     return p ? { p, st: { cs: v }, v } : null;
   }).filter(Boolean).sort((a, b) => b.v - a.v).slice(0, 10);
   const estimatedCleanSheets = Object.entries(csMap).map(([club, v]) => {
-    const gks = players.filter((p) => p.club_id === club && p.position === "Goalkeeper");
+    const gks = visiblePlayers.filter((p) => playerClubId(p) === club && p.position === "Goalkeeper");
     if (!gks.length) return null;
     const gk = gks.map((p) => ({ p, min: pss[p.id]?.minutes || 0 })).sort((a, b) => b.min - a.min)[0].p;
     return { p: gk, st: { cs: v }, v };
@@ -199,7 +226,7 @@ export default function CompetitionPage() {
           {x ? (
             <div className="mt-2 flex items-center gap-3">
               <img src={x.p.photo_url || ""} className="h-14 w-14 rounded-full object-cover ring-2" style={{ "--tw-ring-color": accent }} alt="" />
-              <span className="min-w-0"><b className="block truncate">{x.p.name}</b><span className="flex items-center gap-1 text-xs text-muted">{clubsMap[x.p.club_id]?.logo_url && <img src={clubsMap[x.p.club_id].logo_url} className="h-3.5 w-3.5 object-contain" alt="" />}{clubName(x.p.club_id)}</span>{meta && <span className="block text-[11px] text-muted/70">{meta(x.st)}</span>}</span>
+              <span className="min-w-0"><b className="block truncate">{x.p.name}</b><span className="flex items-center gap-1 text-xs text-muted">{clubsMap[playerClubId(x.p)]?.logo_url && <img src={clubsMap[playerClubId(x.p)].logo_url} className="h-3.5 w-3.5 object-contain" alt="" />}{clubName(playerClubId(x.p))}</span>{meta && <span className="block text-[11px] text-muted/70">{meta(x.st)}</span>}</span>
               <b className="ml-auto text-2xl" style={{ color: accent }}>{unit}</b>
             </div>
           ) : <p className="mt-2 text-sm text-muted">—</p>}
@@ -215,13 +242,13 @@ export default function CompetitionPage() {
     if (!rows.length) return <div id={id} className="h-full rounded-2xl border border-line/10 bg-gradient-to-b from-surface to-bg/35 p-4"><h3 className="mb-2 font-bold" style={{ color: accent }}>{title}</h3><p className="text-sm text-muted">—</p></div>;
     const [a, b, c, ...rest] = rows;
     const Sub = ({ cid }) => <span className="flex items-center gap-1 text-[11px] text-muted">{clubsMap[cid]?.logo_url && <img src={clubsMap[cid].logo_url} className="h-3.5 w-3.5 object-contain" alt="" />}{clubName(cid)}</span>;
-    const Med = ({ x, tone, ring }) => <Link href={`/players/${x.p.id}`} className={`flex items-center gap-2 rounded-xl border p-2 ${tone}`}><img src={x.p.photo_url || ""} className={`h-9 w-9 rounded-full object-cover ring-1 ${ring}`} alt="" /><span className="min-w-0 flex-1"><span className="block truncate text-sm font-bold">{x.p.name}</span><Sub cid={x.p.club_id} /></span><b>{fmt(x.st)}</b></Link>;
+    const Med = ({ x, tone, ring }) => <Link href={`/players/${x.p.id}`} className={`flex items-center gap-2 rounded-xl border p-2 ${tone}`}><img src={x.p.photo_url || ""} className={`h-9 w-9 rounded-full object-cover ring-1 ${ring}`} alt="" /><span className="min-w-0 flex-1"><span className="block truncate text-sm font-bold">{x.p.name}</span><Sub cid={playerClubId(x.p)} /></span><b>{fmt(x.st)}</b></Link>;
     return (
       <div id={id} className="h-full rounded-2xl border bg-gradient-to-b from-surface to-bg/35 p-4 shadow-[0_18px_45px_-34px_rgba(0,0,0,0.95)]" style={{ borderColor: `${accent}45` }}>
         <div className="mb-3 flex items-center gap-2"><span className="h-4 w-1 rounded-full" style={{ background: accent }} /><h3 className="font-black">{title}</h3></div>
         <Link href={`/players/${a.p.id}`} className="mb-2 flex items-center gap-3 rounded-2xl border p-3 transition hover:brightness-110" style={{ borderColor: `${accent}60`, background: `${accent}12` }}>
           <img src={a.p.photo_url || ""} className="h-14 w-14 rounded-full object-cover ring-2" style={{ "--tw-ring-color": `${accent}90` }} alt="" />
-          <span className="min-w-0 flex-1"><span className="block truncate font-black">{a.p.name}</span><Sub cid={a.p.club_id} />{meta && <span className="block text-[11px] text-muted/70">{meta(a.st)}</span>}</span>
+          <span className="min-w-0 flex-1"><span className="block truncate font-black">{a.p.name}</span><Sub cid={playerClubId(a.p)} />{meta && <span className="block text-[11px] text-muted/70">{meta(a.st)}</span>}</span>
           <b className="text-2xl" style={{ color: accent }}>{fmt(a.st)}</b>
         </Link>
         {(b || c) && <div className="mb-2 grid grid-cols-2 gap-2">{b && <Med x={b} tone="border-slate-300/25 bg-slate-300/5" ring="ring-slate-300/40" />}{c && <Med x={c} tone="border-amber-700/30 bg-amber-700/5" ring="ring-amber-700/40" />}</div>}
@@ -347,7 +374,7 @@ export default function CompetitionPage() {
           <div className="grid grid-cols-2 gap-2 border-t border-line/10 pt-4 text-center text-xs text-muted sm:grid-cols-4">
             <div><b className="block text-base text-content">{clubsList.length}</b>{L("nav.clubs", "clubs")}</div>
             <div><b className="block text-base text-content">{seasonMatches.length}</b>{L("nav.matchs", "matchs")}</div>
-            <div><b className="block text-base text-content">{players.length}</b>{L("nav.joueurs", "joueurs")}</div>
+            <div><b className="block text-base text-content">{visiblePlayers.length}</b>{L("nav.joueurs", "joueurs")}</div>
             <div><b className="block text-base text-content">{seasons.length}</b>saisons</div>
           </div>
         </div>
@@ -381,13 +408,13 @@ export default function CompetitionPage() {
         selClub === null ? (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             {[...clubsList].sort((a, b) => a.name.localeCompare(b.name)).map((c) => (
-              <button key={c.id} onClick={() => { setSelClub(c.id); setPosFilter("all"); }} className="rounded-2xl border border-line/10 bg-surface p-4 text-center transition hover:border-accent/40">{c.logo_url && <img src={c.logo_url} className="mx-auto h-14 w-14 object-contain" alt="" />}<div className="mt-2 font-bold">{c.name}</div><div className="text-xs text-muted">{players.filter((p) => p.club_id === c.id).length} {L("nav.joueurs", "joueurs")}</div></button>
+              <button key={c.id} onClick={() => { setSelClub(c.id); setPosFilter("all"); }} className="rounded-2xl border border-line/10 bg-surface p-4 text-center transition hover:border-accent/40">{c.logo_url && <img src={c.logo_url} className="mx-auto h-14 w-14 object-contain" alt="" />}<div className="mt-2 font-bold">{c.name}</div><div className="text-xs text-muted">{visiblePlayers.filter((p) => playerClubId(p) === c.id).length} {L("nav.joueurs", "joueurs")}</div></button>
             ))}
             {clubsList.length === 0 && <p className="text-muted">{L("empty.players", "Aucun joueur.")}</p>}
           </div>
         ) : (() => {
           const POS_LABEL = { all: L("pos.all", "Tous"), Goalkeeper: L("pos.gk", "Gardiens"), Defender: L("pos.def", "Défenseurs"), Midfielder: L("pos.mid", "Milieux"), Attacker: L("pos.fwd", "Attaquants") };
-          const roster = players.filter((p) => (selClub === "__none__" ? !p.club_id : p.club_id === selClub));
+          const roster = visiblePlayers.filter((p) => (selClub === "__none__" ? !playerClubId(p) : playerClubId(p) === selClub));
           const shown = roster.filter((p) => posFilter === "all" || p.position === posFilter).sort((a, b) => (POS[a.position] ?? 9) - (POS[b.position] ?? 9) || (a.name || "").localeCompare(b.name || ""));
           return (
             <div>

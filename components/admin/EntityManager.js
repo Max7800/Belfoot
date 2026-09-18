@@ -43,8 +43,12 @@ export default function EntityManager({ spec }) {
   };
   const remove = async (r) => { if (!confirm("Supprimer ?")) return; await supabase.from(table).delete().eq("id", r.id); load(); };
   const setV = (k, v) => setEditing((e) => ({ ...e, [k]: v }));
-  const rowLabel = (r) => r.name || r.label || r.title || (r.id ? String(r.id).slice(0, 8) : "—");
   const relLabelOf = (relTable, id) => (rel[relTable] || []).find((o) => o.id === id)?.label || "Sans club / non associé";
+  const rowLabel = (r) => {
+    if (table === "player_team_seasons") return `${relLabelOf("players", r.player_id)} → ${relLabelOf("clubs", r.club_id)} · ${r.season || "saison ?"}`;
+    if (table === "player_season_stats") return `${relLabelOf("players", r.player_id)} · ${relLabelOf("clubs", r.club_id)} · ${r.season || "saison ?"}`;
+    return r.name || r.label || r.title || (r.id ? String(r.id).slice(0, 8) : "—");
+  };
 
   const Row = ({ it }) => (
     <div className="flex items-center gap-3 p-3">
@@ -161,6 +165,7 @@ function Field({ f, value, onChange, options }) {
   if (f.type === "select") return <div>{label}<select value={value || ""} onChange={(e) => onChange(e.target.value)} className={box}><option value="">—</option>{f.options.map((o) => <option key={o} value={o}>{o}</option>)}</select></div>;
   if (f.type === "number") return <div>{label}<input type="number" value={value ?? ""} onChange={(e) => onChange(e.target.value === "" ? null : Number(e.target.value))} className={box} /></div>;
   if (f.type === "datetime") return <div>{label}<input type="datetime-local" value={value ? String(value).slice(0, 16) : ""} onChange={(e) => onChange(e.target.value || null)} className={box} /></div>;
+  if (f.type === "date") return <div>{label}<input type="date" value={value ? String(value).slice(0, 10) : ""} onChange={(e) => onChange(e.target.value || null)} className={box} /></div>;
   if (f.type === "zones") {
     const arr = Array.isArray(value) ? value : [];
     const upd = (i, k, v) => onChange(arr.map((z, j) => (j === i ? { ...z, [k]: v } : z)));
