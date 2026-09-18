@@ -43,7 +43,7 @@ provider, consommation API non verrouillée et requêtes publiques qui ne passer
 | Migrations | Fragile | Passage manuel, dérive réelle déjà constatée (`players.country`) |
 | Sync API | Fonctionnelle mais fragile | Idempotence partielle, erreurs avalées, pas de verrou de job |
 | Modèle saisons | Incomplet | Les imports n'attachent pas les matchs à `season_id` |
-| Performance front | Correcte en V1 | Requêtes trop larges et plafond Supabase futur |
+| Performance front | En progrès | Admin volumineux paginé ; requêtes publiques encore à consolider |
 | Tests/CI/observabilité | Insuffisant | Aucun test, aucune CI, aucun error boundary/monitoring |
 | SEO | Incomplet | Football rendu client, domaine placeholder, pas sitemap/robots |
 
@@ -490,9 +490,11 @@ le footer. À traiter avant communication large, même sans publicité ni analyt
 
 1. Tests + CI + secret scan + build obligatoire avant `main`.
 2. Error boundaries et monitoring.
-3. Pagination/agrégations Supabase et suppression des `select("*")` lourds.
+3. Pagination/agrégations Supabase et suppression des `select("*")` lourds. **Admin volumineux
+   paginé le 18/09 ; reste les pages publiques.**
 4. Refactor des gros composants et selectors partagés.
-5. Audit responsive admin + accessibilité.
+5. Audit responsive admin + accessibilité. **Navigation et listes principales refondues le 18/09 ;
+   test réel multi-écrans encore recommandé.**
 
 ### P3 — Produit
 

@@ -1,49 +1,59 @@
-// Structure de l'administration Belfoot (sections + panneaux).
+// Navigation de l'administration Belfoot.
+// Les panneaux restent accessibles par leur URL même lorsqu'ils sont rangés dans « Avancé ».
 export const adminSections = [
-  { label: "Tableau de bord", panels: [{ key: "dashboard", label: "Dashboard" }] },
-  { label: "Éditorial", panels: [
+  { label: "Accueil", icon: "home", panels: [{ key: "dashboard", label: "Vue d'ensemble" }] },
+  { label: "Contenu", icon: "editorial", panels: [
     { key: "news", label: "Actualités" },
     { key: "categories", label: "Catégories" },
     { key: "contributions", label: "Contributions" },
   ] },
-  { label: "Football", panels: [
+  { label: "Compétitions", icon: "trophy", panels: [
     { key: "competitions", label: "Compétitions" },
-    { key: "seasons", label: "Saisons" },
+    { key: "seasons", label: "Saisons et phases" },
+    { key: "matches", label: "Matchs" },
+  ] },
+  { label: "Clubs & effectifs", icon: "users", panels: [
     { key: "clubs", label: "Clubs" },
     { key: "players", label: "Joueurs" },
-    { key: "playerMemberships", label: "Affectations joueurs" },
-    { key: "playerCareerStats", label: "Stats carrière" },
     { key: "coaches", label: "Entraîneurs" },
-    { key: "matches", label: "Matchs" },
+    { key: "playerMemberships", label: "Affectations", secondary: true },
+    { key: "playerCareerStats", label: "Carrières et statistiques", secondary: true },
+  ] },
+  { label: "Match Center", icon: "activity", panels: [
     { key: "events", label: "Événements" },
     { key: "lineups", label: "Formations" },
-    { key: "matchPlayerStats", label: "Compositions joueurs" },
+    { key: "matchPlayerStats", label: "Performances joueurs" },
   ] },
-  { label: "Données & sync", panels: [
-    { key: "providers", label: "Providers" },
-    { key: "jobs", label: "Jobs" },
-    { key: "sync-history", label: "Historique sync" },
-    { key: "sync-errors", label: "Erreurs sync" },
+  { label: "Synchronisation", icon: "refresh", panels: [
+    { key: "jobs", label: "Jobs et historique" },
+    { key: "providers", label: "Sources de données" },
+    { key: "sync-errors", label: "Erreurs de synchronisation" },
   ] },
-  { label: "Communauté", panels: [
+  { label: "Apparence du site", icon: "palette", panels: [
+    { key: "homepage", label: "Page d'accueil" },
+    { key: "competitionhub", label: "Portail compétitions" },
+    { key: "belgiansabroad", label: "Belges à l'étranger" },
+    { key: "clubpage", label: "Fiches clubs" },
+    { key: "statspage", label: "Pages statistiques" },
+    { key: "tilesbg", label: "Tuiles et couleurs" },
+    { key: "labels", label: "Textes de l'interface" },
+  ] },
+  { label: "Communauté", icon: "community", panels: [
     { key: "profiles", label: "Profils" },
     { key: "reports", label: "Signalements" },
-    { key: "moderation", label: "Modération" },
-    { key: "forum", label: "Forum" },
   ] },
-  { label: "Réglages", panels: [
-    { key: "homepage", label: "Page d'accueil" },
-    { key: "belgiansabroad", label: "Belges à l'étranger" },
-    { key: "competitionhub", label: "Portail compétitions" },
+  { label: "Avancé", icon: "settings", collapsed: true, panels: [
+    { key: "media", label: "Médias" },
+    { key: "seo", label: "SEO" },
+    { key: "io", label: "Import / export" },
     { key: "config", label: "Configuration" },
     { key: "modules", label: "Modules" },
     { key: "flags", label: "Feature flags" },
-    { key: "media", label: "Médias" },
-    { key: "seo", label: "SEO" },
-    { key: "labels", label: "Textes" },
-    { key: "tilesbg", label: "Tuiles" },
-    { key: "clubpage", label: "Fiche club" },
-    { key: "statspage", label: "Page Stats" },
-    { key: "io", label: "Import / export" },
+    { key: "moderation", label: "Modération" },
+    { key: "forum", label: "Forum" },
   ] },
 ];
+
+export const adminPanelIndex = Object.fromEntries(
+  adminSections.flatMap((section) => section.panels.map((panel) => [panel.key, { ...panel, section: section.label }])),
+);

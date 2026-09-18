@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import SaveStatus from "@/components/ui/SaveStatus";
 import ImageField from "@/components/ui/ImageField";
@@ -15,15 +15,40 @@ export default function EntityManager({ spec }) {
   const [status, setStatus] = useState("idle");
   const [q, setQ] = useState("");
   const [groupFilter, setGroupFilter] = useState("all");
+  const [quickFilters, setQuickFilters] = useState({});
+  const [page, setPage] = useState(0);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const pageSize = spec.pageSize || 0;
   const relFields = useMemo(() => fields.filter((f) => f.type === "relation"), [fields]);
 
-  const load = async () => {
-    let query = supabase.from(table).select("*");
+  const load = useCallback(async () => {
+    setLoading(true);
+    let query = supabase.from(table).select("*", pageSize ? { count: "exact" } : undefined);
+    if (spec.search && q.trim()) query = query.ilike(spec.searchField || "name", `%${q.trim()}%`);
+    if (spec.groupBy && groupFilter !== "all") {
+      query = groupFilter === "none" ? query.is(spec.groupBy.field, null) : query.eq(spec.groupBy.field, groupFilter);
+    }
+    for (const filter of spec.quickFilters || []) {
+      const value = quickFilters[filter.key];
+      if (value === undefined || value === "all") continue;
+      if (value === "none") query = query.is(filter.key, null);
+      else query = query.eq(filter.key, filter.type === "bool" ? value === "true" : value);
+    }
     if (spec.orderBy) query = query.order(spec.orderBy, { ascending: spec.orderAsc !== false, nullsFirst: false });
-    const { data } = await query; setRows(data || []);
-  };
+    if (pageSize) query = query.range(page * pageSize, page * pageSize + pageSize - 1);
+    const { data, count } = await query;
+    setRows(data || []);
+    setTotal(count ?? data?.length ?? 0);
+    setLoading(false);
+  }, [groupFilter, page, pageSize, q, quickFilters, spec, table]);
+
   useEffect(() => {
-    load();
+    const timer = setTimeout(load, q.trim() ? 250 : 0);
+    return () => clearTimeout(timer);
+  }, [load, q]);
+
+  useEffect(() => {
     const done = new Set();
     relFields.forEach(async (f) => {
       if (done.has(f.table)) return; done.add(f.table);
@@ -31,7 +56,9 @@ export default function EntityManager({ spec }) {
       const { data } = await supabase.from(f.table).select(sel).limit(1000);
       setRel((prev) => ({ ...prev, [f.table]: (data || []).map((r) => ({ id: r.id, label: f.labelCol === "id" ? String(r.id).slice(0, 8) : String(r[f.labelCol] ?? r.id) })) }));
     });
-  }, [table]);
+  }, [relFields, table]);
+
+  useEffect(() => { setPage(0); }, [groupFilter, q, quickFilters, table]);
 
   const save = async () => {
     setStatus("saving");
@@ -56,11 +83,11 @@ export default function EntityManager({ spec }) {
       <div className="min-w-0 flex-1">
         <div className="truncate font-semibold">{rowLabel(it)}</div>
         <div className="text-xs text-muted">
-          {it.position ? it.position + " · " : ""}{hasSource ? (it.locked ? "🔒 manuel" : (it.source || "manual")) : ""}{it.tracked ? " · suivi" : ""}
+          {spec.groupBy ? `${relLabelOf(spec.groupBy.relTable, it[spec.groupBy.field])} · ` : ""}{it.position ? it.position + " · " : ""}{hasSource ? (it.locked ? "🔒 manuel" : (it.source || "manual")) : ""}{it.tracked ? " · suivi" : ""}
         </div>
       </div>
-      <button onClick={() => setEditing({ ...it })} className="text-sm text-muted hover:text-content">Éditer</button>
-      <button onClick={() => remove(it)} className="text-sm text-red-400">Suppr.</button>
+      <button onClick={() => setEditing({ ...it })} className="shrink-0 text-xs text-muted hover:text-content sm:text-sm">Éditer</button>
+      <button onClick={() => remove(it)} className="hidden shrink-0 text-xs text-red-400 sm:block sm:text-sm">Suppr.</button>
     </div>
   );
 
@@ -92,12 +119,10 @@ export default function EntityManager({ spec }) {
   }
 
   // filtrage + regroupement
-  let list = rows;
-  if (spec.search && q.trim()) list = list.filter((r) => (r.name || "").toLowerCase().includes(q.toLowerCase()));
+  const list = rows;
   const gb = spec.groupBy;
   let groups = null;
-  if (gb) {
-    if (groupFilter !== "all") list = list.filter((r) => String(r[gb.field] || "") === (groupFilter === "none" ? "" : groupFilter));
+  if (gb && spec.grouped !== false) {
     const map = new Map();
     for (const r of list) { const key = r[gb.field] || "__none__"; (map.get(key) || map.set(key, []).get(key)).push(r); }
     groups = [...map.entries()].map(([key, items]) => ({
@@ -109,14 +134,15 @@ export default function EntityManager({ spec }) {
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-lg font-bold">{title}</h2>
+        <div><h2 className="text-lg font-bold">{title}</h2>{pageSize > 0 && <p className="mt-0.5 text-xs text-muted">{total} entrée{total > 1 ? "s" : ""}</p>}</div>
         <div className="flex flex-wrap items-center gap-2">
-          {spec.search && <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Rechercher…" className="rounded border border-line/10 bg-surface2 px-2 py-1 text-xs" />}
+          {spec.search && <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Rechercher un nom…" className="min-w-44 rounded border border-line/10 bg-surface2 px-3 py-2 text-xs" />}
           {gb && <select value={groupFilter} onChange={(e) => setGroupFilter(e.target.value)} className="rounded border border-line/10 bg-surface2 px-2 py-1 text-xs"><option value="all">Tous les clubs</option>{(rel[gb.relTable] || []).map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}<option value="none">Sans club</option></select>}
+          {(spec.quickFilters || []).map((filter) => <select key={filter.key} value={quickFilters[filter.key] ?? "all"} onChange={(event) => setQuickFilters((current) => ({ ...current, [filter.key]: event.target.value }))} className="rounded border border-line/10 bg-surface2 px-2 py-1 text-xs"><option value="all">{filter.allLabel || filter.label}</option>{filter.options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>)}
           <button onClick={() => setEditing({})} className="rounded bg-accent px-3 py-1 text-sm font-bold text-white">+ {singular || "Ajouter"}</button>
         </div>
       </div>
-      {groups ? (
+      {loading ? <div className="rounded-xl border border-line/10 p-8 text-center text-sm text-muted">Chargement…</div> : groups ? (
         <div className="space-y-4">
           {groups.map((g) => (
             <div key={g.key}>
@@ -132,6 +158,7 @@ export default function EntityManager({ spec }) {
           {list.length === 0 && <div className="p-4 text-sm text-muted">Aucune entrée. (Se remplira surtout via provider / sync.)</div>}
         </div>
       )}
+      {pageSize > 0 && total > pageSize && <div className="mt-4 flex items-center justify-between gap-3 text-xs text-muted"><span>{page * pageSize + 1}–{Math.min((page + 1) * pageSize, total)} sur {total}</span><div className="flex gap-2"><button type="button" disabled={page === 0} onClick={() => setPage((current) => Math.max(0, current - 1))} className="rounded-lg border border-line/10 px-3 py-2 text-content disabled:opacity-30">Précédent</button><button type="button" disabled={(page + 1) * pageSize >= total} onClick={() => setPage((current) => current + 1)} className="rounded-lg border border-line/10 px-3 py-2 text-content disabled:opacity-30">Suivant</button></div></div>}
     </div>
   );
 }

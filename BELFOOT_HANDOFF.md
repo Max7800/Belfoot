@@ -8,13 +8,9 @@
 > **choix éditoriaux/admin** (logos manuels, bannières, ordre, zones, textes, fonds de tuiles,
 > relations de clubs, visibilité de blocs).
 >
-> **Audit obligatoire avant reprise :** lire aussi `BELFOOT_AUDIT.md`. L'audit du 18 septembre
-> 2026 a identifié un P0 sécurité (RLS `profiles`, HTML riche, dépendances) qui passe désormais
-> avant toute nouvelle fonctionnalité.
->
-> Mise à jour : les rôles et le contenu riche sont durcis dans le code. Il faut encore appliquer
-> `supabase/migrations/0002_profile_role_hardening.sql` sur Supabase. L'upgrade Next/Tiptap et les
-> policies Storage restent les prochains lots sécurité.
+> **Audit obligatoire avant reprise :** lire aussi `BELFOOT_AUDIT.md`. Les correctifs sécurité,
+> l'upgrade Next/Tiptap et les policies Storage ont été codés ; les cinq policies finales ont été
+> contrôlées sur Supabase. Les tests réels des rôles restent à effectuer.
 
 ---
 
@@ -33,7 +29,7 @@ Belges à l'étranger + actu. Le reste vient plus tard.
 
 ## 2. Stack technique
 
-- **Next.js 14** (App Router, `app/`), React 18, JavaScript (pas de TypeScript).
+- **Next.js 16.3.5** (App Router, `app/`), React 19.3, JavaScript (pas de TypeScript).
 - **Tailwind CSS** avec des **tokens CSS** (thème clair/sombre) : couleurs `accent`, `bg`,
   `surface`, `surface2`, `content`, `muted`, `line` (voir `app/globals.css` + `tailwind.config.js`).
 - **Supabase** (Postgres + Auth + Storage). Projet Supabase dédié « Joueurs Belge »
@@ -66,7 +62,7 @@ app/                     pages (App Router)
   [collection]/          pages génériques des collections éditoriales (news…)
   recherche/            recherche unifiée
   login / reset / compte / auth/callback   auth (OAuth + email)
-  admin/                 shell admin (layout forcé sombre) + [key] (routeur de panneaux)
+  admin/                 Admin V2 responsive + [key] (routeur de panneaux)
   api/jobs/[key]/        runner de jobs protégé par JOBS_SECRET (cron)
   api/admin/run-job/     runner de jobs déclenché depuis l'admin (auth = rôle admin via JWT)
 config/
@@ -94,7 +90,7 @@ components/
   Navbar/Footer/ThemeModeProvider/CategoryBadge/RichContent/CollapsibleSection
   auth/OAuthButtons.js
   football/  MatchRow, StandingsTable, CompetitionHeader, SeasonCalendar, Watermark
-  admin/     EntityManager (CRUD générique tables métier), CollectionManager (contenus éditoriaux),
+  admin/     EntityManager (CRUD générique paginé), CollectionManager (contenus éditoriaux),
              registry.js (clé de panneau -> composant), panels.js (Jobs/Profils/Signalements/
              Providers/Textes/Tuiles/FicheClub/SettingsInfo…), Dashboard, CategoriesManager,
              ContributionsQueue, FieldInput, SortableList, ui/{ImageField,GalleryField,SaveStatus}
@@ -334,22 +330,27 @@ aucune correction de donnée ou migration n'est requise pour conserver les ancie
 
 ---
 
-## 11. Admin existant
+## 11. Administration V2
 
-Shell forcé sombre (`app/admin/layout.js`, `[data-force-dark]`), garde d'accès (rôle admin).
-Sections (`config/admin.js`) : **Tableau de bord** ; **Éditorial** (Actualités, Catégories,
-Contributions) ; **Football** (Compétitions, Saisons, Clubs, Joueurs, Entraîneurs, Matchs,
-Événements, Formations, Compositions joueurs — via `EntityManager` + spec
-`config/football-admin.js`) ; **Données & sync** (Providers,
-Jobs [sélecteur compétition + saison + run], Historique sync, Erreurs) ; **Communauté** (Profils,
-Signalements, Modération, Forum) ; **Réglages** (Configuration, Modules, Feature flags, Médias, SEO,
-**Page d'accueil**, **Portail compétitions**, **Textes**, **Tuiles**, **Fiche club**, **Page Stats**).
+Shell forcé sombre (`app/admin/layout.js`, `[data-force-dark]`), garde d'accès (rôle admin), menu
+latéral desktop et tiroir mobile. La navigation possède une recherche, des catégories repliables,
+un état actif et un fil d'Ariane. Sections (`config/admin.js`) : **Accueil** ; **Contenu** ;
+**Compétitions** ; **Clubs & effectifs** ; **Match Center** ; **Synchronisation** ; **Apparence du
+site** ; **Communauté** ; **Avancé**. Les affectations et carrières sont visuellement secondaires
+sous Joueurs. L'ancien doublon visible Jobs/Historique sync est fusionné en **Jobs et historique**.
+Les anciennes URLs restent compatibles.
+
+Le tableau de bord montre les compteurs, les erreurs de jobs, les dernières synchronisations et les
+accès rapides. `EntityManager` : CRUD générique piloté par spec (types de champ : text, number,
+bool, image, select, relation recherchable, datetime, zones…), recherche et filtres. Les tables
+volumineuses sont paginées côté Supabase par 40 lignes : joueurs, affectations, carrière, matchs,
+événements, formations et performances. Joueurs propose en plus club, actif/inactif et suivi
+Belfoot ; il ne déplie plus tous les clubs en une page.
+
 Le panneau Portail compétitions édite son bandeau général, ses textes et son overlay ; les portes
 individuelles restent dans Football → Compétitions. Le panneau Accueil édite
 le hero, les appels à l'action, les titres/sous-titres, l'ordre et la visibilité des blocs sans
-modifier le code. `EntityManager` : CRUD générique piloté par spec (types de
-champ : text, number, bool, image, select, relation **recherchable**, datetime, zones…), regroupement
-(Joueurs par club) + recherche, affichage source/verrou/synchro, auto-slug.
+modifier le code.
 
 ---
 
@@ -1012,13 +1013,25 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
 - Vérifications : ESLint sans erreur (`69` avertissements historiques), build Next 16 et
   `git diff --check` réussis.
 
+### 2026-09-18 — ChatGPT — Administration V2 et passage à l'échelle
+
+- Navigation réorganisée par tâches, sections repliables et recherchables, repère actif, fil
+  d'Ariane desktop et tiroir mobile.
+- Les panneaux secondaires et avancés ne saturent plus le menu principal. Jobs et historique ne
+  sont plus affichés comme deux destinations identiques.
+- Tableau de bord enrichi : raccourcis, incidents récents, compteurs et dernières synchronisations.
+- Pagination Supabase par 40 sur toutes les grosses entités. Joueurs devient une liste compacte avec
+  recherche serveur et filtres club/statut/suivi, prête à accueillir les effectifs 2026.
+- Aucun changement SQL et aucun appel API-Football. ESLint : zéro erreur (`68` avertissements
+  historiques). Build Next 16 et `git diff --check` réussis.
+
 ---
 
 ## CURRENT_GIT_STATE
 
 - **Branche** : `main`
-- **Dernier commit distant avant le lot courant** : `9dd2c33` — synchronisations fiables et saisons.
-  Le lot courant sépare les effectifs par équipe/saison ; il n'est pas encore poussé.
+- **Dernier commit distant avant le lot courant** : `6103afd` — réparation des affectations
+  historiques. Le lot courant est l'Administration V2 ; il n'est pas encore poussé.
 - **Commits importants récents** :
   - `2c71e35` documentation clubs liés / Europe
   - `69578a5` automatisation des stades + simplification des équipes liées

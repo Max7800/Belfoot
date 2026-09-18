@@ -54,7 +54,12 @@ export const FOOTBALL_ENTITIES = {
     ],
   },
   players: {
-    table: "players", title: "Joueurs", singular: "Joueur", orderBy: "name", hasSource: true, search: true, groupBy: { field: "club_id", relTable: "clubs", relLabel: "name" },
+    table: "players", title: "Joueurs", singular: "Joueur", orderBy: "name", hasSource: true, search: true,
+    pageSize: 40, grouped: false, groupBy: { field: "club_id", relTable: "clubs", relLabel: "name" },
+    quickFilters: [
+      { key: "active", label: "Tous les statuts", type: "bool", options: [{ value: "true", label: "Actifs" }, { value: "false", label: "Inactifs" }] },
+      { key: "tracked", label: "Tous les suivis", type: "bool", options: [{ value: "true", label: "Suivis Belfoot" }, { value: "false", label: "Non suivis" }] },
+    ],
     fields: [
       { key: "name", label: "Nom", type: "text" },
       { key: "club_id", label: "Club actuel", type: "relation", table: "clubs", labelCol: "name" },
@@ -70,7 +75,7 @@ export const FOOTBALL_ENTITIES = {
     ],
   },
   playerMemberships: {
-    table: "player_team_seasons", title: "Affectations joueurs", singular: "Affectation", orderBy: "season_start_year", orderAsc: false, hasSource: true, search: false,
+    table: "player_team_seasons", title: "Affectations joueurs", singular: "Affectation", orderBy: "season_start_year", orderAsc: false, hasSource: true, search: false, pageSize: 40,
     fields: [
       { key: "player_id", label: "Joueur", type: "relation", table: "players", labelCol: "name" },
       { key: "club_id", label: "Club / équipe", type: "relation", table: "clubs", labelCol: "name" },
@@ -87,7 +92,7 @@ export const FOOTBALL_ENTITIES = {
     ],
   },
   playerCareerStats: {
-    table: "player_season_stats", title: "Statistiques de carrière", singular: "Ligne de statistiques", orderBy: "season", orderAsc: false, hasSource: true,
+    table: "player_season_stats", title: "Statistiques de carrière", singular: "Ligne de statistiques", orderBy: "season", orderAsc: false, hasSource: true, pageSize: 40,
     fields: [
       { key: "player_id", label: "Joueur", type: "relation", table: "players", labelCol: "name" },
       { key: "club_id", label: "Club représenté", type: "relation", table: "clubs", labelCol: "name" },
@@ -114,7 +119,7 @@ export const FOOTBALL_ENTITIES = {
     ],
   },
   matches: {
-    table: "matches", title: "Matchs", singular: "Match", orderBy: "kickoff", orderAsc: false, hasSource: true,
+    table: "matches", title: "Matchs", singular: "Match", orderBy: "kickoff", orderAsc: false, hasSource: true, pageSize: 40,
     fields: [
       { key: "competition_id", label: "Compétition", type: "relation", table: "competitions", labelCol: "name" },
       { key: "season_id", label: "Saison", type: "relation", table: "seasons", labelCol: "label" },
@@ -129,7 +134,7 @@ export const FOOTBALL_ENTITIES = {
     ],
   },
   events: {
-    table: "match_events", title: "Événements de match", singular: "Événement", orderBy: "minute", orderAsc: true,
+    table: "match_events", title: "Événements de match", singular: "Événement", orderBy: "minute", orderAsc: true, pageSize: 40,
     fields: [
       { key: "match_id", label: "Match", type: "relation", table: "matches", labelCol: "id" },
       { key: "minute", label: "Minute", type: "number" },
@@ -139,7 +144,7 @@ export const FOOTBALL_ENTITIES = {
     ],
   },
   lineups: {
-    table: "match_lineups", title: "Formations par match", singular: "Formation", orderBy: "synced_at", orderAsc: false, hasSource: true,
+    table: "match_lineups", title: "Formations par match", singular: "Formation", orderBy: "synced_at", orderAsc: false, hasSource: true, pageSize: 40,
     fields: [
       { key: "match_id", label: "Match", type: "relation", table: "matches", labelCol: "id" },
       { key: "competition_id", label: "Compétition", type: "relation", table: "competitions", labelCol: "name" },
@@ -148,7 +153,7 @@ export const FOOTBALL_ENTITIES = {
     ],
   },
   matchPlayerStats: {
-    table: "match_player_stats", title: "Compositions et performances", singular: "Joueur du match", orderBy: "synced_at", orderAsc: false, hasSource: true,
+    table: "match_player_stats", title: "Compositions et performances", singular: "Joueur du match", orderBy: "synced_at", orderAsc: false, hasSource: true, pageSize: 40,
     fields: [
       { key: "match_id", label: "Match", type: "relation", table: "matches", labelCol: "id" },
       { key: "competition_id", label: "Compétition", type: "relation", table: "competitions", labelCol: "name" },
