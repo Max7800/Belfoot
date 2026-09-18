@@ -80,6 +80,7 @@ const provider = {
   // DISCOVERY : effectif d'un club (avec nationalité) — paginé, plafonné.
   async fetchSquadPlayers(club, ctx = {}) {
     const y = seasonYear(ctx.season);
+    const pageCap = Math.max(1, Math.min(Number(ctx.playerPageCap) || 3, 3));
     const out = []; let page = 1, pages = 1;
     do {
       const j = await apiFull(`/players?team=${club.external_id}&season=${y}&page=${page}`, ctx);
@@ -100,7 +101,7 @@ const provider = {
         });
       }
       page++;
-    } while (page <= pages && page <= 15);   // plafond quota
+    } while (page <= pages && page <= pageCap);   // plan gratuit API-Football : page <= 3
     return out;
   },
   // TRACKING : stats agrégées de saison d'un joueur (1 requête).

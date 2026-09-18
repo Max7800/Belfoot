@@ -798,6 +798,15 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
 - Nouvelle migration : **aucune**. Vérification : build Next.js 14.2.35 réussi avec variables
   Supabase factices de compilation + `git diff --check` réussi. Socle : **aucune modification**.
 
+### 2026-09-18 — ChatGPT — plafond de pagination API-Football Free
+
+- Le premier import ciblé Burnley a atteint l'effectif puis échoué avec `Free plans are limited to
+  a maximum value of 3 for the Page parameter` : `fetchSquadPlayers` autorisait encore 15 pages.
+- Toutes les récupérations d'effectifs API-Football sont désormais plafonnées à 3 pages, avec un
+  `playerPageCap` optionnel qui ne peut jamais dépasser cette limite. Relancer le job est sans
+  danger : clubs et matchs utilisent des upserts et ne seront pas dupliqués.
+- Nouvelle migration : **aucune**. Le test Burnley doit être relancé après déploiement du correctif.
+
 ---
 
 ## CURRENT_GIT_STATE
