@@ -20,9 +20,8 @@ et responsive public nettement amélioré. Le build de production passe.
 En revanche, **ne pas ajouter C1/C3/C4, d'autres ligues étrangères ou des fonctions communautaires
 avant le lot de durcissement P0**. Trois risques dominent :
 
-1. **Escalade de privilèges Supabase** : un membre peut théoriquement modifier son propre `role`.
-2. **HTML éditorial non assaini** : une contribution approuvée peut devenir du HTML exécuté dans la
-   page publique.
+1. **Escalade de privilèges Supabase** : correctif codé dans la migration core `0002`, à déployer.
+2. **HTML éditorial non assaini** : rendu et approbation assainis dans le lot suivant l'audit.
 3. **Dépendances vulnérables** : `npm audit` remonte 27 vulnérabilités, dont Next.js classé critique.
 
 La dette suivante est surtout opérationnelle : migrations manuelles non suivies, imports qui
@@ -70,7 +69,13 @@ GitHub, journaux Vercel/Supabase, sauvegardes/PITR et état exact de toutes les 
 
 ## 3. Sécurité — constats prioritaires
 
-### SEC-01 — CRITIQUE — Un membre peut tenter de se promouvoir admin
+### SEC-01 — CRITIQUE — Un membre peut tenter de se promouvoir admin — CORRIGÉ, SQL À DÉPLOYER
+
+**Correctif du 18 septembre 2026 :** `0002_profile_role_hardening.sql` supprime l'INSERT client,
+limite l'UPDATE authentifié à `username` et ajoute la RPC admin `set_profile_role`. La RPC valide le
+rôle, journalise l'action et interdit de rétrograder le dernier admin. `ProfilesPanel` l'utilise et
+remonte maintenant les erreurs. Le risque reste présent sur l'instance tant que ce SQL n'y est pas
+appliqué.
 
 **Preuve :** `supabase/schema.sql` et `supabase/migrations/0001_core.sql` contiennent :
 
@@ -110,7 +115,14 @@ rester sur une branche non corrigée.
 (au moment de l'audit, npm propose `16.3.5`), avec migration React si nécessaire, build puis tests
 des routes publiques, Auth et API. Ne pas lancer `npm audit fix --force` directement sur `main`.
 
-### SEC-03 — HAUT — XSS stockée possible via le contenu riche
+### SEC-03 — HAUT — XSS stockée possible via le contenu riche — CORRIGÉ DANS LE CODE
+
+**Correctif du 18 septembre 2026 :** le HTML est nettoyé au rendu avec une allowlist serveur. La
+modération passe par `/api/admin/contributions/review`, qui revalide le JWT et le rôle admin, relit
+la contribution en base, valide collection/type/cible/champs/tailles/URLs, assainit les champs
+richtext et journalise la décision. L'admin voit désormais tous les champs avant acceptation ; une
+nouvelle contribution devient un brouillon et n'est plus publiée automatiquement. Un payload
+hostile (`script`, `onclick`, `javascript:`) a été vérifié localement, et le build passe.
 
 `components/RichContent.js` utilise `dangerouslySetInnerHTML` sans assainissement. Le commentaire
 « contenu admin, de confiance » est faux dans le flux actuel : un membre peut insérer un `payload`
@@ -407,8 +419,8 @@ le footer. À traiter avant communication large, même sans publicité ni analyt
 
 ### P0 — Sécurité immédiate
 
-1. Corriger RLS/permissions de `profiles` et adapter la promotion admin.
-2. Assainir le HTML + sécuriser la modération des contributions/imports.
+1. ~~Corriger RLS/permissions de `profiles` et adapter la promotion admin.~~ Codé ; appliquer `0002`.
+2. ~~Assainir le HTML + sécuriser la modération des contributions/imports.~~ Codé.
 3. Versionner et vérifier les policies Storage.
 4. Mettre Next/Tiptap à niveau dans une branche dédiée.
 5. Ajouter headers de sécurité et rotation/révocation de tous les anciens PAT.
@@ -443,9 +455,9 @@ le footer. À traiter avant communication large, même sans publicité ni analyt
 
 1. Lire `BELFOOT_HANDOFF.md`, puis ce rapport en entier.
 2. Ne pas modifier le socle partagé ; les corrections Belfoot restent dans ce fork.
-3. Commencer par **SEC-01 uniquement**, migration + UI admin + tests RLS.
-4. Faire ensuite **SEC-03**, avec tests de payload hostile.
-5. Traiter l'upgrade Next/Tiptap séparément pour faciliter le rollback.
+3. Appliquer et vérifier **SEC-01** avec trois sessions (anonyme, membre, admin) sur Supabase.
+4. Tester **SEC-03** avec une vraie contribution en staging et confirmer le brouillon créé.
+5. Traiter maintenant l'upgrade Next/Tiptap séparément pour faciliter le rollback.
 6. Ne reprendre les features qu'après P0 et DATA-01/02/03.
 7. Garder `BELFOOT_HANDOFF.md` et ce rapport à jour à chaque lot.
 8. Avant chaque livraison : `git diff --check`, tests, build avec variables factices, commit ; push
@@ -473,5 +485,6 @@ rg --hidden --glob '!node_modules' --glob '!.git/**' \
   'ghp_|service_role|APIFOOTBALL_KEY=|JOBS_SECRET='
 ```
 
-**État final de l'audit :** documentation seulement. Aucun correctif de sécurité n'est appliqué par
-ce lot afin de ne pas mélanger diagnostic et changements sensibles sans validation utilisateur.
+**État après premier lot de correction :** SEC-01 et SEC-03 sont corrigés dans le dépôt. SEC-01
+nécessite encore l'application manuelle de `0002_profile_role_hardening.sql` sur l'instance ;
+l'upgrade des dépendances (SEC-02), les policies Storage et les tests réels Supabase restent ouverts.

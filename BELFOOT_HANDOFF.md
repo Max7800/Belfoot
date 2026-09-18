@@ -11,6 +11,10 @@
 > **Audit obligatoire avant reprise :** lire aussi `BELFOOT_AUDIT.md`. L'audit du 18 septembre
 > 2026 a identifié un P0 sécurité (RLS `profiles`, HTML riche, dépendances) qui passe désormais
 > avant toute nouvelle fonctionnalité.
+>
+> Mise à jour : les rôles et le contenu riche sont durcis dans le code. Il faut encore appliquer
+> `supabase/migrations/0002_profile_role_hardening.sql` sur Supabase. L'upgrade Next/Tiptap et les
+> policies Storage restent les prochains lots sécurité.
 
 ---
 
@@ -885,14 +889,26 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
 - Ce lot est volontairement **documentation seulement** : aucun correctif sensible n'a été mêlé à
   l'audit sans validation de l'utilisateur.
 
+### 2026-09-18 — ChatGPT — durcissement rôles et contenu éditorial
+
+- Nouvelle migration core `0002_profile_role_hardening.sql` : suppression de l'insertion directe
+  de profil, UPDATE client limité à `username`, promotion/rétrogradation via RPC admin auditée et
+  protection du dernier administrateur. Le panneau Profils utilise cette RPC et affiche les erreurs.
+- Le HTML riche est assaini côté serveur au rendu avec `sanitize-html` et une allowlist compatible
+  avec l'éditeur (pas de scripts, handlers, styles, iframe ni URL `javascript:`).
+- Nouvelle route admin `/api/admin/contributions/review` : JWT + rôle revérifiés, contribution relue
+  en base, collection/type/cible/payload validés, richtext assaini et décision journalisée.
+- La file de modération expose tous les champs en texte échappé. Une création acceptée devient un
+  brouillon ; une correction conserve l'état de publication existant après relecture explicite.
+- Vérifications : payload hostile nettoyé, build Next.js de production et `git diff --check` réussis.
+
 ---
 
 ## CURRENT_GIT_STATE
 
 - **Branche** : `main`
 - **Dernier commit distant avant le lot courant** : `b503c15` — correctif runtime des fiches joueur
-  et match. Le lot courant ajoute l'audit complet et repriorise la roadmap ; aucune modification du
-  code applicatif.
+  et match. Le commit local `a632647` ajoute l'audit ; le lot suivant durcit SEC-01/SEC-03.
 - **Commits importants récents** :
   - `2c71e35` documentation clubs liés / Europe
   - `69578a5` automatisation des stades + simplification des équipes liées
@@ -913,8 +929,9 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
   - `5d57095` cartes cliquables → ancres Stats + note fiabilisée (seuil) + clean sheets
   - `a6213f5` rounds/phases génériques (fin du mélange journées/barrages)
   - `39267e2`/`150db4d` couche compétition (effectifs+stats, événements, journées, fiches)
-- **Migrations encore à passer** (si le projet Supabase n'est pas à jour) : `0012` est indiquée
-  comme appliquée par l'utilisateur ; vérifier `0013_competition_header_texts.sql`, puis appliquer
+- **Migrations encore à passer** (si le projet Supabase n'est pas à jour) : appliquer d'abord
+  `supabase/migrations/0002_profile_role_hardening.sql`. Pour le football, `0012` est indiquée comme
+  appliquée par l'utilisateur ; vérifier `0013_competition_header_texts.sql`, puis appliquer
   `0014_belgians_abroad.sql`, `0015_season_phase_zones.sql`, `0016_club_profiles.sql`, puis
   `0017_protect_manual_coaches.sql`, `0018_challenger_pro_league.sql`, puis
   `0019_competition_portal_style.sql`, `0020_match_lineups.sql`, `0021_burnley_test.sql`, puis

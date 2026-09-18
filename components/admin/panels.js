@@ -12,13 +12,21 @@ import { DEFAULT_COMPETITION_HUB } from "@/lib/competitionHub";
 
 export function ProfilesPanel() {
   const [rows, setRows] = useState([]);
+  const [error, setError] = useState("");
+  const [busyId, setBusyId] = useState(null);
   const load = () => supabase.from("profiles").select("*").order("created_at", { ascending: false }).then(({ data }) => setRows(data || []));
   useEffect(() => { load(); }, []);
-  const setRole = async (r, role) => { await supabase.from("profiles").update({ role }).eq("id", r.id); load(); };
+  const setRole = async (r, role) => {
+    setBusyId(r.id); setError("");
+    const { error: rpcError } = await supabase.rpc("set_profile_role", { target_id: r.id, next_role: role });
+    if (rpcError) setError(rpcError.message || "Le rôle n'a pas pu être modifié.");
+    await load(); setBusyId(null);
+  };
   return (<div><h2 className="mb-4 text-lg font-bold">Profils</h2>
+    {error && <p role="alert" className="mb-3 rounded-lg border border-red-400/30 bg-red-500/10 p-3 text-sm text-red-300">{error}</p>}
     <div className="divide-y divide-line/10 rounded-xl border border-line/10">
       {rows.map((r) => <div key={r.id} className="flex items-center gap-3 p-3 text-sm"><span className="flex-1 truncate">{r.username || String(r.id).slice(0, 8)}</span>
-        <select value={r.role} onChange={(e) => setRole(r, e.target.value)} className="rounded border border-line/10 bg-surface2 px-2 py-1 text-xs"><option>member</option><option>admin</option></select></div>)}
+        <select value={r.role} disabled={busyId === r.id} onChange={(e) => setRole(r, e.target.value)} className="rounded border border-line/10 bg-surface2 px-2 py-1 text-xs disabled:opacity-50"><option>member</option><option>admin</option></select></div>)}
       {rows.length === 0 && <div className="p-4 text-sm text-muted">Aucun profil.</div>}
     </div></div>);
 }
