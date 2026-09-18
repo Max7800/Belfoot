@@ -14,7 +14,7 @@ export default function MatchPage() {
   const [comp, setComp] = useState(null);
   const [lineups, setLineups] = useState([]);
   const [matchPlayerStats, setMatchPlayerStats] = useState([]);
-  const { L } = useLabels();
+  const L = useLabels();
   useEffect(() => { (async () => {
     const { data: match } = await supabase.from("matches").select("*").eq("id", id).maybeSingle();
     if (!match) { setM(null); return; }

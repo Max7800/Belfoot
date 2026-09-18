@@ -846,6 +846,16 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
 - Nouvelle migration : **aucune**. Vérification : build Next.js 14.2.35 réussi avec variables
   Supabase factices de compilation + `git diff --check` réussi. Socle : **aucune modification**.
 
+### 2026-09-18 — ChatGPT — correctif runtime fiches joueur et match
+
+- Après déploiement de la nouvelle fiche joueur, le navigateur affichait `Application error` :
+  `useLabels()` renvoie directement la fonction `L`, mais les fiches joueur et match tentaient de la
+  déstructurer avec `{ L }`. La compilation ne détectait pas cette erreur JavaScript côté client.
+- Les deux pages utilisent maintenant `const L = useLabels()`. Cela répare la fiche ouverte depuis
+  `/belges-a-l-etranger` et évite la même erreur latente dès qu'une composition serait visible sur
+  `/matchs/[id]`.
+- Nouvelle migration : **aucune**. Vérification : build Next.js 14.2.35 + `git diff --check`.
+
 ---
 
 ## CURRENT_GIT_STATE

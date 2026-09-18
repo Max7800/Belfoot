@@ -46,7 +46,7 @@ function MatchCard({ match, clubs, playerClubId }) {
 
 export default function PlayerPage() {
   const { id } = useParams();
-  const { L } = useLabels();
+  const L = useLabels();
   const [state, setState] = useState({ player: undefined, club: null, stats: [], performances: [], matches: [], competitions: {}, clubs: {}, error: "" });
 
   useEffect(() => { let alive = true; (async () => {
