@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { CalendarDays, List } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import MatchRow from "@/components/football/MatchRow";
@@ -11,6 +11,9 @@ export default function MatchsPage() {
   const [seasons, setSeasons] = useState([]); const [seasonLabel, setSeasonLabel] = useState("");
   const [phase, setPhase] = useState(null); const [round, setRound] = useState("all");
   const [view, setView] = useState("list");
+  const viewChosen = useRef(false);
+  useEffect(() => { if (!viewChosen.current && window.matchMedia("(max-width: 639px)").matches) setView("calendar"); }, []);
+  const chooseView = (next) => { viewChosen.current = true; setView(next); };
   useEffect(() => { supabase.from("competitions").select("*").order("name").then(({ data }) => { const arr = (data || []).filter((c) => c.public_visible !== false).sort((a, b) => (a.position ?? 999) - (b.position ?? 999)); setComps(arr); if (arr[0]) setCid(arr[0].id); }); }, []);
   useEffect(() => { if (!cid) return; (async () => {
     const [{ data: m }, { data: seasonRows }] = await Promise.all([
@@ -37,21 +40,25 @@ export default function MatchsPage() {
   return (
     <div>
       <h1 className="mb-4 text-3xl font-black">Matchs</h1>
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        <div className="flex flex-wrap gap-2">
+      <div className="-mx-4 mb-3 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:mx-0 sm:overflow-visible sm:px-0">
+        <div className="flex w-max gap-2 sm:w-auto sm:flex-wrap">
           {comps.map((c) => (
-            <button key={c.id} onClick={() => setCid(c.id)} className={`flex items-center gap-2 rounded-xl border p-2 pr-3 text-sm transition ${cid === c.id ? "border-accent bg-accent/10" : "border-line/10 bg-surface hover:border-accent/40"}`}>
+            <button key={c.id} onClick={() => setCid(c.id)} className={`flex shrink-0 items-center gap-2 rounded-xl border p-2 pr-3 text-sm transition ${cid === c.id ? "border-accent bg-accent/10" : "border-line/10 bg-surface hover:border-accent/40"}`}>
               {c.logo_url && <img src={c.logo_url} className="h-7 w-7 object-contain" alt="" />}
               <span className="font-semibold">{c.name}</span>
             </button>
           ))}
         </div>
-        {phases.length > 1 && phases.map((p) => <button key={p} onClick={() => { setPhase(p); setRound("all"); }} className={`rounded-full border px-3 py-1 text-xs ${cur === p ? "border-accent bg-accent/10 text-accent" : "border-line/20 text-muted"}`}>{p}</button>)}
-        {seasons.length > 0 && <select value={seasonLabel} onChange={(e) => { setSeasonLabel(e.target.value); setPhase(null); setRound("all"); }} className="ml-auto rounded-xl border border-line/10 bg-surface px-3 py-2 text-sm">{seasons.map((season) => <option key={season.id}>{season.label}</option>)}</select>}
       </div>
-      <div className="mb-4 flex justify-end"><div className="inline-flex rounded-xl border border-line/10 bg-surface p-1"><button onClick={() => setView("list")} className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold ${view === "list" ? "bg-accent text-white" : "text-muted hover:text-content"}`}><List className="h-3.5 w-3.5" />Liste</button><button onClick={() => setView("calendar")} className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold ${view === "calendar" ? "bg-accent text-white" : "text-muted hover:text-content"}`}><CalendarDays className="h-3.5 w-3.5" />Calendrier</button></div></div>
+      <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+        {phases.length > 1 && <select value={cur || ""} onChange={(e) => { setPhase(e.target.value); setRound("all"); }} className="w-full rounded-xl border border-line/10 bg-surface px-3 py-2 text-sm sm:hidden">{phases.map((p) => <option key={p}>{p}</option>)}</select>}
+        {phases.length > 1 && <div className="hidden flex-wrap gap-2 sm:flex">{phases.map((p) => <button key={p} onClick={() => { setPhase(p); setRound("all"); }} className={`rounded-full border px-3 py-1 text-xs ${cur === p ? "border-accent bg-accent/10 text-accent" : "border-line/20 text-muted"}`}>{p}</button>)}</div>}
+        {seasons.length > 0 && <select value={seasonLabel} onChange={(e) => { setSeasonLabel(e.target.value); setPhase(null); setRound("all"); }} className="w-full rounded-xl border border-line/10 bg-surface px-3 py-2 text-sm sm:ml-auto sm:w-auto">{seasons.map((season) => <option key={season.id}>{season.label}</option>)}</select>}
+      </div>
+      <div className="mb-4 flex sm:justify-end"><div className="inline-flex w-full rounded-xl border border-line/10 bg-surface p-1 sm:w-auto"><button onClick={() => chooseView("calendar")} className={`order-1 flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold sm:order-2 sm:flex-none sm:py-1.5 ${view === "calendar" ? "bg-accent text-white" : "text-muted hover:text-content"}`}><CalendarDays className="h-3.5 w-3.5" />Calendrier</button><button onClick={() => chooseView("list")} className={`order-2 flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold sm:order-1 sm:flex-none sm:py-1.5 ${view === "list" ? "bg-accent text-white" : "text-muted hover:text-content"}`}><List className="h-3.5 w-3.5" />Liste</button></div></div>
       {view === "calendar" ? <SeasonCalendar matches={pm} clubs={clubs} selectedRound={round} onRoundChange={setRound} /> : <>
-        {rounds.length > 1 && <div className="mb-4 flex flex-wrap gap-1"><button onClick={() => setRound("all")} className={`rounded-full border px-3 py-1 text-xs ${round === "all" ? "border-accent bg-accent/10 text-accent" : "border-line/20 text-muted"}`}>Tout</button>{rounds.map((r) => <button key={r.key} onClick={() => setRound(r.key)} className={`rounded-full border px-3 py-1 text-xs ${round === r.key ? "border-accent bg-accent/10 text-accent" : "border-line/20 text-muted"}`}>{r.num != null ? `J${r.num}` : r.label}</button>)}</div>}
+        {rounds.length > 1 && <select value={round} onChange={(e) => setRound(e.target.value)} className="mb-4 w-full rounded-xl border border-line/10 bg-surface px-3 py-2 text-sm sm:hidden"><option value="all">Toutes les journées</option>{rounds.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}</select>}
+        {rounds.length > 1 && <div className="mb-4 hidden flex-wrap gap-1 sm:flex"><button onClick={() => setRound("all")} className={`rounded-full border px-3 py-1 text-xs ${round === "all" ? "border-accent bg-accent/10 text-accent" : "border-line/20 text-muted"}`}>Tout</button>{rounds.map((r) => <button key={r.key} onClick={() => setRound(r.key)} className={`rounded-full border px-3 py-1 text-xs ${round === r.key ? "border-accent bg-accent/10 text-accent" : "border-line/20 text-muted"}`}>{r.num != null ? `J${r.num}` : r.label}</button>)}</div>}
         {grouped.map((g) => <div key={g.label} className="mb-5"><div className="mb-2 text-xs font-bold uppercase tracking-wider text-muted">{g.label}</div><div className="space-y-2">{g.items.map((m) => <MatchRow key={m.id} m={m} clubs={clubs} href={`/matchs/${m.id}`} />)}</div></div>)}
         {shown.length === 0 && <p className="text-muted">Aucun match.</p>}
       </>}

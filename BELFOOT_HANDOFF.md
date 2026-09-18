@@ -783,13 +783,28 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
 - Vérification : build Next.js 14.2.35 réussi avec variables Supabase factices de compilation +
   `git diff --check` réussi. Socle : **aucune modification**.
 
+### 2026-09-18 — ChatGPT — navigation et page Matchs réellement responsives
+
+- La navigation globale n'est plus une longue rangée horizontale coupée sur mobile/tablette : logo,
+  recherche et bouton menu restent visibles, puis le menu s'ouvre en grille avec navigation,
+  connexion/compte, admin et thème. La barre desktop est conservée à partir de `lg`.
+- `/matchs` démarre automatiquement en vue Calendrier sur mobile, tout en gardant Liste par défaut
+  sur desktop. L'ordre visuel du poussoir suit aussi le support : Calendrier d'abord sur mobile,
+  Liste d'abord sur desktop. Le choix manuel de l'utilisateur reste prioritaire.
+- Les compétitions deviennent un rail horizontal sans scrollbar sur mobile. Les phases passent dans
+  une liste déroulante ; en vue Liste, les 30 boutons de journées sont remplacés par un seul
+  sélecteur. Les puces complètes restent inchangées sur desktop.
+- Le rail des journées du calendrier reste balayable au doigt mais sa scrollbar native est masquée.
+- Nouvelle migration : **aucune**. Vérification : build Next.js 14.2.35 réussi avec variables
+  Supabase factices de compilation + `git diff --check` réussi. Socle : **aucune modification**.
+
 ---
 
 ## CURRENT_GIT_STATE
 
 - **Branche** : `main`
-- **Dernier commit distant avant le lot courant** : `acdf17d` — Belges à l'étranger V2. Le lot
-  courant ajoute l'import ciblé d'une équipe et prépare le test Burnley/Championship 2024.
+- **Dernier commit distant avant le lot courant** : `632dedc` — filtres Belges toujours visibles.
+  Le lot courant adapte la navigation globale et `/matchs` aux petits écrans.
 - **Commits importants récents** :
   - `2c71e35` documentation clubs liés / Europe
   - `69578a5` automatisation des stades + simplification des équipes liées

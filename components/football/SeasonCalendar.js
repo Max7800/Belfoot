@@ -42,7 +42,7 @@ export default function SeasonCalendar({ matches = [], clubs = {}, selectedRound
 
   return (
     <div className="space-y-4">
-      <div className="flex gap-2 overflow-x-auto pb-1">
+      <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {groups.map((group) => { const status = statusOf(group); const activeGroup = group.key === active.key; return (
           <button key={group.key} onClick={() => onRoundChange?.(group.key)} className={`min-w-[76px] shrink-0 rounded-xl border px-3 py-2 text-left transition ${activeGroup ? "border-accent bg-accent/10" : "border-line/10 bg-surface hover:border-accent/35"}`}>
             <span className={`mb-1 block h-1.5 w-1.5 rounded-full ${status === "live" ? "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.9)]" : status === "finished" ? "bg-emerald-400" : "bg-amber-300"}`} />
