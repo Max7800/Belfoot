@@ -120,6 +120,8 @@ Sur Vercel (Production + Preview) :
 - `NEXT_PUBLIC_ADMIN_EMAIL` — email admin (indicatif).
 - `SUPABASE_SERVICE_ROLE_KEY` — **secret**, serveur uniquement (jobs, bypass RLS). SANS `NEXT_PUBLIC_`.
 - `JOBS_SECRET` — protège l'endpoint `/api/jobs/[key]` (cron).
+- `CRON_SECRET` — secret Bearer ajouté automatiquement par Vercel Cron. Peut être distinct de
+  `JOBS_SECRET`. Aucun cron live n'est activé dans le dépôt avant le forfait API 2026.
 - `APIFOOTBALL_KEY` — clé API-Football (provider principal).
 - `THESPORTSDB_KEY` — provider secondaire/test (défaut `3`).
 
@@ -146,7 +148,9 @@ Trigger `handle_new_user` : crée un `profiles` (role member) à chaque inscript
   étrangère sans l'afficher dans les sélecteurs publics), source/**locked**/synced_at/**ext** (jsonb : coverage,
   country, country_flag, providerName, season…). Depuis `0019`, le portail possède ses champs
   séparés : `portal_background_url`, `portal_border_color`, `portal_overlay`, `portal_title` et
-  `portal_subtitle`, sans modifier le bandeau de la page détail.
+  `portal_subtitle`, sans modifier le bandeau de la page détail. Depuis `0026`, `live_enabled`
+  active explicitement le job direct pour cette compétition et `live_refresh_seconds` documente
+  la cadence cible (30 à 900 secondes).
 - `clubs` : name, short_name, city, logo_url, **team_type** (first_team|reserve|u23|women),
   **parent_club_id** (réserves/U23), source/external_id/locked/synced_at/ext. Depuis `0016` :
   nickname, founded_year, description, website_url, couleurs, informations du stade et honours jsonb.
@@ -215,10 +219,11 @@ fetchMatches, fetchLiveMatches, fetchSquadPlayers, fetchPlayerSeason, fetchEvent
 compétition choisit son provider (colonne `provider`) → **aucune logique JPL en dur**, multi-sources.
 
 **Orchestrateurs** : `syncCompetition` (mode full = clubs dérivés des matchs + enrichis + tous les
-matchs + coverage + logo/nom/pays/drapeau si vide ; mode live = matchs en direct only),
+matchs + coverage + logo/nom/pays/drapeau si vide ; mode live = journée courante, afin de conserver
+aussi le passage du direct au statut terminé),
 `syncSquads` (effectifs + `player_season_stats` scoppées par compétition/saison en même temps,
 0 requête en plus — met `tracked=true`),
-`syncEvents` (événements par match, incrémental + plafonné 40/run), `syncLineups` (formations +
+`syncEvents` (événements terminés incrémentaux ou événements live renouvelés, plafonné), `syncLineups` (formations +
 performances individuelles, incrémental, matchs récents d'abord et **3 matchs/run par défaut**),
 `discoverBelgians`/`trackPlayers`
 (suivi belges à l'étranger : discovery limitée aux clubs de la compétition demandée + tracking
@@ -231,7 +236,8 @@ Chaque job accepte un
 « Sync Croky Cup »). Déclenchement :
 - Admin → **Données & sync → Jobs** : sélecteur de compétition + saison + boutons (route
   `/api/admin/run-job`, sécurisée par **rôle admin via JWT**, aucun secret côté client).
-- `/api/jobs/[key]?season=&competitionId=` protégée par `JOBS_SECRET` (pour cron Vercel).
+- `/api/jobs/[key]?season=&competitionId=` accepte POST avec `x-jobs-secret` et GET avec Bearer
+  `CRON_SECRET`/`JOBS_SECRET`. Le GET est compatible Vercel Cron.
 Les jobs écrivent via le client **service-role** (`getAdmin()`), seul moyen de contourner la RLS
 côté serveur. Le rapport de job affiche le **nom réel de la ligue** (auto-vérification de l'id) +
 compteurs. Traces dans `job_runs` + Dashboard.
@@ -1034,13 +1040,30 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
 - La fiche publique reste accessible depuis cet espace. Aucun SQL et aucun appel provider.
 - Vérifications : ESLint sans erreur (`68` avertissements historiques), build Next 16 réussi.
 
+### 2026-09-18 — ChatGPT — fondations du Match Center Live
+
+- `/matchs` devient un Match Center avec trois vues transversales : En direct, Aujourd'hui et les
+  sept prochains jours, avant le calendrier complet déjà présent.
+- Les cartes indiquent la compétition, le statut détaillé (mi-temps, prolongation, tirs au but,
+  terminé/reporté), le score et la présence d'un club comprenant un Belge suivi.
+- La fiche match, les timelines et la pastille live de la navigation écoutent les écritures
+  Supabase Realtime. Un polling base de secours (30 à 60 secondes) ne contacte jamais le provider.
+- `football.live-sync` demande la journée courante par compétition (un appel), puis les événements
+  des seuls matchs live dans la limite `matchCap`. Il effectue aussi une dernière collecte au passage
+  live → terminé. Sans compétition explicite, seules celles avec `live_enabled=true` sont traitées.
+- Migration `0026_match_center_live.sql` : activation explicite par compétition, cadence indicative,
+  index live et publication Realtime pour `matches`/`match_events`. Tous les directs sont désactivés
+  par défaut et aucun cron n'est installé avant le forfait API 2026.
+- `/api/jobs/[key]` accepte désormais le GET sécurisé Bearer attendu par Vercel Cron tout en gardant
+  le POST historique. ESLint sans erreur, build Next 16 réussi, aucun appel API effectué.
+
 ---
 
 ## CURRENT_GIT_STATE
 
 - **Branche** : `main`
-- **Dernier commit distant avant le lot courant** : `6103afd` — réparation des affectations
-  historiques. Le lot courant est l'Administration V2 ; il n'est pas encore poussé.
+- **Dernier commit distant avant le lot courant** : `27a9e42` — espace joueur consolidé.
+  Le lot courant est le Match Center Live ; il n'est pas encore poussé.
 - **Commits importants récents** :
   - `2c71e35` documentation clubs liés / Europe
   - `69578a5` automatisation des stades + simplification des équipes liées
@@ -1070,14 +1093,15 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
   `0017_protect_manual_coaches.sql`, `0018_challenger_pro_league.sql`, puis
   `0019_competition_portal_style.sql`, `0020_match_lineups.sql`, `0021_burnley_test.sql`, puis
   `0022_ensure_player_country.sql`, `0023_season_safe_sync.sql`, puis
-  `0024_player_team_seasons.sql`, puis `0025_membership_backfill_repair.sql`, et vérifier que
-  `modules/football/migrations/0001→0025` sont
+  `0024_player_team_seasons.sql`, puis `0025_membership_backfill_repair.sql` (appliquée et contrôlée),
+  puis `0026_match_center_live.sql`, et vérifier que `modules/football/migrations/0001→0026` sont
   **toutes** passées (surtout `0008` position, `0009` banner_url/zones, `0010` rating_min,
   `0011` competition_type/parent_club_id/team_type, `0012` unicité des stats par compétition et
   `0013` textes des bandeaux, `0014` visibilité/pays du suivi international, `0015` zones par
   saison/phase, `0016` contenu éditorial des fiches clubs, `0017` protection des coachs manuels et
   `0018` création Challenger Pro League, `0019` style séparé des portes du portail et `0024`
-  séparation personne/équipe/saison et `0025` réparation du backfill historique).
+  séparation personne/équipe/saison, `0025` réparation du backfill historique et `0026` fondations
+  Realtime/activation explicite du direct).
   Le code est tolérant mais ces features restent inactives sinon.
 
 ---

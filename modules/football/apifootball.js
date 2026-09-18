@@ -16,6 +16,10 @@ function mapFixture(f) {
     home_logo: f.teams.home.logo || null, away_logo: f.teams.away.logo || null,
     home_score: f.goals.home, away_score: f.goals.away,
     status: mapStatus(f.fixture.status?.short), minute: f.fixture.status?.elapsed ?? null,
+    status_short: f.fixture.status?.short || null,
+    status_long: f.fixture.status?.long || null,
+    elapsed: f.fixture.status?.elapsed ?? null,
+    extra: f.fixture.status?.extra ?? null,
     round: f.league?.round || null,
     kickoff: f.fixture.date || null,
   };
@@ -113,7 +117,13 @@ const provider = {
     return rows.filter((fixture) => String(fixture.league?.id) === String(competition.external_id)).map(mapFixture);
   },
   async fetchLiveMatches(competition, ctx = {}) {
-    return (await api(`/fixtures?league=${competition.external_id}&live=all`, ctx)).map(mapFixture);
+    const y = seasonYear(ctx.season || competition.ext?.season);
+    const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Brussels", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
+    const value = (type) => parts.find((part) => part.type === type)?.value;
+    const date = `${value("year")}-${value("month")}-${value("day")}`;
+    // La journée complète conserve aussi le passage LIVE -> FIN, qu'un endpoint
+    // limité aux seuls matchs en cours ne renverrait plus après le coup de sifflet.
+    return (await api(`/fixtures?league=${competition.external_id}&season=${y}&date=${date}&timezone=Europe%2FBrussels`, ctx)).map(mapFixture);
   },
   // DISCOVERY : effectif d'un club (avec nationalité) — paginé, plafonné.
   async fetchSquadPlayers(club, ctx = {}) {

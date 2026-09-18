@@ -20,6 +20,8 @@ export const FOOTBALL_ENTITIES = {
       { key: "public_visible", label: "Visible dans les pages publiques", type: "bool" },
       { key: "zones", label: "Zones de classement", type: "zones" },
       { key: "rating_min", label: "Note : min. apparitions", type: "number" },
+      { key: "live_enabled", label: "Direct activé pour les jobs automatiques", type: "bool" },
+      { key: "live_refresh_seconds", label: "Direct : intervalle conseillé en secondes (30 à 900)", type: "number" },
       { key: "competition_type", label: "Type", type: "select", options: ["league", "cup"] },
     ],
   },

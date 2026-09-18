@@ -55,7 +55,7 @@ export function JobsPanel() {
   const [requestLimit, setRequestLimit] = useState(10);
   const [teamExternalId, setTeamExternalId] = useState("44");
   const load = () => supabase.from("job_runs").select("*").order("started_at", { ascending: false }).limit(30).then(({ data }) => setRows(data || []));
-  useEffect(() => { load(); supabase.from("competitions").select("id,name").order("name").then(({ data }) => setComps(data || [])); }, []);
+  useEffect(() => { load(); supabase.from("competitions").select("*").order("name").then(({ data }) => setComps(data || [])); }, []);
   const run = async (key) => {
     const cost = describeJobCost(key, { competitionId: compId, competitionCount: comps.length, matchCap });
     if (!window.confirm(`${JOB_CATALOG[key]?.label || key}\n\nCoût estimé : ${cost}.\nBudget strict : ${requestLimit} appels API maximum.\n\nLancer la synchronisation ?`)) return;
@@ -78,7 +78,7 @@ export function JobsPanel() {
     <h2 className="mb-4 text-lg font-bold">Jobs & synchronisation</h2>
     <p className="mb-3 text-xs leading-5 text-muted">Chaque lancement affiche maintenant son coût estimé et respecte un budget strict. Une relance identique est bloquée tant que le premier job travaille. La base 2024/2025 reste la référence de développement ; le passage à 2026/2027 se fera ici, compétition par compétition, lorsque l'abonnement API sera actif.</p>
     <div className="mb-3 flex flex-wrap items-center gap-2">
-      <select value={compId} onChange={(e) => setCompId(e.target.value)} className="rounded border border-line/10 bg-surface2 px-2 py-1 text-sm"><option value="">Toutes les compétitions</option>{comps.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
+      <select value={compId} onChange={(e) => setCompId(e.target.value)} className="rounded border border-line/10 bg-surface2 px-2 py-1 text-sm"><option value="">Toutes les compétitions activées</option>{comps.map((c) => <option key={c.id} value={c.id}>{c.live_enabled ? "🔴 " : ""}{c.name}</option>)}</select>
       <label className="text-xs text-muted">Saison</label>
       <input value={season} onChange={(e) => setSeason(e.target.value)} className="w-28 rounded border border-line/10 bg-surface2 px-2 py-1 text-sm" />
       <label className="text-xs text-muted">Max matchs</label>
@@ -93,6 +93,7 @@ export function JobsPanel() {
         </button>
       ))}
     </div>
+    <p className="mb-3 rounded-lg border border-red-400/15 bg-red-500/5 p-3 text-xs leading-5 text-muted"><b className="text-content">Direct :</b> sans compétition choisie, le job traite uniquement celles dont « Direct activé » est coché. Il consomme un appel pour la journée, puis au maximum « Max matchs » appels pour les événements des rencontres en cours. L&apos;affichage public et Supabase Realtime ne consomment aucun appel API-Football.</p>
     {msg && <p className="mb-3 rounded border border-line/10 bg-surface p-2 text-sm text-muted">{msg}</p>}
     <div className="divide-y divide-line/10 rounded-xl border border-line/10">
       {rows.map((j) => <div key={j.id} className="flex items-center justify-between p-3 text-sm"><span>{j.job_key} · {new Date(j.started_at).toLocaleString()}</span><span className={j.status === "error" ? "text-red-400" : j.status === "ok" ? "text-green-400" : "text-muted"}>{j.status}{j.detail ? ` · ${j.detail}` : ""}</span></div>)}
