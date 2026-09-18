@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { uploadImage } from "@/lib/media";
 
-export default function GalleryField({ value, onChange }) {
+export default function GalleryField({ value, onChange, uploadScope = "admin" }) {
   const imgs = Array.isArray(value) ? value : [];
   const [busy, setBusy] = useState(false);
   async function add(e) {
@@ -10,7 +10,7 @@ export default function GalleryField({ value, onChange }) {
     const urls = [...imgs];
     for (const f of files) {
       try {
-        urls.push(await uploadImage(f));
+        urls.push(await uploadImage(f, { scope: uploadScope }));
       } catch (err) { alert("Upload : " + err.message); }
     }
     onChange(urls); setBusy(false); e.target.value = "";
@@ -26,7 +26,7 @@ export default function GalleryField({ value, onChange }) {
         ))}
       </div>
       <div className="flex items-center gap-2">
-        <input type="file" accept="image/*" multiple onChange={add} className="text-xs" />
+        <input type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={add} className="text-xs" />
         {busy && <span className="text-xs text-muted">…</span>}
       </div>
     </div>

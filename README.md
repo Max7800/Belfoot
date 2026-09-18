@@ -5,9 +5,9 @@ Fork football belge du socle réutilisable. Pour reprendre le projet, lire dans 
 1. `BELFOOT_HANDOFF.md` — architecture, décisions produit, historique et procédures ;
 2. `BELFOOT_AUDIT.md` — audit sécurité/qualité du 18 septembre 2026 et roadmap priorisée.
 
-**Important :** le durcissement des rôles et du contenu riche est codé, mais la migration
-`supabase/migrations/0002_profile_role_hardening.sql` doit être appliquée en production. L'upgrade
-Next/Tiptap reste le prochain lot P0 avant toute nouvelle fonctionnalité.
+**Important :** le durcissement des rôles est déployé. La migration Storage
+`supabase/migrations/0003_media_storage_hardening.sql` doit encore être appliquée et les anciennes
+policies du bucket `media` vérifiées avant de reprendre les fonctionnalités.
 
 ## Origine du projet
 
@@ -32,7 +32,7 @@ nouveau site : tu ne touches en principe qu'à `/config`.
 ## Mise en route
 1. `npm install`
 2. Copier `.env.local.example` → `.env.local` (clés Supabase).
-3. Passer `supabase/schema.sql`, puis `supabase/migrations/0002_profile_role_hardening.sql`, puis les migrations football dans l'ordre
+3. Passer `supabase/schema.sql`, puis les migrations core `0002` et `0003`, puis les migrations football dans l'ordre
    `modules/football/migrations/0001_init.sql` → `0022_ensure_player_country.sql`.
 4. `npm run dev`
 

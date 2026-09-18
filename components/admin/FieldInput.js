@@ -4,7 +4,7 @@ import GalleryField from "@/components/ui/GalleryField";
 import RichText from "@/components/ui/RichText";
 import CategoryField from "@/components/ui/CategoryField";
 
-export default function FieldInput({ field, value, onChange, scope }) {
+export default function FieldInput({ field, value, onChange, scope, uploadScope = "admin" }) {
   const label = field.label ? <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-muted">{field.label}</label> : null;
   const box = "w-full rounded border border-line/10 bg-surface2 px-3 py-2 text-sm outline-none focus:border-accent";
   switch (field.type) {
@@ -23,9 +23,9 @@ export default function FieldInput({ field, value, onChange, scope }) {
     case "select":
       return <div>{label}<select value={value || ""} onChange={(e) => onChange(e.target.value)} className={box}><option value="">—</option>{(field.options || []).map((o) => <option key={o} value={o}>{o}</option>)}</select></div>;
     case "image":
-      return <div>{label}<ImageField value={value} onChange={onChange} /></div>;
+      return <div>{label}<ImageField value={value} onChange={onChange} uploadScope={uploadScope} /></div>;
     case "gallery":
-      return <div>{label}<GalleryField value={value} onChange={onChange} /></div>;
+      return <div>{label}<GalleryField value={value} onChange={onChange} uploadScope={uploadScope} /></div>;
     case "seo": {
       const v = value || {};
       return (

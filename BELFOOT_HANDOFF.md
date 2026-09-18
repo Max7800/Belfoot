@@ -912,17 +912,36 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
 - La configuration `images.remotePatterns: hostname "**"` a été retirée : Belfoot utilise ses images
   externes via `<img>` et n'ouvre plus inutilement l'optimiseur Next à toutes les destinations HTTPS.
 - `AGENTS.md` documente désormais la version Next 16 à lire par Claude et les futurs agents.
-- Vérifications : build Next 16/Turbopack réussi, ESLint réussi, `git diff --check` réussi. Le
-  `npm audit` final doit être relancé avant publication ; l'environnement a atteint sa limite lors
-  de cette commande.
+- Vérifications : build Next 16/Turbopack réussi, ESLint réussi et `git diff --check` réussi.
+  Le contrôle final `npm audit --package-lock-only --omit=dev` retourne 0 vulnérabilité.
+
+### 2026-09-18 — ChatGPT — Storage médias et en-têtes de sécurité
+
+- Nouvelle migration core `0003_media_storage_hardening.sql` : bucket public `media` limité à 5 Mo,
+  MIME JPG/PNG/WebP et policies versionnées. Les admins écrivent dans `admin/<uid>/...`, les membres
+  dans `contributions/<uid>/...`; les suppressions suivent la même séparation.
+- L'inspection de l'instance a révélé trois anciennes policies permissives (`media_insert`,
+  `media_update`, `media_delete`) ; la migration les supprime explicitement. Après une première
+  exécution de `0003`, exécuter également les trois `drop policy` ajoutés dans sa version finale.
+- `lib/media.js` exige une session, refuse les sources non JPG/PNG/WebP ou supérieures à 15 Mo,
+  compresse en WebP, contrôle le résultat à 5 Mo et utilise un UUID sous le dossier de l'utilisateur.
+  L'ancien upload arbitraire de fichiers non-image, inutilisé, est supprimé.
+- `ContributeForm` envoie explicitement les médias dans le scope `contributions`; tous les champs
+  d'administration conservent le scope `admin`.
+- `next.config.js` ajoute les headers HSTS, nosniff, anti-frame, referrer et permissions. La CSP est
+  volontairement en `Report-Only` jusqu'au smoke test Vercel.
+- Vérifications : ESLint sans erreur, build Next 16/Turbopack propre et smoke test HTTP réussis ;
+  tous les headers attendus sont présents. `npm audit --package-lock-only --omit=dev` retourne
+  0 vulnérabilité. Le premier build a rencontré un cache Turbopack corrompu ; `.next` a été mis de
+  côté dans `/tmp`, puis le build neuf a réussi.
 
 ---
 
 ## CURRENT_GIT_STATE
 
 - **Branche** : `main`
-- **Dernier commit distant avant le lot courant** : `b503c15` — correctif runtime des fiches joueur
-  et match. Le commit local `a632647` ajoute l'audit ; le lot suivant durcit SEC-01/SEC-03.
+- **Dernier commit distant avant le lot courant** : `29e477c` — upgrade Next 16 / React 19 / Tiptap 3.
+  Le lot courant durcit Storage et les headers ; il n'est pas encore poussé.
 - **Commits importants récents** :
   - `2c71e35` documentation clubs liés / Europe
   - `69578a5` automatisation des stades + simplification des équipes liées
@@ -943,9 +962,10 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
   - `5d57095` cartes cliquables → ancres Stats + note fiabilisée (seuil) + clean sheets
   - `a6213f5` rounds/phases génériques (fin du mélange journées/barrages)
   - `39267e2`/`150db4d` couche compétition (effectifs+stats, événements, journées, fiches)
-- **Migrations encore à passer** (si le projet Supabase n'est pas à jour) : appliquer d'abord
-  `supabase/migrations/0002_profile_role_hardening.sql`. Pour le football, `0012` est indiquée comme
-  appliquée par l'utilisateur ; vérifier `0013_competition_header_texts.sql`, puis appliquer
+- **Migrations encore à passer** (si le projet Supabase n'est pas à jour) : `0002` est indiquée
+  comme appliquée par l'utilisateur. Appliquer `supabase/migrations/0003_media_storage_hardening.sql`
+  puis inspecter les anciennes policies Storage. Pour le football, `0012` est indiquée comme
+  appliquée ; vérifier `0013_competition_header_texts.sql`, puis appliquer
   `0014_belgians_abroad.sql`, `0015_season_phase_zones.sql`, `0016_club_profiles.sql`, puis
   `0017_protect_manual_coaches.sql`, `0018_challenger_pro_league.sql`, puis
   `0019_competition_portal_style.sql`, `0020_match_lineups.sql`, `0021_burnley_test.sql`, puis

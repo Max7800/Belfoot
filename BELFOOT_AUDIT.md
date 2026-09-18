@@ -104,13 +104,13 @@ la prise de contrôle de toutes les tables admin et de `/api/admin/run-job`.
 
 Ne pas se contenter du guard React de `/admin` : il masque l'UI mais la vraie barrière reste RLS.
 
-### SEC-02 — CRITIQUE — Version Next.js signalée vulnérable — UPGRADE CODÉ, AUDIT À RELANCER
+### SEC-02 — CRITIQUE — Version Next.js signalée vulnérable — CORRIGÉ
 
 **Correctif du 18 septembre 2026 :** Next.js passe de 14.2.35 à 16.3.5, React de 18.3.1 à 19.3.0
 et Tiptap de 2.27.3 à 3.31.3. Les pages et route handlers utilisent désormais `await params`,
 `next lint` est remplacé par ESLint flat config et la configuration `images` permissive est retirée.
-Le build Next 16/Turbopack et ESLint passent. Le `npm audit` final n'a pas pu être relancé car la
-limite d'exécution de l'environnement a été atteinte ; il faudra le faire avant publication.
+Le build Next 16/Turbopack et ESLint passent. Le contrôle final
+`npm audit --package-lock-only --omit=dev` ne trouve plus aucune vulnérabilité.
 
 `npm audit` sur le lockfile trouve **27 vulnérabilités** : `1 critical`, `1 high`, `25 moderate`.
 Next `14.2.35` concentre plusieurs avis DoS/SSRF/cache et deux avis classés RCE dans les versions
@@ -155,7 +155,17 @@ Risques associés :
 `npm audit` signale en plus une vulnérabilité XSS/prototype pollution dans Tiptap 2.x ; la version
 corrigée proposée est Tiptap 3.x, donc migration majeure à tester séparément.
 
-### SEC-04 — HAUT À CONFIRMER — Storage n'est pas versionné
+### SEC-04 — HAUT À CONFIRMER — Storage n'est pas versionné — CORRIGÉ, SQL À DÉPLOYER
+
+**Correctif du 18 septembre 2026 :** `0003_media_storage_hardening.sql` crée/met à jour le bucket
+public `media` avec limite de 5 Mo et MIME JPG/PNG/WebP. Les écritures sont séparées entre
+`admin/<uid>/...` (admin uniquement) et `contributions/<uid>/...` (propriétaire connecté), toujours
+en WebP. Le client refuse les autres formats, les sources de plus de 15 Mo et les résultats
+compressés de plus de 5 Mo. L'ancien upload arbitraire de fichiers non-image, inutilisé, est retiré.
+Les fichiers historiques à la racine restent lisibles. Après application, il faut encore inspecter
+et supprimer dans Supabase toute ancienne policy permissive portant un autre nom. L'inspection du
+18 septembre a identifié `media_insert`, `media_update` et `media_delete` ; la version finale de la
+migration les supprime explicitement.
 
 Le client charge directement vers le bucket public `media`, mais aucune création de bucket ni
 policy `storage.objects` n'est présente dans le dépôt. La sécurité réelle dépend donc d'une
@@ -172,7 +182,11 @@ configuration manuelle invisible pour Claude.
 Le code actuel nomme toutes les images à la racine du bucket et ne porte pas l'UID. Une politique
 propre par utilisateur exigera donc une modification de `lib/media.js`.
 
-### SEC-05 — MOYEN — Pas de CSP ni d'en-têtes de durcissement
+### SEC-05 — MOYEN — Pas de CSP ni d'en-têtes de durcissement — CORRIGÉ / CSP EN OBSERVATION
+
+**Correctif du 18 septembre 2026 :** toutes les routes reçoivent `nosniff`, Referrer-Policy,
+Permissions-Policy, HSTS, X-Frame-Options et X-DNS-Prefetch-Control. Une CSP compatible avec les
+images HTTPS et Supabase est ajoutée en `Report-Only` pour observer les violations avant blocage.
 
 `next.config.js` ne définit ni Content-Security-Policy, ni `X-Content-Type-Options`, ni
 `Referrer-Policy`, ni `Permissions-Policy`, ni règle de frame. Une CSP serait particulièrement utile
@@ -428,9 +442,10 @@ le footer. À traiter avant communication large, même sans publicité ni analyt
 
 1. ~~Corriger RLS/permissions de `profiles` et adapter la promotion admin.~~ Codé ; appliquer `0002`.
 2. ~~Assainir le HTML + sécuriser la modération des contributions/imports.~~ Codé.
-3. Versionner et vérifier les policies Storage.
-4. ~~Mettre Next/Tiptap à niveau dans une branche dédiée.~~ Codé ; relancer `npm audit` avant publication.
-5. Ajouter headers de sécurité et rotation/révocation de tous les anciens PAT.
+3. ~~Versionner les policies Storage.~~ Codé ; appliquer `0003` et vérifier les anciennes policies.
+4. ~~Mettre Next/Tiptap à niveau dans une branche dédiée.~~ Codé ; audit npm final à 0 vulnérabilité.
+5. ~~Ajouter les headers de sécurité.~~ Codé ; passer la CSP d'observation à active après test. Tous
+   les anciens PAT transmis doivent rester révoqués.
 
 ### P1 — Fiabilité des données
 
@@ -492,6 +507,7 @@ rg --hidden --glob '!node_modules' --glob '!.git/**' \
   'ghp_|service_role|APIFOOTBALL_KEY=|JOBS_SECRET='
 ```
 
-**État après premier lot de correction :** SEC-01 et SEC-03 sont corrigés dans le dépôt. SEC-01
-nécessite encore l'application manuelle de `0002_profile_role_hardening.sql` sur l'instance ;
-l'upgrade des dépendances (SEC-02), les policies Storage et les tests réels Supabase restent ouverts.
+**État au 18 septembre 2026 :** SEC-01, SEC-02, SEC-03 et le code de SEC-04 sont corrigés dans le
+dépôt. `0002_profile_role_hardening.sql` est indiquée comme appliquée. Il reste à appliquer
+`0003_media_storage_hardening.sql`, inspecter les anciennes policies Storage et réaliser les tests
+réels Supabase/Vercel.

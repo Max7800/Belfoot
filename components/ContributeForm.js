@@ -30,7 +30,7 @@ export default function ContributeForm({ collectionKey }) {
   return (
     <div className="mx-auto max-w-2xl space-y-4">
       <h1 className="text-2xl font-black">Proposer — {col.labelSingular || col.label}</h1>
-      {fields.map(([k, f]) => <FieldInput key={k} field={f} scope={col.key} value={getV(k)} onChange={(v) => setV(k, v)} />)}
+      {fields.map(([k, f]) => <FieldInput key={k} field={f} scope={col.key} uploadScope="contributions" value={getV(k)} onChange={(v) => setV(k, v)} />)}
       <button disabled={busy} onClick={submit} className="rounded bg-accent px-4 py-2 text-sm font-bold text-white">Envoyer la proposition</button>
     </div>
   );
