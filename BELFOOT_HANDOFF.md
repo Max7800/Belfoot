@@ -1025,6 +1025,15 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
 - Aucun changement SQL et aucun appel API-Football. ESLint : zéro erreur (`68` avertissements
   historiques). Build Next 16 et `git diff --check` réussis.
 
+### 2026-09-18 — ChatGPT — espace joueur consolidé dans l'admin
+
+- L'édition d'un joueur affiche désormais, sous son identité, ses affectations saisonnières et ses
+  lignes de carrière avec club, compétition, matchs, buts et passes.
+- Les vues complètes Affectations et Carrières acceptent `?player_id=<uuid>` : elles sont filtrées
+  côté Supabase et une nouvelle ligne reprend automatiquement le joueur ciblé.
+- La fiche publique reste accessible depuis cet espace. Aucun SQL et aucun appel provider.
+- Vérifications : ESLint sans erreur (`68` avertissements historiques), build Next 16 réussi.
+
 ---
 
 ## CURRENT_GIT_STATE

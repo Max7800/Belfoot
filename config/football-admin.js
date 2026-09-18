@@ -75,7 +75,7 @@ export const FOOTBALL_ENTITIES = {
     ],
   },
   playerMemberships: {
-    table: "player_team_seasons", title: "Affectations joueurs", singular: "Affectation", orderBy: "season_start_year", orderAsc: false, hasSource: true, search: false, pageSize: 40,
+    table: "player_team_seasons", title: "Affectations joueurs", singular: "Affectation", orderBy: "season_start_year", orderAsc: false, hasSource: true, search: false, pageSize: 40, scopeField: "player_id",
     fields: [
       { key: "player_id", label: "Joueur", type: "relation", table: "players", labelCol: "name" },
       { key: "club_id", label: "Club / équipe", type: "relation", table: "clubs", labelCol: "name" },
@@ -92,7 +92,7 @@ export const FOOTBALL_ENTITIES = {
     ],
   },
   playerCareerStats: {
-    table: "player_season_stats", title: "Statistiques de carrière", singular: "Ligne de statistiques", orderBy: "season", orderAsc: false, hasSource: true, pageSize: 40,
+    table: "player_season_stats", title: "Statistiques de carrière", singular: "Ligne de statistiques", orderBy: "season", orderAsc: false, hasSource: true, pageSize: 40, scopeField: "player_id",
     fields: [
       { key: "player_id", label: "Joueur", type: "relation", table: "players", labelCol: "name" },
       { key: "club_id", label: "Club représenté", type: "relation", table: "clubs", labelCol: "name" },

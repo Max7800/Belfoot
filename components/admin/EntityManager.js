@@ -3,12 +3,16 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import SaveStatus from "@/components/ui/SaveStatus";
 import ImageField from "@/components/ui/ImageField";
+import PlayerWorkspace from "@/components/admin/PlayerWorkspace";
 import { slugify } from "@/lib/slugify";
+import { useSearchParams } from "next/navigation";
 
 const POS = { Goalkeeper: 0, Defender: 1, Midfielder: 2, Attacker: 3 };
 
 export default function EntityManager({ spec }) {
   const { table, title, singular, fields, hasSource } = spec;
+  const searchParams = useSearchParams();
+  const scopedValue = spec.scopeField ? searchParams.get(spec.scopeField) : null;
   const [rows, setRows] = useState([]);
   const [rel, setRel] = useState({});
   const [editing, setEditing] = useState(null);
@@ -35,13 +39,14 @@ export default function EntityManager({ spec }) {
       if (value === "none") query = query.is(filter.key, null);
       else query = query.eq(filter.key, filter.type === "bool" ? value === "true" : value);
     }
+    if (spec.scopeField && scopedValue) query = query.eq(spec.scopeField, scopedValue);
     if (spec.orderBy) query = query.order(spec.orderBy, { ascending: spec.orderAsc !== false, nullsFirst: false });
     if (pageSize) query = query.range(page * pageSize, page * pageSize + pageSize - 1);
     const { data, count } = await query;
     setRows(data || []);
     setTotal(count ?? data?.length ?? 0);
     setLoading(false);
-  }, [groupFilter, page, pageSize, q, quickFilters, spec, table]);
+  }, [groupFilter, page, pageSize, q, quickFilters, scopedValue, spec, table]);
 
   useEffect(() => {
     const timer = setTimeout(load, q.trim() ? 250 : 0);
@@ -58,7 +63,7 @@ export default function EntityManager({ spec }) {
     });
   }, [relFields, table]);
 
-  useEffect(() => { setPage(0); }, [groupFilter, q, quickFilters, table]);
+  useEffect(() => { setPage(0); }, [groupFilter, q, quickFilters, scopedValue, table]);
 
   const save = async () => {
     setStatus("saving");
@@ -114,6 +119,7 @@ export default function EntityManager({ spec }) {
             </div>
           </div>
         )}
+        {table === "players" && editing.id && <PlayerWorkspace playerId={editing.id} />}
       </div>
     );
   }
@@ -134,12 +140,13 @@ export default function EntityManager({ spec }) {
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-        <div><h2 className="text-lg font-bold">{title}</h2>{pageSize > 0 && <p className="mt-0.5 text-xs text-muted">{total} entrée{total > 1 ? "s" : ""}</p>}</div>
+        <div><h2 className="text-lg font-bold">{title}</h2>{pageSize > 0 && <p className="mt-0.5 text-xs text-muted">{total} entrée{total > 1 ? "s" : ""}{scopedValue ? " pour ce joueur" : ""}</p>}</div>
         <div className="flex flex-wrap items-center gap-2">
           {spec.search && <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Rechercher un nom…" className="min-w-44 rounded border border-line/10 bg-surface2 px-3 py-2 text-xs" />}
           {gb && <select value={groupFilter} onChange={(e) => setGroupFilter(e.target.value)} className="rounded border border-line/10 bg-surface2 px-2 py-1 text-xs"><option value="all">Tous les clubs</option>{(rel[gb.relTable] || []).map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}<option value="none">Sans club</option></select>}
           {(spec.quickFilters || []).map((filter) => <select key={filter.key} value={quickFilters[filter.key] ?? "all"} onChange={(event) => setQuickFilters((current) => ({ ...current, [filter.key]: event.target.value }))} className="rounded border border-line/10 bg-surface2 px-2 py-1 text-xs"><option value="all">{filter.allLabel || filter.label}</option>{filter.options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>)}
-          <button onClick={() => setEditing({})} className="rounded bg-accent px-3 py-1 text-sm font-bold text-white">+ {singular || "Ajouter"}</button>
+          {scopedValue && <a href={`/admin/${table === "player_team_seasons" ? "playerMemberships" : "playerCareerStats"}`} className="rounded border border-line/10 px-3 py-1.5 text-xs text-muted hover:text-content">Voir tout</a>}
+          <button onClick={() => setEditing(scopedValue && spec.scopeField ? { [spec.scopeField]: scopedValue } : {})} className="rounded bg-accent px-3 py-1 text-sm font-bold text-white">+ {singular || "Ajouter"}</button>
         </div>
       </div>
       {loading ? <div className="rounded-xl border border-line/10 p-8 text-center text-sm text-muted">Chargement…</div> : groups ? (
