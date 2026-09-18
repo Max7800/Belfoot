@@ -7,6 +7,10 @@
 > Le provider externe remplit la **donnée sportive** ; il ne doit **jamais** écraser les
 > **choix éditoriaux/admin** (logos manuels, bannières, ordre, zones, textes, fonds de tuiles,
 > relations de clubs, visibilité de blocs).
+>
+> **Audit obligatoire avant reprise :** lire aussi `BELFOOT_AUDIT.md`. L'audit du 18 septembre
+> 2026 a identifié un P0 sécurité (RLS `profiles`, HTML riche, dépendances) qui passe désormais
+> avant toute nouvelle fonctionnalité.
 
 ---
 
@@ -396,25 +400,33 @@ Côté Supabase : Site URL = domaine + Redirect URLs (`/auth/callback`, `/reset`
 
 ## 14. TODO ouverts (par priorité indicative)
 
-1. **Valider le nouvel accueil sur données réelles** et ajuster les sélections éditoriales. Le hero,
+1. **P0 sécurité issu de `BELFOOT_AUDIT.md`** : verrouiller le rôle des profils, assainir le HTML
+   riche/contributions, versionner les policies Storage, puis mettre Next/Tiptap à niveau dans des
+   lots séparés. Ne pas ouvrir davantage les inscriptions/contributions avant ces correctifs.
+2. **P1 fiabilité data** : automatiser le suivi des migrations, rattacher les matchs provider à
+   `season_id`, séparer effectif et `tracked`, harmoniser `locked`, faire remonter les erreurs DB et
+   verrouiller les jobs pour protéger le quota API.
+3. **Tests/CI/observabilité** : tests RLS + provider + Playwright, CI avant `main`, error boundaries
+   et monitoring. Le build seul ne détecte pas toutes les erreurs runtime.
+4. **Valider le nouvel accueil sur données réelles** et ajuster les sélections éditoriales. Le hero,
    les matchs, les Belges suivis, la JPL et les actus sont construits ; le bloc Europe existe mais
    reste masqué par défaut. Aucun appel provider n'est effectué par l'accueil.
-2. **Suivi des Belges à l'étranger** (cœur produit) : exercer `discover-belgians` + `track-belgians`,
+5. **Suivi des Belges à l'étranger** (cœur produit) : exercer `discover-belgians` + `track-belgians`,
    page annuaire V1 construite ; prochaine étape = ajouter les compétitions étrangères masquées,
    exercer les jobs, puis construire le top/récap des Belges du week-end.
-3. **Éditorial** : structurer Mercato (Vérifié/Rumeur/Démenti), En bref, analyses et scouting ;
+6. **Éditorial** : structurer Mercato (Vérifié/Rumeur/Démenti), En bref, analyses et scouting ;
    l'accueil consomme déjà automatiquement les actualités publiées.
-4. **Récap des Belges du week-end** : exploiter `match_player_stats` maintenant disponible pour
+7. **Récap des Belges du week-end** : exploiter `match_player_stats` maintenant disponible pour
    construire une sélection datée (buts, passes, notes, minutes), avec seuils/sélection éditables.
-5. **Europe belge** : ajouter C1/C3/C4 comme compétitions synchronisées, mettre en avant tout match
+8. **Europe belge** : ajouter C1/C3/C4 comme compétitions synchronisées, mettre en avant tout match
    impliquant un club belge et créer un bloc/page coefficient UEFA (association + clubs). Prévoir
    une source coefficient vérifiable et une surcharge admin avant automatisation complète.
-6. **Challenger Pro League / réserves** : migration `0018` prête (compétition 145 + saison
+9. **Challenger Pro League / réserves** : migration `0018` prête (compétition 145 + saison
    2024-2025). Après application, lancer `football.sync` puis `football.squads` uniquement sur la
    Challenger. Club NXT, Jong Genk, RSCA Futures et Jong KAA Gent sont reliés automatiquement à
    leur parent sans perdre leurs propres matchs, classement et fiche ; vérifier ensuite les liens.
-7. **Passer en plan payant** API-Football pour la saison courante (le code est prêt : changer `season`).
-8. Régler les Zones JPL par saison/phase. Pour la Croky, renseigner idéalement Type = `cup` en admin ; le front est
+10. **Passer en plan payant** API-Football pour la saison courante (le code est prêt : changer `season`).
+11. Régler les Zones JPL par saison/phase. Pour la Croky, renseigner idéalement Type = `cup` en admin ; le front est
    désormais résilient et la détecte aussi via le provider/les tours si cette valeur manque encore.
 
 ---
@@ -856,14 +868,31 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
   `/matchs/[id]`.
 - Nouvelle migration : **aucune**. Vérification : build Next.js 14.2.35 + `git diff --check`.
 
+### 2026-09-18 — ChatGPT — audit complet de passation
+
+- Nouveau document racine `BELFOOT_AUDIT.md` : audit sécurité, RLS, dépendances, Storage,
+  contributions, migrations, providers/quota, modèle saison, performance Supabase, tests/CI,
+  observabilité, responsive admin, accessibilité, SEO et roadmap priorisée.
+- P0 identifié avant toute nouvelle feature : empêcher un membre de modifier `profiles.role`,
+  assainir le HTML éditorial/contributions, versionner les policies Storage et mettre à niveau
+  Next/Tiptap dans des lots testables séparément.
+- `npm audit --package-lock-only` : 27 vulnérabilités rapportées (`1 critical`, `1 high`,
+  `25 moderate`). Aucun PAT GitHub ou secret serveur trouvé dans les fichiers/l'historique inspecté ;
+  le remote Git ne contient pas de credential.
+- Risques data prioritaires documentés : imports sans `season_id`, `syncSquads` qui met tous les
+  joueurs en `tracked`, erreurs d'upsert parfois ignorées, pas de lock/budget de job, migrations
+  manuelles non suivies et requêtes publiques qui atteindront le plafond de 1 000 lignes.
+- Ce lot est volontairement **documentation seulement** : aucun correctif sensible n'a été mêlé à
+  l'audit sans validation de l'utilisateur.
+
 ---
 
 ## CURRENT_GIT_STATE
 
 - **Branche** : `main`
-- **Dernier commit distant avant le lot courant** : `ddf568d` — calendrier mobile dans la fiche
-  compétition + réparation `players.country`. Le lot courant consolide le parcours Burnley →
-  annuaire des Belges → fiche joueur → performances.
+- **Dernier commit distant avant le lot courant** : `b503c15` — correctif runtime des fiches joueur
+  et match. Le lot courant ajoute l'audit complet et repriorise la roadmap ; aucune modification du
+  code applicatif.
 - **Commits importants récents** :
   - `2c71e35` documentation clubs liés / Europe
   - `69578a5` automatisation des stades + simplification des équipes liées
