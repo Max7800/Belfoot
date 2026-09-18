@@ -825,13 +825,35 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
 - Vérification : build Next.js 14.2.35 réussi avec variables Supabase factices de compilation +
   `git diff --check` réussi. Socle : **aucune modification**.
 
+### 2026-09-18 — ChatGPT — consolidation du parcours Belges / fiche joueur
+
+- Le test Burnley ayant validé l'import ciblé, la fiche `/players/[id]` devient une vraie page de
+  suivi : retour vers l'annuaire des Belges, identité/club/pays/poste, quatre chiffres de saison,
+  minutes et moyenne, trois prochains matchs du club, performances match par match et tableau par
+  compétition. Le rendu est en cartes sur mobile et en deux colonnes sur grand écran.
+- Les performances ne sont plus ordonnées par leur date de synchronisation : elles sont reliées aux
+  matchs puis triées par `matches.kickoff`. La fiche récupère aussi les anciens matchs nécessaires
+  si une performance n'appartient plus aux 100 matchs récents du club.
+- Aucun appel API n'est fait depuis une page publique. Pour enrichir Burnley sans brûler le quota :
+  choisir le Championship dans Jobs, mettre `Max matchs` à 1–3, puis lancer **Compositions &
+  performances**. L'aide du panneau admin explique désormais cette séquence.
+- Correction de fiabilité : une fiche joueur `locked` conserve bien ses champs éditoriaux, mais
+  l'import équipe ciblée continue de mettre à jour sa ligne `player_season_stats` séparée. Avant,
+  le `continue` sautait également les statistiques.
+- L'annuaire demande les performances les plus récemment synchronisées en premier. L'admin accepte
+  maintenant les postes longs renvoyés par API-Football (`Goalkeeper`, `Defender`, `Midfielder`,
+  `Attacker`) en plus des abréviations.
+- Nouvelle migration : **aucune**. Vérification : build Next.js 14.2.35 réussi avec variables
+  Supabase factices de compilation + `git diff --check` réussi. Socle : **aucune modification**.
+
 ---
 
 ## CURRENT_GIT_STATE
 
 - **Branche** : `main`
-- **Dernier commit distant avant le lot courant** : `632dedc` — filtres Belges toujours visibles.
-  Le lot courant adapte la navigation globale et `/matchs` aux petits écrans.
+- **Dernier commit distant avant le lot courant** : `ddf568d` — calendrier mobile dans la fiche
+  compétition + réparation `players.country`. Le lot courant consolide le parcours Burnley →
+  annuaire des Belges → fiche joueur → performances.
 - **Commits importants récents** :
   - `2c71e35` documentation clubs liés / Europe
   - `69578a5` automatisation des stades + simplification des équipes liées

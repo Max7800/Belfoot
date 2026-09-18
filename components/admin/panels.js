@@ -67,7 +67,7 @@ export function JobsPanel() {
   };
   return (<div>
     <h2 className="mb-4 text-lg font-bold">Jobs & synchronisation</h2>
-    <p className="mb-3 text-xs text-muted">Entraîneurs coûte environ une requête par club. Compositions & performances coûte jusqu'à deux requêtes par match. L'import équipe test ne synchronise qu'un club et ses Belges : sélectionne sa compétition avant de le lancer.</p>
+    <p className="mb-3 text-xs leading-5 text-muted">Entraîneurs coûte environ une requête par club. Compositions & performances coûte jusqu'à deux requêtes par match. L'import équipe test ne synchronise qu'un club, ses matchs et ses Belges : sélectionne sa compétition avant de le lancer. Pour alimenter ensuite les performances récentes, garde la même compétition, mets « Max matchs » à 1–3 et lance « Compositions & performances ».</p>
     <div className="mb-3 flex flex-wrap items-center gap-2">
       <select value={compId} onChange={(e) => setCompId(e.target.value)} className="rounded border border-line/10 bg-surface2 px-2 py-1 text-sm"><option value="">Toutes les compétitions</option>{comps.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
       <label className="text-xs text-muted">Saison</label>

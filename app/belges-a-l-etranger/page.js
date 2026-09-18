@@ -67,7 +67,7 @@ export default function BelgiansAbroadPage() {
       supabase.from("clubs").select("id,name,logo_url"),
       playerIds.length ? supabase.from("player_season_stats").select("*").in("player_id", playerIds) : Promise.resolve({ data: [] }),
       supabase.from("matches").select("*").order("kickoff", { ascending: false }).limit(700),
-      playerIds.length ? supabase.from("match_player_stats").select("*").in("player_id", playerIds).limit(500) : Promise.resolve({ data: [] }),
+      playerIds.length ? supabase.from("match_player_stats").select("*").in("player_id", playerIds).order("synced_at", { ascending: false }).limit(500) : Promise.resolve({ data: [] }),
     ]);
     if (clubResult.error) throw clubResult.error;
     if (statsResult.error) throw statsResult.error;

@@ -66,7 +66,6 @@ export async function syncTeamTest(db, competition, ctx = {}) {
   const syncedAt = new Date().toISOString();
   for (const player of belgians) {
     const { data: existing } = await db.from("players").select("id,locked").eq("source", competition.provider).eq("external_id", player.external_id).maybeSingle();
-    if (existing?.locked) continue;
     const patch = {
       source: competition.provider,
       external_id: player.external_id,
@@ -84,10 +83,12 @@ export async function syncTeamTest(db, competition, ctx = {}) {
       synced_at: syncedAt,
     };
     let playerId = existing?.id;
-    if (existing) {
+    // `locked` protège les champs éditoriaux de la fiche, pas les statistiques
+    // de saison stockées dans une table séparée.
+    if (existing && !existing.locked) {
       const { error } = await db.from("players").update(patch).eq("id", existing.id);
       if (error) throw error;
-    } else {
+    } else if (!existing) {
       const { data, error } = await db.from("players").insert(patch).select("id").single();
       if (error) throw error;
       playerId = data?.id;

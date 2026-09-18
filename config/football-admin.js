@@ -58,7 +58,7 @@ export const FOOTBALL_ENTITIES = {
     fields: [
       { key: "name", label: "Nom", type: "text" },
       { key: "club_id", label: "Club actuel", type: "relation", table: "clubs", labelCol: "name" },
-      { key: "position", label: "Poste", type: "select", options: ["GK", "DEF", "MID", "FWD"] },
+      { key: "position", label: "Poste", type: "select", options: ["Goalkeeper", "Defender", "Midfielder", "Attacker", "GK", "DEF", "MID", "FWD"] },
       { key: "number", label: "N°", type: "number" },
       { key: "age", label: "Âge", type: "number" },
       { key: "nationality", label: "Nationalité", type: "text" },
