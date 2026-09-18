@@ -9,6 +9,19 @@ export function squadRoleForClub(club) {
     : "first_team";
 }
 
+export async function clearUnassignedPlayerStats(db, { playerId, competitionId, season }) {
+  if (!playerId || !competitionId || !season) return;
+  const { error } = await db
+    .from("player_season_stats")
+    .delete()
+    .eq("player_id", playerId)
+    .eq("competition_id", competitionId)
+    .eq("season", String(season))
+    .is("club_id", null)
+    .eq("locked", false);
+  if (error) throw new Error(`Nettoyage stats non attribuées: ${error.message}`);
+}
+
 export async function upsertPlayerMembership(db, {
   playerId,
   club,

@@ -143,8 +143,8 @@ export default function CompetitionPage() {
   const grouped = useMemo(() => { const g = {}; for (const m of shownMatches) { const k = m.round_number != null ? String(m.round_number) : (m.round_raw || "?"); (g[k] ||= { label: m.round_number != null ? `${L("comp.round", "Journée")} ${m.round_number}` : (m.round_raw || "Tour"), num: m.round_number, items: [] }).items.push(m); } return Object.values(g).sort((a, b) => (a.num ?? 999) - (b.num ?? 999)); }, [shownMatches]);
 
   const clubName = (id) => clubsMap[id]?.name || "—";
-  const playerClubId = (player) => pss[player.id]?.club_id || player.club_id || null;
-  const visiblePlayers = Object.keys(pss).length ? players.filter((player) => pss[player.id]) : players;
+  const playerClubId = (player) => pss[player.id] ? (pss[player.id].club_id || null) : (player.club_id || null);
+  const visiblePlayers = Object.keys(pss).length ? players.filter((player) => pss[player.id] && (Number(pss[player.id].appearances) || 0) > 0) : players;
   const withStats = visiblePlayers.map((p) => ({ p, st: pss[p.id] })).filter((x) => x.st);
   const topBy = (key) => withStats.filter((x) => x.st[key] != null).sort((a, b) => (b.st[key] || 0) - (a.st[key] || 0)).slice(0, 10);
   const maxApp = Math.max(0, ...withStats.map((x) => x.st.appearances || 0));

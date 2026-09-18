@@ -1,7 +1,7 @@
 import { getProvider } from "./providers";
 import { upsertExternal } from "./sync";
 import { ensureSeason, seasonLabel, seasonYear } from "./season";
-import { upsertPlayerMembership } from "./playerMemberships";
+import { clearUnassignedPlayerStats, upsertPlayerMembership } from "./playerMemberships";
 
 function parseRound(raw) {
   if (!raw) return { round_raw: null, phase: null, round_number: null };
@@ -100,6 +100,7 @@ export async function syncTeamTest(db, competition, ctx = {}) {
       playerId = data?.id;
     }
     if (playerId && player.stats) {
+      await clearUnassignedPlayerStats(db, { playerId, competitionId: competition.id, season });
       const { error } = await db.from("player_season_stats").upsert({ player_id: playerId, club_id: teamClubId, season_id: seasonRow.id, competition_id: competition.id, season, ...player.stats, source: competition.provider, external_id: player.external_id, synced_at: syncedAt }, { onConflict: "player_id,club_id,competition_id,season" });
       if (error) throw new Error(`${player.name}: ${error.message}`);
     }

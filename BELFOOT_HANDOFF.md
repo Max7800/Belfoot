@@ -992,6 +992,26 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
 - Vérifications : ESLint sans erreur (`69` avertissements historiques), build Next 16 et
   `git diff --check` réussis sans appel API-Football.
 
+### 2026-09-18 — ChatGPT — réparation du backfill historique des effectifs
+
+- Le contrôle post-`0024` a révélé 569 affectations et deux héritages incorrects : relation inversée
+  Club Brugge → Club NXT et anciennes stats Challenger attribuées au club actuel du joueur faute de
+  club historique stocké avant `0024`.
+- Nouvelle migration `0025_membership_backfill_repair.sql`, transactionnelle : rattache les stats à
+  leur saison Belfoot, conserve toutes les valeurs statistiques, retire seulement le `club_id` quand
+  le club n'a disputé aucun match dans cette compétition/saison, supprime les affectations générées
+  devenues sans preuve et répare les relations parent/U23 connues.
+- Les jobs effectifs, découverte et tracking sélectionnent désormais les clubs depuis les matchs de
+  la saison demandée, et non plus depuis toutes les saisons de la compétition.
+- Une future resynchronisation stricte remplace proprement une ancienne ligne statistique sans club ;
+  les lignes manuelles verrouillées restent protégées.
+- La page compétition n'attribue plus au club actuel une ligne historique dont le club est inconnu et
+  affiche seulement les joueurs ayant une apparition dans la compétition sélectionnée. La fiche club
+  affiche les joueurs utilisés dans la saison ; les autres restent administrables.
+- Aucune statistique historique n'est supprimée par `0025`, aucun appel API n'a été effectué.
+- Vérifications : ESLint sans erreur (`69` avertissements historiques), build Next 16 et
+  `git diff --check` réussis.
+
 ---
 
 ## CURRENT_GIT_STATE
@@ -1028,13 +1048,14 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
   `0017_protect_manual_coaches.sql`, `0018_challenger_pro_league.sql`, puis
   `0019_competition_portal_style.sql`, `0020_match_lineups.sql`, `0021_burnley_test.sql`, puis
   `0022_ensure_player_country.sql`, `0023_season_safe_sync.sql`, puis
-  `0024_player_team_seasons.sql`, et vérifier que `modules/football/migrations/0001→0024` sont
+  `0024_player_team_seasons.sql`, puis `0025_membership_backfill_repair.sql`, et vérifier que
+  `modules/football/migrations/0001→0025` sont
   **toutes** passées (surtout `0008` position, `0009` banner_url/zones, `0010` rating_min,
   `0011` competition_type/parent_club_id/team_type, `0012` unicité des stats par compétition et
   `0013` textes des bandeaux, `0014` visibilité/pays du suivi international, `0015` zones par
   saison/phase, `0016` contenu éditorial des fiches clubs, `0017` protection des coachs manuels et
   `0018` création Challenger Pro League, `0019` style séparé des portes du portail et `0024`
-  séparation personne/équipe/saison).
+  séparation personne/équipe/saison et `0025` réparation du backfill historique).
   Le code est tolérant mais ces features restent inactives sinon.
 
 ---

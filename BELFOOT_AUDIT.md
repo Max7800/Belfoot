@@ -483,7 +483,8 @@ le footer. À traiter avant communication large, même sans publicité ni analyt
 4. Faire remonter toutes les erreurs DB/provider ; ~~ajouter job locks/budget quota.~~ Relire les jobs restants.
 5. Corriger le traitement des réponses vides et la transaction événements.
 6. ~~Séparer personne, équipe et saison pour les effectifs/U23/transferts.~~ Codé dans `0024` ;
-   appliquer la migration puis contrôler les relations automatiques dans l'admin.
+   le contrôle a conduit au correctif transactionnel `0025` pour les associations historiques sans
+   preuve. Appliquer les deux migrations dans l'ordre.
 
 ### P2 — Qualité et passage à l'échelle
 
@@ -540,4 +541,4 @@ rg --hidden --glob '!node_modules' --glob '!.git/**' \
 **État au 18 septembre 2026 :** SEC-01, SEC-02, SEC-03 et SEC-04 sont corrigés dans le dépôt. Les
 cinq policies Storage finales ont été contrôlées et les trois anciennes policies permissives ne sont
 plus présentes. Il reste les tests réels de rôles Supabase, le passage de la CSP en mode actif après
-observation Vercel et l'application/validation des migrations data `0004`, `0023` et `0024`.
+observation Vercel et l'application/validation des migrations data `0004`, `0023`, `0024` et `0025`.

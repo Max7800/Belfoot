@@ -25,6 +25,7 @@ export default function ClubPage() {
   const [clubsMap, setClubsMap] = useState({});
   const [players, setPlayers] = useState([]);
   const [memberships, setMemberships] = useState([]);
+  const [rosterStats, setRosterStats] = useState([]);
   const [coach, setCoach] = useState(null);
   const [linked, setLinked] = useState([]);
   const [sport, setSport] = useState(null);
@@ -48,10 +49,11 @@ export default function ClubPage() {
       current.count += 1; current.latest = Math.max(current.latest, new Date(match.kickoff || 0).getTime() || 0); current.match = match; contexts.set(key, current);
     });
     const contextMatch = [...contexts.values()].sort((a, b) => b.count - a.count || b.latest - a.latest)[0]?.match;
-    const [clubResult, playerResult, membershipResult, coachResult, linkedResult] = await Promise.all([
+    const [clubResult, playerResult, membershipResult, statsResult, coachResult, linkedResult] = await Promise.all([
       ids.length ? supabase.from("clubs").select("id,name,logo_url").in("id", ids) : Promise.resolve({ data: [] }),
       supabase.from("players").select("*").eq("club_id", id).order("name"),
       supabase.from("player_team_seasons").select("*").eq("club_id", id).eq("active", true).order("season_start_year", { ascending: false, nullsFirst: false }),
+      supabase.from("player_season_stats").select("player_id,club_id,season,appearances").eq("club_id", id),
       supabase.from("coaches").select("*").eq("club_id", id),
       supabase.from("clubs").select("id,name,logo_url,team_type,parent_club_id").or(`parent_club_id.eq.${id},id.eq.${c.parent_club_id || "00000000-0000-0000-0000-000000000000"}${c.parent_club_id ? `,parent_club_id.eq.${c.parent_club_id}` : ""}`),
     ]);
@@ -65,6 +67,7 @@ export default function ClubPage() {
       if (!error) rosterPlayers = relatedPlayers || [];
     }
     setMemberships(membershipRows);
+    setRosterStats(statsResult.error ? [] : (statsResult.data || []));
     setPlayers(rosterPlayers); setCoach([...coaches].sort((a, b) => Number(!!b.locked) - Number(!!a.locked) || Number(b.source === "manual") - Number(a.source === "manual"))[0] || null); setLinked((linkedResult.data || []).filter((item) => item.id !== id));
 
     if (contextMatch) {
@@ -95,7 +98,9 @@ export default function ClubPage() {
   const rosterMemberships = memberships.length
     ? memberships.filter((row) => !rosterYear || (row.season_start_year || seasonYear(row.season)) === rosterYear)
     : [];
-  const membershipByPlayer = new Map(rosterMemberships.map((row) => [row.player_id, row]));
+  const usedPlayerIds = new Set(rosterStats.filter((row) => (!rosterYear || seasonYear(row.season) === rosterYear) && (Number(row.appearances) || 0) > 0).map((row) => row.player_id));
+  const visibleMemberships = usedPlayerIds.size ? rosterMemberships.filter((row) => usedPlayerIds.has(row.player_id)) : rosterMemberships;
+  const membershipByPlayer = new Map(visibleMemberships.map((row) => [row.player_id, row]));
   const squadSource = memberships.length ? players.filter((player) => membershipByPlayer.has(player.id)) : players;
   const squad = [...squadSource].map((player) => ({ ...player, membership: membershipByPlayer.get(player.id) || null })).sort((a, b) => (POS[a.membership?.position || a.position] ?? 9) - (POS[b.membership?.position || b.position] ?? 9) || (a.name || "").localeCompare(b.name || ""));
   const honours = Array.isArray(club.honours) ? club.honours : [];
@@ -113,7 +118,7 @@ export default function ClubPage() {
     stats: teamStats.length ? <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">{[[teamStats.length, "Matchs"], [wins, "Victoires"], [draws, "Nuls"], [losses, "Défaites"], [goalsFor, "Buts pour"], [goalsAgainst, "Buts contre"], [goalsFor - goalsAgainst, "Différence"]].map(([value, label]) => <div key={label} className="rounded-xl border border-line/10 bg-bg/35 p-3 text-center"><div className="text-xl font-black">{value > 0 && label === "Différence" ? `+${value}` : value}</div><div className="mt-1 text-[10px] uppercase tracking-wide text-muted">{label}</div></div>)}</div> : <p className="text-sm text-muted">Aucune statistique disponible.</p>,
     stadium: (club.stadium_name || club.stadium_image_url || club.stadium_address) ? <div className="grid overflow-hidden rounded-2xl border border-line/10 bg-bg/35 sm:grid-cols-2">{club.stadium_image_url ? <img src={club.stadium_image_url} className="h-52 w-full object-cover" alt={club.stadium_name || "Stade"} /> : <div className="flex h-52 items-center justify-center bg-white/[0.025]"><Building2 className="h-12 w-12 text-muted/40" /></div>}<div className="flex flex-col justify-center p-5"><div className="text-xl font-black">{club.stadium_name || "Stade"}</div>{club.stadium_capacity && <div className="mt-2 text-sm text-muted">{Number(club.stadium_capacity).toLocaleString("fr-BE")} places</div>}{club.stadium_address && <div className="mt-3 flex items-start gap-2 text-sm text-muted"><MapPin className="mt-0.5 h-4 w-4 shrink-0" />{club.stadium_address}</div>}</div></div> : <p className="text-sm text-muted">Informations du stade à compléter dans l'administration.</p>,
     honours: honours.length ? <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{honours.map((item, index) => <div key={`${item.title}-${index}`} className="flex items-center gap-3 rounded-2xl border border-line/10 bg-bg/35 p-4"><span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl" style={{ background: `${secondary}18`, color: secondary }}><Trophy className="h-5 w-5" /></span><span className="min-w-0 flex-1"><b className="block">{item.title || "Trophée"}</b>{item.years && <span className="block truncate text-xs text-muted">{item.years}</span>}</span>{item.count && <b className="text-2xl" style={{ color: secondary }}>×{item.count}</b>}</div>)}</div> : <p className="text-sm text-muted">Palmarès à compléter dans l'administration.</p>,
-    squad: squad.length ? <div><div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs text-muted"><span>{rosterYear ? `Effectif ${rosterYear}/${String(rosterYear + 1).slice(-2)}` : "Effectif du club"}</span>{memberships.length > 0 && <span>Relations club–saison vérifiées séparément</span>}</div><div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">{squad.map((player) => { const role = player.membership?.squad_role; const position = player.membership?.position || player.position; return <Link key={player.id} href={`/players/${player.id}`} className="rounded-2xl border border-line/10 bg-bg/40 p-3 text-center transition hover:border-accent/40"><img src={player.photo_url || ""} className="mx-auto h-14 w-14 rounded-full object-cover" alt="" /><div className="mt-1 truncate text-sm font-bold">{player.name}</div><div className="text-xs text-muted">{[position, player.age ? `${player.age} ans` : null].filter(Boolean).join(" · ")}</div>{role && role !== "first_team" && <div className="mt-1 text-[10px] font-bold uppercase tracking-wide text-accent">{ROLE_LABELS[role] || role}</div>}{player.membership?.membership_type === "loan" && <div className="mt-1 text-[10px] font-bold uppercase tracking-wide text-amber-300">Prêt</div>}</Link>; })}</div></div> : <p className="text-muted">—</p>,
+    squad: squad.length ? <div><div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs text-muted"><span>{rosterYear ? `Joueurs utilisés en ${rosterYear}/${String(rosterYear + 1).slice(-2)}` : "Effectif du club"}</span>{memberships.length > 0 && <span>Les joueurs sans apparition restent éditables dans l'admin</span>}</div><div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">{squad.map((player) => { const role = player.membership?.squad_role; const position = player.membership?.position || player.position; return <Link key={player.id} href={`/players/${player.id}`} className="rounded-2xl border border-line/10 bg-bg/40 p-3 text-center transition hover:border-accent/40"><img src={player.photo_url || ""} className="mx-auto h-14 w-14 rounded-full object-cover" alt="" /><div className="mt-1 truncate text-sm font-bold">{player.name}</div><div className="text-xs text-muted">{[position, player.age ? `${player.age} ans` : null].filter(Boolean).join(" · ")}</div>{role && role !== "first_team" && <div className="mt-1 text-[10px] font-bold uppercase tracking-wide text-accent">{ROLE_LABELS[role] || role}</div>}{player.membership?.membership_type === "loan" && <div className="mt-1 text-[10px] font-bold uppercase tracking-wide text-amber-300">Prêt</div>}</Link>; })}</div></div> : <p className="text-muted">—</p>,
     linked: linked.length ? <div className="flex flex-wrap gap-2">{linked.map((team) => <Link key={team.id} href={`/clubs/${team.id}`} className="flex items-center gap-2 rounded-xl border border-line/10 bg-bg/40 p-2 pr-3 text-sm transition hover:border-accent/40">{team.logo_url && <img src={team.logo_url} className="h-6 w-6 object-contain" alt="" />}<span className="font-semibold">{team.name}</span>{team.team_type && team.team_type !== "first_team" && <span className="text-[10px] uppercase text-muted">{ROLE_LABELS[team.team_type] || team.team_type}</span>}</Link>)}</div> : <p className="text-muted">—</p>,
     last: finished.length ? <div className="space-y-2">{finished.slice(0, 10).map((match) => <MatchRow key={match.id} m={match} clubs={clubsMap} href={`/matchs/${match.id}`} />)}</div> : <p className="text-muted">—</p>,
     next: upcoming.length ? <div className="space-y-2">{upcoming.slice(0, 10).map((match) => <MatchRow key={match.id} m={match} clubs={clubsMap} href={`/matchs/${match.id}`} />)}</div> : <p className="text-muted">Aucun match à venir.</p>,
