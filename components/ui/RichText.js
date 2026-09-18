@@ -10,6 +10,7 @@ export default function RichText({ value, onChange }) {
   const editor = useEditor({
     immediatelyRender: false,
     extensions: [StarterKit, Link.configure({ openOnClick: false })],
+    shouldRerenderOnTransaction: true,
     content: value || "",
     onUpdate: ({ editor }) => onChange(editor.getHTML()),
     editorProps: { attributes: { class: "rich min-h-[160px] focus:outline-none" } },
@@ -17,7 +18,7 @@ export default function RichText({ value, onChange }) {
 
   // Recharge le contenu quand on passe à une autre entrée.
   useEffect(() => {
-    if (editor && (value || "") !== editor.getHTML()) editor.commands.setContent(value || "", false);
+    if (editor && (value || "") !== editor.getHTML()) editor.commands.setContent(value || "", { emitUpdate: false });
   }, [value, editor]);
 
   if (!editor) return null;

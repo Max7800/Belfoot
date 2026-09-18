@@ -902,6 +902,20 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
   brouillon ; une correction conserve l'état de publication existant après relecture explicite.
 - Vérifications : payload hostile nettoyé, build Next.js de production et `git diff --check` réussis.
 
+### 2026-09-18 — ChatGPT — upgrade Next.js / React / Tiptap
+
+- Next.js passe de `14.2.35` à `16.3.5`, avec React et React DOM `19.3.0`.
+- Tiptap passe de `2.27.3` à `3.31.3`, avec `@floating-ui/dom` ajouté pour les extensions v3.
+- Les pages serveur et le job dynamique utilisent `await params`, conformément à Next 16.
+- `next lint` a été remplacé par ESLint flat config (`eslint.config.mjs`) ; le lint passe sans erreur
+  et conserve uniquement 69 avertissements historiques, principalement sur les balises `<img>`.
+- La configuration `images.remotePatterns: hostname "**"` a été retirée : Belfoot utilise ses images
+  externes via `<img>` et n'ouvre plus inutilement l'optimiseur Next à toutes les destinations HTTPS.
+- `AGENTS.md` documente désormais la version Next 16 à lire par Claude et les futurs agents.
+- Vérifications : build Next 16/Turbopack réussi, ESLint réussi, `git diff --check` réussi. Le
+  `npm audit` final doit être relancé avant publication ; l'environnement a atteint sa limite lors
+  de cette commande.
+
 ---
 
 ## CURRENT_GIT_STATE

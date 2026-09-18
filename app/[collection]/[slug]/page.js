@@ -9,18 +9,20 @@ import { buildMetadata } from "@/lib/seo";
 export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ params }) {
-  const c = collectionByRoute("/" + params.collection);
+  const { collection, slug } = await params;
+  const c = collectionByRoute("/" + collection);
   if (!c) return {};
   let e = null;
-  try { e = await getEntry(c.key, params.slug); } catch {}
-  return buildMetadata({ title: e?.seo?.title || e?.title || c.label, description: e?.seo?.description || e?.excerpt, image: e?.cover_url, path: `${c.route}/${params.slug}` });
+  try { e = await getEntry(c.key, slug); } catch {}
+  return buildMetadata({ title: e?.seo?.title || e?.title || c.label, description: e?.seo?.description || e?.excerpt, image: e?.cover_url, path: `${c.route}/${slug}` });
 }
 
 export default async function EntryDetail({ params }) {
-  const c = collectionByRoute("/" + params.collection);
+  const { collection, slug } = await params;
+  const c = collectionByRoute("/" + collection);
   if (!c) notFound();
   let e = null;
-  try { e = await getEntry(c.key, params.slug); } catch {}
+  try { e = await getEntry(c.key, slug); } catch {}
   if (!e || !e.published) notFound();
   let colors = {}; try { colors = await categoryColorMap(c.key); } catch {}
   const imgs = Array.isArray(e.images) ? e.images : [];

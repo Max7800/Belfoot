@@ -22,7 +22,8 @@ avant le lot de durcissement P0**. Trois risques dominent :
 
 1. **Escalade de privilèges Supabase** : correctif codé dans la migration core `0002`, à déployer.
 2. **HTML éditorial non assaini** : rendu et approbation assainis dans le lot suivant l'audit.
-3. **Dépendances vulnérables** : `npm audit` remonte 27 vulnérabilités, dont Next.js classé critique.
+3. **Dépendances vulnérables** : le lot d'upgrade Next/Tiptap est codé ; le contrôle npm distant reste
+   à relancer après la limite d'exécution de l'environnement.
 
 La dette suivante est surtout opérationnelle : migrations manuelles non suivies, imports qui
 peuvent annoncer un succès malgré des écritures en erreur, absence de `season_id` sur les matchs
@@ -103,7 +104,13 @@ la prise de contrôle de toutes les tables admin et de `/api/admin/run-job`.
 
 Ne pas se contenter du guard React de `/admin` : il masque l'UI mais la vraie barrière reste RLS.
 
-### SEC-02 — CRITIQUE — Version Next.js signalée vulnérable
+### SEC-02 — CRITIQUE — Version Next.js signalée vulnérable — UPGRADE CODÉ, AUDIT À RELANCER
+
+**Correctif du 18 septembre 2026 :** Next.js passe de 14.2.35 à 16.3.5, React de 18.3.1 à 19.3.0
+et Tiptap de 2.27.3 à 3.31.3. Les pages et route handlers utilisent désormais `await params`,
+`next lint` est remplacé par ESLint flat config et la configuration `images` permissive est retirée.
+Le build Next 16/Turbopack et ESLint passent. Le `npm audit` final n'a pas pu être relancé car la
+limite d'exécution de l'environnement a été atteinte ; il faudra le faire avant publication.
 
 `npm audit` sur le lockfile trouve **27 vulnérabilités** : `1 critical`, `1 high`, `25 moderate`.
 Next `14.2.35` concentre plusieurs avis DoS/SSRF/cache et deux avis classés RCE dans les versions
@@ -422,7 +429,7 @@ le footer. À traiter avant communication large, même sans publicité ni analyt
 1. ~~Corriger RLS/permissions de `profiles` et adapter la promotion admin.~~ Codé ; appliquer `0002`.
 2. ~~Assainir le HTML + sécuriser la modération des contributions/imports.~~ Codé.
 3. Versionner et vérifier les policies Storage.
-4. Mettre Next/Tiptap à niveau dans une branche dédiée.
+4. ~~Mettre Next/Tiptap à niveau dans une branche dédiée.~~ Codé ; relancer `npm audit` avant publication.
 5. Ajouter headers de sécurité et rotation/révocation de tous les anciens PAT.
 
 ### P1 — Fiabilité des données

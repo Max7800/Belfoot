@@ -2,26 +2,32 @@
   "name": "socle",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=20.9.0"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "eslint ."
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",
-    "@tiptap/extension-link": "^2.27.3",
-    "@tiptap/pm": "^2.27.3",
-    "@tiptap/react": "^2.27.3",
-    "@tiptap/starter-kit": "^2.27.3",
+    "@floating-ui/dom": "1.7.4",
+    "@tiptap/extension-link": "3.31.3",
+    "@tiptap/pm": "3.31.3",
+    "@tiptap/react": "3.31.3",
+    "@tiptap/starter-kit": "3.31.3",
     "lucide-react": "^0.446.0",
-    "next": "14.2",
-    "react": "18.3.1",
-    "react-dom": "18.3.1",
+    "next": "16.3.5",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
     "sanitize-html": "^2.17.7"
   },
   "devDependencies": {
     "autoprefixer": "^10.4.20",
+    "eslint": "9.39.3",
+    "eslint-config-next": "16.3.5",
     "postcss": "^8.4.47",
     "tailwindcss": "^3.4.13"
   }

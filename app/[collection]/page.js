@@ -9,12 +9,14 @@ import CategoryBadge from "@/components/CategoryBadge";
 export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ params }) {
-  const c = collectionByRoute("/" + params.collection);
+  const { collection } = await params;
+  const c = collectionByRoute("/" + collection);
   return buildMetadata({ title: c?.label || "Contenu", path: c?.route });
 }
 
 export default async function CollectionList({ params }) {
-  const c = collectionByRoute("/" + params.collection);
+  const { collection } = await params;
+  const c = collectionByRoute("/" + collection);
   if (!c) notFound();
   let items = [], colors = {};
   try { items = await listEntries(c.key, { publishedOnly: true }); } catch {}
