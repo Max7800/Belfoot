@@ -3,7 +3,7 @@ const votw = {
   key: "votw",
   label: "11 de la semaine",
   icon: "star",
-  enabled: false, requires: ["football"],
+  enabled: true, requires: ["football"],
   nav: [{ label: "11 de la semaine", to: "/onze" }],
   adminPanels: [{ key: "votw-sessions", label: "11 de la semaine" }],
 };

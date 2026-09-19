@@ -1185,16 +1185,38 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
   (valeur + source nulle) n'est jamais écrasée. Schéma et admin déjà prêts, seul l'import reste à faire.
 - Vérifs : ESLint 0 erreur, build Next 16 vert. Zéro appel API.
 
+### 2026-09-19 — Claude — Onze de la semaine (module `votw`) — sous-lot 1/3 : fondation + admin
+- **Module `votw` activé** (`modules/votw/manifest.js` `enabled:true`) → **nav publique `/onze`** +
+  panneau admin. La page `/onze` est une coquille « bientôt » en attendant le terrain (sous-lot 2).
+  Tables déjà définies dans `votw/migrations/0001_init.sql` (sessions/candidates/votes/results
+  + vue `votw_appearances` + RLS). **Nouvelle migration `votw/0002_session_competition.sql`** : ajoute
+  `competition_id` + `season_id` à `votw_sessions` (choisir JPL + saison). **Appliquer `votw 0001` puis
+  `votw 0002`.**
+- **Décision d'archi** : on NE crée PAS les tables `weekly_xi_*` proposées — on branche sur `votw`. Slots
+  visuels : `votw_votes.position` = **slot** (GK, LB, CB1, CB2, RB, CM1..RW) ; `votw_candidates.position`
+  = **catégorie** (GK/DEF/MID/FWD) qui filtre quels joueurs vont dans quel slot. `unique(session,member,
+  position)` = 1 choix par emplacement.
+- **`lib/votw.js`** : formation 4-3-3 (11 slots + coords terrain), `categoryOf()` (réutilise
+  `lib/positions.js`), `generateEligibles(session)` — construit les candidats depuis `match_player_stats`
+  (joueurs avec minutes>0 de la journée), **zéro appel API**, n'écrase pas les ajouts/corrections manuels.
+- **Admin Communauté → Onze de la semaine** (`VotwSessionsPanel`) : créer une session (compétition,
+  saison, journée, formation, ouverture/fermeture, statut), générer/compléter les éligibles, corriger la
+  catégorie, ajouter/retirer un joueur, voir le nb de votes, changer le statut (open/closed/published).
+- **`/onze`** : coquille publique tolérante (état vide si tables non migrées). Le **terrain de vote**
+  (sous-lot 2) et la **publication du résultat + Onze Belfoot** (sous-lot 3) restent à faire.
+- Testable **maintenant sur données 2024** : créer une session JPL, générer les éligibles depuis les
+  matchs déjà en base. La population réelle des journées 2026 = territoire mois Pro (jobs lineups).
+- Vérifs : ESLint 0 erreur, build Next 16 vert (`/onze` générée). Zéro appel API.
+
 ---
 
 ## CURRENT_GIT_STATE
 
 - **Branche** : `main`
-- **Dernier commit distant** : `fbbb9ef` — « Ajoute le point d'entrée Proposer » (le lot Proposer et
-  la verticale Sélections belges `0027`/`0028` sont poussés).
-- **Lot courant (non poussé)** : page Diables Rouges — genre Hommes/Femmes, sélection groupée par
-  poste, classement FIFA administrable (**migration `0029` à appliquer**). Voir changelog 2026-09-19
-  ci-dessus.
+- **Dernier commit distant** : `7e87032` — « Diables Rouges : genre H/F, postes groupes, classement
+  FIFA » (`0029` fournie, à appliquer côté Supabase).
+- **Lot courant (non poussé)** : Onze de la semaine `votw` sous-lot 1/3 (fondation + admin). **Migrations
+  à appliquer : `votw/0001_init.sql` puis `votw/0002_session_competition.sql`.** Voir changelog 2026-09-19.
 - **Commits importants récents** :
   - `2c71e35` documentation clubs liés / Europe
   - `69578a5` automatisation des stades + simplification des équipes liées
