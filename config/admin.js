@@ -4,8 +4,12 @@ export const adminSections = [
   { label: "Accueil", icon: "home", panels: [{ key: "dashboard", label: "Vue d'ensemble" }] },
   { label: "Contenu", icon: "editorial", panels: [
     { key: "news", label: "Actualités" },
+    { key: "mercato", label: "Mercato" },
+    { key: "scouting", label: "Scouting" },
     { key: "categories", label: "Catégories" },
     { key: "contributions", label: "Contributions" },
+    { key: "correction", label: "Corrections" },
+    { key: "propose", label: "Page Proposer" },
   ] },
   { label: "Compétitions", icon: "trophy", panels: [
     { key: "competitions", label: "Compétitions" },

@@ -5,12 +5,13 @@ import CollectionManager from "./CollectionManager";
 import CategoriesManager from "./CategoriesManager";
 import ContributionsQueue from "./ContributionsQueue";
 import SystemStatusPanel from "./SystemStatusPanel";
-import { ProfilesPanel, ReportsPanel, JobsPanel, SyncHistoryPanel, ProvidersPanel, SettingsInfo, LabelsPanel, TilesPanel, ClubSectionsPanel, HomePanel, BelgiansAbroadPanel, CompetitionHubPanel, NationalTeamsPanel, StatsSectionsPanel, Placeholder } from "./panels";
+import { ProfilesPanel, ReportsPanel, JobsPanel, SyncHistoryPanel, ProvidersPanel, SettingsInfo, LabelsPanel, TilesPanel, ClubSectionsPanel, HomePanel, BelgiansAbroadPanel, CompetitionHubPanel, NationalTeamsPanel, StatsSectionsPanel, ProposePanel, Placeholder } from "./panels";
 import { FOOTBALL_ENTITIES } from "@/config/football-admin";
+import { getCollection } from "@/config/collections";
 
 export function panelComponent(key) {
   if (key === "dashboard") return { Comp: Dashboard, props: {} };
-  if (key === "news") return { Comp: CollectionManager, props: { collectionKey: "news" } };
+  if (getCollection(key)) return { Comp: CollectionManager, props: { collectionKey: key } };
   if (key === "categories") return { Comp: CategoriesManager, props: {} };
   if (key === "contributions") return { Comp: ContributionsQueue, props: {} };
   if (FOOTBALL_ENTITIES[key]) return { Comp: EntityManager, props: { spec: FOOTBALL_ENTITIES[key] } };
@@ -29,6 +30,7 @@ export function panelComponent(key) {
   if (key === "clubpage") return { Comp: ClubSectionsPanel, props: {} };
   if (key === "statspage") return { Comp: StatsSectionsPanel, props: {} };
   if (key === "system-status") return { Comp: SystemStatusPanel, props: {} };
+  if (key === "propose") return { Comp: ProposePanel, props: {} };
   if (["config", "modules", "flags"].includes(key)) return { Comp: SettingsInfo, props: { which: key === "config" ? "site" : key } };
   return { Comp: Placeholder, props: { title: key } };
 }

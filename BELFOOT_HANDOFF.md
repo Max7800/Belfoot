@@ -1143,14 +1143,37 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
 - Ne jamais attribuer la sélection à `players.club_id` : la relation nationale reste exclusivement
   dans `national_team_callups`.
 
+### 2026-09-19 — Claude — point d'entrée « Proposer » (contributions multi-types)
+- Point d'entrée public unique `/proposer` (`app/proposer/page.js`) qui liste automatiquement les
+  collections ouvertes à la contribution (`contribute:true`) ; entrée « Proposer » ajoutée à la nav
+  (`config/site.js`). Aucune liste en dur.
+- Nouvelles collections déclaratives (`config/collections.js`, zéro migration — tout dans `entries`) :
+  `mercato` (rumeur : joueur/clubs + statut Rumeur/Vérifié/Démenti), `scouting` (joueur à suivre) et
+  `correction` (rapport de correction, `public:false`, sans page publique) ; `news` ouverte à la
+  contribution. Chaque type expose automatiquement son formulaire (`/proposer/<key>`), sa page
+  publique générique (sauf `correction`) et son admin.
+- Tout transite par la file de modération existante (`contributions` + route serveur d'approbation,
+  **inchangée**). Rien n'est public tant que l'admin n'a pas accepté puis publié (`published=false`).
+- Correction de fiche = version rapport : le membre décrit la fiche foot + le correctif → file →
+  l'admin applique à la main. Les fiches foot vivent dans des tables dédiées, donc pas d'auto-apply
+  par la route (qui ne s'applique qu'aux `entries`). La correction directe d'un contenu éditorial
+  (`kind:edit` + prefill) est déjà gérée côté serveur : à brancher côté UI plus tard.
+- Administrable : nouveau panneau **Contenu → Page Proposer** (`ProposePanel`,
+  `site_settings.data.propose`) = textes du bandeau + libellé/ordre/visibilité de chaque type. Le
+  registry admin résout désormais **toute** collection déclarée vers `CollectionManager` (plus
+  seulement `news`) → mercato/scouting/correction gérables comme les actus. Ajouter un 5ᵉ type =
+  déclarer une collection `contribute:true`.
+- Vérifs : `npm ci` OK, ESLint 0 erreur, build Next 16 vert (route `/proposer` générée). Zéro appel API.
+
 ---
 
 ## CURRENT_GIT_STATE
 
 - **Branche** : `main`
-- **Dernier commit distant avant le lot courant** : `0da9454` — séparation Direct/calendrier et
-  bandeau live d'accueil. Le commit local `2437a58` ajoute le contrôle de préparation 2026 et la CI.
-  Le lot courant ajoute la verticale Sélections belges ; il n'est pas encore poussé.
+- **Dernier commit distant** : `d3c73d0` — « Corrige le suivi des sélections nationales » : la
+  verticale Sélections belges est **poussée** (`0027`/`0028` incluses).
+- **Lot courant (non poussé)** : point d'entrée « Proposer » (contributions multi-types) — voir
+  l'entrée changelog 2026-09-19 ci-dessus. Zéro migration, zéro appel API.
 - **Commits importants récents** :
   - `2c71e35` documentation clubs liés / Europe
   - `69578a5` automatisation des stades + simplification des équipes liées
@@ -1182,8 +1205,8 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
   `0022_ensure_player_country.sql`, `0023_season_safe_sync.sql`, puis
   `0024_player_team_seasons.sql`, puis `0025_membership_backfill_repair.sql` (appliquée et contrôlée),
   puis `0026_match_center_live.sql` (**appliquée et confirmée par l'utilisateur**), puis
-  `0027_national_teams.sql`, puis `0028_followed_national_teams.sql` (**à appliquer pour ne pas
-  afficher les adversaires comme onglets Diables**), et vérifier que `modules/football/migrations/0001→0028` sont
+  `0027_national_teams.sql`, puis `0028_followed_national_teams.sql` (**indiquées appliquées par
+  l'utilisateur** — la page Diables reste tolérante si ce n'est pas le cas), et vérifier que `modules/football/migrations/0001→0028` sont
   **toutes** passées (surtout `0008` position, `0009` banner_url/zones, `0010` rating_min,
   `0011` competition_type/parent_club_id/team_type, `0012` unicité des stats par compétition et
   `0013` textes des bandeaux, `0014` visibilité/pays du suivi international, `0015` zones par
@@ -1221,6 +1244,14 @@ Fonctionnalités Belfoot qui seraient de bons candidats à généraliser dans le
    runner sécurisé par rôle admin, coverage gating, upsert par `(source, external_id)`).
 10. **Rounds/phases génériques** (parsing `round_raw`/`phase`/`round_number`) — modèle pour toute
     donnée à phases (championnat/coupe, saisons, sous-périodes).
+11. **Point d'entrée de contribution public** (`/proposer` + `lib/propose.js` + `ProposePanel`) —
+    hub unique qui liste automatiquement les collections `contribute:true`, avec surcouche
+    administrable (textes du bandeau + libellé/ordre/visibilité par type) dans
+    `site_settings.data.propose`. Capacité moteur pure, branchée sur la capacité
+    contributions/modération existante.
+12. **Résolution admin générique d'une collection** (registry : toute collection déclarée →
+    `CollectionManager`, au lieu d'un câblage par clé) — supprime le besoin d'ajouter un cas admin
+    à chaque nouveau type de contenu.
 
 > Rappel : ne pas modifier le socle pour l'instant. Ceci est une **liste de candidats** à valider
 > une fois éprouvés par l'usage sur Belfoot.

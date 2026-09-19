@@ -30,6 +30,7 @@ export const collections = {
     public: true,            // false = contenu géré mais sans page publique
     ordered: false,          // false = tri par date ; true = tri manuel (drag)
     sort: "-published_at",   // tri par défaut de la liste
+    contribute: true,        // ouvert aux propositions publiques (/proposer)
     fields: {
       title:        { type: "text", label: "Titre", required: true },
       slug:         { type: "slug", from: "title" },
@@ -44,8 +45,79 @@ export const collections = {
   },
 
 
-  // Le site foot ajoutera ses collections ici (joueurs, matchs, etc.)
-  // en réutilisant exactement le même schéma déclaratif.
+  // ── Rumeurs mercato (contribuable) ────────────────────────────────────────
+  mercato: {
+    label: "Mercato",
+    labelSingular: "Rumeur mercato",
+    icon: "repeat",
+    route: "/mercato",
+    public: true,
+    ordered: false,
+    sort: "-published_at",
+    contribute: true,
+    fields: {
+      title:        { type: "text", label: "Titre / sujet", required: true },
+      slug:         { type: "slug", from: "title" },
+      player_name:  { type: "text", label: "Joueur concerné" },
+      club_from:    { type: "text", label: "Club actuel" },
+      club_to:      { type: "text", label: "Club pressenti" },
+      status:       { type: "select", label: "Statut", options: ["Rumeur", "Vérifié", "Démenti"], default: "Rumeur" },
+      body:         { type: "richtext", label: "Détails" },
+      source:       { type: "text", label: "Source (lien / média)" },
+      category:     { type: "category", label: "Rubrique" },
+      published_at: { type: "date", label: "Date" },
+      published:    { type: "bool", label: "Publié", default: false },
+      seo:          { type: "seo" },
+    },
+  },
+
+  // ── Fiches scouting / joueurs à suivre (contribuable) ─────────────────────
+  scouting: {
+    label: "Scouting",
+    labelSingular: "Fiche scouting",
+    icon: "search",
+    route: "/scouting",
+    public: true,
+    ordered: false,
+    sort: "-published_at",
+    contribute: true,
+    fields: {
+      title:        { type: "text", label: "Joueur / sujet", required: true },
+      slug:         { type: "slug", from: "title" },
+      cover:        { type: "image", label: "Photo" },
+      club:         { type: "text", label: "Club" },
+      position:     { type: "text", label: "Poste" },
+      body:         { type: "richtext", label: "Analyse" },
+      category:     { type: "category", label: "Rubrique" },
+      published_at: { type: "date", label: "Date" },
+      published:    { type: "bool", label: "Publié", default: false },
+      seo:          { type: "seo" },
+    },
+  },
+
+  // ── Corrections de fiche (contribuable, sans page publique) ───────────────
+  // Rapport de correction : le membre décrit la fiche à corriger + le correctif.
+  // Pour les fiches foot (tables dédiées) l'admin applique à la main depuis la
+  // file ; pour un contenu éditorial, une correction directe (kind:edit) pourra
+  // être branchée plus tard — la route d'approbation la gère déjà côté serveur.
+  correction: {
+    label: "Corrections",
+    labelSingular: "Correction de fiche",
+    icon: "edit",
+    public: false,          // pas de page publique : c'est un journal interne
+    ordered: false,
+    sort: "-created_at",
+    contribute: true,
+    fields: {
+      title:       { type: "text", label: "Sujet de la correction", required: true },
+      target_type: { type: "select", label: "Type de fiche", options: ["Fiche joueur", "Fiche club", "Actualité", "Rumeur mercato", "Autre"], default: "Fiche joueur" },
+      target_ref:  { type: "text", label: "Fiche concernée (nom ou lien)" },
+      body:        { type: "textarea", label: "Correction proposée" },
+    },
+  },
+
+  // Ajouter un type contribuable = déclarer une collection ici avec contribute:true ;
+  // elle apparaît automatiquement dans /proposer et dans l'admin (Contenu → Page Proposer).
 };
 
 export default collections;

@@ -10,6 +10,7 @@ import { normalizeHomeConfig } from "@/lib/homeSections";
 import { normalizeBelgiansAbroadConfig } from "@/lib/belgiansAbroad";
 import { DEFAULT_COMPETITION_HUB } from "@/lib/competitionHub";
 import { normalizeNationalTeamsConfig } from "@/lib/nationalTeams";
+import { normalizeProposeConfig } from "@/lib/propose";
 
 export function ProfilesPanel() {
   const [rows, setRows] = useState([]);
@@ -394,6 +395,53 @@ export function StatsSectionsPanel() {
             <div className="flex justify-end gap-1"><button onClick={() => move(index, -1)} className="rounded px-2 py-1 text-muted hover:bg-white/5 hover:text-content">↑</button><button onClick={() => move(index, 1)} className="rounded px-2 py-1 text-muted hover:bg-white/5 hover:text-content">↓</button></div>
           </div>
         ))}
+      </div>
+      <div className="mt-4 flex items-center gap-3"><button onClick={save} disabled={status === "saving"} className="rounded-xl bg-accent px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{status === "saving" ? "Enregistrement…" : "Enregistrer"}</button>{status === "saved" && <span className="text-sm text-green-400">Enregistré</span>}{status === "error" && <span className="text-sm text-red-400">Erreur d'enregistrement</span>}</div>
+    </div>
+  );
+}
+
+export function ProposePanel() {
+  const [cfg, setCfg] = useState(() => normalizeProposeConfig());
+  const [status, setStatus] = useState("idle");
+  useEffect(() => {
+    supabase.from("site_settings").select("data").eq("id", 1).maybeSingle()
+      .then(({ data }) => setCfg(normalizeProposeConfig(data?.data?.propose)));
+  }, []);
+  const setHub = (k, v) => setCfg((c) => ({ ...c, hub: { ...c.hub, [k]: v } }));
+  const setType = (i, patch) => setCfg((c) => ({ ...c, types: c.types.map((t, j) => (j === i ? { ...t, ...patch } : t)) }));
+  const move = (i, d) => {
+    const j = i + d; if (j < 0 || j >= cfg.types.length) return;
+    const a = [...cfg.types]; [a[i], a[j]] = [a[j], a[i]]; setCfg((c) => ({ ...c, types: a }));
+  };
+  const save = async () => {
+    setStatus("saving");
+    const types = Object.fromEntries(cfg.types.map((t, i) => [t.key, { enabled: t.enabled, order: i, label: t.label }]));
+    const { data } = await supabase.from("site_settings").select("data").eq("id", 1).maybeSingle();
+    const { error } = await supabase.from("site_settings").update({ data: { ...(data?.data || {}), propose: { hub: cfg.hub, types } } }).eq("id", 1);
+    setStatus(error ? "error" : "saved");
+  };
+  return (
+    <div>
+      <h2 className="mb-2 text-lg font-bold">Page Proposer</h2>
+      <p className="mb-4 text-xs text-muted">Textes du bandeau public et types de proposition. Les types viennent des collections ouvertes à la contribution ; en ajouter un se fait en déclarant une collection avec <code>contribute:true</code> — il apparaît ici automatiquement.</p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="text-xs text-muted">Sur-titre<input value={cfg.hub.kicker || ""} onChange={(e) => setHub("kicker", e.target.value)} className="mt-1 w-full rounded border border-line/10 bg-surface2 px-3 py-2 text-sm text-content" /></label>
+        <label className="text-xs text-muted">Titre<input value={cfg.hub.title || ""} onChange={(e) => setHub("title", e.target.value)} className="mt-1 w-full rounded border border-line/10 bg-surface2 px-3 py-2 text-sm text-content" /></label>
+        <label className="text-xs text-muted sm:col-span-2">Introduction<textarea rows="2" value={cfg.hub.intro || ""} onChange={(e) => setHub("intro", e.target.value)} className="mt-1 w-full rounded border border-line/10 bg-surface2 px-3 py-2 text-sm text-content" /></label>
+      </div>
+      <div className="mt-4 mb-1 text-xs font-semibold text-muted">Types proposés</div>
+      <div className="space-y-1">
+        {cfg.types.map((t, i) => (
+          <div key={t.key} className="flex items-center gap-2 rounded border border-line/10 bg-surface p-2 text-sm">
+            <label className="flex items-center gap-2"><input type="checkbox" checked={t.enabled} onChange={() => setType(i, { enabled: !t.enabled })} />Visible</label>
+            <input value={t.label} onChange={(e) => setType(i, { label: e.target.value })} className="min-w-0 flex-1 rounded border border-line/10 bg-surface2 px-2 py-1" />
+            <span className="text-xs text-muted">/proposer/{t.key}</span>
+            <button onClick={() => move(i, -1)} className="px-1 text-muted hover:text-content">↑</button>
+            <button onClick={() => move(i, 1)} className="px-1 text-muted hover:text-content">↓</button>
+          </div>
+        ))}
+        {cfg.types.length === 0 && <p className="text-muted">Aucune collection ouverte à la contribution.</p>}
       </div>
       <div className="mt-4 flex items-center gap-3"><button onClick={save} disabled={status === "saving"} className="rounded-xl bg-accent px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{status === "saving" ? "Enregistrement…" : "Enregistrer"}</button>{status === "saved" && <span className="text-sm text-green-400">Enregistré</span>}{status === "error" && <span className="text-sm text-red-400">Erreur d'enregistrement</span>}</div>
     </div>
