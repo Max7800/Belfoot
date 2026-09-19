@@ -1122,6 +1122,27 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
 - Vérifications : ESLint sans erreur (avertissements `<img>` historiques), build Next 16 réussi avec
   variables Supabase factices, `git diff --check` réussi. Aucun appel API-Football effectué.
 
+### 2026-09-19 — ChatGPT — correction des sélections suivies et clubs des internationaux
+
+- La première synchronisation révélait tous les adversaires comme onglets « Diables Rouges » : ils
+  étaient correctement enregistrés comme équipes nationales pour les matchs, mais il manquait la
+  distinction éditoriale entre une sélection belge suivie et un adversaire.
+- Migration `0028_followed_national_teams.sql` : ajout de `clubs.national_followed`, réparation des
+  lignes existantes (`Belgium*` suivi, adversaires non suivis) et index dédié. La page publique ne
+  propose désormais que les sélections explicitement suivies ; une prochaine synchronisation
+  entretient automatiquement ce marqueur.
+- La synchronisation par équipe récupère déjà toutes les compétitions de la saison via
+  `/fixtures?team=…&season=…`, **amicaux compris**. Les compétitions découvertes restent masquées du
+  portail général par défaut mais sont créées dans l'admin et leur liste apparaît dans le résultat
+  du job.
+- Les internationaux déjà connus avec un club/pays deviennent automatiquement `tracked`. Pour les
+  nouveaux joueurs issus uniquement de l'effectif national, le provider ne donne pas leur club dans
+  `/players/squads` : nouveau job optionnel `football.resolve-national-clubs`, plafonné par
+  `matchCap`, qui consomme un appel par joueur incomplet, choisit son club principal de la saison,
+  crée son affectation et l'intègre au suivi des Belges à l'étranger si son pays n'est pas la Belgique.
+- Ne jamais attribuer la sélection à `players.club_id` : la relation nationale reste exclusivement
+  dans `national_team_callups`.
+
 ---
 
 ## CURRENT_GIT_STATE
@@ -1161,14 +1182,16 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
   `0022_ensure_player_country.sql`, `0023_season_safe_sync.sql`, puis
   `0024_player_team_seasons.sql`, puis `0025_membership_backfill_repair.sql` (appliquée et contrôlée),
   puis `0026_match_center_live.sql` (**appliquée et confirmée par l'utilisateur**), puis
-  `0027_national_teams.sql` (**à appliquer avant d'utiliser la page Diables**), et vérifier que `modules/football/migrations/0001→0027` sont
+  `0027_national_teams.sql`, puis `0028_followed_national_teams.sql` (**à appliquer pour ne pas
+  afficher les adversaires comme onglets Diables**), et vérifier que `modules/football/migrations/0001→0028` sont
   **toutes** passées (surtout `0008` position, `0009` banner_url/zones, `0010` rating_min,
   `0011` competition_type/parent_club_id/team_type, `0012` unicité des stats par compétition et
   `0013` textes des bandeaux, `0014` visibilité/pays du suivi international, `0015` zones par
   saison/phase, `0016` contenu éditorial des fiches clubs, `0017` protection des coachs manuels et
   `0018` création Challenger Pro League, `0019` style séparé des portes du portail et `0024`
   séparation personne/équipe/saison, `0025` réparation du backfill historique, `0026` fondations
-  Realtime/activation explicite du direct et `0027` sélections/convocations séparées des clubs).
+  Realtime/activation explicite du direct, `0027` sélections/convocations séparées des clubs et
+  `0028` distinction sélection suivie/adversaires).
   Le code est tolérant mais ces features restent inactives sinon.
 
 ---

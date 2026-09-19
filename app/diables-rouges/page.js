@@ -68,7 +68,7 @@ export default function NationalTeamsPage() {
   const [schemaMissing, setSchemaMissing] = useState(false);
 
   useEffect(() => {
-    supabase.from("clubs").select("id,name,short_name,logo_url,national_category,national_gender").eq("team_type", "national").then(({ data, error }) => {
+    supabase.from("clubs").select("id,name,short_name,logo_url,national_category,national_gender").eq("team_type", "national").eq("national_followed", true).then(({ data, error }) => {
       if (error) { setSchemaMissing(true); setLoading(false); return; }
       const sorted = (data || []).sort((a, b) => CATEGORY_ORDER.indexOf(a.national_category) - CATEGORY_ORDER.indexOf(b.national_category));
       setTeams(sorted);

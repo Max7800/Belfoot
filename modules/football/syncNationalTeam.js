@@ -77,16 +77,16 @@ export async function syncNationalTeam(db, ctx = {}) {
   ]);
   if (!team) throw new Error(`Sélection ${teamExternalId} introuvable`);
 
-  await upsertExternal(db, "clubs", providerKey, [{ ...team, team_type: "national", national_category: category, national_gender: gender }], [
-    "name", "short_name", "logo_url", "city", "founded_year", "stadium_name", "stadium_capacity", "stadium_address", "stadium_image_url", "team_type", "national_category", "national_gender",
+  await upsertExternal(db, "clubs", providerKey, [{ ...team, team_type: "national", national_category: category, national_gender: gender, national_followed: true }], [
+    "name", "short_name", "logo_url", "city", "founded_year", "stadium_name", "stadium_capacity", "stadium_address", "stadium_image_url", "team_type", "national_category", "national_gender", "national_followed",
   ]);
 
   const opponents = new Map();
   for (const match of matches) {
-    if (match.home_ext) opponents.set(match.home_ext, { external_id: match.home_ext, name: match.home_name || match.home_ext, logo_url: match.home_logo || null, team_type: "national", national_category: category, national_gender: gender });
-    if (match.away_ext) opponents.set(match.away_ext, { external_id: match.away_ext, name: match.away_name || match.away_ext, logo_url: match.away_logo || null, team_type: "national", national_category: category, national_gender: gender });
+    if (match.home_ext && match.home_ext !== teamExternalId) opponents.set(match.home_ext, { external_id: match.home_ext, name: match.home_name || match.home_ext, logo_url: match.home_logo || null, team_type: "national", national_category: category, national_gender: gender, national_followed: false });
+    if (match.away_ext && match.away_ext !== teamExternalId) opponents.set(match.away_ext, { external_id: match.away_ext, name: match.away_name || match.away_ext, logo_url: match.away_logo || null, team_type: "national", national_category: category, national_gender: gender, national_followed: false });
   }
-  await upsertExternal(db, "clubs", providerKey, [...opponents.values()], ["name", "logo_url", "team_type", "national_category", "national_gender"]);
+  await upsertExternal(db, "clubs", providerKey, [...opponents.values()], ["name", "logo_url", "team_type", "national_category", "national_gender", "national_followed"]);
 
   const externalClubIds = [...opponents.keys()];
   if (!externalClubIds.includes(teamExternalId)) externalClubIds.push(teamExternalId);
@@ -133,7 +133,7 @@ export async function syncNationalTeam(db, ctx = {}) {
 
   let callups = 0;
   for (const member of squad) {
-    const { data: existing, error: playerSelectError } = await db.from("players").select("id,locked").eq("source", providerKey).eq("external_id", member.external_id).maybeSingle();
+    const { data: existing, error: playerSelectError } = await db.from("players").select("id,locked,club_id,country,tracked").eq("source", providerKey).eq("external_id", member.external_id).maybeSingle();
     if (playerSelectError) throw playerSelectError;
     const playerPatch = {
       source: providerKey,
@@ -144,6 +144,7 @@ export async function syncNationalTeam(db, ctx = {}) {
       photo_url: member.photo_url,
       age: member.age,
       active: true,
+      tracked: Boolean(existing?.tracked || (existing?.club_id && existing?.country)),
       synced_at: syncedAt,
     };
     let playerId = existing?.id;
@@ -172,5 +173,6 @@ export async function syncNationalTeam(db, ctx = {}) {
     callups++;
   }
 
-  return `${team.name} (${category.toUpperCase()}) : ${resolvedMatches.length} matchs, ${competitionMap.size} compétitions et ${callups} joueurs (${season})`;
+  const competitionNames = [...new Set(matches.map((match) => match.league_name).filter(Boolean))];
+  return `${team.name} (${category.toUpperCase()}) : ${resolvedMatches.length} matchs, ${competitionMap.size} compétitions (${competitionNames.join(", ") || "aucune"}) et ${callups} joueurs (${season})`;
 }

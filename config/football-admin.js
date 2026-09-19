@@ -54,6 +54,7 @@ export const FOOTBALL_ENTITIES = {
       { key: "team_type", label: "Type d'équipe", type: "select", options: ["first_team", "reserve", "u23", "youth", "women", "national"] },
       { key: "national_category", label: "Catégorie de sélection", type: "select", options: ["senior", "u23", "u21", "u20", "u19", "u18", "u17", "women"] },
       { key: "national_gender", label: "Genre de la sélection", type: "select", options: ["men", "women"] },
+      { key: "national_followed", label: "Sélection belge suivie", type: "bool" },
       { key: "parent_club_id", label: "Club parent (réserve/U23)", type: "relation", table: "clubs", labelCol: "name" },
     ],
   },

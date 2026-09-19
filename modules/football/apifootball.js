@@ -198,6 +198,33 @@ const provider = {
       ext: player,
     }));
   },
+  // Club principal d'un international pour une saison. L'appel est séparé de
+  // la synchronisation de sélection car il coûte une requête par joueur.
+  async fetchPlayerClubSeason(player, ctx = {}) {
+    const y = seasonYear(ctx.season);
+    const row = (await api(`/players?id=${player.external_id}&season=${y}`, ctx))[0];
+    if (!row) return null;
+    const grouped = new Map();
+    for (const stat of row.statistics || []) {
+      const teamId = stat.team?.id ? String(stat.team.id) : null;
+      const teamName = String(stat.team?.name || "");
+      if (!teamId || teamId === String(ctx.nationalTeamExternalId || "") || /^Belgium(?:\s|$)/i.test(teamName)) continue;
+      const current = grouped.get(teamId) || { appearances: 0, competitions: [] };
+      current.appearances += Number(stat.games?.appearences) || 0;
+      current.competitions.push(stat);
+      grouped.set(teamId, current);
+    }
+    const best = [...grouped.entries()].sort((a, b) => b[1].appearances - a[1].appearances)[0];
+    if (!best) return null;
+    const [teamId, aggregate] = best;
+    const stat = aggregate.competitions.sort((a, b) => (Number(b.games?.appearences) || 0) - (Number(a.games?.appearences) || 0))[0];
+    return {
+      club: { external_id: teamId, name: stat.team?.name || `Club ${teamId}`, logo_url: stat.team?.logo || null },
+      country: stat.league?.country || null,
+      competition: stat.league?.name || null,
+      position: stat.games?.position || null,
+    };
+  },
   // TRACKING : stats agrégées de saison d'un joueur (1 requête).
   async fetchPlayerSeason(player, ctx = {}) {
     const y = seasonYear(ctx.season);
