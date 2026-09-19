@@ -1165,15 +1165,36 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
   déclarer une collection `contribute:true`.
 - Vérifs : `npm ci` OK, ESLint 0 erreur, build Next 16 vert (route `/proposer` générée). Zéro appel API.
 
+### 2026-09-19 — Claude — page Diables Rouges : genre H/F, postes, classement FIFA
+- **Différenciation Hommes/Femmes** : la page groupe désormais les sélections par `national_gender`
+  (déjà rempli par le sync : women→women, reste→men). Sélecteur Hommes/Femmes affiché uniquement si
+  les deux genres existent ; les onglets de catégorie sont filtrés par genre ; changer de genre
+  sélectionne la 1ʳᵉ sélection de ce genre. Aucun SQL, aucun appel API.
+- **Sélection groupée par poste** : nouveau helper `lib/positions.js` (`groupByPosition`, tolérant
+  aux libellés anglais complets ET abrégés GK/DEF/MID/FWD, repli « Autres »). La sélection s'affiche
+  en sections Gardiens / Défenseurs / Milieux / Attaquants. Aucun SQL, aucun appel API.
+- **Classement FIFA sous les drapeaux (match mis en avant)** : migration `0029_national_fifa_ranking.sql`
+  (ajoute `clubs.fifa_ranking`, `fifa_ranking_source`, `fifa_ranking_at`). Champ admin sur les clubs
+  (`config/football-admin.js`). Affiché sous le nom dans le match mis en avant quand renseigné. Le
+  ranking est lu par une **requête séparée tolérante** : si `0029` n'est pas appliquée, la page
+  fonctionne sans, et éditer un club ne casse rien tant qu'on ne saisit pas de valeur.
+- **Long terme / automatisation** : API-Football (même Pro) n'expose PAS le classement FIFA — il
+  viendra d'une source dédiée (Sportradar / BALLDONTLIE / Zyla / Sportmonks, certaines gratuites) via
+  un futur job `football.sync-fifa-rankings`. Contrat prévu : ne mettre à jour que les lignes
+  `fifa_ranking is null` OU `fifa_ranking_source = 'auto'`, poser `source='auto'` ; une saisie admin
+  (valeur + source nulle) n'est jamais écrasée. Schéma et admin déjà prêts, seul l'import reste à faire.
+- Vérifs : ESLint 0 erreur, build Next 16 vert. Zéro appel API.
+
 ---
 
 ## CURRENT_GIT_STATE
 
 - **Branche** : `main`
-- **Dernier commit distant** : `d3c73d0` — « Corrige le suivi des sélections nationales » : la
-  verticale Sélections belges est **poussée** (`0027`/`0028` incluses).
-- **Lot courant (non poussé)** : point d'entrée « Proposer » (contributions multi-types) — voir
-  l'entrée changelog 2026-09-19 ci-dessus. Zéro migration, zéro appel API.
+- **Dernier commit distant** : `fbbb9ef` — « Ajoute le point d'entrée Proposer » (le lot Proposer et
+  la verticale Sélections belges `0027`/`0028` sont poussés).
+- **Lot courant (non poussé)** : page Diables Rouges — genre Hommes/Femmes, sélection groupée par
+  poste, classement FIFA administrable (**migration `0029` à appliquer**). Voir changelog 2026-09-19
+  ci-dessus.
 - **Commits importants récents** :
   - `2c71e35` documentation clubs liés / Europe
   - `69578a5` automatisation des stades + simplification des équipes liées
@@ -1206,7 +1227,9 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
   `0024_player_team_seasons.sql`, puis `0025_membership_backfill_repair.sql` (appliquée et contrôlée),
   puis `0026_match_center_live.sql` (**appliquée et confirmée par l'utilisateur**), puis
   `0027_national_teams.sql`, puis `0028_followed_national_teams.sql` (**indiquées appliquées par
-  l'utilisateur** — la page Diables reste tolérante si ce n'est pas le cas), et vérifier que `modules/football/migrations/0001→0028` sont
+  l'utilisateur** — la page Diables reste tolérante si ce n'est pas le cas), puis
+  `0029_national_fifa_ranking.sql` (**à appliquer** pour le champ + l'affichage du classement FIFA ;
+  la page reste tolérante sans), et vérifier que `modules/football/migrations/0001→0028` sont
   **toutes** passées (surtout `0008` position, `0009` banner_url/zones, `0010` rating_min,
   `0011` competition_type/parent_club_id/team_type, `0012` unicité des stats par compétition et
   `0013` textes des bandeaux, `0014` visibilité/pays du suivi international, `0015` zones par
@@ -1252,6 +1275,9 @@ Fonctionnalités Belfoot qui seraient de bons candidats à généraliser dans le
 12. **Résolution admin générique d'une collection** (registry : toute collection déclarée →
     `CollectionManager`, au lieu d'un câblage par clé) — supprime le besoin d'ajouter un cas admin
     à chaque nouveau type de contenu.
+13. **Regroupement par poste** (`lib/positions.js` — `groupByPosition`, tolérant EN/abrégé, repli
+    « Autres ») — utile pour tout effectif/roster ; `POS` est encore dupliqué dans la fiche club et
+    `EntityManager`, à faire converger vers ce helper.
 
 > Rappel : ne pas modifier le socle pour l'instant. Ceci est une **liste de candidats** à valider
 > une fois éprouvés par l'usage sur Belfoot.

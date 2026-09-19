@@ -38,6 +38,7 @@ export const FOOTBALL_ENTITIES = {
     fields: [
       { key: "name", label: "Nom", type: "text" },
       { key: "short_name", label: "Abréviation", type: "text" },
+      { key: "fifa_ranking", label: "Classement FIFA (sélections nationales)", type: "number" },
       { key: "city", label: "Ville", type: "text" },
       { key: "logo_url", label: "Logo", type: "image" },
       { key: "nickname", label: "Surnom", type: "text" },

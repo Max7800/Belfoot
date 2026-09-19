@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { CalendarDays, ChevronRight, MapPin, Shield, Trophy, Users } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { useNationalTeamsConfig } from "@/lib/nationalTeams";
+import { groupByPosition } from "@/lib/positions";
 import { matchStatusMeta } from "@/lib/matchStatus";
 
 const CATEGORY_LABELS = { senior: "Diables Rouges", u23: "U23", u21: "Espoirs U21", u20: "U20", u19: "U19", u18: "U18", u17: "U17", women: "Red Flames" };
@@ -31,6 +32,7 @@ function TeamVisual({ club, large = false }) {
       {club?.logo_url && <img src={club.logo_url} alt="" className={`relative object-contain drop-shadow-xl ${large ? "h-16 w-16 sm:h-20 sm:w-20" : "h-9 w-9"}`} />}
     </div>
     <strong className={`${large ? "text-lg sm:text-2xl" : "text-xs"} max-w-full truncate`}>{club?.name || "À confirmer"}</strong>
+    {large && club?.fifa_ranking != null && <span className="rounded-full border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-amber-300">FIFA #{club.fifa_ranking}</span>}
   </div>;
 }
 
@@ -59,6 +61,7 @@ function SmallMatch({ match, clubs, competitions }) {
 export default function NationalTeamsPage() {
   const config = useNationalTeamsConfig();
   const [teams, setTeams] = useState([]);
+  const [selectedGender, setSelectedGender] = useState("");
   const [selectedId, setSelectedId] = useState("");
   const [matches, setMatches] = useState([]);
   const [clubs, setClubs] = useState({});
@@ -72,6 +75,7 @@ export default function NationalTeamsPage() {
       if (error) { setSchemaMissing(true); setLoading(false); return; }
       const sorted = (data || []).sort((a, b) => CATEGORY_ORDER.indexOf(a.national_category) - CATEGORY_ORDER.indexOf(b.national_category));
       setTeams(sorted);
+      setSelectedGender((current) => current || sorted[0]?.national_gender || "men");
       setSelectedId((current) => current || sorted[0]?.id || "");
       if (!sorted.length) setLoading(false);
     });
@@ -101,8 +105,15 @@ export default function NationalTeamsPage() {
       const currentClubsResult = currentClubIds.length ? await supabase.from("clubs").select("id,name,logo_url").in("id", currentClubIds) : { data: [] };
       const currentClubs = Object.fromEntries((currentClubsResult.data || []).map((club) => [club.id, club]));
       const uniqueCallups = [...new Map(callups.map((callup) => [callup.player_id, callup])).values()];
+      const clubMap = Object.fromEntries((clubsResult.data || []).map((club) => [club.id, club]));
+      if (clubIds.length) {
+        // Requête séparée et tolérante : si la migration 0029 n'est pas encore appliquée,
+        // l'erreur « colonne inconnue » est ignorée et la page fonctionne sans le ranking.
+        const { data: rankRows, error: rankError } = await supabase.from("clubs").select("id,fifa_ranking").in("id", clubIds);
+        if (!rankError) for (const row of rankRows || []) { if (clubMap[row.id]) clubMap[row.id].fifa_ranking = row.fifa_ranking; }
+      }
       setMatches(matchRows);
-      setClubs(Object.fromEntries((clubsResult.data || []).map((club) => [club.id, club])));
+      setClubs(clubMap);
       setCompetitions(Object.fromEntries((competitionsResult.data || []).map((competition) => [competition.id, competition])));
       setSquad(uniqueCallups.map((callup) => ({ ...callup, player: players[callup.player_id], club: currentClubs[players[callup.player_id]?.club_id] })).filter((row) => row.player));
       setLoading(false);
@@ -110,6 +121,8 @@ export default function NationalTeamsPage() {
   }, [selectedId]);
 
   const selectedTeam = teams.find((team) => team.id === selectedId);
+  const genders = [...new Set(teams.map((team) => team.national_gender || "men"))];
+  const teamsForGender = teams.filter((team) => (team.national_gender || "men") === (selectedGender || "men"));
   const now = Date.now();
   const upcoming = matches.filter((match) => match.status === "live" || (match.status === "scheduled" && new Date(match.kickoff).getTime() >= now));
   const results = matches.filter((match) => match.status === "finished").sort((a, b) => new Date(b.kickoff) - new Date(a.kickoff));
@@ -128,7 +141,7 @@ export default function NationalTeamsPage() {
   const content = {
     schedule: upcoming.length ? <div className="flex gap-3 overflow-x-auto pb-3 sm:grid sm:grid-cols-2 sm:overflow-visible lg:grid-cols-3">{upcoming.slice(0, 6).map((match) => <SmallMatch key={match.id} match={match} clubs={clubs} competitions={competitions} />)}</div> : <p className="rounded-2xl border border-dashed border-line/15 p-6 text-center text-sm text-muted">Aucun prochain match enregistré.</p>,
     results: results.length ? <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{results.slice(0, 6).map((match) => <SmallMatch key={match.id} match={match} clubs={clubs} competitions={competitions} />)}</div> : <p className="text-sm text-muted">Aucun résultat importé.</p>,
-    squad: squad.length ? <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">{squad.map((row) => <Link key={row.id} href={`/players/${row.player.id}`} className="group rounded-2xl border border-line/10 bg-gradient-to-b from-surface to-bg/60 p-3 text-center transition hover:border-amber-400/35"><div className="mx-auto h-20 w-20 overflow-hidden rounded-full border border-white/10 bg-surface2">{row.player.photo_url ? <img src={row.player.photo_url} alt="" className="h-full w-full object-cover object-top" /> : <Users className="m-5 h-10 w-10 text-muted" />}</div><div className="mt-2 truncate text-sm font-black group-hover:text-amber-300">{row.player.name}</div><div className="truncate text-[10px] uppercase tracking-wider text-muted">{row.position || row.player.position || "Joueur"}</div><div className="mt-1 truncate text-[10px] text-slate-400">{row.club?.name || "Club à compléter"}</div></Link>)}</div> : <p className="text-sm text-muted">La sélection apparaîtra après sa synchronisation.</p>,
+    squad: squad.length ? <div className="space-y-5">{groupByPosition(squad, (row) => row.position || row.player?.position).map((group) => <div key={group.key}><div className="mb-2 flex items-center gap-2"><span className="h-4 w-1 rounded-full bg-amber-400/70" /><h3 className="text-xs font-black uppercase tracking-wider text-muted">{group.label} <span className="text-slate-500">· {group.rows.length}</span></h3></div><div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">{group.rows.map((row) => <Link key={row.id} href={`/players/${row.player.id}`} className="group rounded-2xl border border-line/10 bg-gradient-to-b from-surface to-bg/60 p-3 text-center transition hover:border-amber-400/35"><div className="mx-auto h-20 w-20 overflow-hidden rounded-full border border-white/10 bg-surface2">{row.player.photo_url ? <img src={row.player.photo_url} alt="" className="h-full w-full object-cover object-top" /> : <Users className="m-5 h-10 w-10 text-muted" />}</div><div className="mt-2 truncate text-sm font-black group-hover:text-amber-300">{row.player.name}</div><div className="truncate text-[10px] uppercase tracking-wider text-muted">{row.position || row.player.position || "Joueur"}</div><div className="mt-1 truncate text-[10px] text-slate-400">{row.club?.name || "Club à compléter"}</div></Link>)}</div></div>)}</div> : <p className="text-sm text-muted">La sélection apparaîtra après sa synchronisation.</p>,
   };
 
   if (schemaMissing) return <div className="mx-auto max-w-3xl rounded-3xl border border-amber-400/20 bg-amber-400/5 p-8 text-center"><Shield className="mx-auto h-10 w-10 text-amber-300" /><h1 className="mt-3 text-2xl font-black">Le module Sélections est prêt</h1><p className="mt-2 text-sm leading-6 text-muted">Il reste à appliquer la migration SQL 0027, puis à lancer « Synchroniser une sélection » dans l'administration.</p></div>;
@@ -139,7 +152,8 @@ export default function NationalTeamsPage() {
       {config.hero.image_url && <img src={config.hero.image_url} alt="" className="absolute inset-0 h-full w-full object-cover" />}
       <div className="absolute inset-0 bg-gradient-to-r from-black via-black/75 to-black/20" style={{ opacity: config.hero.overlay }} />
       <div className="relative z-10 max-w-2xl"><div className="text-[11px] font-black uppercase tracking-[.25em]" style={{ color: config.hero.secondary_color }}>{config.hero.kicker}</div><h1 className="mt-3 text-4xl font-black uppercase leading-none sm:text-6xl">{selectedTeam?.national_category === "senior" || !selectedTeam ? config.hero.title : CATEGORY_LABELS[selectedTeam.national_category] || selectedTeam.name}</h1><p className="mt-4 max-w-xl text-sm leading-6 text-slate-300 sm:text-base">{config.hero.intro}</p>
-        <div className="mt-6 flex flex-wrap gap-2">{teams.map((team) => <button key={team.id} onClick={() => setSelectedId(team.id)} className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-bold transition ${selectedId === team.id ? "border-red-400/60 bg-red-500/20 text-white" : "border-white/15 bg-black/20 text-slate-300 hover:border-white/35"}`}>{team.logo_url && <img src={team.logo_url} className="h-5 w-5 object-contain" alt="" />}{CATEGORY_LABELS[team.national_category] || team.name}</button>)}</div>
+        {genders.length > 1 && <div className="mt-5 inline-flex rounded-xl border border-white/15 bg-black/25 p-1">{genders.map((gender) => <button key={gender} onClick={() => { setSelectedGender(gender); const first = teams.find((team) => (team.national_gender || "men") === gender); if (first) setSelectedId(first.id); }} className={`rounded-lg px-4 py-1.5 text-sm font-bold transition ${(selectedGender || "men") === gender ? "bg-white text-black" : "text-slate-300 hover:text-white"}`}>{gender === "women" ? "Femmes" : "Hommes"}</button>)}</div>}
+        <div className="mt-4 flex flex-wrap gap-2">{teamsForGender.map((team) => <button key={team.id} onClick={() => setSelectedId(team.id)} className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-bold transition ${selectedId === team.id ? "border-red-400/60 bg-red-500/20 text-white" : "border-white/15 bg-black/20 text-slate-300 hover:border-white/35"}`}>{team.logo_url && <img src={team.logo_url} className="h-5 w-5 object-contain" alt="" />}{CATEGORY_LABELS[team.national_category] || team.name}</button>)}</div>
       </div>
     </section>
 
