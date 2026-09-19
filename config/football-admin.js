@@ -51,8 +51,21 @@ export const FOOTBALL_ENTITIES = {
       { key: "stadium_address", label: "Adresse du stade", type: "text" },
       { key: "stadium_image_url", label: "Photo du stade", type: "image" },
       { key: "honours", label: "Palmarès", type: "honours" },
-      { key: "team_type", label: "Type d'équipe", type: "select", options: ["first_team", "reserve", "u23", "youth", "women"] },
+      { key: "team_type", label: "Type d'équipe", type: "select", options: ["first_team", "reserve", "u23", "youth", "women", "national"] },
+      { key: "national_category", label: "Catégorie de sélection", type: "select", options: ["senior", "u23", "u21", "u20", "u19", "u18", "u17", "women"] },
+      { key: "national_gender", label: "Genre de la sélection", type: "select", options: ["men", "women"] },
       { key: "parent_club_id", label: "Club parent (réserve/U23)", type: "relation", table: "clubs", labelCol: "name" },
+    ],
+  },
+  nationalCallups: {
+    table: "national_team_callups", title: "Convocations en sélection", singular: "Convocation", orderBy: "updated_at", orderAsc: false, hasSource: true, pageSize: 40,
+    fields: [
+      { key: "national_team_id", label: "Sélection", type: "relation", table: "clubs", labelCol: "name" },
+      { key: "player_id", label: "Joueur", type: "relation", table: "players", labelCol: "name" },
+      { key: "season", label: "Saison", type: "text" },
+      { key: "shirt_number", label: "Numéro", type: "number" },
+      { key: "position", label: "Poste", type: "text" },
+      { key: "active", label: "Dans la sélection actuelle", type: "bool" },
     ],
   },
   players: {

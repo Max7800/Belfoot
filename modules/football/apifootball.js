@@ -22,6 +22,14 @@ function mapFixture(f) {
     extra: f.fixture.status?.extra ?? null,
     round: f.league?.round || null,
     kickoff: f.fixture.date || null,
+    league_ext: f.league?.id ? String(f.league.id) : null,
+    league_name: f.league?.name || null,
+    league_logo: f.league?.logo || null,
+    league_country: f.league?.country || null,
+    league_flag: f.league?.flag || null,
+    venue_name: f.fixture?.venue?.name || null,
+    venue_city: f.fixture?.venue?.city || null,
+    referee: f.fixture?.referee || null,
   };
 }
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -74,6 +82,15 @@ const api = async (path, ctx) => (await apiFull(path, ctx)).response || [];
 
 const provider = {
   key: "apifootball",
+  async searchNationalTeams(search = "Belgium", ctx = {}) {
+    const rows = await api(`/teams?search=${encodeURIComponent(search)}`, ctx);
+    return rows.filter((row) => row.team?.national === true).map((row) => ({
+      external_id: String(row.team.id),
+      name: row.team.name,
+      logo_url: row.team.logo || null,
+      country: row.team.country || null,
+    }));
+  },
   // Infos ligue : nom réel (auto-vérification de l'id) + pays + coverage flags.
   async fetchLeagueInfo(competition, ctx = {}) {
     const y = seasonYear(ctx.season || competition.ext?.season);
@@ -115,6 +132,13 @@ const provider = {
     const y = seasonYear(ctx.season || competition.ext?.season);
     const rows = await api(`/fixtures?team=${teamExternalId}&season=${y}`, ctx);
     return rows.filter((fixture) => String(fixture.league?.id) === String(competition.external_id)).map(mapFixture);
+  },
+  // Toutes les compétitions disputées par une sélection pendant une saison.
+  // Contrairement à fetchTeamMatches, aucune ligue n'est filtrée : cela permet
+  // de réunir qualifications, tournoi final, Nations League et amicaux.
+  async fetchNationalTeamMatches(teamExternalId, ctx = {}) {
+    const y = seasonYear(ctx.season);
+    return (await api(`/fixtures?team=${teamExternalId}&season=${y}`, ctx)).map(mapFixture);
   },
   async fetchLiveMatches(competition, ctx = {}) {
     const y = seasonYear(ctx.season || competition.ext?.season);

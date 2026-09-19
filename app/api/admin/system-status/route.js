@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic";
 
 const EXPECTED_MIGRATIONS = {
   core: ["0002_profile_role_hardening", "0003_media_storage_hardening", "0004_job_execution_guardrails"],
-  football: ["0023_season_safe_sync", "0024_player_team_seasons", "0025_membership_backfill_repair", "0026_match_center_live"],
+  football: ["0023_season_safe_sync", "0024_player_team_seasons", "0025_membership_backfill_repair", "0026_match_center_live", "0027_national_teams"],
 };
 
 async function requireAdmin(request, db) {
@@ -44,6 +44,7 @@ export async function GET(request) {
       probe("Affectations joueur-équipe-saison", db.from("player_team_seasons").select("id,season,squad_role").limit(1)),
       probe("Compositions de match", db.from("match_lineups").select("id").limit(1)),
       probe("Performances individuelles", db.from("match_player_stats").select("id").limit(1)),
+      probe("Sélections et convocations", db.from("national_team_callups").select("id,national_team_id,player_id,season").limit(1)),
     ]);
 
     const applied = migrationResult.data || [];

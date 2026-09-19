@@ -5,7 +5,7 @@ import CollectionManager from "./CollectionManager";
 import CategoriesManager from "./CategoriesManager";
 import ContributionsQueue from "./ContributionsQueue";
 import SystemStatusPanel from "./SystemStatusPanel";
-import { ProfilesPanel, ReportsPanel, JobsPanel, SyncHistoryPanel, ProvidersPanel, SettingsInfo, LabelsPanel, TilesPanel, ClubSectionsPanel, HomePanel, BelgiansAbroadPanel, CompetitionHubPanel, StatsSectionsPanel, Placeholder } from "./panels";
+import { ProfilesPanel, ReportsPanel, JobsPanel, SyncHistoryPanel, ProvidersPanel, SettingsInfo, LabelsPanel, TilesPanel, ClubSectionsPanel, HomePanel, BelgiansAbroadPanel, CompetitionHubPanel, NationalTeamsPanel, StatsSectionsPanel, Placeholder } from "./panels";
 import { FOOTBALL_ENTITIES } from "@/config/football-admin";
 
 export function panelComponent(key) {
@@ -25,6 +25,7 @@ export function panelComponent(key) {
   if (key === "homepage") return { Comp: HomePanel, props: {} };
   if (key === "belgiansabroad") return { Comp: BelgiansAbroadPanel, props: {} };
   if (key === "competitionhub") return { Comp: CompetitionHubPanel, props: {} };
+  if (key === "nationalteams") return { Comp: NationalTeamsPanel, props: {} };
   if (key === "clubpage") return { Comp: ClubSectionsPanel, props: {} };
   if (key === "statspage") return { Comp: StatsSectionsPanel, props: {} };
   if (key === "system-status") return { Comp: SystemStatusPanel, props: {} };

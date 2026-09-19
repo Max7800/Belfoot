@@ -20,8 +20,9 @@ async function handle(request, { params }) {
     const matchCap = url.searchParams.get("matchCap") || undefined;
     const requestLimit = url.searchParams.get("requestLimit") || undefined;
     const teamExternalId = url.searchParams.get("teamExternalId") || null;
+    const nationalCategory = url.searchParams.get("nationalCategory") || null;
     return Response.json(await runJob(key, {
-      db: getAdmin(), season, competitionId, matchCap, requestLimit, teamExternalId,
+      db: getAdmin(), season, competitionId, matchCap, requestLimit, teamExternalId, nationalCategory,
       thesportsdbKey: process.env.THESPORTSDB_KEY,
       apifootballKey: process.env.APIFOOTBALL_KEY,
     }));

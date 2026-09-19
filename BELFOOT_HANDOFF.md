@@ -1093,14 +1093,43 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
 - Vérifications locales : ESLint sans erreur (`74` avertissements historiques) et build Next 16
   réussi. Aucun SQL ni appel provider.
 
+### 2026-09-19 — ChatGPT — verticale Sélections belges / Diables Rouges
+
+- Nouvelle page publique `/diables-rouges`, construite dans l'identité Belfoot sans embarquer les
+  widgets API-Sports : grand prochain match, écussons/drapeaux, compétition, stade, calendrier
+  horizontal sur mobile, derniers résultats, bilan et effectif appelé. Les sélecteurs A/U21/U19/
+  U17/Red Flames n'apparaissent que lorsque la sélection correspondante a été synchronisée.
+- Le bandeau, ses textes, son image, son assombrissement, ses couleurs et contours ainsi que les
+  titres/couleurs/ordre/visibilité des modules sont administrables dans
+  `Sélections belges > Page Diables Rouges` (`site_settings.data.national_teams`).
+- Migration `0027_national_teams.sql` : les sélections réutilisent `clubs` avec
+  `team_type='national'`, `national_category` et `national_gender`. La nouvelle table
+  `national_team_callups` relie un joueur à une sélection et une saison sans jamais écraser son
+  club courant ni polluer `player_team_seasons`.
+- Nouveau job `football.national-team` : trois appels ciblés (fiche sélection, tous ses matchs de la
+  saison, effectif actuel). Il découvre les compétitions internationales rencontrées, les garde
+  invisibles du portail Compétitions par défaut, crée leurs saisons et alimente les matchs. Le job
+  `football.find-national-teams` recherche les IDs belges en un seul appel et les écrit dans le
+  résultat du job.
+- Dans `Synchronisation > Jobs`, les imports ciblés sont désormais regroupés dans un encart séparé
+  afin de ne pas alourdir les actions générales. Procédure : rechercher les sélections, recopier
+  l'ID, choisir A/U21/U19/U17/Red Flames, puis synchroniser la sélection.
+- La page est tolérante avant migration : elle affiche un état de préparation au lieu d'une erreur.
+  `Préparation 2026` vérifie désormais la migration et la table des convocations.
+- Limite connue : l'effectif vient de `/players/squads` et représente l'effectif courant du
+  provider, alors que les matchs respectent la saison choisie. Les compositions historiques exactes
+  restent alimentées match par match via le job existant de compositions.
+- Vérifications : ESLint sans erreur (avertissements `<img>` historiques), build Next 16 réussi avec
+  variables Supabase factices, `git diff --check` réussi. Aucun appel API-Football effectué.
+
 ---
 
 ## CURRENT_GIT_STATE
 
 - **Branche** : `main`
 - **Dernier commit distant avant le lot courant** : `0da9454` — séparation Direct/calendrier et
-  bandeau live d'accueil. Le lot courant ajoute le contrôle de préparation 2026 et la CI ; il n'est
-  pas encore poussé.
+  bandeau live d'accueil. Le commit local `2437a58` ajoute le contrôle de préparation 2026 et la CI.
+  Le lot courant ajoute la verticale Sélections belges ; il n'est pas encore poussé.
 - **Commits importants récents** :
   - `2c71e35` documentation clubs liés / Europe
   - `69578a5` automatisation des stades + simplification des équipes liées
@@ -1131,14 +1160,15 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
   `0019_competition_portal_style.sql`, `0020_match_lineups.sql`, `0021_burnley_test.sql`, puis
   `0022_ensure_player_country.sql`, `0023_season_safe_sync.sql`, puis
   `0024_player_team_seasons.sql`, puis `0025_membership_backfill_repair.sql` (appliquée et contrôlée),
-  puis `0026_match_center_live.sql` (**appliquée et confirmée par l'utilisateur**), et vérifier que `modules/football/migrations/0001→0026` sont
+  puis `0026_match_center_live.sql` (**appliquée et confirmée par l'utilisateur**), puis
+  `0027_national_teams.sql` (**à appliquer avant d'utiliser la page Diables**), et vérifier que `modules/football/migrations/0001→0027` sont
   **toutes** passées (surtout `0008` position, `0009` banner_url/zones, `0010` rating_min,
   `0011` competition_type/parent_club_id/team_type, `0012` unicité des stats par compétition et
   `0013` textes des bandeaux, `0014` visibilité/pays du suivi international, `0015` zones par
   saison/phase, `0016` contenu éditorial des fiches clubs, `0017` protection des coachs manuels et
   `0018` création Challenger Pro League, `0019` style séparé des portes du portail et `0024`
-  séparation personne/équipe/saison, `0025` réparation du backfill historique et `0026` fondations
-  Realtime/activation explicite du direct).
+  séparation personne/équipe/saison, `0025` réparation du backfill historique, `0026` fondations
+  Realtime/activation explicite du direct et `0027` sélections/convocations séparées des clubs).
   Le code est tolérant mais ces features restent inactives sinon.
 
 ---

@@ -9,6 +9,7 @@ import { normalizeStatsConfig } from "@/lib/statsSections";
 import { normalizeHomeConfig } from "@/lib/homeSections";
 import { normalizeBelgiansAbroadConfig } from "@/lib/belgiansAbroad";
 import { DEFAULT_COMPETITION_HUB } from "@/lib/competitionHub";
+import { normalizeNationalTeamsConfig } from "@/lib/nationalTeams";
 
 export function ProfilesPanel() {
   const [rows, setRows] = useState([]);
@@ -54,6 +55,8 @@ export function JobsPanel() {
   const [matchCap, setMatchCap] = useState(3);
   const [requestLimit, setRequestLimit] = useState(10);
   const [teamExternalId, setTeamExternalId] = useState("44");
+  const [nationalCategory, setNationalCategory] = useState("senior");
+  const targetedJobs = new Set(["football.team-test", "football.national-team", "football.find-national-teams"]);
   const load = () => supabase.from("job_runs").select("*").order("started_at", { ascending: false }).limit(30).then(({ data }) => setRows(data || []));
   useEffect(() => { load(); supabase.from("competitions").select("*").order("name").then(({ data }) => setComps(data || [])); }, []);
   const run = async (key) => {
@@ -65,7 +68,7 @@ export function JobsPanel() {
       const r = await fetch("/api/admin/run-job", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token}` },
-        body: JSON.stringify({ key, season, competitionId: compId || null, matchCap, requestLimit, teamExternalId }),
+        body: JSON.stringify({ key, season, competitionId: compId || null, matchCap, requestLimit, teamExternalId, nationalCategory }),
       });
       const txt = await r.text();
       if (!r.ok) throw new Error(txt || ("HTTP " + r.status));
@@ -85,14 +88,13 @@ export function JobsPanel() {
       <input type="number" min="1" max="20" value={matchCap} onChange={(e) => setMatchCap(Math.max(1, Math.min(20, Number(e.target.value) || 1)))} className="w-16 rounded border border-line/10 bg-surface2 px-2 py-1 text-sm" />
       <label className="text-xs text-muted">Budget API</label>
       <input type="number" min="1" max="100" value={requestLimit} onChange={(e) => setRequestLimit(Math.max(1, Math.min(100, Number(e.target.value) || 1)))} className="w-16 rounded border border-line/10 bg-surface2 px-2 py-1 text-sm" />
-      <label className="text-xs text-muted">ID équipe API</label>
-      <input value={teamExternalId} onChange={(e) => setTeamExternalId(e.target.value.replace(/\D/g, ""))} placeholder="44" className="w-20 rounded border border-line/10 bg-surface2 px-2 py-1 text-sm" />
-      {jobKeys().map((k) => (
+      {jobKeys().filter((key) => !targetedJobs.has(key)).map((k) => (
         <button key={k} disabled={!!busy} onClick={() => run(k)} className="rounded bg-accent px-3 py-1.5 text-sm font-bold text-white disabled:opacity-50">
           {(JOB_CATALOG[k]?.label || k)}{busy === k ? " …" : ""}
         </button>
       ))}
     </div>
+    <div className="mb-3 rounded-xl border border-amber-400/15 bg-amber-400/5 p-3"><div className="mb-2 text-xs font-black uppercase tracking-wider text-amber-300">Imports ciblés</div><div className="flex flex-wrap items-center gap-2"><label className="text-xs text-muted">ID équipe API</label><input value={teamExternalId} onChange={(e) => setTeamExternalId(e.target.value.replace(/\D/g, ""))} placeholder="ID" className="w-20 rounded border border-line/10 bg-surface2 px-2 py-1 text-sm" /><label className="text-xs text-muted">Catégorie</label><select value={nationalCategory} onChange={(e) => setNationalCategory(e.target.value)} className="rounded border border-line/10 bg-surface2 px-2 py-1 text-sm"><option value="senior">Équipe A</option><option value="u21">U21</option><option value="u19">U19</option><option value="u17">U17</option><option value="women">Red Flames</option></select>{jobKeys().filter((key) => targetedJobs.has(key)).map((k) => <button key={k} disabled={!!busy} onClick={() => run(k)} className="rounded border border-amber-400/25 bg-amber-400/10 px-3 py-1.5 text-sm font-bold text-amber-100 disabled:opacity-50">{JOB_CATALOG[k]?.label || k}{busy === k ? " …" : ""}</button>)}</div><p className="mt-2 text-[11px] leading-5 text-muted">Commence par « Trouver les sélections belges » : les identifiants apparaîtront dans le message de résultat. Choisis ensuite l'ID et la catégorie avant la synchronisation.</p></div>
     <p className="mb-3 rounded-lg border border-red-400/15 bg-red-500/5 p-3 text-xs leading-5 text-muted"><b className="text-content">Direct :</b> sans compétition choisie, le job traite uniquement celles dont « Direct activé » est coché. Il consomme un appel pour la journée, puis au maximum « Max matchs » appels pour les événements des rencontres en cours. L&apos;affichage public et Supabase Realtime ne consomment aucun appel API-Football.</p>
     {msg && <p className="mb-3 rounded border border-line/10 bg-surface p-2 text-sm text-muted">{msg}</p>}
     <div className="divide-y divide-line/10 rounded-xl border border-line/10">
@@ -310,6 +312,35 @@ export function CompetitionHubPanel() {
       </div>
     </div>
   );
+}
+
+export function NationalTeamsPanel() {
+  const [draft, setDraft] = useState(normalizeNationalTeamsConfig());
+  const [status, setStatus] = useState("");
+  useEffect(() => { supabase.from("site_settings").select("data").eq("id", 1).maybeSingle().then(({ data }) => setDraft(normalizeNationalTeamsConfig(data?.data?.national_teams || {}))); }, []);
+  const setHero = (key, value) => setDraft((current) => ({ ...current, hero: { ...current.hero, [key]: value } }));
+  const setSection = (key, field, value) => setDraft((current) => ({ ...current, sections: current.sections.map((section) => section.key === key ? { ...section, [field]: value } : section) }));
+  const move = (index, direction) => setDraft((current) => { const next = [...current.sections]; const target = index + direction; if (target < 0 || target >= next.length) return current; [next[index], next[target]] = [next[target], next[index]]; return { ...current, sections: next }; });
+  const save = async () => {
+    setStatus("saving");
+    const { data } = await supabase.from("site_settings").select("data").eq("id", 1).maybeSingle();
+    const sections = Object.fromEntries(draft.sections.map((section, index) => [section.key, { enabled: section.enabled, order: index, label: section.label, subtitle: section.subtitle, accent: section.accent }]));
+    const { error } = await supabase.from("site_settings").update({ data: { ...(data?.data || {}), national_teams: { hero: draft.hero, sections } } }).eq("id", 1);
+    setStatus(error ? "error" : "saved");
+  };
+  return <div>
+    <div className="mb-5 flex items-start justify-between gap-3"><div><h2 className="text-lg font-bold">Page des sélections belges</h2><p className="mt-1 text-xs text-muted">Le contenu éditorial reste indépendant des données API : image, textes, couleurs, modules et ordre sont modifiables ici.</p></div><button onClick={save} disabled={status === "saving"} className="shrink-0 rounded bg-accent px-3 py-2 text-sm font-bold text-white disabled:opacity-50">{status === "saving" ? "Enregistrement…" : status === "saved" ? "✓ Enregistré" : "Enregistrer"}</button></div>
+    {status === "error" && <p className="mb-4 text-sm text-red-400">Impossible d'enregistrer les réglages.</p>}
+    <div className="mb-6 rounded-xl border border-line/10 bg-surface p-4"><h3 className="mb-3 font-bold">Bandeau Diables Rouges</h3><div className="grid gap-3 sm:grid-cols-2">
+      <label className="text-xs text-muted">Sur-titre<input value={draft.hero.kicker || ""} onChange={(e) => setHero("kicker", e.target.value)} className="mt-1 w-full rounded border border-line/10 bg-surface2 px-2 py-2 text-sm text-content" /></label>
+      <label className="text-xs text-muted">Grand titre<input value={draft.hero.title || ""} onChange={(e) => setHero("title", e.target.value)} className="mt-1 w-full rounded border border-line/10 bg-surface2 px-2 py-2 text-sm text-content" /></label>
+      <label className="text-xs text-muted sm:col-span-2">Introduction<textarea rows="3" value={draft.hero.intro || ""} onChange={(e) => setHero("intro", e.target.value)} className="mt-1 w-full rounded border border-line/10 bg-surface2 px-2 py-2 text-sm text-content" /></label>
+      {[["background_color", "Fond"], ["border_color", "Contour"], ["primary_color", "Accent rouge"], ["secondary_color", "Accent or"]].map(([key, label]) => <label key={key} className="text-xs text-muted">{label}<div className="mt-1 flex gap-2"><input type="color" value={draft.hero[key] || "#000000"} onChange={(e) => setHero(key, e.target.value)} className="h-9 w-12 rounded border border-line/10 bg-surface2 p-1" /><input value={draft.hero[key] || ""} onChange={(e) => setHero(key, e.target.value)} className="min-w-0 flex-1 rounded border border-line/10 bg-surface2 px-2 text-sm text-content" /></div></label>)}
+      <label className="text-xs text-muted">Assombrissement<input type="number" min="0" max="1" step="0.05" value={draft.hero.overlay ?? 0.58} onChange={(e) => setHero("overlay", Number(e.target.value))} className="mt-1 w-full rounded border border-line/10 bg-surface2 px-2 py-2 text-sm text-content" /></label>
+      <div className="sm:col-span-2"><div className="mb-1 text-xs text-muted">Image du bandeau</div><ImageField value={draft.hero.image_url || ""} onChange={(value) => setHero("image_url", value)} /></div>
+    </div></div>
+    <h3 className="mb-2 font-bold">Modules</h3><div className="space-y-2">{draft.sections.map((section, index) => <div key={section.key} className="rounded-xl border border-line/10 bg-surface p-3"><div className="flex items-center gap-2"><label className="flex shrink-0 items-center gap-2 text-xs"><input type="checkbox" checked={section.enabled} onChange={(e) => setSection(section.key, "enabled", e.target.checked)} />Visible</label><input value={section.label} onChange={(e) => setSection(section.key, "label", e.target.value)} className="min-w-0 flex-1 rounded border border-line/10 bg-surface2 px-2 py-1.5 text-sm font-semibold" /><input type="color" value={section.accent} onChange={(e) => setSection(section.key, "accent", e.target.value)} className="h-8 w-10 rounded border border-line/10 bg-surface2 p-1" /><button onClick={() => move(index, -1)} className="px-1 text-muted">↑</button><button onClick={() => move(index, 1)} className="px-1 text-muted">↓</button></div><textarea rows="2" value={section.subtitle || ""} onChange={(e) => setSection(section.key, "subtitle", e.target.value)} className="mt-2 w-full rounded border border-line/10 bg-surface2 px-2 py-1.5 text-xs text-content" /></div>)}</div>
+  </div>;
 }
 
 export function StatsSectionsPanel() {

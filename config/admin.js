@@ -19,6 +19,10 @@ export const adminSections = [
     { key: "playerMemberships", label: "Affectations", secondary: true },
     { key: "playerCareerStats", label: "Carrières et statistiques", secondary: true },
   ] },
+  { label: "Sélections belges", icon: "trophy", panels: [
+    { key: "nationalteams", label: "Page Diables Rouges" },
+    { key: "nationalCallups", label: "Convocations" },
+  ] },
   { label: "Match Center", icon: "activity", panels: [
     { key: "events", label: "Événements" },
     { key: "lineups", label: "Formations" },
