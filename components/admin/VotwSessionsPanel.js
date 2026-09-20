@@ -65,7 +65,7 @@ export default function VotwSessionsPanel() {
 
   const generate = async (session) => {
     setBusy(true); setMsg("");
-    try { const r = await generateEligibles(session); setMsg(`${r.added} ajouté(s) · ${r.found} trouvé(s) sur ${r.matches} match(s).`); await loadCandidates(session.id); }
+    try { const r = await generateEligibles(session); const src = r.source === "squad" ? " — repli effectifs (pas de stats de match)" : r.source === "none" ? " — aucun match pour cette journée" : ""; setMsg(`${r.added} ajouté(s) · ${r.found} trouvé(s) sur ${r.matches} match(s)${src}.`); await loadCandidates(session.id); }
     catch (e) { setMsg(e.message); }
     setBusy(false);
   };

@@ -1242,10 +1242,12 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
 ## CURRENT_GIT_STATE
 
 - **Branche** : `main`
-- **Dernier commit distant** : `1c4bff7` — « Onze de la semaine (module votw) - fondation + admin »
-  (migrations `votw/0001` + `votw/0002` à appliquer côté Supabase ; `0029` FIFA aussi).
-- **Lot courant (non poussé)** : Onze de la semaine `votw` sous-lot 2/3 (terrain + vote). Aucune
-  nouvelle migration. Voir changelog 2026-09-19.
+- **Dernier commit distant** : `1caaee6` — « Onze de la semaine - terrain 4-3-3 + vote (sous-lot 2) ».
+  Migrations à appliquer côté Supabase : `votw/0001`+`0002` (votw) et `0029` (FIFA).
+- **Lot courant (non poussé)** : `generateEligibles` — **repli sans quota** quand `match_player_stats`
+  est vide (2024) : prend les joueurs des effectifs (`players.club_id`) des clubs de la journée ;
+  l'admin affiche la source (stats de match vs repli effectifs). Le vrai remplissage par compo = job
+  lineups (mois Pro). Aucune migration.
 - **Commits importants récents** :
   - `2c71e35` documentation clubs liés / Europe
   - `69578a5` automatisation des stades + simplification des équipes liées
