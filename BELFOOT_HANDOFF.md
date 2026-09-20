@@ -412,6 +412,19 @@ Côté Supabase : Site URL = domaine + Redirect URLs (`/auth/callback`, `/reset`
 
 ## 14. TODO ouverts (par priorité indicative)
 
+> **Chantier conçu (à venir) — Notes & Diable du match des Diables Rouges.** Même famille que votw
+> (vote communautaire par membre, fenêtre, résultat figé). Décisions verrouillées avec l'utilisateur :
+> **note /10**, **Belgique A uniquement**, **ouverture auto à la fin du match + fermeture ~3-4 jours
+> après** (override admin). Modèle : `player_ratings` (match_id, player_id, member_id, rating ;
+> `unique(match,member,player)`) + `motm_votes` (match_id, member_id, player_id ;
+> `unique(match,member)`), **gel du résultat par match** à la fermeture (archive consultable, rien à
+> recalculer). Puis **vue d'agrégation annuelle** (comme `votw_appearances`) pour le **bilan de
+> décembre** : meilleure moyenne (avec **seuil mini de matchs notés**, réglable admin), meilleur
+> buteur (`match_player_stats`), plus souvent élu Diable du match. UX : bloc sur `/diables-rouges` au
+> coup de sifflet final (cartes joueurs notables = qui a joué côté Belgique) + archive par match.
+> Communautaire = zéro API ; les buts/qui-a-joué = `match_player_stats` = API (mois Pro). À faire
+> **après le votw sous-lot 3**. Candidat socle : « notation communautaire d'entités par événement ».
+
 1. **P0 sécurité issu de `BELFOOT_AUDIT.md`** : verrouiller le rôle des profils, assainir le HTML
    riche/contributions, versionner les policies Storage, puis mettre Next/Tiptap à niveau dans des
    lots séparés. Ne pas ouvrir davantage les inscriptions/contributions avant ces correctifs.
@@ -1208,15 +1221,31 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
   matchs déjà en base. La population réelle des journées 2026 = territoire mois Pro (jobs lineups).
 - Vérifs : ESLint 0 erreur, build Next 16 vert (`/onze` générée). Zéro appel API.
 
+### 2026-09-19 — Claude — Onze de la semaine — sous-lot 2/3 : terrain + vote
+- **`/onze` réécrite** : terrain 4-3-3 (11 slots positionnés), clic sur un slot → panneau/drawer
+  (bas sur mobile, modal centré desktop) listant les joueurs éligibles **filtrés par la catégorie du
+  slot**, avec photo, nom, club+logo, poste et stats de la journée (minutes, buts, passes, cartons,
+  note) tirées de `match_player_stats`. Recherche par nom, tri par note/minutes.
+- **Vote** : membre connecté obligatoire ; 1 XI par membre, **auto-enregistré par slot** (`upsert`
+  sur `votw_votes` `onConflict session_id,member_id,position`) ; modifiable tant que
+  `status='open'` et avant `closes_at` ; un joueur ne peut occuper qu'un slot (exclu des autres) ;
+  indicateur n/11 ; retrait d'un joueur d'un slot possible.
+- Hors fenêtre de vote (fermé/publié) ou non connecté : terrain en lecture, message adapté. Le
+  **calcul + publication du résultat** (Onze des lecteurs figé) et l'**Onze Belfoot manuel** =
+  sous-lot 3. Nav publique `/onze` réaffichée (demande utilisateur).
+- **Style du terrain regroupé** dans une constante `PITCH` en tête de `app/onze/page.js` (fond, lignes,
+  cartes joueur) → re-style facile quand le design collera au site, sans toucher la logique.
+- Vérifs : ESLint 0 erreur, build Next 16 vert. Zéro appel API.
+
 ---
 
 ## CURRENT_GIT_STATE
 
 - **Branche** : `main`
-- **Dernier commit distant** : `7e87032` — « Diables Rouges : genre H/F, postes groupes, classement
-  FIFA » (`0029` fournie, à appliquer côté Supabase).
-- **Lot courant (non poussé)** : Onze de la semaine `votw` sous-lot 1/3 (fondation + admin). **Migrations
-  à appliquer : `votw/0001_init.sql` puis `votw/0002_session_competition.sql`.** Voir changelog 2026-09-19.
+- **Dernier commit distant** : `1c4bff7` — « Onze de la semaine (module votw) - fondation + admin »
+  (migrations `votw/0001` + `votw/0002` à appliquer côté Supabase ; `0029` FIFA aussi).
+- **Lot courant (non poussé)** : Onze de la semaine `votw` sous-lot 2/3 (terrain + vote). Aucune
+  nouvelle migration. Voir changelog 2026-09-19.
 - **Commits importants récents** :
   - `2c71e35` documentation clubs liés / Europe
   - `69578a5` automatisation des stades + simplification des équipes liées
