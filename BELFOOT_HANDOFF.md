@@ -425,6 +425,13 @@ Côté Supabase : Site URL = domaine + Redirect URLs (`/auth/callback`, `/reset`
 > Communautaire = zéro API ; les buts/qui-a-joué = `match_player_stats` = API (mois Pro). À faire
 > **après le votw sous-lot 3**. Candidat socle : « notation communautaire d'entités par événement ».
 
+> **Prépa 2026 — data : `season_id` manquant sur les matchs importés.** Constaté sur la JPL 2024 : les
+> matchs arrivaient avec `season_id NULL`, ce qui casse tout filtre par saison (votw éligibles,
+> classement, stats). Corrigé ponctuellement en base pour 2024 (UPDATE ciblé compétition + season_id
+> null → saison 2024). **Cause racine à corriger dans l'import matchs (job `upsert` matchs) AVANT la
+> bascule 2026**, sinon le trou revient. Filet en place côté `generateEligibles` : signale
+> explicitement « matchs sans saison rattachée » au lieu d'un « 0 » muet.
+
 1. **P0 sécurité issu de `BELFOOT_AUDIT.md`** : verrouiller le rôle des profils, assainir le HTML
    riche/contributions, versionner les policies Storage, puis mettre Next/Tiptap à niveau dans des
    lots séparés. Ne pas ouvrir davantage les inscriptions/contributions avant ces correctifs.

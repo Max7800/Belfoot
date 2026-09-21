@@ -33,6 +33,7 @@ export default function OnzePage() {
   const [picks, setPicks] = useState({});
   const [openSlot, setOpenSlot] = useState(null);
   const [q, setQ] = useState("");
+  const [clubFilter, setClubFilter] = useState("");
   const [saving, setSaving] = useState(false);
 
   const slots = formationSlots(sess?.formation || "4-3-3");
@@ -67,7 +68,7 @@ export default function OnzePage() {
     const map = {};
     for (const p of players || []) {
       const club = clubById[p.club_id];
-      map[p.id] = { name: p.name, photo: p.photo_url, position: p.position, club: club?.name, clubLogo: club?.logo_url, ...(stats[p.id] || { minutes: 0, goals: 0, assists: 0, cards: 0, rating: null }) };
+      map[p.id] = { name: p.name, photo: p.photo_url, position: p.position, clubId: p.club_id, club: club?.name, clubLogo: club?.logo_url, ...(stats[p.id] || { minutes: 0, goals: 0, assists: 0, cards: 0, rating: null }) };
     }
     setInfo(map);
 
@@ -96,14 +97,27 @@ export default function OnzePage() {
     [picks, openSlot]
   );
 
+  // Clubs présents parmi les joueurs éligibles de ce poste (pour le filtre club).
+  const slotClubs = useMemo(() => {
+    if (!openSlot) return [];
+    const seen = new Map();
+    for (const c of candidates) {
+      if (c.position !== openSlot.cat) continue;
+      const i = info[c.player_id];
+      if (i?.clubId && !seen.has(i.clubId)) seen.set(i.clubId, i.club || "Club");
+    }
+    return [...seen.entries()].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
+  }, [openSlot, candidates, info]);
+
   const options = useMemo(() => {
     if (!openSlot) return [];
     const term = q.trim().toLowerCase();
     return candidates
       .filter((c) => c.position === openSlot.cat && !pickedElsewhere.has(c.player_id))
+      .filter((c) => !clubFilter || info[c.player_id]?.clubId === clubFilter)
       .filter((c) => !term || (info[c.player_id]?.name || "").toLowerCase().includes(term))
       .sort((a, b) => (info[b.player_id]?.rating ?? 0) - (info[a.player_id]?.rating ?? 0) || (info[b.player_id]?.minutes ?? 0) - (info[a.player_id]?.minutes ?? 0));
-  }, [openSlot, candidates, pickedElsewhere, q, info]);
+  }, [openSlot, candidates, pickedElsewhere, q, clubFilter, info]);
 
   async function pick(slot, playerId) {
     if (!votable || !userId) return;
@@ -153,7 +167,7 @@ export default function OnzePage() {
           const pid = picks[slot.id];
           const p = pid ? info[pid] : null;
           return (
-            <button key={slot.id} onClick={() => votable && userId ? setOpenSlot(slot) : null} style={{ left: `${slot.x}%`, top: `${slot.y}%` }} className="absolute -translate-x-1/2 -translate-y-1/2">
+            <button key={slot.id} onClick={() => { if (votable && userId) { setQ(""); setClubFilter(""); setOpenSlot(slot); } }} style={{ left: `${slot.x}%`, top: `${slot.y}%` }} className="absolute -translate-x-1/2 -translate-y-1/2">
               {p ? (
                 <div className="flex w-16 flex-col items-center sm:w-20">
                   <div className={PITCH.avatar}>{p.photo ? <img src={p.photo} alt="" className="h-full w-full object-cover object-top" /> : <span className="flex h-full w-full items-center justify-center text-[10px] text-muted">{slot.id}</span>}</div>
@@ -178,6 +192,12 @@ export default function OnzePage() {
               <button onClick={() => setOpenSlot(null)} className="rounded-full p-1 text-muted hover:text-content"><X className="h-5 w-5" /></button>
             </div>
             <div className="p-3">
+              {slotClubs.length > 1 && (
+                <select value={clubFilter} onChange={(e) => setClubFilter(e.target.value)} className="mb-2 w-full rounded-lg border border-line/10 bg-surface2 px-3 py-2 text-sm">
+                  <option value="">Tous les clubs ({slotClubs.length})</option>
+                  {slotClubs.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              )}
               <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Rechercher un joueur…" className="mb-3 w-full rounded-lg border border-line/10 bg-surface2 px-3 py-2 text-sm" />
               <div className="max-h-[52vh] space-y-1 overflow-y-auto">
                 {options.map((c) => { const p = info[c.player_id] || {}; return (
