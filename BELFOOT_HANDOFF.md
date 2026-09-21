@@ -1249,12 +1249,15 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
 ## CURRENT_GIT_STATE
 
 - **Branche** : `main`
-- **Dernier commit distant** : `1caaee6` — « Onze de la semaine - terrain 4-3-3 + vote (sous-lot 2) ».
-  Migrations à appliquer côté Supabase : `votw/0001`+`0002` (votw) et `0029` (FIFA).
-- **Lot courant (non poussé)** : `generateEligibles` — **repli sans quota** quand `match_player_stats`
-  est vide (2024) : prend les joueurs des effectifs (`players.club_id`) des clubs de la journée ;
-  l'admin affiche la source (stats de match vs repli effectifs). Le vrai remplissage par compo = job
-  lineups (mois Pro). Aucune migration.
+- **Dernier commit distant** : `1732d67` — « Onze de la semaine - filtre club + filet saison » (filtre
+  club dans le picker `/onze`, filet « matchs sans saison » à la génération).
+  Migrations appliquées côté Supabase : `votw/0001`+`0002`, `0029`. Data : matchs JPL 2024 rattachés à
+  la saison via UPDATE ciblé (voir note prépa-2026 : corriger `season_id` à la source dans l'import).
+- **Lot courant (non poussé)** : votw **sous-lot 3a** — résultat des lecteurs. `computeResult(session)`
+  (`lib/votw.js`) agrège les votes par slot, départage note→minutes, fige un snapshot dans
+  `votw_results`. Bouton admin **« Calculer le résultat »**. `/onze` affiche le **« Onze des lecteurs »**
+  figé sur le terrain (lecture) quand la session est `closed`/`published` (avec nb de votes par poste).
+  Reste le **3b** : Onze Belfoot manuel (rédaction). Aucune migration.
 - **Commits importants récents** :
   - `2c71e35` documentation clubs liés / Europe
   - `69578a5` automatisation des stades + simplification des équipes liées

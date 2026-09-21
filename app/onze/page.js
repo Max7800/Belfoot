@@ -31,6 +31,7 @@ export default function OnzePage() {
   const [candidates, setCandidates] = useState([]);
   const [info, setInfo] = useState({});
   const [picks, setPicks] = useState({});
+  const [results, setResults] = useState({});
   const [openSlot, setOpenSlot] = useState(null);
   const [q, setQ] = useState("");
   const [clubFilter, setClubFilter] = useState("");
@@ -77,6 +78,13 @@ export default function OnzePage() {
       setPicks(Object.fromEntries((votes || []).map((v) => [v.position, v.player_id])));
     } else {
       setPicks({});
+    }
+
+    if (s.status !== "open") {
+      const { data: res } = await supabase.from("votw_results").select("position,votes,player_snapshot").eq("session_id", s.id);
+      setResults(Object.fromEntries((res || []).map((r) => [r.position, { ...(r.player_snapshot || {}), votes: r.votes }])));
+    } else {
+      setResults({});
     }
   }
 
@@ -150,10 +158,12 @@ export default function OnzePage() {
         <h1 className="text-2xl font-black sm:text-3xl">Le 11 de la semaine</h1>
         <span className="text-sm text-muted">Journée {sess.matchday}{sess.season_label ? ` · ${sess.season_label}` : ""} · {sess.formation || "4-3-3"}</span>
         {votable && <span className="ml-auto rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-black uppercase tracking-wider text-emerald-300">{filled}/11</span>}
+        {!votable && Object.keys(results).length > 0 && <span className="ml-auto rounded-full bg-amber-400/15 px-3 py-1 text-xs font-black uppercase tracking-wider text-amber-300">Onze des lecteurs</span>}
       </div>
 
       {!userId && <p className="rounded-xl border border-amber-400/25 bg-amber-400/5 p-3 text-sm text-amber-200">Connecte-toi pour composer et enregistrer ton XI.</p>}
-      {userId && !votable && <p className="rounded-xl border border-line/15 bg-surface p-3 text-sm text-muted"><Trophy className="mr-2 inline h-4 w-4" />Le vote est fermé. Le résultat sera publié ici.</p>}
+      {!votable && Object.keys(results).length === 0 && <p className="rounded-xl border border-line/15 bg-surface p-3 text-sm text-muted"><Trophy className="mr-2 inline h-4 w-4" />Le vote est fermé. Le résultat sera publié ici.</p>}
+      {!votable && Object.keys(results).length > 0 && <p className="rounded-xl border border-amber-400/20 bg-amber-400/5 p-3 text-sm text-amber-200"><Trophy className="mr-2 inline h-4 w-4" />Voici le 11 élu par les lecteurs pour cette journée.</p>}
 
       {/* Terrain — style regroupé dans la constante PITCH (haut du fichier) */}
       <div className={PITCH.field}>
@@ -165,13 +175,14 @@ export default function OnzePage() {
         </div>
         {slots.map((slot) => {
           const pid = picks[slot.id];
-          const p = pid ? info[pid] : null;
+          const p = votable ? (pid ? info[pid] : null) : (results[slot.id] || null);
           return (
             <button key={slot.id} onClick={() => { if (votable && userId) { setQ(""); setClubFilter(""); setOpenSlot(slot); } }} style={{ left: `${slot.x}%`, top: `${slot.y}%` }} className="absolute -translate-x-1/2 -translate-y-1/2">
               {p ? (
                 <div className="flex w-16 flex-col items-center sm:w-20">
                   <div className={PITCH.avatar}>{p.photo ? <img src={p.photo} alt="" className="h-full w-full object-cover object-top" /> : <span className="flex h-full w-full items-center justify-center text-[10px] text-muted">{slot.id}</span>}</div>
                   <div className={PITCH.nameTag}><span className={PITCH.nameText}>{p.name}</span>{p.clubLogo && <img src={p.clubLogo} alt="" className="h-3 w-3 object-contain" />}</div>
+                  {!votable && p.votes != null && <div className="mt-0.5 rounded-full bg-amber-400/20 px-1.5 text-[9px] font-black text-amber-300">{p.votes} vote{p.votes > 1 ? "s" : ""}</div>}
                 </div>
               ) : (
                 <div className={PITCH.empty}><span className="text-lg leading-none">+</span><span className="text-[8px] uppercase">{slot.label.split(" ")[0]}</span></div>

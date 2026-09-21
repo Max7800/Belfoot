@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { generateEligibles } from "@/lib/votw";
+import { generateEligibles, computeResult } from "@/lib/votw";
 
 const CATS = ["GK", "DEF", "MID", "FWD"];
 const STATUS = ["open", "closed", "published"];
@@ -70,6 +70,13 @@ export default function VotwSessionsPanel() {
     setBusy(false);
   };
 
+  const compute = async (session) => {
+    setBusy(true); setMsg("");
+    try { const r = await computeResult(session); setMsg(`Résultat calculé : ${r.slots}/11 postes attribués (${r.votes} votes). Passe le statut en « published » pour l'afficher.`); }
+    catch (e) { setMsg(e.message); }
+    setBusy(false);
+  };
+
   const search = async () => {
     if (q.trim().length < 2) { setFound([]); return; }
     const { data } = await supabase.from("players").select("id,name").ilike("name", `%${q.trim()}%`).limit(8);
@@ -118,6 +125,7 @@ export default function VotwSessionsPanel() {
               <div className="mt-3 border-t border-line/10 pt-3">
                 <div className="flex flex-wrap items-center gap-3">
                   <button onClick={() => generate(s)} disabled={busy} className="rounded-lg border border-line/20 px-3 py-1.5 text-sm font-bold hover:border-accent/40 disabled:opacity-50">Générer les éligibles</button>
+                  <button onClick={() => compute(s)} disabled={busy} className="rounded-lg border border-amber-400/30 px-3 py-1.5 text-sm font-bold text-amber-300 hover:border-amber-400/60 disabled:opacity-50">Calculer le résultat</button>
                   <span className="text-xs text-muted">{candidates.length} éligible(s) · {voteCount} vote(s)</span>
                 </div>
 
