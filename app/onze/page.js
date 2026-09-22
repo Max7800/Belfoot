@@ -32,6 +32,8 @@ export default function OnzePage() {
   const [info, setInfo] = useState({});
   const [picks, setPicks] = useState({});
   const [results, setResults] = useState({});
+  const [belfoot, setBelfoot] = useState({});
+  const [view, setView] = useState("readers");
   const [openSlot, setOpenSlot] = useState(null);
   const [q, setQ] = useState("");
   const [clubFilter, setClubFilter] = useState("");
@@ -83,8 +85,10 @@ export default function OnzePage() {
     if (s.status !== "open") {
       const { data: res } = await supabase.from("votw_results").select("position,votes,player_snapshot").eq("session_id", s.id);
       setResults(Object.fromEntries((res || []).map((r) => [r.position, { ...(r.player_snapshot || {}), votes: r.votes }])));
+      setBelfoot(s.result?.belfoot || {});
     } else {
       setResults({});
+      setBelfoot({});
     }
   }
 
@@ -165,6 +169,13 @@ export default function OnzePage() {
       {!votable && Object.keys(results).length === 0 && <p className="rounded-xl border border-line/15 bg-surface p-3 text-sm text-muted"><Trophy className="mr-2 inline h-4 w-4" />Le vote est fermé. Le résultat sera publié ici.</p>}
       {!votable && Object.keys(results).length > 0 && <p className="rounded-xl border border-amber-400/20 bg-amber-400/5 p-3 text-sm text-amber-200"><Trophy className="mr-2 inline h-4 w-4" />Voici le 11 élu par les lecteurs pour cette journée.</p>}
 
+      {!votable && Object.keys(belfoot).length > 0 && (
+        <div className="inline-flex rounded-xl border border-line/15 bg-surface p-1">
+          <button onClick={() => setView("readers")} className={`rounded-lg px-4 py-1.5 text-sm font-bold transition ${view === "readers" ? "bg-amber-400/20 text-amber-200" : "text-muted hover:text-content"}`}>Onze des lecteurs</button>
+          <button onClick={() => setView("belfoot")} className={`rounded-lg px-4 py-1.5 text-sm font-bold transition ${view === "belfoot" ? "bg-amber-400/20 text-amber-200" : "text-muted hover:text-content"}`}>Onze Belfoot</button>
+        </div>
+      )}
+
       {/* Terrain — style regroupé dans la constante PITCH (haut du fichier) */}
       <div className={PITCH.field}>
         <div className="pointer-events-none absolute inset-0">
@@ -175,14 +186,17 @@ export default function OnzePage() {
         </div>
         {slots.map((slot) => {
           const pid = picks[slot.id];
-          const p = votable ? (pid ? info[pid] : null) : (results[slot.id] || null);
+          let p = null;
+          if (votable) { p = pid ? info[pid] : null; }
+          else if (view === "belfoot") { const b = belfoot[slot.id]; if (b) { const i = info[b.player_id] || {}; p = { name: b.name || i.name, photo: i.photo, clubLogo: i.clubLogo }; } }
+          else { p = results[slot.id] || null; }
           return (
             <button key={slot.id} onClick={() => { if (votable && userId) { setQ(""); setClubFilter(""); setOpenSlot(slot); } }} style={{ left: `${slot.x}%`, top: `${slot.y}%` }} className="absolute -translate-x-1/2 -translate-y-1/2">
               {p ? (
                 <div className="flex w-16 flex-col items-center sm:w-20">
                   <div className={PITCH.avatar}>{p.photo ? <img src={p.photo} alt="" className="h-full w-full object-cover object-top" /> : <span className="flex h-full w-full items-center justify-center text-[10px] text-muted">{slot.id}</span>}</div>
                   <div className={PITCH.nameTag}><span className={PITCH.nameText}>{p.name}</span>{p.clubLogo && <img src={p.clubLogo} alt="" className="h-3 w-3 object-contain" />}</div>
-                  {!votable && p.votes != null && <div className="mt-0.5 rounded-full bg-amber-400/20 px-1.5 text-[9px] font-black text-amber-300">{p.votes} vote{p.votes > 1 ? "s" : ""}</div>}
+                  {!votable && view === "readers" && p.votes != null && <div className="mt-0.5 rounded-full bg-amber-400/20 px-1.5 text-[9px] font-black text-amber-300">{p.votes} vote{p.votes > 1 ? "s" : ""}</div>}
                 </div>
               ) : (
                 <div className={PITCH.empty}><span className="text-lg leading-none">+</span><span className="text-[8px] uppercase">{slot.label.split(" ")[0]}</span></div>

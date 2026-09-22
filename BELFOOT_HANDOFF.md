@@ -1249,15 +1249,14 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
 ## CURRENT_GIT_STATE
 
 - **Branche** : `main`
-- **Dernier commit distant** : `1732d67` — « Onze de la semaine - filtre club + filet saison » (filtre
-  club dans le picker `/onze`, filet « matchs sans saison » à la génération).
+- **Dernier commit distant** : `3c58152` — « Onze de la semaine - resultat des lecteurs (sous-lot 3a) ».
   Migrations appliquées côté Supabase : `votw/0001`+`0002`, `0029`. Data : matchs JPL 2024 rattachés à
   la saison via UPDATE ciblé (voir note prépa-2026 : corriger `season_id` à la source dans l'import).
-- **Lot courant (non poussé)** : votw **sous-lot 3a** — résultat des lecteurs. `computeResult(session)`
-  (`lib/votw.js`) agrège les votes par slot, départage note→minutes, fige un snapshot dans
-  `votw_results`. Bouton admin **« Calculer le résultat »**. `/onze` affiche le **« Onze des lecteurs »**
-  figé sur le terrain (lecture) quand la session est `closed`/`published` (avec nb de votes par poste).
-  Reste le **3b** : Onze Belfoot manuel (rédaction). Aucune migration.
+- **Lot courant (non poussé)** : votw **sous-lot 3b** — **Onze Belfoot** (choix rédaction). Éditeur admin
+  (un sélecteur par poste, alimenté par les éligibles) → stocké dans `votw_sessions.result.belfoot`
+  (jsonb, **aucune migration**). `/onze` affiche une **bascule « Onze des lecteurs » / « Onze Belfoot »**
+  quand la session est fermée et qu'un Onze Belfoot existe. **→ votw V1 COMPLET** (fondation + terrain +
+  vote + résultat lecteurs + Onze Belfoot). Prochain chantier prévu : Notes & Diable du match (voir §14).
 - **Commits importants récents** :
   - `2c71e35` documentation clubs liés / Europe
   - `69578a5` automatisation des stades + simplification des équipes liées

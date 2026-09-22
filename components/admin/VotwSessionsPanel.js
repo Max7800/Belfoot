@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { generateEligibles, computeResult } from "@/lib/votw";
+import { generateEligibles, computeResult, formationSlots } from "@/lib/votw";
 
 const CATS = ["GK", "DEF", "MID", "FWD"];
 const STATUS = ["open", "closed", "published"];
@@ -16,6 +16,7 @@ export default function VotwSessionsPanel() {
   const [expanded, setExpanded] = useState(null);
   const [candidates, setCandidates] = useState([]);
   const [voteCount, setVoteCount] = useState(0);
+  const [belfoot, setBelfoot] = useState({});
   const [q, setQ] = useState("");
   const [found, setFound] = useState([]);
   const [msg, setMsg] = useState("");
@@ -60,7 +61,22 @@ export default function VotwSessionsPanel() {
   const toggle = async (session) => {
     if (expanded === session.id) { setExpanded(null); return; }
     setExpanded(session.id); setCandidates([]); setVoteCount(0); setQ(""); setFound([]); setMsg("");
+    setBelfoot(session.result?.belfoot || {});
     await loadCandidates(session.id);
+  };
+
+  const saveBelfoot = async (session, next) => {
+    const { data } = await supabase.from("votw_sessions").select("result").eq("id", session.id).maybeSingle();
+    await supabase.from("votw_sessions").update({ result: { ...(data?.result || {}), belfoot: next } }).eq("id", session.id);
+    loadSessions();
+  };
+  const assignBelfoot = async (session, slot, playerId) => {
+    const cand = candidates.find((c) => c.player_id === playerId);
+    const next = { ...belfoot };
+    if (playerId) next[slot.id] = { player_id: playerId, name: cand?.player?.name || "" };
+    else delete next[slot.id];
+    setBelfoot(next);
+    await saveBelfoot(session, next);
   };
 
   const generate = async (session) => {
@@ -144,6 +160,21 @@ export default function VotwSessionsPanel() {
                     </div>
                   ))}
                   {candidates.length === 0 && <p className="p-3 text-xs text-muted">Aucun éligible. Clique « Générer les éligibles » (ou ajoute à la main).</p>}
+                </div>
+
+                <div className="mt-4 border-t border-line/10 pt-3">
+                  <div className="mb-2 text-xs font-semibold text-muted">Onze Belfoot (choix de la rédaction) — {Object.keys(belfoot).length}/11</div>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {formationSlots(s.formation).map((slot) => (
+                      <label key={slot.id} className="text-[11px] text-muted">{slot.label}
+                        <select value={belfoot[slot.id]?.player_id || ""} onChange={(e) => assignBelfoot(s, slot, e.target.value)} className={`mt-1 w-full ${box}`}>
+                          <option value="">—</option>
+                          {candidates.filter((c) => c.position === slot.cat).map((c) => <option key={c.id} value={c.player_id}>{c.player?.name || "?"}</option>)}
+                        </select>
+                      </label>
+                    ))}
+                  </div>
+                  <p className="mt-2 text-[11px] text-muted">Enregistré automatiquement. S'affiche sur /onze à côté du Onze des lecteurs.</p>
                 </div>
               </div>
             )}
