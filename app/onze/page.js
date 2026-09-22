@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Star, X, Trophy } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/lib/auth";
-import { formationSlots } from "@/lib/votw";
+import { formationSlots, CATEGORY_LABEL } from "@/lib/votw";
 
 // ── Style du terrain, regroupé ici ─────────────────────────────────────────
 // Le design collera au site plus tard : pour le re-styler, tout est ici (fond,
@@ -146,6 +146,13 @@ export default function OnzePage() {
     setOpenSlot(null);
   }
 
+  // Joueur affiché pour un slot, selon le mode (vote / lecteurs / Belfoot).
+  const slotPlayer = (slot) => {
+    if (votable) { const pid = picks[slot.id]; return pid ? info[pid] : null; }
+    if (view === "belfoot") { const b = belfoot[slot.id]; if (!b) return null; const i = info[b.player_id] || {}; return { name: b.name || i.name, photo: i.photo, clubLogo: i.clubLogo, club: i.club }; }
+    return results[slot.id] || null;
+  };
+
   if (loading) return <div className="mx-auto max-w-3xl py-10 text-center text-muted">Chargement…</div>;
 
   if (!sess) return (
@@ -156,7 +163,7 @@ export default function OnzePage() {
   );
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5">
+    <div className="mx-auto max-w-5xl space-y-5">
       <div className="flex flex-wrap items-center gap-3">
         <Star className="h-7 w-7 text-amber-300" />
         <h1 className="text-2xl font-black sm:text-3xl">Le 11 de la semaine</h1>
@@ -176,6 +183,8 @@ export default function OnzePage() {
         </div>
       )}
 
+      <div className="lg:flex lg:items-start lg:gap-8">
+      <div className="lg:w-[380px] lg:flex-shrink-0">
       {/* Terrain — style regroupé dans la constante PITCH (haut du fichier) */}
       <div className={PITCH.field}>
         <div className="pointer-events-none absolute inset-0">
@@ -185,11 +194,7 @@ export default function OnzePage() {
           <div className={`absolute left-1/2 bottom-0 h-14 w-28 -translate-x-1/2 border border-b-0 ${PITCH.lineBorder}`} />
         </div>
         {slots.map((slot) => {
-          const pid = picks[slot.id];
-          let p = null;
-          if (votable) { p = pid ? info[pid] : null; }
-          else if (view === "belfoot") { const b = belfoot[slot.id]; if (b) { const i = info[b.player_id] || {}; p = { name: b.name || i.name, photo: i.photo, clubLogo: i.clubLogo }; } }
-          else { p = results[slot.id] || null; }
+          const p = slotPlayer(slot);
           return (
             <button key={slot.id} onClick={() => { if (votable && userId) { setQ(""); setClubFilter(""); setOpenSlot(slot); } }} style={{ left: `${slot.x}%`, top: `${slot.y}%` }} className="absolute -translate-x-1/2 -translate-y-1/2">
               {p ? (
@@ -204,6 +209,36 @@ export default function OnzePage() {
             </button>
           );
         })}
+      </div>
+      </div>
+
+      <div className="mt-6 flex-1 lg:mt-0">
+        <div className="rounded-2xl border border-line/10 bg-surface/60 p-4">
+          <div className="mb-3 text-sm font-black">{votable ? "Ta composition" : view === "belfoot" ? "Onze Belfoot" : "Onze des lecteurs"}</div>
+          <div className="space-y-4">
+            {["GK", "DEF", "MID", "FWD"].map((cat) => (
+              <div key={cat}>
+                <div className="mb-1 text-[11px] font-black uppercase tracking-wider text-muted">{CATEGORY_LABEL[cat]}</div>
+                <div className="space-y-1">
+                  {slots.filter((sl) => sl.cat === cat).map((slot) => {
+                    const p = slotPlayer(slot);
+                    return (
+                      <div key={slot.id} className="flex items-center gap-2 rounded-lg border border-line/10 bg-surface px-2 py-1.5 text-sm">
+                        <div className="h-7 w-7 flex-shrink-0 overflow-hidden rounded-full border border-white/10 bg-surface2">{p?.photo ? <img src={p.photo} alt="" className="h-full w-full object-cover object-top" /> : null}</div>
+                        <div className="min-w-0 flex-1">
+                          {p ? <div className="flex items-center gap-1.5"><span className="truncate font-bold">{p.name}</span>{p.clubLogo && <img src={p.clubLogo} alt="" className="h-3.5 w-3.5 object-contain" />}</div> : <span className="text-muted">— À choisir</span>}
+                          <div className="text-[10px] uppercase tracking-wider text-slate-500">{slot.label}</div>
+                        </div>
+                        {!votable && view === "readers" && p?.votes != null && <span className="text-[10px] font-black text-amber-300">{p.votes}</span>}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
       </div>
 
       {votable && userId && filled === 11 && <p className="text-center text-sm font-bold text-emerald-300">Ton XI est complet et enregistré. Tu peux encore le modifier tant que le vote est ouvert.</p>}

@@ -412,6 +412,15 @@ Côté Supabase : Site URL = domaine + Redirect URLs (`/auth/callback`, `/reset`
 
 ## 14. TODO ouverts (par priorité indicative)
 
+> **Roadmap — décisions produit (2026-09-19, avec l'utilisateur).**
+> - **Coupes d'Europe (C1 Champions League / C3 Europa / C4 Conference)** = football de CLUBS →
+>   rejoignent l'**onglet « Compétitions » existant** (PAS un nouvel onglet, PAS sous Diables Rouges
+>   qui est la sélection nationale). À synchroniser/suivre **plus tard** (appels API → mois Pro).
+>   Angle éditorial : clubs belges en Europe + coefficient UEFA.
+> - **Éviter d'empiler les onglets de nav** : privilégier le regroupement plutôt que d'en ajouter.
+> - **Onglet « Communauté » avec les forums encore manquant** : le module `forum` est déjà scaffolé
+>   dans le repo (comme `votw` l'était) → chantier à activer/brancher (nav, admin, pages).
+
 > **Chantier conçu (à venir) — Notes & Diable du match des Diables Rouges.** Même famille que votw
 > (vote communautaire par membre, fenêtre, résultat figé). Décisions verrouillées avec l'utilisateur :
 > **note /10**, **Belgique A uniquement**, **ouverture auto à la fin du match + fermeture ~3-4 jours
