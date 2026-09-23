@@ -1264,15 +1264,18 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
 ## CURRENT_GIT_STATE
 
 - **Branche** : `main`
-- **Dernier commit distant** : `0dadaa8` — « Nettoyage saisons (migration 0030) + retrait onglet Matchs ».
-  votw V1 complet et déployé. Migrations appliquées : `votw/0001`+`0002`, `0029`, `football/0030`
-  (backfill saisons). Data saisons assainie (Croky Cup + doublon tiret/slash Pro League réglés).
-- **Lot courant (non poussé)** : **Forum — sous-lot 1/2** (module `forum`, jusqu'ici scaffolé/désactivé).
-  Migration `forum/0001_init.sql` amendée (colonnes `author_name` dénormalisées — profils en lecture
-  self-only, on n'expose pas `profiles`) : **à appliquer**. Module activé (`enabled:true`, nav `/forum`).
-  Pages `/forum` (catégories + sujets + création) et `/forum/[id]` (messages + réponse). Admin
-  **Communauté → Forum** : gestion des catégories + modération sujets (épingler/verrouiller/supprimer).
-  Reste sous-lot 2 : modération des messages, éventuel trigger `last_activity`, polish. Aucun appel API.
+- **Dernier commit distant** : `1e2552c` — « Forum - fondation + pages publiques + admin (sous-lot 1) ».
+  Migration `forum/0001_init.sql` à appliquer (si pas déjà fait). votw V1 + nettoyage saisons déployés.
+- **Lot courant (non poussé)** : **« Le Noyau » — forum sous-lot 2a** (identité + structure + finition).
+  Migration `forum/0002_noyau_structure.sql` **à appliquer** : ajoute `description` aux catégories,
+  colonnes `ref_type`/`ref_id` sur les sujets (liaison future match/club/joueur/article, **préparée non
+  branchée**), corrige **SEC-06** (épingler/verrouiller/éditer un sujet = admin only), trigger
+  `last_activity` (un sujet remonte à chaque réponse), et **sème les 4 catégories** (Football belge /
+  Diables & sélections / Belges à l'étranger / La Tribune). Renommé « Le Noyau » (nav + pages, URL
+  `/forum` gardée). Nouvelles pages : accueil `/forum` (cartes de catégories + dernier message),
+  `/forum/c/[slug]` (sujets d'une catégorie + création), `/forum/[id]` enrichi (édition/suppression de
+  son message, auteur + nb messages + dernier message). Reste **2b** : signalement, pagination, badges,
+  vraies connexions (« Discuter de ce match », sujet d'article). Aucun appel API.
 - **Commits importants récents** :
   - `2c71e35` documentation clubs liés / Europe
   - `69578a5` automatisation des stades + simplification des équipes liées

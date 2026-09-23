@@ -39,10 +39,13 @@ export default function ForumModerationPanel() {
         <div className="mb-2 text-xs font-semibold text-muted">Catégories</div>
         <div className="space-y-1">
           {categories.map((c) => (
-            <div key={c.id} className="flex items-center gap-2 text-sm">
-              <input defaultValue={c.name} onBlur={(e) => e.target.value !== c.name && patchCat(c.id, { name: e.target.value, slug: slugify(e.target.value) })} className={`flex-1 ${box}`} />
-              <input type="number" defaultValue={c.position} onBlur={(e) => patchCat(c.id, { position: Number(e.target.value) })} className={`w-16 ${box}`} />
-              <button onClick={() => delCat(c.id)} className="px-2 text-muted hover:text-red-300">Suppr.</button>
+            <div key={c.id} className="rounded-lg border border-line/10 bg-surface2 p-2">
+              <div className="flex items-center gap-2 text-sm">
+                <input defaultValue={c.name} onBlur={(e) => e.target.value !== c.name && patchCat(c.id, { name: e.target.value, slug: slugify(e.target.value) })} className={`flex-1 ${box}`} />
+                <input type="number" defaultValue={c.position} onBlur={(e) => patchCat(c.id, { position: Number(e.target.value) })} className={`w-16 ${box}`} />
+                <button onClick={() => delCat(c.id)} className="px-2 text-muted hover:text-red-300">Suppr.</button>
+              </div>
+              <input defaultValue={c.description || ""} onBlur={(e) => e.target.value !== (c.description || "") && patchCat(c.id, { description: e.target.value })} placeholder="Description" className={`mt-1 w-full ${box}`} />
             </div>
           ))}
           {categories.length === 0 && <p className="text-xs text-muted">Aucune catégorie. Crée la première ci-dessous.</p>}
