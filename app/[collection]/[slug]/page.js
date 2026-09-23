@@ -5,6 +5,7 @@ import CategoryBadge from "@/components/CategoryBadge";
 import RichContent from "@/components/RichContent";
 import { categoryColorMap } from "@/lib/categories";
 import { buildMetadata } from "@/lib/seo";
+import DiscussButton from "@/components/forum/DiscussButton";
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +38,7 @@ export default async function EntryDetail({ params }) {
           {imgs.map((u, i) => <img key={i} src={u} alt="" className="aspect-[4/3] w-full rounded-lg object-cover" />)}
         </div>
       )}
+      <div className="mt-8 border-t border-line/10 pt-6"><DiscussButton refType="article" refId={e.id} title={`Discussion : ${e.title}`} label="Discuter de cet article" /></div>
     </article>
   );
 }

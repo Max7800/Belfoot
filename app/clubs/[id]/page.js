@@ -10,6 +10,7 @@ import { useClubSections } from "@/lib/clubSections";
 import { computeStandings } from "@/lib/standings";
 import { competitionPhases, getCompetitionType } from "@/lib/competitionType";
 import { competitionPath } from "@/lib/competitionRoutes";
+import DiscussButton from "@/components/forum/DiscussButton";
 
 const POS = { Goalkeeper: 0, Defender: 1, Midfielder: 2, Attacker: 3 };
 const ROLE_LABELS = { first_team: "Équipe première", reserve: "Réserve", u23: "U23", youth: "Jeunes", women: "Équipe féminine", unknown: "Groupe à préciser" };
@@ -135,6 +136,7 @@ export default function ClubPage() {
         <Shield className="pointer-events-none absolute -bottom-12 -right-8 h-44 w-44 opacity-[0.05]" />
         <div className="relative flex items-center gap-3 sm:gap-4">{club.logo_url && <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-black/15 p-2 sm:h-20 sm:w-20"><img src={club.logo_url} className="h-full w-full object-contain" alt="" /></div>}<div className="min-w-0"><div className="text-[10px] font-bold uppercase tracking-[0.22em] text-muted">{club.nickname || club.city || "Club"}</div><h1 className="truncate text-2xl font-black sm:text-4xl">{club.name}</h1>{coach && <div className="mt-1.5 flex items-center gap-2 text-xs text-muted sm:mt-2 sm:text-sm">{coach.photo_url && <img src={coach.photo_url} className="h-6 w-6 rounded-full object-cover" alt="" />}<span className="truncate">Entraîneur : <b className="text-content">{coach.name}</b></span></div>}</div></div>
       </div>
+      <div className="mb-5"><DiscussButton refType="club" refId={club.id} title={`Discussion : ${club.name}`} label="Discuter de ce club" categorySlug="football-belge" /></div>
       <div className="sm:hidden">
         <div className="-mx-4 mb-3 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {visibleSections.map((section) => <button key={section.key} onClick={() => setMobileSection(section.key)} className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-bold transition ${activeMobileSection?.key === section.key ? "border-accent bg-accent/15 text-accent" : "border-line/15 bg-surface text-muted"}`}>{section.label}{counts[section.key] != null ? ` · ${counts[section.key]}` : ""}</button>)}

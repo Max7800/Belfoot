@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { useLabels } from "@/lib/labels";
+import DiscussButton from "@/components/forum/DiscussButton";
 
 const POSITION_LABELS = { Goalkeeper: "Gardien", GK: "Gardien", Defender: "Défenseur", DEF: "Défenseur", Midfielder: "Milieu", MID: "Milieu", Attacker: "Attaquant", FWD: "Attaquant" };
 const FINISHED = new Set(["finished"]);
@@ -132,6 +133,8 @@ export default function PlayerPage() {
           <div className="grid grid-cols-2 gap-2 sm:w-64"><div className="rounded-2xl border border-line/10 bg-black/15 p-3"><b className="block text-2xl">{view.totals.goals}</b><span className="text-[10px] uppercase tracking-wider text-muted">Buts</span></div><div className="rounded-2xl border border-line/10 bg-black/15 p-3"><b className="block text-2xl">{view.totals.assists}</b><span className="text-[10px] uppercase tracking-wider text-muted">Passes</span></div><div className="rounded-2xl border border-line/10 bg-black/15 p-3"><b className="block text-2xl">{view.totals.appearances}</b><span className="text-[10px] uppercase tracking-wider text-muted">Matchs</span></div><div className="rounded-2xl border border-line/10 bg-black/15 p-3"><b className="block text-2xl">{view.totals.rating?.toFixed(1) || "—"}</b><span className="text-[10px] uppercase tracking-wider text-muted">Note</span></div></div>
         </div>
       </section>
+
+      <div className="mt-4"><DiscussButton refType="player" refId={p.id} title={`Discussion : ${p.name}`} label="Discuter de ce joueur" categorySlug="belges-etranger" /></div>
 
       <div className="mt-8 grid gap-8 lg:grid-cols-[1.05fr_1.95fr]">
         <div className="space-y-8">

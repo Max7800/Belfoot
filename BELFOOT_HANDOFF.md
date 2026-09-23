@@ -1264,14 +1264,15 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
 ## CURRENT_GIT_STATE
 
 - **Branche** : `main`
-- **Dernier commit distant** : `5a12097` — « Le Noyau - forum sous-lot 2a » (identité + structure + les
-  4 catégories). Migrations forum `0001` + `0002` à appliquer si pas déjà fait. votw V1 + saisons déployés.
-- **Lot courant (non poussé)** : **« Le Noyau » — 2b (partie 1)** : **signalement** des messages (réutilise
-  la table générique `reports` → panneau admin Signalements) ; **connexion « Discuter de ce match »** —
-  composant réutilisable `components/forum/DiscussButton.js` + `lib/forum.js` (`getRefTopic`/`startRefTopic`
-  sur `ref_type`/`ref_id`), branché dans `/matchs/[id]` (crée/ouvre le sujet lié au match). Reste **2b
-  partie 2** : brancher DiscussButton sur articles/joueurs/clubs, pagination, badges contributeurs.
-  Aucun appel API, aucune migration.
+- **Dernier commit distant** : `01f65a4` — « Le Noyau 2b (partie 1) » (signalement + Discuter de ce match).
+  Migrations forum `0001` + `0002` à appliquer si pas déjà fait.
+- **Lot courant (non poussé)** : **« Le Noyau » — 2b (partie 2) : les connexions**. `DiscussButton` branché
+  sur la **fiche joueur** (`/players/[id]`, ref `player`), la **fiche club** (`/clubs/[id]`, ref `club`) et
+  le **détail d'article** (`/[collection]/[slug]`, ref `article` — page serveur, composant client rendu
+  dedans). Le forum est maintenant relié aux matchs, joueurs, clubs et articles. Aucun appel API, aucune
+  migration. **Reste en polish optionnel** : pagination sujets/messages (volume faible pour l'instant) et
+  **badges contributeurs** (nécessite dénormaliser le rôle/les stats de l'auteur, car `profiles` est en
+  lecture self-only — même logique que `author_name`).
 - **Commits importants récents** :
   - `2c71e35` documentation clubs liés / Europe
   - `69578a5` automatisation des stades + simplification des équipes liées
