@@ -8,7 +8,6 @@ const football = {
     { label: "Compétitions", to: "/competitions" },
     { label: "Diables", to: "/diables-rouges" },
     { label: "Belges", to: "/belges-a-l-etranger" },
-    { label: "Matchs", to: "/matchs" },
     { label: "Classement", to: "/classement" },
   ],
   adminPanels: [

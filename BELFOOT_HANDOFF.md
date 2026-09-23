@@ -420,6 +420,11 @@ Côté Supabase : Site URL = domaine + Redirect URLs (`/auth/callback`, `/reset`
 > - **Éviter d'empiler les onglets de nav** : privilégier le regroupement plutôt que d'en ajouter.
 > - **Onglet « Communauté » avec les forums encore manquant** : le module `forum` est déjà scaffolé
 >   dans le repo (comme `votw` l'était) → chantier à activer/brancher (nav, admin, pages).
+> - **« Matchs » retiré de la nav** (redondant avec Compétitions ; page `/matchs` toujours joignable).
+> - **votw pour les Diables / compétitions** : le moteur le supporte DÉJÀ (`votw_sessions.competition_id`).
+>   Créer une session sur une compétition nationale = « 11 des Diables » sans nouveau code moteur. Reste
+>   à décider l'affichage (un « Votez le 11 des Diables » sous `/diables-rouges` plutôt que dans `/onze`)
+>   et la notion de « journée » pour un tournoi. Dépend de données nationales = mois Pro.
 
 > **Chantier conçu (à venir) — Notes & Diable du match des Diables Rouges.** Même famille que votw
 > (vote communautaire par membre, fenêtre, résultat figé). Décisions verrouillées avec l'utilisateur :
@@ -434,12 +439,13 @@ Côté Supabase : Site URL = domaine + Redirect URLs (`/auth/callback`, `/reset`
 > Communautaire = zéro API ; les buts/qui-a-joué = `match_player_stats` = API (mois Pro). À faire
 > **après le votw sous-lot 3**. Candidat socle : « notation communautaire d'entités par événement ».
 
-> **Prépa 2026 — data : `season_id` manquant sur les matchs importés.** Constaté sur la JPL 2024 : les
-> matchs arrivaient avec `season_id NULL`, ce qui casse tout filtre par saison (votw éligibles,
-> classement, stats). Corrigé ponctuellement en base pour 2024 (UPDATE ciblé compétition + season_id
-> null → saison 2024). **Cause racine à corriger dans l'import matchs (job `upsert` matchs) AVANT la
-> bascule 2026**, sinon le trou revient. Filet en place côté `generateEligibles` : signale
-> explicitement « matchs sans saison rattachée » au lieu d'un « 0 » muet.
+> **Data — `season_id` NULL sur d'anciens matchs (legacy, PAS un bug d'import).** Constaté sur la JPL
+> 2024. **Vérifié** : `syncCompetition` (via `ensureSeason` + `season_id` dans les champs écrits) ET
+> `syncNationalTeam` (seasonMap construit pour chaque compétition) posent bien `season_id` à l'import
+> → un sync 2026 sera correct, pas de correction de code. Les NULL sont du **legacy** (import d'une
+> version antérieure). Nettoyage : UPDATE ciblé passé pour la JPL 2024 ; backfill général sûr
+> disponible (ne remplit que les compétitions à **une seule** saison). Filet en place côté
+> `generateEligibles` (signale « matchs sans saison » au lieu d'un 0 muet).
 
 1. **P0 sécurité issu de `BELFOOT_AUDIT.md`** : verrouiller le rôle des profils, assainir le HTML
    riche/contributions, versionner les policies Storage, puis mettre Next/Tiptap à niveau dans des
