@@ -25,6 +25,14 @@ create policy "fcat_write" on forum_categories for all using (is_admin()) with c
 create policy "ftop_read"  on forum_topics for select using (true);
 create policy "ftop_write" on forum_topics for insert with check (author = auth.uid());
 create policy "ftop_mod"   on forum_topics for update using (is_admin() or author = auth.uid());
+create policy "fcat_del"   on forum_topics for delete using (is_admin());
 create policy "fpost_read"  on forum_posts for select using (deleted_at is null or is_admin());
 create policy "fpost_write" on forum_posts for insert with check (author = auth.uid());
 create policy "fpost_mod"   on forum_posts for update using (is_admin() or author = auth.uid());
+
+-- Nom d'auteur dénormalisé (affichage sans exposer la table profiles, lecture self-only).
+alter table forum_topics add column if not exists author_name text;
+alter table forum_posts  add column if not exists author_name text;
+
+insert into public.schema_migrations (module, version)
+values ('forum', '0001_init') on conflict do nothing;

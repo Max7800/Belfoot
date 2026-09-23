@@ -6,6 +6,7 @@ import CategoriesManager from "./CategoriesManager";
 import ContributionsQueue from "./ContributionsQueue";
 import SystemStatusPanel from "./SystemStatusPanel";
 import VotwSessionsPanel from "./VotwSessionsPanel";
+import ForumModerationPanel from "./ForumModerationPanel";
 import { ProfilesPanel, ReportsPanel, JobsPanel, SyncHistoryPanel, ProvidersPanel, SettingsInfo, LabelsPanel, TilesPanel, ClubSectionsPanel, HomePanel, BelgiansAbroadPanel, CompetitionHubPanel, NationalTeamsPanel, StatsSectionsPanel, ProposePanel, Placeholder } from "./panels";
 import { FOOTBALL_ENTITIES } from "@/config/football-admin";
 import { getCollection } from "@/config/collections";
@@ -33,6 +34,7 @@ export function panelComponent(key) {
   if (key === "system-status") return { Comp: SystemStatusPanel, props: {} };
   if (key === "propose") return { Comp: ProposePanel, props: {} };
   if (key === "votw-sessions") return { Comp: VotwSessionsPanel, props: {} };
+  if (key === "forum-moderation") return { Comp: ForumModerationPanel, props: {} };
   if (["config", "modules", "flags"].includes(key)) return { Comp: SettingsInfo, props: { which: key === "config" ? "site" : key } };
   return { Comp: Placeholder, props: { title: key } };
 }

@@ -1264,14 +1264,15 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
 ## CURRENT_GIT_STATE
 
 - **Branche** : `main`
-- **Dernier commit distant** : `3c58152` — « Onze de la semaine - resultat des lecteurs (sous-lot 3a) ».
-  Migrations appliquées côté Supabase : `votw/0001`+`0002`, `0029`. Data : matchs JPL 2024 rattachés à
-  la saison via UPDATE ciblé (voir note prépa-2026 : corriger `season_id` à la source dans l'import).
-- **Lot courant (non poussé)** : votw **sous-lot 3b** — **Onze Belfoot** (choix rédaction). Éditeur admin
-  (un sélecteur par poste, alimenté par les éligibles) → stocké dans `votw_sessions.result.belfoot`
-  (jsonb, **aucune migration**). `/onze` affiche une **bascule « Onze des lecteurs » / « Onze Belfoot »**
-  quand la session est fermée et qu'un Onze Belfoot existe. **→ votw V1 COMPLET** (fondation + terrain +
-  vote + résultat lecteurs + Onze Belfoot). Prochain chantier prévu : Notes & Diable du match (voir §14).
+- **Dernier commit distant** : `0dadaa8` — « Nettoyage saisons (migration 0030) + retrait onglet Matchs ».
+  votw V1 complet et déployé. Migrations appliquées : `votw/0001`+`0002`, `0029`, `football/0030`
+  (backfill saisons). Data saisons assainie (Croky Cup + doublon tiret/slash Pro League réglés).
+- **Lot courant (non poussé)** : **Forum — sous-lot 1/2** (module `forum`, jusqu'ici scaffolé/désactivé).
+  Migration `forum/0001_init.sql` amendée (colonnes `author_name` dénormalisées — profils en lecture
+  self-only, on n'expose pas `profiles`) : **à appliquer**. Module activé (`enabled:true`, nav `/forum`).
+  Pages `/forum` (catégories + sujets + création) et `/forum/[id]` (messages + réponse). Admin
+  **Communauté → Forum** : gestion des catégories + modération sujets (épingler/verrouiller/supprimer).
+  Reste sous-lot 2 : modération des messages, éventuel trigger `last_activity`, polish. Aucun appel API.
 - **Commits importants récents** :
   - `2c71e35` documentation clubs liés / Europe
   - `69578a5` automatisation des stades + simplification des équipes liées
