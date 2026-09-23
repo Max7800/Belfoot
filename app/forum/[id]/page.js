@@ -50,6 +50,12 @@ export default function TopicPage() {
     await supabase.from("forum_posts").update({ deleted_at: new Date().toISOString() }).eq("id", postId);
     await loadPosts();
   };
+  const reportPost = async (postId) => {
+    const reason = prompt("Signaler ce message — motif (optionnel) :");
+    if (reason === null) return;
+    const { error } = await supabase.from("reports").insert({ target_type: "forum_post", target_id: postId, reporter: userId, reason: reason || null });
+    alert(error ? "Impossible de signaler pour le moment." : "Merci, le message a été signalé aux modérateurs.");
+  };
 
   if (loading) return <div className="mx-auto max-w-3xl py-10 text-center text-muted">Chargement…</div>;
   if (!topic) return <div className="mx-auto max-w-3xl py-10 text-center text-muted">Sujet introuvable. <Link href="/forum" className="text-accent">Retour au Noyau</Link></div>;
@@ -83,10 +89,11 @@ export default function TopicPage() {
               ) : (
                 <>
                   <div className="whitespace-pre-wrap text-sm">{p.body}</div>
-                  {(mine || isAdmin) && (
+                  {userId && (
                     <div className="mt-2 flex gap-3 text-[11px] text-muted">
                       {mine && <button onClick={() => { setEditId(p.id); setEditBody(p.body); }} className="hover:text-content">Modifier</button>}
-                      <button onClick={() => removePost(p.id)} className="hover:text-red-300">Supprimer</button>
+                      {(mine || isAdmin) && <button onClick={() => removePost(p.id)} className="hover:text-red-300">Supprimer</button>}
+                      {!mine && <button onClick={() => reportPost(p.id)} className="hover:text-amber-300">Signaler</button>}
                     </div>
                   )}
                 </>

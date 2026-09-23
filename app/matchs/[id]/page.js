@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { useLabels } from "@/lib/labels";
 import MatchLineups from "@/components/football/MatchLineups";
 import { isMatchLive, matchStatusMeta } from "@/lib/matchStatus";
+import DiscussButton from "@/components/forum/DiscussButton";
 
 export default function MatchPage() {
   const { id } = useParams();
@@ -80,6 +81,7 @@ export default function MatchPage() {
         <div className="flex flex-1 flex-col items-center gap-2">{a.logo_url && <img src={a.logo_url} className="h-14 w-14 object-contain" alt="" />}<span className="text-center font-semibold">{a.name}</span></div>
       </div>
       <div className="mb-8 flex items-center justify-center gap-2 text-[10px] text-muted"><span className={`h-1.5 w-1.5 rounded-full ${realtime === "connected" ? "bg-green-400" : realtime === "fallback" ? "bg-amber-400" : "bg-muted"}`} />{realtime === "connected" ? "Direct connecté" : realtime === "fallback" ? "Actualisation automatique" : "Connexion…"}{lastUpdated && <span>· {lastUpdated.toLocaleTimeString("fr-BE", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</span>}<button type="button" onClick={() => { refreshScore(); refreshEvents(); }} aria-label="Actualiser le match" className="rounded p-1 hover:bg-surface"><RefreshCw size={11} /></button></div>
+      <div className="mb-8 flex justify-center"><DiscussButton refType="match" refId={id} title={`Discussion : ${h.name || "?"} - ${a.name || "?"}`} label="Discuter de ce match" /></div>
       {(lineups.length > 0 || matchPlayerStats.length > 0) && <section className="mb-8"><div className="mb-3 flex items-end justify-between gap-3"><div><h2 className="text-lg font-black">{L("match.lineups", "Compositions")}</h2><p className="text-xs text-muted">{L("match.lineups.subtitle", "Titulaires, formations et performances individuelles")}</p></div></div><MatchLineups homeClub={h} awayClub={a} lineups={lineups} rows={matchPlayerStats} labels={{ starters: L("match.starters", "Titulaires"), bench: L("match.bench", "Remplaçants"), formationEmpty: L("match.formation.empty", "Formation non renseignée"), startersEmpty: L("match.starters.empty", "Aucun titulaire importé."), home: L("match.home", "Domicile"), away: L("match.away", "Extérieur") }} /></section>}
       <h2 className="mb-3 flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-muted">{status.live && <Radio size={14} className="text-red-400" />}{L("match.events", "Faits du match")}</h2>
       {events.length === 0

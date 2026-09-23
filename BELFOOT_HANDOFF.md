@@ -1264,18 +1264,14 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
 ## CURRENT_GIT_STATE
 
 - **Branche** : `main`
-- **Dernier commit distant** : `1e2552c` — « Forum - fondation + pages publiques + admin (sous-lot 1) ».
-  Migration `forum/0001_init.sql` à appliquer (si pas déjà fait). votw V1 + nettoyage saisons déployés.
-- **Lot courant (non poussé)** : **« Le Noyau » — forum sous-lot 2a** (identité + structure + finition).
-  Migration `forum/0002_noyau_structure.sql` **à appliquer** : ajoute `description` aux catégories,
-  colonnes `ref_type`/`ref_id` sur les sujets (liaison future match/club/joueur/article, **préparée non
-  branchée**), corrige **SEC-06** (épingler/verrouiller/éditer un sujet = admin only), trigger
-  `last_activity` (un sujet remonte à chaque réponse), et **sème les 4 catégories** (Football belge /
-  Diables & sélections / Belges à l'étranger / La Tribune). Renommé « Le Noyau » (nav + pages, URL
-  `/forum` gardée). Nouvelles pages : accueil `/forum` (cartes de catégories + dernier message),
-  `/forum/c/[slug]` (sujets d'une catégorie + création), `/forum/[id]` enrichi (édition/suppression de
-  son message, auteur + nb messages + dernier message). Reste **2b** : signalement, pagination, badges,
-  vraies connexions (« Discuter de ce match », sujet d'article). Aucun appel API.
+- **Dernier commit distant** : `5a12097` — « Le Noyau - forum sous-lot 2a » (identité + structure + les
+  4 catégories). Migrations forum `0001` + `0002` à appliquer si pas déjà fait. votw V1 + saisons déployés.
+- **Lot courant (non poussé)** : **« Le Noyau » — 2b (partie 1)** : **signalement** des messages (réutilise
+  la table générique `reports` → panneau admin Signalements) ; **connexion « Discuter de ce match »** —
+  composant réutilisable `components/forum/DiscussButton.js` + `lib/forum.js` (`getRefTopic`/`startRefTopic`
+  sur `ref_type`/`ref_id`), branché dans `/matchs/[id]` (crée/ouvre le sujet lié au match). Reste **2b
+  partie 2** : brancher DiscussButton sur articles/joueurs/clubs, pagination, badges contributeurs.
+  Aucun appel API, aucune migration.
 - **Commits importants récents** :
   - `2c71e35` documentation clubs liés / Europe
   - `69578a5` automatisation des stades + simplification des équipes liées
