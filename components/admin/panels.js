@@ -36,13 +36,47 @@ export function ProfilesPanel() {
 
 export function ReportsPanel() {
   const [rows, setRows] = useState([]);
-  const load = () => supabase.from("reports").select("*").eq("status", "open").order("created_at", { ascending: false }).then(({ data }) => setRows(data || []));
+  const [posts, setPosts] = useState({});
+  const load = async () => {
+    const { data } = await supabase.from("reports").select("*").eq("status", "open").order("created_at", { ascending: false });
+    const list = data || [];
+    setRows(list);
+    const postIds = list.filter((r) => r.target_type === "forum_post").map((r) => r.target_id);
+    if (postIds.length) {
+      const { data: pdata } = await supabase.from("forum_posts").select("id,body,topic_id,author_name").in("id", postIds);
+      setPosts(Object.fromEntries((pdata || []).map((p) => [p.id, p])));
+    } else setPosts({});
+  };
   useEffect(() => { load(); }, []);
   const act = async (r, status) => { await supabase.from("reports").update({ status }).eq("id", r.id); load(); };
+  const removePost = async (r) => {
+    if (!confirm("Supprimer le message signalé ?")) return;
+    await supabase.from("forum_posts").update({ deleted_at: new Date().toISOString() }).eq("id", r.target_id);
+    await act(r, "resolved");
+  };
   return (<div><h2 className="mb-4 text-lg font-bold">Signalements <span className="text-sm font-normal text-muted">({rows.length})</span></h2>
     <div className="divide-y divide-line/10 rounded-xl border border-line/10">
-      {rows.map((r) => <div key={r.id} className="flex items-center gap-3 p-3 text-sm"><span className="flex-1">{r.target_type} · {r.reason || "(sans motif)"}</span>
-        <button onClick={() => act(r, "resolved")} className="text-green-400">Traiter</button><button onClick={() => act(r, "dismissed")} className="text-muted">Ignorer</button></div>)}
+      {rows.map((r) => {
+        const post = r.target_type === "forum_post" ? posts[r.target_id] : null;
+        return (
+          <div key={r.id} className="p-3 text-sm">
+            <div className="flex items-center gap-3">
+              <span className="flex-1"><span className="text-xs uppercase tracking-wider text-muted">{r.target_type}</span> · {r.reason || "(sans motif)"}</span>
+              <button onClick={() => act(r, "resolved")} className="text-green-400">Traiter</button>
+              <button onClick={() => act(r, "dismissed")} className="text-muted">Ignorer</button>
+            </div>
+            {post && (
+              <div className="mt-2 rounded-lg border border-line/10 bg-surface2 p-2">
+                <div className="text-[11px] text-muted">{post.author_name || "Membre"} :</div>
+                <div className="whitespace-pre-wrap text-xs">{(post.body || "").slice(0, 300)}{(post.body || "").length > 300 ? "…" : ""}</div>
+                <a href={`/forum/${post.topic_id}`} target="_blank" rel="noreferrer" className="mt-1 inline-block text-xs text-accent hover:underline">Voir dans le sujet ↗</a>
+                <button onClick={() => removePost(r)} className="ml-3 text-xs text-red-300 hover:underline">Supprimer le message</button>
+              </div>
+            )}
+            {r.target_type === "forum_post" && !post && <div className="mt-1 text-[11px] text-muted">(message introuvable ou déjà supprimé)</div>}
+          </div>
+        );
+      })}
       {rows.length === 0 && <div className="p-4 text-sm text-muted">Aucun signalement.</div>}
     </div></div>);
 }

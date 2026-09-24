@@ -1264,14 +1264,14 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
 ## CURRENT_GIT_STATE
 
 - **Branche** : `main`
-- **Dernier commit distant** : `3114850` — « Syncs etape 2 - garde-fou migrations + quota restant affiche ».
-  Migrations forum `0001`+`0002` à appliquer si pas fait. 2 remontées socle poussées (Proposer, forum).
-- **Lot courant (non poussé)** : **classements Belgique manuels** (FIFA + coef UEFA). API-Football n'a NI
-  le classement FIFA NI le coef UEFA ; sources externes payantes/scrapers fragiles → **saisie manuelle**
-  retenue (faible fréquence de MAJ). `lib/rankings.js` (`site_settings.data.rankings`), panneau admin
-  **Sélections belges → Classements Belgique** (`RankingsPanel`). Affichages : **fenêtre FIFA ±2 (Belgique
-  surlignée)** sur `/diables-rouges` sous le match mis en avant, **carte Coefficient UEFA** sur
-  `/competitions`. Aucun appel API, aucune migration.
+- **Dernier commit distant** : `d06a050` — « Classements Belgique manuels + recap handoff ».
+- **Lot courant (non poussé)** : **consolidation sécurité communauté & votes** (nouvelles migrations,
+  sans toucher aux appliquées). `votw/0003_vote_integrity.sql` : RLS votes (membre gère SES votes +
+  session votable → **corrige aussi l'absence d'update/delete**), unique(session,member,player) (1 joueur
+  une place), trigger candidat + poste compatible. `forum/0003_community_guardrails.sql` : réponse
+  interdite en sujet verrouillé (base), unique(ref_type,ref_id) (1 sujet lié par entité), limites de
+  longueur, anti-flood 10 s. Code : `ReportsPanel` exploitable (aperçu du message + lien vers le sujet +
+  suppression). **À appliquer après forum 0001/0002.** Manifests votw/forum mis à jour.
 
 ### RÉCAP SESSION 2026-09-24 (pour revue roadmap)
 **Livré côté Belfoot (poussé sur `main`)** :
@@ -1291,9 +1291,11 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
 **Livré côté socle (`Max7800/Socle`, poussé)** : capacité **Proposer** (hub + admin) ; **build-out forum**
 générique (pages + admin + `DiscussButton` + migration de finition). Additif, forks non impactés.
 
-**SQL à appliquer côté Supabase (état à confirmer par l'utilisateur)** :
-- Appliqués : `votw/0001`+`0002`, `0029` (FIFA colonnes), `0030` (backfill saisons).
-- **À appliquer** : `forum/0001_init.sql` puis `forum/0002_noyau_structure.sql` (Le Noyau).
+**SQL à appliquer côté Supabase (état RÉEL à confirmer via la requête de vérification ci-dessous)** :
+- Probablement appliqués : `votw/0001`+`0002`, `0030` (backfill saisons). `0029` (FIFA colonnes) = **à
+  confirmer** (contradiction du doc levée : la requête tranche).
+- **À appliquer** : `forum/0001_init.sql` + `forum/0002_noyau_structure.sql` (Le Noyau) ; puis le **lot
+  sécurité** `votw/0003_vote_integrity.sql` + `forum/0003_community_guardrails.sql` (après forum 0001/0002).
 
 **Reste / pistes (voir §14)** : bande communauté légère sur l'accueil (en attente, à faire léger) ;
 polish Noyau (pagination, badges) ; remonter au socle les briques syncs (garde-fou, pipelines) + votw ;
@@ -1332,8 +1334,8 @@ avant lancement : SEO minimal (sitemap/robots/metadata), CGU/vie privée, sécur
   puis `0026_match_center_live.sql` (**appliquée et confirmée par l'utilisateur**), puis
   `0027_national_teams.sql`, puis `0028_followed_national_teams.sql` (**indiquées appliquées par
   l'utilisateur** — la page Diables reste tolérante si ce n'est pas le cas), puis
-  `0029_national_fifa_ranking.sql` (**à appliquer** pour le champ + l'affichage du classement FIFA ;
-  la page reste tolérante sans), et vérifier que `modules/football/migrations/0001→0028` sont
+  `0029_national_fifa_ranking.sql` (**état à confirmer par la requête de vérification — voir recap
+  session** ; la page reste tolérante sans), et vérifier que `modules/football/migrations/0001→0028` sont
   **toutes** passées (surtout `0008` position, `0009` banner_url/zones, `0010` rating_min,
   `0011` competition_type/parent_club_id/team_type, `0012` unicité des stats par compétition et
   `0013` textes des bandeaux, `0014` visibilité/pays du suivi international, `0015` zones par

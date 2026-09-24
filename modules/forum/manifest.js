@@ -5,6 +5,6 @@ const forum = {
   enabled: true, requires: [],
   nav: [{ label: "Le Noyau", to: "/forum" }],
   adminPanels: [{ key: "forum-moderation", label: "Forum (modération)" }],
-  migrations: ["0001_init.sql", "0002_noyau_structure.sql"],
+  migrations: ["0001_init.sql", "0002_noyau_structure.sql", "0003_community_guardrails.sql"],
 };
 export default forum;
