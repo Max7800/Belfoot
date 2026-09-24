@@ -1264,16 +1264,13 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
 ## CURRENT_GIT_STATE
 
 - **Branche** : `main`
-- **Dernier commit distant** : `ceb7672` — « Le Noyau 2b (partie 2) - connexions joueur/club/article »
-  (forum relié aux matchs/joueurs/clubs/articles). Migrations forum `0001`+`0002` à appliquer si pas fait.
-  NB : entre-temps, 2 remontées poussées sur `Max7800/Socle` (capacité Proposer ; build-out forum).
-- **Lot courant (non poussé)** : **réorganisation des syncs** (`lib/jobCatalog.js` + `SyncPanel`). Jobs
-  rangés en **groupes** (Import de base / Belges & sélections / Direct), **dépendances** déclarées
-  (`requires`, tooltip « à lancer après »), et **pipelines en 1 clic** (MAJ hebdo / Préparer une journée /
-  Mise en place saison — séquences ordonnées, budget par étape, stop à la 1ʳᵉ erreur). Le budget/quota
-  par run + la lecture du restant (headers API) existaient déjà. Aucun appel API, aucune migration.
-  **Reste (étape 2)** : garde-fou migrations (bloquer un job si sa migration requise manque) + surfacer
-  le quota restant dans l'admin.
+- **Dernier commit distant** : `e3a227c` — « Syncs - reorganisation : groupes + dependances + pipelines ».
+  Migrations forum `0001`+`0002` à appliquer si pas fait. 2 remontées socle poussées (Proposer, forum).
+- **Lot courant (non poussé)** : **syncs étape 2** — **garde-fou migrations** (un job qui déclare
+  `requiresMigration` est bloqué AVANT tout appel API si la migration n'est pas dans `schema_migrations` ;
+  posé sur les 3 jobs sélections → `0028_followed_national_teams`) + **affichage du quota restant** dans
+  le SyncPanel (lu depuis `job_runs.quota_remaining`, déjà persisté). `lib/jobs.js`, `lib/jobCatalog.js`,
+  `components/admin/panels.js`. Aucun appel API, aucune migration. Bons candidats à remonter au socle.
 - **Commits importants récents** :
   - `2c71e35` documentation clubs liés / Europe
   - `69578a5` automatisation des stades + simplification des équipes liées

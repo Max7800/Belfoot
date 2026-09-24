@@ -90,6 +90,7 @@ export function JobsPanel() {
     setMsg(`✓ ${p.label} — terminé.`);
     setBusy(null); load();
   };
+  const latestQuota = rows.find((r) => r.quota_remaining != null)?.quota_remaining;
   return (<div>
     <h2 className="mb-4 text-lg font-bold">Jobs & synchronisation</h2>
     <p className="mb-3 text-xs leading-5 text-muted">Chaque lancement affiche maintenant son coût estimé et respecte un budget strict. Une relance identique est bloquée tant que le premier job travaille. La base 2024/2025 reste la référence de développement ; le passage à 2026/2027 se fera ici, compétition par compétition, lorsque l'abonnement API sera actif.</p>
@@ -101,6 +102,7 @@ export function JobsPanel() {
       <input type="number" min="1" max="20" value={matchCap} onChange={(e) => setMatchCap(Math.max(1, Math.min(20, Number(e.target.value) || 1)))} className="w-16 rounded border border-line/10 bg-surface2 px-2 py-1 text-sm" />
       <label className="text-xs text-muted">Budget API</label>
       <input type="number" min="1" max="100" value={requestLimit} onChange={(e) => setRequestLimit(Math.max(1, Math.min(100, Number(e.target.value) || 1)))} className="w-16 rounded border border-line/10 bg-surface2 px-2 py-1 text-sm" />
+      {latestQuota != null && <span className="ml-auto rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-bold text-emerald-300" title="Quota restant lu lors de la dernière synchronisation">≈ {latestQuota} appels restants</span>}
     </div>
 
     <div className="mb-4 rounded-xl border border-accent/20 bg-accent/5 p-3">
