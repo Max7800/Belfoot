@@ -1264,15 +1264,16 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
 ## CURRENT_GIT_STATE
 
 - **Branche** : `main`
-- **Dernier commit distant** : `01f65a4` — « Le Noyau 2b (partie 1) » (signalement + Discuter de ce match).
-  Migrations forum `0001` + `0002` à appliquer si pas déjà fait.
-- **Lot courant (non poussé)** : **« Le Noyau » — 2b (partie 2) : les connexions**. `DiscussButton` branché
-  sur la **fiche joueur** (`/players/[id]`, ref `player`), la **fiche club** (`/clubs/[id]`, ref `club`) et
-  le **détail d'article** (`/[collection]/[slug]`, ref `article` — page serveur, composant client rendu
-  dedans). Le forum est maintenant relié aux matchs, joueurs, clubs et articles. Aucun appel API, aucune
-  migration. **Reste en polish optionnel** : pagination sujets/messages (volume faible pour l'instant) et
-  **badges contributeurs** (nécessite dénormaliser le rôle/les stats de l'auteur, car `profiles` est en
-  lecture self-only — même logique que `author_name`).
+- **Dernier commit distant** : `ceb7672` — « Le Noyau 2b (partie 2) - connexions joueur/club/article »
+  (forum relié aux matchs/joueurs/clubs/articles). Migrations forum `0001`+`0002` à appliquer si pas fait.
+  NB : entre-temps, 2 remontées poussées sur `Max7800/Socle` (capacité Proposer ; build-out forum).
+- **Lot courant (non poussé)** : **réorganisation des syncs** (`lib/jobCatalog.js` + `SyncPanel`). Jobs
+  rangés en **groupes** (Import de base / Belges & sélections / Direct), **dépendances** déclarées
+  (`requires`, tooltip « à lancer après »), et **pipelines en 1 clic** (MAJ hebdo / Préparer une journée /
+  Mise en place saison — séquences ordonnées, budget par étape, stop à la 1ʳᵉ erreur). Le budget/quota
+  par run + la lecture du restant (headers API) existaient déjà. Aucun appel API, aucune migration.
+  **Reste (étape 2)** : garde-fou migrations (bloquer un job si sa migration requise manque) + surfacer
+  le quota restant dans l'admin.
 - **Commits importants récents** :
   - `2c71e35` documentation clubs liés / Europe
   - `69578a5` automatisation des stades + simplification des équipes liées
