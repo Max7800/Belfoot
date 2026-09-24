@@ -25,6 +25,7 @@ export const adminSections = [
   ] },
   { label: "Sélections belges", icon: "trophy", panels: [
     { key: "nationalteams", label: "Page Diables Rouges" },
+    { key: "rankings", label: "Classements Belgique" },
     { key: "nationalCallups", label: "Convocations" },
   ] },
   { label: "Match Center", icon: "activity", panels: [

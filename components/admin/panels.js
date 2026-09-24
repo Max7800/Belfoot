@@ -11,6 +11,7 @@ import { normalizeBelgiansAbroadConfig } from "@/lib/belgiansAbroad";
 import { DEFAULT_COMPETITION_HUB } from "@/lib/competitionHub";
 import { normalizeNationalTeamsConfig } from "@/lib/nationalTeams";
 import { normalizeProposeConfig } from "@/lib/propose";
+import { normalizeRankings } from "@/lib/rankings";
 
 export function ProfilesPanel() {
   const [rows, setRows] = useState([]);
@@ -480,6 +481,63 @@ export function ProposePanel() {
         {cfg.types.length === 0 && <p className="text-muted">Aucune collection ouverte à la contribution.</p>}
       </div>
       <div className="mt-4 flex items-center gap-3"><button onClick={save} disabled={status === "saving"} className="rounded-xl bg-accent px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{status === "saving" ? "Enregistrement…" : "Enregistrer"}</button>{status === "saved" && <span className="text-sm text-green-400">Enregistré</span>}{status === "error" && <span className="text-sm text-red-400">Erreur d'enregistrement</span>}</div>
+    </div>
+  );
+}
+
+export function RankingsPanel() {
+  const [cfg, setCfg] = useState(() => normalizeRankings());
+  const [status, setStatus] = useState("idle");
+  useEffect(() => {
+    supabase.from("site_settings").select("data").eq("id", 1).maybeSingle()
+      .then(({ data }) => setCfg(normalizeRankings(data?.data?.rankings)));
+  }, []);
+  const box = "rounded border border-line/10 bg-surface2 px-2 py-1.5 text-sm text-content";
+  const setFifa = (i, patch) => setCfg((c) => ({ ...c, fifa: c.fifa.map((r, j) => (j === i ? { ...r, ...patch } : r)) }));
+  const addFifa = () => setCfg((c) => ({ ...c, fifa: [...c.fifa, { rank: "", nation: "", points: "", isBelgium: false }] }));
+  const delFifa = (i) => setCfg((c) => ({ ...c, fifa: c.fifa.filter((_, j) => j !== i) }));
+  const moveFifa = (i, d) => setCfg((c) => { const a = [...c.fifa]; const j = i + d; if (j < 0 || j >= a.length) return c; [a[i], a[j]] = [a[j], a[i]]; return { ...c, fifa: a }; });
+  const setUefa = (k, v) => setCfg((c) => ({ ...c, uefa: { ...c.uefa, [k]: v } }));
+  const save = async () => {
+    setStatus("saving");
+    const { data } = await supabase.from("site_settings").select("data").eq("id", 1).maybeSingle();
+    const { error } = await supabase.from("site_settings").update({ data: { ...(data?.data || {}), rankings: cfg } }).eq("id", 1);
+    setStatus(error ? "error" : "saved");
+  };
+  return (
+    <div>
+      <h2 className="mb-2 text-lg font-bold">Classements Belgique (saisie manuelle)</h2>
+      <p className="mb-4 text-xs text-muted">Le classement FIFA et le coefficient UEFA ne sont dans aucune API : à tenir à jour ici (FIFA ~1×/mois, UEFA après les semaines de coupe).</p>
+
+      <div className="mb-6">
+        <div className="mb-2 flex items-center justify-between"><span className="text-xs font-semibold text-muted">Classement FIFA — nations autour de la Belgique</span><button onClick={addFifa} className="rounded border border-line/20 px-2 py-1 text-xs hover:border-accent/40">+ Ajouter une nation</button></div>
+        <p className="mb-2 text-[11px] text-muted">Saisis dans l'ordre (ex. 2 devant, la Belgique, 2 derrière). Coche « BEL » pour la ligne Belgique.</p>
+        <div className="space-y-1">
+          {cfg.fifa.map((r, i) => (
+            <div key={i} className="flex items-center gap-2 text-sm">
+              <input value={r.rank} onChange={(e) => setFifa(i, { rank: e.target.value })} placeholder="Rang" className={`w-14 ${box}`} />
+              <input value={r.nation} onChange={(e) => setFifa(i, { nation: e.target.value })} placeholder="Nation" className={`flex-1 ${box}`} />
+              <input value={r.points} onChange={(e) => setFifa(i, { points: e.target.value })} placeholder="Points" className={`w-20 ${box}`} />
+              <label className="flex items-center gap-1 text-xs"><input type="checkbox" checked={r.isBelgium} onChange={(e) => setFifa(i, { isBelgium: e.target.checked })} />BEL</label>
+              <button onClick={() => moveFifa(i, -1)} className="px-1 text-muted hover:text-content">↑</button>
+              <button onClick={() => moveFifa(i, 1)} className="px-1 text-muted hover:text-content">↓</button>
+              <button onClick={() => delFifa(i)} className="px-1 text-muted hover:text-red-300">✕</button>
+            </div>
+          ))}
+          {cfg.fifa.length === 0 && <p className="text-xs text-muted">Aucune nation. Clique « Ajouter ».</p>}
+        </div>
+      </div>
+
+      <div className="mb-4">
+        <div className="mb-2 text-xs font-semibold text-muted">Coefficient UEFA — Belgique</div>
+        <div className="flex flex-wrap gap-2">
+          <label className="text-xs text-muted">Rang pays<input value={cfg.uefa.rank} onChange={(e) => setUefa("rank", e.target.value)} className={`mt-1 w-20 ${box}`} /></label>
+          <label className="text-xs text-muted">Points<input value={cfg.uefa.points} onChange={(e) => setUefa("points", e.target.value)} className={`mt-1 w-24 ${box}`} /></label>
+          <label className="text-xs text-muted">Tendance<select value={cfg.uefa.trend} onChange={(e) => setUefa("trend", e.target.value)} className={`mt-1 ${box}`}><option value="">—</option><option value="up">▲ Monte</option><option value="down">▼ Descend</option><option value="steady">= Stable</option></select></label>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3"><button onClick={save} disabled={status === "saving"} className="rounded-xl bg-accent px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{status === "saving" ? "Enregistrement…" : "Enregistrer"}</button>{status === "saved" && <span className="text-sm text-green-400">Enregistré</span>}{status === "error" && <span className="text-sm text-red-400">Erreur</span>}</div>
     </div>
   );
 }

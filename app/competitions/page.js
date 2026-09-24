@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { ArrowRight, CalendarDays, ListOrdered, Shield, Sparkles, Trophy, UsersRound } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useRankings } from "@/lib/rankings";
 import { getCompetitionType } from "@/lib/competitionType";
 import { competitionPath } from "@/lib/competitionRoutes";
 import { useCompetitionHub } from "@/lib/competitionHub";
@@ -19,6 +20,7 @@ export default function CompetitionsPage() {
   const [comps, setComps] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const rankings = useRankings();
 
   useEffect(() => { (async () => {
     const [competitionsResult, matchesResult] = await Promise.all([
@@ -49,6 +51,20 @@ export default function CompetitionsPage() {
           <p className="mt-2 max-w-xl text-sm leading-6 text-slate-300 sm:text-[15px]">{hub.intro}</p>
         </div>
       </header>
+
+      {(rankings.uefa.rank !== "" || rankings.uefa.points !== "") && (
+        <div className="mb-6 flex items-center gap-4 rounded-2xl border border-amber-400/20 bg-amber-400/5 p-4">
+          <div className="text-3xl">🇧🇪</div>
+          <div className="min-w-0 flex-1">
+            <div className="text-xs font-black uppercase tracking-wider text-amber-300">Coefficient UEFA — Belgique</div>
+            <div className="mt-0.5 text-sm text-muted">Détermine les places belges en Coupes d'Europe (C1 / C3 / C4).</div>
+          </div>
+          <div className="flex-shrink-0 text-right">
+            {rankings.uefa.rank !== "" && <div className="text-2xl font-black">{rankings.uefa.rank}<span className="text-sm text-muted">ᵉ</span> {rankings.uefa.trend === "up" ? <span className="text-emerald-400">▲</span> : rankings.uefa.trend === "down" ? <span className="text-red-400">▼</span> : ""}</div>}
+            {rankings.uefa.points !== "" && <div className="text-xs text-muted">{rankings.uefa.points} pts</div>}
+          </div>
+        </div>
+      )}
 
       {loading && <div className="grid gap-4 lg:grid-cols-2"><div className="h-80 animate-pulse rounded-3xl bg-surface" /><div className="h-80 animate-pulse rounded-3xl bg-surface" /></div>}
       {!loading && error && <p className="rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">Impossible de charger les compétitions : {error}</p>}

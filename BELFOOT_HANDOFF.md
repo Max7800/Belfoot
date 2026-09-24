@@ -1264,13 +1264,41 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
 ## CURRENT_GIT_STATE
 
 - **Branche** : `main`
-- **Dernier commit distant** : `e3a227c` — « Syncs - reorganisation : groupes + dependances + pipelines ».
+- **Dernier commit distant** : `3114850` — « Syncs etape 2 - garde-fou migrations + quota restant affiche ».
   Migrations forum `0001`+`0002` à appliquer si pas fait. 2 remontées socle poussées (Proposer, forum).
-- **Lot courant (non poussé)** : **syncs étape 2** — **garde-fou migrations** (un job qui déclare
-  `requiresMigration` est bloqué AVANT tout appel API si la migration n'est pas dans `schema_migrations` ;
-  posé sur les 3 jobs sélections → `0028_followed_national_teams`) + **affichage du quota restant** dans
-  le SyncPanel (lu depuis `job_runs.quota_remaining`, déjà persisté). `lib/jobs.js`, `lib/jobCatalog.js`,
-  `components/admin/panels.js`. Aucun appel API, aucune migration. Bons candidats à remonter au socle.
+- **Lot courant (non poussé)** : **classements Belgique manuels** (FIFA + coef UEFA). API-Football n'a NI
+  le classement FIFA NI le coef UEFA ; sources externes payantes/scrapers fragiles → **saisie manuelle**
+  retenue (faible fréquence de MAJ). `lib/rankings.js` (`site_settings.data.rankings`), panneau admin
+  **Sélections belges → Classements Belgique** (`RankingsPanel`). Affichages : **fenêtre FIFA ±2 (Belgique
+  surlignée)** sur `/diables-rouges` sous le match mis en avant, **carte Coefficient UEFA** sur
+  `/competitions`. Aucun appel API, aucune migration.
+
+### RÉCAP SESSION 2026-09-24 (pour revue roadmap)
+**Livré côté Belfoot (poussé sur `main`)** :
+- Point d'entrée **Proposer** (contributions multi-types) + admin.
+- **Diables Rouges** : différenciation Hommes/Femmes, sélection groupée par poste, classement FIFA
+  administrable par match.
+- **Onze de la semaine** (`votw`) COMPLET : session → éligibles (repli effectifs si pas de stats) →
+  terrain 4-3-3 + vote + filtre club → résultat lecteurs figé → Onze Belfoot manuel → feuille de compo.
+- **Nettoyage saisons** : migration `0030` (générique/idempotente) + réconciliation legacy (Croky Cup,
+  doublon tiret/slash Pro League). Import déjà correct pour 2026.
+- **Le Noyau** (forum) : fondation → structure « 4 portes » → signalement → connexions
+  match/joueur/club/article (`DiscussButton`).
+- **Syncs réorganisés** : groupes + dépendances + pipelines 1 clic + garde-fou migrations + quota affiché.
+- **Classements Belgique** manuels (FIFA ±2 + coef UEFA) — pas d'API pour ces données.
+- Nav : « Matchs » retiré (redondant avec Compétitions).
+
+**Livré côté socle (`Max7800/Socle`, poussé)** : capacité **Proposer** (hub + admin) ; **build-out forum**
+générique (pages + admin + `DiscussButton` + migration de finition). Additif, forks non impactés.
+
+**SQL à appliquer côté Supabase (état à confirmer par l'utilisateur)** :
+- Appliqués : `votw/0001`+`0002`, `0029` (FIFA colonnes), `0030` (backfill saisons).
+- **À appliquer** : `forum/0001_init.sql` puis `forum/0002_noyau_structure.sql` (Le Noyau).
+
+**Reste / pistes (voir §14)** : bande communauté légère sur l'accueil (en attente, à faire léger) ;
+polish Noyau (pagination, badges) ; remonter au socle les briques syncs (garde-fou, pipelines) + votw ;
+et tout le volet **mois Pro** (Notes & Diable du match, Belges à l'étranger, Europe, bascule 2026) ;
+avant lancement : SEO minimal (sitemap/robots/metadata), CGU/vie privée, sécurité P0 (RLS rôles).
 - **Commits importants récents** :
   - `2c71e35` documentation clubs liés / Europe
   - `69578a5` automatisation des stades + simplification des équipes liées

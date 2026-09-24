@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { CalendarDays, ChevronRight, MapPin, Shield, Trophy, Users } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { useNationalTeamsConfig } from "@/lib/nationalTeams";
+import { useRankings } from "@/lib/rankings";
 import { groupByPosition } from "@/lib/positions";
 import { matchStatusMeta } from "@/lib/matchStatus";
 
@@ -60,6 +61,7 @@ function SmallMatch({ match, clubs, competitions }) {
 
 export default function NationalTeamsPage() {
   const config = useNationalTeamsConfig();
+  const rankings = useRankings();
   const [teams, setTeams] = useState([]);
   const [selectedGender, setSelectedGender] = useState("");
   const [selectedId, setSelectedId] = useState("");
@@ -159,6 +161,19 @@ export default function NationalTeamsPage() {
 
     {loading ? <div className="h-72 animate-pulse rounded-3xl bg-surface" /> : teams.length === 0 ? <div className="rounded-3xl border border-dashed border-line/20 p-10 text-center"><div className="text-5xl">🇧🇪</div><h2 className="mt-4 text-xl font-black">Les sélections sont prêtes à être reliées</h2><p className="mt-2 text-sm text-muted">Lance la synchronisation ciblée depuis l’administration avec l’identifiant API-Football de la Belgique.</p></div> : <>
       <FeaturedMatch match={featured} clubs={clubs} competitions={competitions} />
+      {rankings.fifa.length > 0 && (
+        <div className="rounded-2xl border border-line/10 bg-surface/60 p-4">
+          <div className="mb-2 text-xs font-black uppercase tracking-wider text-amber-300">Classement FIFA</div>
+          <div className="space-y-1">
+            {rankings.fifa.map((r, i) => (
+              <div key={i} className={`flex items-center justify-between rounded-lg px-3 py-1.5 text-sm ${r.isBelgium ? "bg-red-500/15 font-black text-white" : "text-muted"}`}>
+                <span><span className="mr-2 inline-block w-8 tabular-nums text-slate-500">{r.rank}</span>{r.nation}</span>
+                {r.points !== "" && <span className="text-xs">{r.points} pts</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       <div className="grid grid-cols-4 gap-2 rounded-2xl border border-line/10 bg-surface/60 p-3 text-center"><div><b className="block text-xl sm:text-2xl">{results.length}</b><span className="text-[9px] uppercase tracking-wider text-muted">Matchs</span></div><div><b className="block text-xl text-emerald-400 sm:text-2xl">{record.wins}</b><span className="text-[9px] uppercase tracking-wider text-muted">Victoires</span></div><div><b className="block text-xl sm:text-2xl">{record.goals}</b><span className="text-[9px] uppercase tracking-wider text-muted">Buts</span></div><div><b className="block text-xl text-amber-300 sm:text-2xl">{squad.length}</b><span className="text-[9px] uppercase tracking-wider text-muted">Joueurs</span></div></div>
       {config.sections.filter((section) => section.enabled).map((section) => <section key={section.key}><div className="mb-4 flex items-end gap-3"><div className="h-8 w-1 rounded-full" style={{ backgroundColor: section.accent }} /><div><h2 className="flex items-center gap-2 text-xl font-black">{section.key === "schedule" ? <CalendarDays className="h-5 w-5" /> : section.key === "squad" ? <Users className="h-5 w-5" /> : <Trophy className="h-5 w-5" />}{section.label}</h2><p className="mt-1 text-xs text-muted">{section.subtitle}</p></div></div>{content[section.key]}</section>)}
     </>}
