@@ -5,6 +5,7 @@ import { CalendarDays, ChevronRight, MapPin, Shield, Trophy, Users } from "lucid
 import { supabase } from "@/lib/supabaseClient";
 import { useNationalTeamsConfig } from "@/lib/nationalTeams";
 import { useRankings } from "@/lib/rankings";
+import DiableRatings from "@/components/football/DiableRatings";
 import { groupByPosition } from "@/lib/positions";
 import { matchStatusMeta } from "@/lib/matchStatus";
 
@@ -173,6 +174,9 @@ export default function NationalTeamsPage() {
             ))}
           </div>
         </div>
+      )}
+      {selectedTeam?.national_category === "senior" && (selectedTeam?.national_gender || "men") === "men" && results[0] && (
+        <DiableRatings match={results[0]} squad={squad} />
       )}
       <div className="grid grid-cols-4 gap-2 rounded-2xl border border-line/10 bg-surface/60 p-3 text-center"><div><b className="block text-xl sm:text-2xl">{results.length}</b><span className="text-[9px] uppercase tracking-wider text-muted">Matchs</span></div><div><b className="block text-xl text-emerald-400 sm:text-2xl">{record.wins}</b><span className="text-[9px] uppercase tracking-wider text-muted">Victoires</span></div><div><b className="block text-xl sm:text-2xl">{record.goals}</b><span className="text-[9px] uppercase tracking-wider text-muted">Buts</span></div><div><b className="block text-xl text-amber-300 sm:text-2xl">{squad.length}</b><span className="text-[9px] uppercase tracking-wider text-muted">Joueurs</span></div></div>
       {config.sections.filter((section) => section.enabled).map((section) => <section key={section.key}><div className="mb-4 flex items-end gap-3"><div className="h-8 w-1 rounded-full" style={{ backgroundColor: section.accent }} /><div><h2 className="flex items-center gap-2 text-xl font-black">{section.key === "schedule" ? <CalendarDays className="h-5 w-5" /> : section.key === "squad" ? <Users className="h-5 w-5" /> : <Trophy className="h-5 w-5" />}{section.label}</h2><p className="mt-1 text-xs text-muted">{section.subtitle}</p></div></div>{content[section.key]}</section>)}
