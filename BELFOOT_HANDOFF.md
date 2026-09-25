@@ -1266,11 +1266,16 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
 - **Branche** : `main`
 - **Dernier commit distant** : `dce3dcc` — « Notes & Diable du match - sous-lot 1 » (migration
   `football/0031` À APPLIQUER). Avant : lot communautaire `ae74bf6` + sécurité `ec0e1eb` (0003 appliquées).
-- **Lot courant (non poussé)** : **forum — modération facilitée + citer**. Sur `/forum/[id]` : boutons
-  admin **Épingler / Verrouiller** dans le sujet, **Modifier** étendu à l'admin, **Citer** un message
-  (insère `>` dans la réponse). Sur `/forum/c/[slug]` (liste) : **actions admin directes sur chaque ligne**
-  (épingler 📌 / verrouiller 🔒 / supprimer ✕, sans ouvrir le sujet) → modération rapide. Aucun appel API,
-  aucune migration.
+- **Lot courant (non poussé)** : **préparation mois Pro — sous-lot A (runner)**. Pipelines : **budget
+  GLOBAL** partagé sur toute la séquence (décompté à chaque étape via `requests` renvoyé par le job) ;
+  **reprise** après erreur (bouton « Reprendre » depuis l'étape échouée) ; **simulation** (🔎 Simuler
+  affiche le coût estimé de chaque étape sans lancer). Garde-fou migrations **étendu** au-delà des
+  sélections (squads→`0024`, live-sync→`0026`, + national→`0028`). `lib/jobCatalog.js` +
+  `components/admin/panels.js` (JobsPanel). Aucun appel API, aucune migration.
+  **Reste sous-lot B** : (5) bascule 2026 par compétition — **déjà possible** via le sélecteur de saison +
+  sync par compétition (à formaliser/sécuriser) ; (6) **plan d'import** (whitelist + ordre Pro League →
+  Challenger → Croky → sélections → compétitions étrangères avec Belges) pour ne pas aspirer tous les
+  championnats.
 - **À CONCEVOIR (note utilisateur)** : les **appelés en Belgique A changent à chaque rassemblement** →
   garder une **trace de la sélection par match** (et de qui n'est plus rappelé). Aujourd'hui les notes
   portent sur l'effectif COURANT (callups actifs), donc un match passé afficherait la sélection actuelle.

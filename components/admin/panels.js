@@ -92,38 +92,47 @@ export function JobsPanel() {
   const [requestLimit, setRequestLimit] = useState(10);
   const [teamExternalId, setTeamExternalId] = useState("44");
   const [nationalCategory, setNationalCategory] = useState("senior");
+  const [resume, setResume] = useState(null);
   const targetedJobs = new Set(["football.team-test", "football.national-team", "football.find-national-teams", "football.resolve-national-clubs"]);
   const load = () => supabase.from("job_runs").select("*").order("started_at", { ascending: false }).limit(30).then(({ data }) => setRows(data || []));
   useEffect(() => { load(); supabase.from("competitions").select("*").order("name").then(({ data }) => setComps(data || [])); }, []);
-  const callJob = async (key) => {
+  const callJob = async (key, budget) => {
     const { data: { session } } = await supabase.auth.getSession();
     const r = await fetch("/api/admin/run-job", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token}` },
-      body: JSON.stringify({ key, season, competitionId: compId || null, matchCap, requestLimit, teamExternalId, nationalCategory }),
+      body: JSON.stringify({ key, season, competitionId: compId || null, matchCap, requestLimit: budget ?? requestLimit, teamExternalId, nationalCategory }),
     });
     const txt = await r.text();
     if (!r.ok) throw new Error(txt || ("HTTP " + r.status));
     let d; try { d = JSON.parse(txt); } catch { d = { detail: txt }; }
-    return d.detail || "ok";
+    return d;
   };
   const run = async (key) => {
     const cost = describeJobCost(key, { competitionId: compId, competitionCount: comps.length, matchCap });
     if (!window.confirm(`${JOB_CATALOG[key]?.label || key}\n\nCoût estimé : ${cost}.\nBudget strict : ${requestLimit} appels API maximum.\n\nLancer la synchronisation ?`)) return;
     setBusy(key); setMsg("");
-    try { setMsg(`✓ ${key} : ${await callJob(key)}`); } catch (e) { setMsg(`✗ ${key} : ${e.message}`); }
+    try { const d = await callJob(key); setMsg(`✓ ${key} : ${d.detail || "ok"}`); } catch (e) { setMsg(`✗ ${key} : ${e.message}`); }
     setBusy(null); load();
   };
-  const runPipeline = async (p) => {
+  const simulate = (p) => {
+    const lines = p.jobs.map((k, i) => `${i + 1}. ${JOB_CATALOG[k]?.label || k} — ${describeJobCost(k, { competitionId: compId, competitionCount: comps.length, matchCap })}`);
+    setMsg(`🔎 Simulation « ${p.label} » — budget GLOBAL ${requestLimit} appels pour la séquence :\n${lines.join("\n")}\n(Estimations hautes ; rien n'est lancé.)`);
+  };
+  const runPipeline = async (p, fromIndex = 0) => {
     const chain = p.jobs.map((j) => JOB_CATALOG[j]?.label || j).join("  →  ");
-    if (!window.confirm(`${p.label}\n\n${chain}\n\nBudget ${requestLimit} appels PAR étape. La séquence s'arrête à la première erreur.\n\nLancer ?`)) return;
-    setBusy(p.key); setMsg("");
-    for (const key of p.jobs) {
-      setMsg(`⏳ ${p.label} — ${JOB_CATALOG[key]?.label || key}…`);
-      try { await callJob(key); } catch (e) { setMsg(`✗ Séquence stoppée à « ${JOB_CATALOG[key]?.label || key} » : ${e.message}`); setBusy(null); load(); return; }
+    if (fromIndex === 0 && !window.confirm(`${p.label}\n\n${chain}\n\nBudget GLOBAL ${requestLimit} appels pour TOUTE la séquence. Reprenable après une erreur.\n\nLancer ?`)) return;
+    setBusy(p.key); setResume(null);
+    let remaining = requestLimit;
+    for (let i = fromIndex; i < p.jobs.length; i++) {
+      const key = p.jobs[i];
+      if (remaining <= 0) { setMsg(`⏸ Budget global épuisé avant l'étape ${i + 1} « ${JOB_CATALOG[key]?.label || key} ». Augmente le budget et reprends.`); setResume({ p, fromIndex: i }); setBusy(null); load(); return; }
+      setMsg(`⏳ ${p.label} — étape ${i + 1}/${p.jobs.length} : ${JOB_CATALOG[key]?.label || key}… (budget restant ${remaining})`);
+      try { const d = await callJob(key, remaining); remaining -= (d.requests || 0); }
+      catch (e) { setMsg(`✗ Stoppé à l'étape ${i + 1} « ${JOB_CATALOG[key]?.label || key} » : ${e.message}`); setResume({ p, fromIndex: i }); setBusy(null); load(); return; }
     }
-    setMsg(`✓ ${p.label} — terminé.`);
-    setBusy(null); load();
+    setMsg(`✓ ${p.label} — terminé (${requestLimit - remaining} appels consommés).`);
+    setResume(null); setBusy(null); load();
   };
   const latestQuota = rows.find((r) => r.quota_remaining != null)?.quota_remaining;
   return (<div>
@@ -142,12 +151,17 @@ export function JobsPanel() {
 
     <div className="mb-4 rounded-xl border border-accent/20 bg-accent/5 p-3">
       <div className="mb-2 text-xs font-black uppercase tracking-wider text-accent">Pipelines — séquences en 1 clic</div>
-      <div className="flex flex-wrap gap-2">
+      <div className="space-y-1.5">
         {jobPipelines().map((p) => (
-          <button key={p.key} disabled={!!busy} onClick={() => runPipeline(p)} title={`${p.description}\n${p.jobs.map((j) => JOB_CATALOG[j]?.label || j).join(" → ")}`} className="rounded-lg border border-accent/30 bg-accent/10 px-3 py-1.5 text-sm font-bold text-accent disabled:opacity-50">{p.label}{busy === p.key ? " …" : ""}</button>
+          <div key={p.key} className="flex flex-wrap items-center gap-2">
+            <button disabled={!!busy} onClick={() => runPipeline(p)} title={`${p.description}\n${p.jobs.map((j) => JOB_CATALOG[j]?.label || j).join(" → ")}`} className="rounded-lg border border-accent/30 bg-accent/10 px-3 py-1.5 text-sm font-bold text-accent disabled:opacity-50">{p.label}{busy === p.key ? " …" : ""}</button>
+            <button disabled={!!busy} onClick={() => simulate(p)} className="rounded-lg border border-line/20 px-2 py-1.5 text-xs text-muted hover:border-accent/40 disabled:opacity-50">🔎 Simuler</button>
+            <span className="text-[11px] text-muted">{p.description}</span>
+          </div>
         ))}
       </div>
-      <p className="mt-2 text-[11px] leading-5 text-muted">Chaque étape respecte le « Budget API » ci-dessus ; la séquence s'arrête à la première erreur.</p>
+      {resume && <div className="mt-2 flex items-center gap-2 rounded-lg border border-amber-400/30 bg-amber-400/10 p-2 text-xs text-amber-200"><span className="flex-1">Séquence « {resume.p.label} » interrompue à l'étape {resume.fromIndex + 1}.</span><button disabled={!!busy} onClick={() => runPipeline(resume.p, resume.fromIndex)} className="rounded bg-amber-400/20 px-3 py-1 font-bold text-amber-200 disabled:opacity-50">Reprendre</button></div>}
+      <p className="mt-2 text-[11px] leading-5 text-muted">Budget <b>global</b> (« Budget API » ci-dessus) partagé sur toute la séquence, décompté à chaque étape. Reprenable après une erreur.</p>
     </div>
 
     {Object.entries(JOB_GROUPS).sort((a, b) => a[1].order - b[1].order).map(([g, meta]) => {
@@ -168,7 +182,7 @@ export function JobsPanel() {
     })}
     <div className="mb-3 rounded-xl border border-amber-400/15 bg-amber-400/5 p-3"><div className="mb-2 text-xs font-black uppercase tracking-wider text-amber-300">Imports ciblés</div><div className="flex flex-wrap items-center gap-2"><label className="text-xs text-muted">ID équipe API</label><input value={teamExternalId} onChange={(e) => setTeamExternalId(e.target.value.replace(/\D/g, ""))} placeholder="ID" className="w-20 rounded border border-line/10 bg-surface2 px-2 py-1 text-sm" /><label className="text-xs text-muted">Catégorie</label><select value={nationalCategory} onChange={(e) => setNationalCategory(e.target.value)} className="rounded border border-line/10 bg-surface2 px-2 py-1 text-sm"><option value="senior">Équipe A</option><option value="u21">U21</option><option value="u19">U19</option><option value="u17">U17</option><option value="women">Red Flames</option></select>{jobKeys().filter((key) => targetedJobs.has(key)).map((k) => <button key={k} disabled={!!busy} onClick={() => run(k)} className="rounded border border-amber-400/25 bg-amber-400/10 px-3 py-1.5 text-sm font-bold text-amber-100 disabled:opacity-50">{JOB_CATALOG[k]?.label || k}{busy === k ? " …" : ""}</button>)}</div><p className="mt-2 text-[11px] leading-5 text-muted">1. Trouve les IDs. 2. Synchronise la sélection : toutes ses compétitions de la saison, amicaux compris, sont créées automatiquement et restent masquées du portail général. 3. « Compléter les clubs » traite au maximum le nombre indiqué dans « Max matchs », à raison d'un appel par joueur.</p></div>
     <p className="mb-3 rounded-lg border border-red-400/15 bg-red-500/5 p-3 text-xs leading-5 text-muted"><b className="text-content">Direct :</b> sans compétition choisie, le job traite uniquement celles dont « Direct activé » est coché. Il consomme un appel pour la journée, puis au maximum « Max matchs » appels pour les événements des rencontres en cours. L&apos;affichage public et Supabase Realtime ne consomment aucun appel API-Football.</p>
-    {msg && <p className="mb-3 rounded border border-line/10 bg-surface p-2 text-sm text-muted">{msg}</p>}
+    {msg && <p className="mb-3 whitespace-pre-line rounded border border-line/10 bg-surface p-2 text-sm text-muted">{msg}</p>}
     <div className="divide-y divide-line/10 rounded-xl border border-line/10">
       {rows.map((j) => <div key={j.id} className="flex items-center justify-between p-3 text-sm"><span>{j.job_key} · {new Date(j.started_at).toLocaleString()}</span><span className={j.status === "error" ? "text-red-400" : j.status === "ok" ? "text-green-400" : "text-muted"}>{j.status}{j.detail ? ` · ${j.detail}` : ""}</span></div>)}
       {rows.length === 0 && <div className="p-4 text-sm text-muted">Aucune exécution.</div>}
