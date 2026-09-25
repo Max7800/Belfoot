@@ -40,6 +40,12 @@ export default function TopicPage() {
     if (!error) { setBody(""); await loadPosts(); }
     setBusy(false);
   };
+  const cite = (p) => {
+    const quote = `> ${p.author_name || "Membre"} : ${(p.body || "").replace(/\n/g, " ").slice(0, 200)}\n\n`;
+    setBody((prev) => (prev ? prev + "\n" : "") + quote);
+    setTimeout(() => document.getElementById("forum-reply")?.scrollIntoView({ behavior: "smooth", block: "center" }), 50);
+  };
+  const toggleTopic = async (patch) => { await supabase.from("forum_topics").update(patch).eq("id", id); setTopic((t) => ({ ...t, ...patch })); };
   const saveEdit = async (postId) => {
     if (!editBody.trim()) return;
     await supabase.from("forum_posts").update({ body: editBody.trim() }).eq("id", postId);
@@ -63,10 +69,14 @@ export default function TopicPage() {
   return (
     <div className="mx-auto max-w-3xl space-y-4">
       <Link href="/forum" className="inline-flex items-center gap-1 text-sm text-muted hover:text-content"><ArrowLeft className="h-4 w-4" />Le Noyau</Link>
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {topic.pinned && <Pin className="h-4 w-4 text-amber-300" />}
         {topic.locked && <Lock className="h-4 w-4 text-muted" />}
         <h1 className="text-2xl font-black">{topic.title}</h1>
+        {isAdmin && <div className="ml-auto flex flex-shrink-0 gap-3 text-xs font-bold">
+          <button onClick={() => toggleTopic({ pinned: !topic.pinned })} className={topic.pinned ? "text-amber-300" : "text-muted hover:text-content"}>{topic.pinned ? "Désépingler" : "Épingler"}</button>
+          <button onClick={() => toggleTopic({ locked: !topic.locked })} className={topic.locked ? "text-red-300" : "text-muted hover:text-content"}>{topic.locked ? "Déverrouiller" : "Verrouiller"}</button>
+        </div>}
       </div>
 
       <div className="space-y-3">
@@ -90,8 +100,9 @@ export default function TopicPage() {
                 <>
                   <div className="whitespace-pre-wrap text-sm">{p.body}</div>
                   {userId && (
-                    <div className="mt-2 flex gap-3 text-[11px] text-muted">
-                      {mine && <button onClick={() => { setEditId(p.id); setEditBody(p.body); }} className="hover:text-content">Modifier</button>}
+                    <div className="mt-2 flex flex-wrap gap-3 text-[11px] text-muted">
+                      {(mine || isAdmin) && <button onClick={() => { setEditId(p.id); setEditBody(p.body); }} className="hover:text-content">Modifier</button>}
+                      <button onClick={() => cite(p)} className="hover:text-content">Citer</button>
                       {(mine || isAdmin) && <button onClick={() => removePost(p.id)} className="hover:text-red-300">Supprimer</button>}
                       {!mine && <button onClick={() => reportPost(p.id)} className="hover:text-amber-300">Signaler</button>}
                     </div>
@@ -106,7 +117,7 @@ export default function TopicPage() {
       {topic.locked ? (
         <p className="rounded-xl border border-line/15 bg-surface p-3 text-sm text-muted"><Lock className="mr-2 inline h-4 w-4" />Ce sujet est verrouillé.</p>
       ) : userId ? (
-        <div className="rounded-2xl border border-line/15 bg-surface p-4">
+        <div id="forum-reply" className="rounded-2xl border border-line/15 bg-surface p-4">
           <textarea value={body} onChange={(e) => setBody(e.target.value)} rows="3" placeholder="Répondre…" className="w-full rounded-lg border border-line/10 bg-surface2 px-3 py-2 text-sm" />
           <button onClick={reply} disabled={busy || !body.trim()} className="mt-2 rounded-xl bg-accent px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{busy ? "Envoi…" : "Répondre"}</button>
         </div>

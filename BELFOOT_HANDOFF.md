@@ -1264,10 +1264,19 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
 ## CURRENT_GIT_STATE
 
 - **Branche** : `main`
-- **Dernier commit distant** : `ec0e1eb` — « Consolidation securite communaute & votes (migrations 0003) »
-  (migrations `votw/0003` + `forum/0003` appliquées par l'utilisateur). Migrations toutes à jour en base.
-- **Lot courant (non poussé)** : **Notes & Diable du match — sous-lot 1**. Migration
-  `football/0031_diable_ratings.sql` (**à appliquer**) : tables `player_ratings` (note /10) + `motm_votes`,
+- **Dernier commit distant** : `dce3dcc` — « Notes & Diable du match - sous-lot 1 » (migration
+  `football/0031` À APPLIQUER). Avant : lot communautaire `ae74bf6` + sécurité `ec0e1eb` (0003 appliquées).
+- **Lot courant (non poussé)** : **forum — modération facilitée + citer**. Sur `/forum/[id]` : boutons
+  admin **Épingler / Verrouiller** dans le sujet, **Modifier** étendu à l'admin, **Citer** un message
+  (insère `>` dans la réponse). Sur `/forum/c/[slug]` (liste) : **actions admin directes sur chaque ligne**
+  (épingler 📌 / verrouiller 🔒 / supprimer ✕, sans ouvrir le sujet) → modération rapide. Aucun appel API,
+  aucune migration.
+- **À CONCEVOIR (note utilisateur)** : les **appelés en Belgique A changent à chaque rassemblement** →
+  garder une **trace de la sélection par match** (et de qui n'est plus rappelé). Aujourd'hui les notes
+  portent sur l'effectif COURANT (callups actifs), donc un match passé afficherait la sélection actuelle.
+  À traiter quand les compos réelles arrivent (mois Pro) : archiver le « qui a joué / était convoqué »
+  par match. Lié au sous-lot 2 des Notes & Diable du match.
+- **Lot précédent poussé** (`dce3dcc`) : Notes & Diable du match sous-lot 1 (migration `football/0031`
   fonction `diable_ratings_open(match)` (fenêtre = match terminé + < 4 j après le coup d'envoi, imposée
   en RLS), vues d'agrégat `player_match_ratings` + `match_motm` (moyennes publiques, votes individuels
   privés). Composant `components/football/DiableRatings.js` : noter l'effectif /10 + élire le Diable du

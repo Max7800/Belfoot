@@ -17,7 +17,7 @@ const rel = (d) => {
 };
 
 export default function CategoryPage() {
-  const { session } = useAuth();
+  const { session, isAdmin } = useAuth();
   const userId = session?.user?.id || null;
   const { slug } = useParams();
   const router = useRouter();
@@ -66,6 +66,9 @@ export default function CategoryPage() {
     router.push(`/forum/${topic.id}`);
   };
 
+  const modTopic = async (id, patch) => { await supabase.from("forum_topics").update(patch).eq("id", id); setTopics((ts) => ts.map((t) => (t.id === id ? { ...t, ...patch } : t))); };
+  const delTopic = async (id) => { if (!confirm("Supprimer ce sujet et ses messages ?")) return; await supabase.from("forum_topics").delete().eq("id", id); setTopics((ts) => ts.filter((t) => t.id !== id)); };
+
   if (loading) return <div className="mx-auto max-w-3xl py-10 text-center text-muted">Chargement…</div>;
   if (!cat) return <div className="mx-auto max-w-3xl py-10 text-center text-muted">Catégorie introuvable. <Link href="/forum" className="text-accent">Retour au Noyau</Link></div>;
 
@@ -105,6 +108,13 @@ export default function CategoryPage() {
               </div>
             </div>
             <div className="flex-shrink-0 text-right text-[11px] text-muted">{(meta[t.id]?.count || 1)} msg</div>
+            {isAdmin && (
+              <div className="flex flex-shrink-0 gap-2 text-[11px] font-bold" onClick={(e) => e.preventDefault()}>
+                <button onClick={() => modTopic(t.id, { pinned: !t.pinned })} className={t.pinned ? "text-amber-300" : "text-muted hover:text-content"} title="Épingler">📌</button>
+                <button onClick={() => modTopic(t.id, { locked: !t.locked })} className={t.locked ? "text-red-300" : "text-muted hover:text-content"} title="Verrouiller">🔒</button>
+                <button onClick={() => delTopic(t.id)} className="text-muted hover:text-red-300" title="Supprimer">✕</button>
+              </div>
+            )}
           </Link>
         ))}
         {topics.length === 0 && <div className="p-4 text-sm text-muted">Aucun sujet ici. Sois le premier à lancer la discussion !</div>}
