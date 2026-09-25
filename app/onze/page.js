@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
-import { Star, X, Trophy } from "lucide-react";
+import { Star, X, Trophy, Share2 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/lib/auth";
 import { formationSlots, CATEGORY_LABEL } from "@/lib/votw";
@@ -28,6 +28,7 @@ export default function OnzePage() {
   const userId = session?.user?.id || null;
   const [loading, setLoading] = useState(true);
   const [sess, setSess] = useState(null);
+  const [sessions, setSessions] = useState([]);
   const [candidates, setCandidates] = useState([]);
   const [info, setInfo] = useState({});
   const [picks, setPicks] = useState({});
@@ -94,15 +95,34 @@ export default function OnzePage() {
 
   useEffect(() => {
     (async () => {
-      const { data, error } = await supabase.from("votw_sessions").select("*").order("created_at", { ascending: false }).limit(10);
+      const { data, error } = await supabase.from("votw_sessions").select("*").order("created_at", { ascending: false }).limit(30);
       if (error) { setLoading(false); return; }
-      const s = (data || []).find((x) => x.status === "open") || (data || [])[0] || null;
+      const list = data || [];
+      setSessions(list);
+      const wanted = new URLSearchParams(window.location.search).get("session");
+      const s = (wanted && list.find((x) => x.id === wanted)) || list.find((x) => x.status === "open") || list[0] || null;
       setSess(s);
       if (s) await loadData(s);
       setLoading(false);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]);
+
+  const share = async () => {
+    if (!sess) return;
+    const url = `${window.location.origin}/onze?session=${sess.id}`;
+    const text = `Le 11 de la semaine — Journée ${sess.matchday} sur Belfoot`;
+    try {
+      if (navigator.share) await navigator.share({ title: "11 de la semaine", text, url });
+      else { await navigator.clipboard.writeText(url); alert("Lien copié !"); }
+    } catch { /* annulé */ }
+  };
+
+  const selectSession = async (id) => {
+    const s = sessions.find((x) => x.id === id);
+    if (!s) return;
+    setSess(s); setView("readers"); await loadData(s);
+  };
 
   const pickedElsewhere = useMemo(
     () => new Set(Object.entries(picks).filter(([slotId]) => slotId !== openSlot?.id).map(([, pid]) => pid)),
@@ -168,6 +188,12 @@ export default function OnzePage() {
         <Star className="h-7 w-7 text-amber-300" />
         <h1 className="text-2xl font-black sm:text-3xl">Le 11 de la semaine</h1>
         <span className="text-sm text-muted">Journée {sess.matchday}{sess.season_label ? ` · ${sess.season_label}` : ""} · {sess.formation || "4-3-3"}</span>
+        {sessions.length > 1 && (
+          <select value={sess.id} onChange={(e) => selectSession(e.target.value)} title="Revoir une journée" className="rounded-lg border border-line/10 bg-surface2 px-2 py-1 text-xs text-content">
+            {sessions.map((s) => <option key={s.id} value={s.id}>Journée {s.matchday}{s.season_label ? ` · ${s.season_label}` : ""}{s.status === "open" ? " — en cours" : s.status === "published" ? " — publié" : ""}</option>)}
+          </select>
+        )}
+        <button onClick={share} title="Partager cette composition" className="inline-flex items-center gap-1 rounded-lg border border-line/15 px-2 py-1 text-xs font-bold text-muted hover:border-accent/40 hover:text-content"><Share2 className="h-3.5 w-3.5" />Partager</button>
         {votable && <span className="ml-auto rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-black uppercase tracking-wider text-emerald-300">{filled}/11</span>}
         {!votable && Object.keys(results).length > 0 && <span className="ml-auto rounded-full bg-amber-400/15 px-3 py-1 text-xs font-black uppercase tracking-wider text-amber-300">Onze des lecteurs</span>}
       </div>

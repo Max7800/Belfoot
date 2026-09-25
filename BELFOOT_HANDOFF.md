@@ -1264,8 +1264,20 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
 ## CURRENT_GIT_STATE
 
 - **Branche** : `main`
-- **Dernier commit distant** : `d06a050` — « Classements Belgique manuels + recap handoff ».
-- **Lot courant (non poussé)** : **consolidation sécurité communauté & votes** (nouvelles migrations,
+- **Dernier commit distant** : `ec0e1eb` — « Consolidation securite communaute & votes (migrations 0003) »
+  (migrations `votw/0003` + `forum/0003` appliquées par l'utilisateur). Migrations toutes à jour en base.
+- **Lot courant (non poussé)** : **finition expérience communautaire (sans API) + polish visuel**.
+  Communauté (5 pièces) : (1) accueil bande légère **« En ce moment dans Le Noyau »** (section admin
+  `noyau` : teaser vote/résultat votw + 3 discussions récentes) ; (2) **archives `/onze`** (sélecteur de
+  session pour revoir une journée) ; (3) **partager une compo** (bouton Partager Web Share/copie +
+  `/onze?session=` ouvre une session) ; (4) **profils enrichis** (`/compte` : badges dérivés — Contributeur,
+  Pilier du Noyau, Sélectionneur, Équipe Belfoot — + activité sujets/messages/votes/propositions, RLS
+  self-only) ; (5) **statuts Belfoot** (`lib/statuses.js` : Officiel/Confirmé/Très probable/Rumeur/Incertain/
+  Démenti + badge coloré, appliqués au mercato + affichés sur les fiches). Polish : « Classement » retiré
+  de la nav (onglet interne à Compétitions), titre JPL accueil en blanc, bouton « Voir la compétition »
+  sous le titre en mobile, sous-titre du hero compétition borné à 2 lignes (bannière Challenger). Aucun
+  appel API, aucune migration.
+- **Lot précédent poussé** : **consolidation sécurité communauté & votes** (nouvelles migrations,
   sans toucher aux appliquées). `votw/0003_vote_integrity.sql` : RLS votes (membre gère SES votes +
   session votable → **corrige aussi l'absence d'update/delete**), unique(session,member,player) (1 joueur
   une place), trigger candidat + poste compatible. `forum/0003_community_guardrails.sql` : réponse

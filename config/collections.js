@@ -20,6 +20,8 @@
 //    select    : choix dans `options`      link      : URL externe
 // =============================================================================
 
+import { BELFOOT_STATUS_OPTIONS } from "@/lib/statuses";
+
 export const collections = {
   // ── Exemple 1 : un flux d'actualités (liste chronologique) ────────────────
   news: {
@@ -61,7 +63,7 @@ export const collections = {
       player_name:  { type: "text", label: "Joueur concerné" },
       club_from:    { type: "text", label: "Club actuel" },
       club_to:      { type: "text", label: "Club pressenti" },
-      status:       { type: "select", label: "Statut", options: ["Rumeur", "Vérifié", "Démenti"], default: "Rumeur" },
+      status:       { type: "select", label: "Statut Belfoot", options: BELFOOT_STATUS_OPTIONS, default: "Rumeur" },
       body:         { type: "richtext", label: "Détails" },
       source:       { type: "text", label: "Source (lien / média)" },
       category:     { type: "category", label: "Rubrique" },

@@ -8,7 +8,7 @@ const football = {
     { label: "Compétitions", to: "/competitions" },
     { label: "Diables", to: "/diables-rouges" },
     { label: "Belges", to: "/belges-a-l-etranger" },
-    { label: "Classement", to: "/classement" },
+    // Matchs / Classement sont des onglets internes à Compétitions.
   ],
   adminPanels: [
     { key: "football-clubs", label: "Clubs" },

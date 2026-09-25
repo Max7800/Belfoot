@@ -10,6 +10,7 @@ import {
   Globe2,
   Newspaper,
   Sparkles,
+  Star,
   Trophy,
 } from "lucide-react";
 import { Fragment, useEffect, useMemo, useState } from "react";
@@ -70,10 +71,10 @@ function HeroTitle({ value }) {
 
 export default function Home() {
   const config = useHomeConfig();
-  const [data, setData] = useState({ loading: true, matches: [], clubs: {}, competitions: [], seasons: [], players: [], stats: [], news: [] });
+  const [data, setData] = useState({ loading: true, matches: [], clubs: {}, competitions: [], seasons: [], players: [], stats: [], news: [], votwSessions: [], topics: [] });
 
   useEffect(() => { (async () => {
-    const [matchResult, clubResult, competitionResult, seasonResult, playerResult, statsResult, newsResult] = await Promise.all([
+    const [matchResult, clubResult, competitionResult, seasonResult, playerResult, statsResult, newsResult, votwResult, topicsResult] = await Promise.all([
       supabase.from("matches").select("*").order("kickoff", { ascending: false }).limit(500),
       supabase.from("clubs").select("id,name,logo_url"),
       supabase.from("competitions").select("*"),
@@ -81,6 +82,8 @@ export default function Home() {
       supabase.from("players").select("*").eq("tracked", true).eq("active", true),
       supabase.from("player_season_stats").select("*"),
       supabase.from("entries").select("*").eq("collection", "news").eq("published", true).is("deleted_at", null).order("published_at", { ascending: false, nullsFirst: false }).limit(9),
+      supabase.from("votw_sessions").select("id,matchday,season_label,formation,status,closes_at").order("created_at", { ascending: false }).limit(5),
+      supabase.from("forum_topics").select("id,title,author_name,last_activity").order("last_activity", { ascending: false }).limit(4),
     ]);
     setData({
       loading: false,
@@ -91,6 +94,8 @@ export default function Home() {
       players: playerResult.data || [],
       stats: statsResult.data || [],
       news: newsResult.data || [],
+      votwSessions: votwResult.data || [],
+      topics: topicsResult.data || [],
     });
   })().catch(() => setData((current) => ({ ...current, loading: false }))); }, []);
 
@@ -146,10 +151,12 @@ export default function Home() {
     live: <LiveScoreRibbon config={sectionMap.live} competitions={data.competitions} clubs={data.clubs} followedClubIds={followedClubIds} />,
     jpl: view.league ? (
       <div className="overflow-hidden rounded-2xl border border-sky-400/20 bg-[linear-gradient(145deg,rgba(12,31,52,.96),rgba(5,18,34,.96))] shadow-[0_22px_60px_-45px_rgba(56,189,248,.65)]">
-        <div className="flex flex-wrap items-center gap-4 border-b border-line/10 px-4 py-4 sm:px-5">
-          {view.league.logo_url && <img src={view.league.logo_url} className="h-12 w-12 object-contain" alt="" />}
-          <div className="min-w-0 flex-1"><div className="text-2xl font-black text-fuchsia-400">{sectionMap.jpl?.label}</div><div className="text-xs text-muted">{sectionMap.jpl?.subtitle}</div></div>
-          <Link href={competitionPath(view.league)} className="inline-flex items-center gap-1 rounded-lg border border-line/20 px-3 py-2 text-xs font-bold hover:border-accent/50">{sectionMap.jpl?.action}<ArrowRight className="h-3.5 w-3.5" /></Link>
+        <div className="flex flex-col gap-3 border-b border-line/10 px-4 py-4 sm:flex-row sm:items-center sm:px-5">
+          <div className="flex min-w-0 flex-1 items-center gap-3">
+            {view.league.logo_url && <img src={view.league.logo_url} className="h-11 w-11 flex-shrink-0 object-contain" alt="" />}
+            <div className="min-w-0"><div className="truncate text-xl font-black sm:text-2xl">{sectionMap.jpl?.label}</div><div className="truncate text-xs text-muted">{sectionMap.jpl?.subtitle}</div></div>
+          </div>
+          <Link href={competitionPath(view.league)} className="inline-flex flex-shrink-0 items-center justify-center gap-1 rounded-lg border border-line/20 px-3 py-2 text-xs font-bold hover:border-accent/50">{sectionMap.jpl?.action}<ArrowRight className="h-3.5 w-3.5" /></Link>
         </div>
         <div className="grid lg:grid-cols-3">
           <Link href={`${competitionPath(view.league)}?tab=classement`} className="p-4 transition hover:bg-white/[0.025]"><div className="mb-3 text-sm font-black">Classement <span className="text-muted">(Top 5)</span></div><div className="divide-y divide-line/10">{view.standings.slice(0, 5).map((row, index) => <div key={row.club} className="flex items-center gap-2 py-2"><span className="w-5 text-center text-xs text-muted">{index + 1}</span>{data.clubs[row.club]?.logo_url && <img src={data.clubs[row.club].logo_url} className="h-5 w-5 object-contain" alt="" />}<span className="min-w-0 flex-1 truncate text-xs font-semibold">{data.clubs[row.club]?.name || "—"}</span><b className="text-xs">{row.pts}</b></div>)}</div></Link>
@@ -170,10 +177,43 @@ export default function Home() {
     brief: data.news.length > 3 ? <div className="divide-y divide-line/10 overflow-hidden rounded-2xl border border-line/10 bg-surface/60">{data.news.slice(3, 9).map((item, index) => <Link key={item.id} href={`/actus/${item.slug}`} className="flex items-center gap-3 px-4 py-3 transition hover:bg-white/[0.025]"><span className={`h-2 w-2 shrink-0 rounded-full ${index % 3 === 0 ? "bg-emerald-400" : index % 3 === 1 ? "bg-pink-500" : "bg-sky-400"}`} /><span className="min-w-0 flex-1 text-sm font-semibold">{item.title}</span>{item.published_at && <time className="hidden shrink-0 text-[11px] text-muted sm:block">{new Date(item.published_at).toLocaleDateString("fr-BE", { day: "numeric", month: "short" })}</time>}<ChevronRight className="h-4 w-4 shrink-0 text-muted/50" /></Link>)}</div> : <EmptyBlock>Les brèves supplémentaires apparaîtront ici.</EmptyBlock>,
 
     europe: view.europe.length ? <div className="space-y-2">{view.europe.map((match) => <MatchRow key={match.id} m={match} clubs={data.clubs} href={`/matchs/${match.id}`} />)}</div> : <EmptyBlock>Ce bloc peut rester masqué tant que les compétitions européennes ne sont pas alimentées.</EmptyBlock>,
+
+    noyau: (() => {
+      const sessions = data.votwSessions || [];
+      const openSess = sessions.find((s) => s.status === "open") || null;
+      const lastPublished = sessions.find((s) => s.status === "published") || null;
+      const topics = data.topics || [];
+      const votw = openSess || lastPublished;
+      if (!votw && !topics.length) return <EmptyBlock>Le vote du 11 de la semaine et les discussions du Noyau apparaîtront ici.</EmptyBlock>;
+      return (
+        <div className="grid gap-3 sm:grid-cols-2">
+          {votw && (
+            <Link href="/onze" className="flex items-center gap-3 rounded-2xl border border-amber-400/25 bg-amber-400/5 p-4 transition hover:border-amber-400/50">
+              <Star className="h-8 w-8 flex-shrink-0 text-amber-300" />
+              <div className="min-w-0">
+                <div className="text-[11px] font-black uppercase tracking-wider text-amber-300">{openSess ? "Vote en cours" : "Onze des lecteurs"}</div>
+                <div className="truncate text-sm font-bold">11 de la semaine — Journée {votw.matchday}</div>
+                <div className="text-xs text-muted">{openSess ? "Compose ton XI →" : "Découvre le XI élu →"}</div>
+              </div>
+            </Link>
+          )}
+          <div className="rounded-2xl border border-line/10 bg-surface p-4">
+            <div className="mb-2 text-[11px] font-black uppercase tracking-wider text-muted">Discussions récentes</div>
+            <div className="space-y-1.5">
+              {topics.slice(0, 3).map((t) => (
+                <Link key={t.id} href={`/forum/${t.id}`} className="block truncate text-sm hover:text-accent"><span className="font-semibold">{t.title}</span> <span className="text-xs text-muted">· {t.author_name || "Membre"}</span></Link>
+              ))}
+              {topics.length === 0 && <p className="text-xs text-muted">Lance la première discussion dans Le Noyau.</p>}
+            </div>
+          </div>
+        </div>
+      );
+    })(),
   };
 
   const meta = {
     jpl: { href: view.league ? competitionPath(view.league) : "/competitions", icon: Trophy },
+    noyau: { href: "/forum", icon: Star },
     watch: { href: "/matchs", icon: CalendarDays },
     form: { href: "/belges-a-l-etranger", icon: Flame },
     leagues: { href: "/belges-a-l-etranger", icon: Globe2 },

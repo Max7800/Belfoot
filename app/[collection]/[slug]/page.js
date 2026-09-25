@@ -6,6 +6,7 @@ import RichContent from "@/components/RichContent";
 import { categoryColorMap } from "@/lib/categories";
 import { buildMetadata } from "@/lib/seo";
 import DiscussButton from "@/components/forum/DiscussButton";
+import { StatusBadge } from "@/lib/statuses";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +30,7 @@ export default async function EntryDetail({ params }) {
   const imgs = Array.isArray(e.images) ? e.images : [];
   return (
     <article className="mx-auto max-w-3xl">
-      <CategoryBadge name={e.category} color={colors[e.category]} />
+      <div className="flex flex-wrap items-center gap-2"><CategoryBadge name={e.category} color={colors[e.category]} /><StatusBadge status={e.data?.status} /></div>
       <h1 className="mt-2 text-3xl font-black">{e.title}</h1>
       {e.cover_url && <img src={e.cover_url} alt="" className="mt-4 w-full rounded-xl" />}
       {e.body && <div className="mt-6"><RichContent html={e.body} /></div>}

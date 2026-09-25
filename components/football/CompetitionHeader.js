@@ -19,9 +19,9 @@ export default function CompetitionHeader({ comp, seasonLabel, kicker }) {
           {kicker && <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-accent">{kicker}</div>}
           <h1 className="truncate text-3xl font-black leading-none text-white sm:text-5xl">{title}</h1>
           <div className="mt-2 h-[3px] w-24 overflow-hidden rounded-full"><div className="flex h-full opacity-80"><span className="flex-1 bg-black" /><span className="flex-1 bg-yellow-400" /><span className="flex-1 bg-red-600" /></div></div>
-          {subtitle && <div className="mt-2 flex items-center gap-2 text-sm text-white/75">
-            {flagUrl ? <img src={flagUrl} className="h-4 w-6 rounded-sm object-cover shadow" alt="" /> : flagEmoji ? <span className="text-base">{flagEmoji}</span> : null}
-            {subtitle}
+          {subtitle && <div className="mt-2 flex items-start gap-2 text-sm text-white/75">
+            {flagUrl ? <img src={flagUrl} className="mt-0.5 h-4 w-6 flex-shrink-0 rounded-sm object-cover shadow" alt="" /> : flagEmoji ? <span className="text-base">{flagEmoji}</span> : null}
+            <span className="line-clamp-2">{subtitle}</span>
           </div>}
         </div>
       </div>
