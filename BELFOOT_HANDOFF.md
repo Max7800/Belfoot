@@ -1559,6 +1559,33 @@ tant que la migration n'est pas enregistrée.
 - Aucun SQL et aucun appel API-Football : le tableau est construit depuis `matches.phase` et les clubs
   déjà enregistrés.
 
+### 2026-09-27 — ChatGPT — contrôle de préparation avant activation d’une saison
+
+- L’administration ne peut plus déclarer une saison « prête » sur la seule base d’un clic. La route
+  serveur `/api/admin/season-readiness` audite chaque saison et refuse la validation tant qu’un
+  contrôle obligatoire échoue. Elle exige une session administrateur et effectue la validation avec
+  le client serveur ; aucune écriture directe depuis le navigateur ne peut contourner l’audit.
+- Le contrôle vérifie la whitelist enregistrée pour le couple compétition/saison et son niveau
+  (`Calendrier`, `+ Effectifs` ou `Complet`), les migrations nécessaires, le volume de matchs et de
+  clubs par rapport aux estimations du plan, ainsi que les affectations joueur-équipe-saison lorsque
+  les effectifs sont demandés.
+- Pour un import complet, les marqueurs de `football/0034_match_sync_state` sont contrôlés sur tous les
+  matchs terminés possédant un identifiant provider. Les événements, compositions et performances ne
+  bloquent que si la couverture déclarée de la compétition prend réellement en charge l’endpoint.
+  Une réponse provider vide déjà marquée comme traitée est donc correctement considérée comme
+  complète.
+- Le panneau **Plan historique 2024 → 2027** affiche, pour chaque saison, le pourcentage des contrôles,
+  les volumes constatés/attendus et le détail des blocages. Les boutons « Marquer prête » et
+  « Utiliser par défaut » restent désactivés tant que le contrôle est incomplet. L’activation refait
+  toujours l’audit côté serveur juste avant la RPC de bascule afin d’éviter une décision fondée sur un
+  écran devenu obsolète.
+- Les saisons déjà publiques ne sont jamais désactivées automatiquement : leur état est seulement
+  diagnostiqué. Les nombres attendus de clubs et de matchs restent éditables dans le plan si le format
+  officiel 2026 change, mais il faut enregistrer le plan avant que le contrôle serveur les utilise.
+- Aucun SQL supplémentaire et aucun appel API-Football pour ce lot. Il s’appuie sur les migrations
+  existantes `core/0004` et `football/0023`, `0024`, `0032`, `0033`, `0034` selon le niveau choisi.
+- État Git à la fin du lot : commit local uniquement ; ne pas pousser sans autorisation explicite.
+
 ---
 
 ## SOCLE_CANDIDATES  (documenter seulement — NE PAS remonter au socle maintenant)

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, CheckCircle2, LockKeyhole, RefreshCw } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import {
@@ -17,6 +17,23 @@ import {
 const groupLabel = Object.fromEntries(IMPORT_GROUPS.map((group) => [group.key, group.label]));
 const scopeOptions = Object.entries(IMPORT_SCOPES);
 
+async function requestReadiness(payload) {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.access_token) throw new Error("Session administrateur expirée.");
+  const response = await fetch("/api/admin/season-readiness", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(result.error || "Le contrôle de préparation a échoué.");
+    error.report = result.report;
+    throw error;
+  }
+  return result;
+}
+
 function SeasonTarget({ value, onChange, disabled }) {
   return <div className={`rounded-lg border p-2 ${value?.enabled && !disabled ? "border-accent/25 bg-accent/5" : "border-line/10 bg-bg/30 opacity-60"}`}>
     <label className="flex items-center gap-2 text-[10px] font-bold uppercase text-muted"><input type="checkbox" checked={!!value?.enabled && !disabled} disabled={disabled} onChange={(event) => onChange({ enabled: event.target.checked })} />Importer</label>
@@ -28,11 +45,12 @@ export default function ImportPlanPanel() {
   const [competitions, setCompetitions] = useState([]);
   const [nationalTeams, setNationalTeams] = useState([]);
   const [seasons, setSeasons] = useState([]);
+  const [readiness, setReadiness] = useState({});
   const [plan, setPlan] = useState(DEFAULT_IMPORT_PLAN);
   const [status, setStatus] = useState("loading");
   const [message, setMessage] = useState("");
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setStatus("loading"); setMessage("");
     const [competitionResult, nationalResult, settingsResult, seasonResult] = await Promise.all([
       supabase.from("competitions").select("id,name,external_id,provider,public_visible").not("provider", "is", null).order("name"),
@@ -47,17 +65,26 @@ export default function ImportPlanPanel() {
     const stored = normalizeImportPlan(settingsResult.data?.data?.football_import_plan);
     setCompetitions(competitionRows);
     setNationalTeams(nationalRows);
-    setSeasons(seasonResult.data || []);
+    const seasonRows = seasonResult.data || [];
+    setSeasons(seasonRows);
     setPlan({
       ...stored,
       version: 2,
       competitions: Object.fromEntries(competitionRows.map((competition, index) => [competition.id, hydrateCompetitionConfig(competition, stored.competitions[competition.id], index)])),
       nationalTeams: Object.fromEntries(nationalRows.filter((team) => team.external_id).map((team, index) => [String(team.external_id), hydrateNationalConfig(stored.nationalTeams[String(team.external_id)], index)])),
     });
-    setStatus("idle");
-  };
+    try {
+      const result = seasonRows.length ? await requestReadiness({ seasonIds: seasonRows.map((season) => season.id) }) : { reports: [] };
+      setReadiness(Object.fromEntries((result.reports || []).map((report) => [report.season.id, report])));
+      setStatus("idle");
+    } catch (readinessError) {
+      setReadiness({});
+      setStatus("error");
+      setMessage(`Plan chargé, mais contrôle des saisons indisponible : ${readinessError.message}`);
+    }
+  }, []);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [load]);
 
   const updateCompetition = (id, patch) => setPlan((current) => ({ ...current, competitions: { ...current.competitions, [id]: { ...current.competitions[id], ...patch } } }));
   const updateCompetitionSeason = (id, season, patch) => setPlan((current) => ({ ...current, competitions: { ...current.competitions, [id]: { ...current.competitions[id], seasons: { ...current.competitions[id].seasons, [season]: { ...current.competitions[id].seasons[season], ...patch } } } } }));
@@ -76,13 +103,25 @@ export default function ImportPlanPanel() {
   };
   const markReady = async (season) => {
     setStatus("saving"); setMessage("");
-    const { error } = await supabase.from("seasons").update({ import_status: "ready" }).eq("id", season.id).eq("public_active", false);
-    if (error) { setStatus("error"); setMessage(error.message); return; }
+    try {
+      await requestReadiness({ action: "mark-ready", seasonId: season.id });
+    } catch (error) {
+      if (error.report) setReadiness((current) => ({ ...current, [season.id]: error.report }));
+      setStatus("error"); setMessage(error.message); return;
+    }
     await load(); setMessage(`${season.label} est prête, mais pas encore la saison par défaut.`);
   };
   const activate = async (season) => {
-    if (!window.confirm(`Activer ${season.label} sur le site public ?\n\nLes autres saisons resteront consultables.`)) return;
     setStatus("saving"); setMessage("");
+    try {
+      const result = await requestReadiness({ seasonId: season.id });
+      const report = result.reports?.[0];
+      if (report) setReadiness((current) => ({ ...current, [season.id]: report }));
+      if (!report?.ok) throw new Error("La saison ne satisfait plus tous les contrôles obligatoires.");
+    } catch (error) {
+      setStatus("error"); setMessage(error.message); return;
+    }
+    if (!window.confirm(`Activer ${season.label} sur le site public ?\n\nLes autres saisons resteront consultables.`)) { setStatus("idle"); return; }
     const { error } = await supabase.rpc("activate_competition_season", { target_season: season.id });
     if (error) { setStatus("error"); setMessage(error.message); return; }
     await load(); setMessage(`${season.label} est maintenant la saison proposée par défaut.`);
@@ -113,7 +152,7 @@ export default function ImportPlanPanel() {
 
     <section className="mb-6 rounded-2xl border border-accent/20 bg-accent/5 p-4"><h2 className="mb-3 flex items-center gap-2 text-sm font-black uppercase tracking-wider text-accent"><LockKeyhole className="h-4 w-4" />Ordre quotidien autorisé</h2>{schedule.days.length ? <div className="space-y-4">{schedule.days.map((day) => <div key={day.day}><h3 className="mb-2 text-xs font-black">Jour {day.day} · ≈ {day.cost} / {schedule.capacity} appels d’import</h3><ol className="space-y-1.5">{day.targets.map((target, index) => <li key={`${target.type}-${target.id}-${target.season}`} className="flex items-center gap-3 rounded-lg border border-line/10 bg-surface px-3 py-2 text-sm"><span className="flex h-6 w-6 items-center justify-center rounded-full bg-accent/15 text-xs font-black text-accent">{index + 1}</span><span className="flex-1 font-bold">{target.season} · {target.label}</span><span className="text-[10px] uppercase text-muted">≈ {target.cost} · {IMPORT_SCOPES[target.scope]?.label} · {groupLabel[target.group] || target.group}</span></li>)}</ol></div>)}</div> : <p className="text-sm text-muted">Aucune cible autorisée. Tous les imports seront bloqués après enregistrement.</p>}{schedule.capacity <= 0 && <div className="mt-3 rounded-lg border border-red-400/25 bg-red-500/10 p-3 text-xs text-red-200">Les réserves carrières et direct utilisent tout le quota quotidien. Réduis-les avant d’enregistrer.</div>}{schedule.oversized.length > 0 && <div className="mt-3 rounded-lg border border-red-400/25 bg-red-500/10 p-3 text-xs text-red-200">Une cible dépasse à elle seule la capacité quotidienne : {schedule.oversized.map((target) => `${target.season} · ${target.label} (≈ ${target.cost})`).join(", ")}. Réduis son périmètre ou augmente le quota avant d’enregistrer.</div>}</section>
 
-    <section><div className="mb-3"><h2 className="text-lg font-black">Activation publique des saisons</h2><p className="mt-1 text-xs text-muted">Une archive prête reste consultable. Une seule saison est proposée par défaut pour chaque compétition.</p></div><div className="divide-y divide-line/10 overflow-hidden rounded-2xl border border-line/10 bg-surface">{seasons.map((season) => <div key={season.id} className="flex flex-wrap items-center gap-3 p-3 text-sm"><div className="min-w-[190px] flex-1"><b>{competitionName[season.competition_id] || "Compétition"} · {season.label}</b><div className="mt-0.5 text-[10px] uppercase tracking-wider text-muted">{season.import_status || "inconnu"}</div></div>{season.public_active ? <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-bold text-emerald-300"><CheckCircle2 className="h-3.5 w-3.5" />Par défaut</span> : <>{["draft", "error", "importing"].includes(season.import_status) && <button type="button" onClick={() => markReady(season)} disabled={status === "saving"} className="rounded-lg border border-amber-400/25 bg-amber-400/10 px-3 py-1.5 text-xs font-bold text-amber-200 disabled:opacity-50">Marquer prête</button>}{season.import_status === "ready" && <button type="button" onClick={() => activate(season)} disabled={status === "saving"} className="rounded-lg border border-emerald-400/25 bg-emerald-400/10 px-3 py-1.5 text-xs font-bold text-emerald-200 disabled:opacity-50">Utiliser par défaut</button>}</>}</div>)}</div></section>
+    <section><div className="mb-3"><h2 className="text-lg font-black">Activation publique des saisons</h2><p className="mt-1 text-xs text-muted">Chaque saison est contrôlée côté serveur. Une archive prête reste consultable et une seule saison est proposée par défaut pour chaque compétition.</p></div><div className="divide-y divide-line/10 overflow-hidden rounded-2xl border border-line/10 bg-surface">{seasons.map((season) => { const report = readiness[season.id]; const failedChecks = report?.checks?.filter((item) => item.blocking && !item.ok) || []; return <div key={season.id} className="p-3 text-sm"><div className="flex flex-wrap items-center gap-3"><div className="min-w-[190px] flex-1"><b>{competitionName[season.competition_id] || "Compétition"} · {season.label}</b><div className="mt-0.5 text-[10px] uppercase tracking-wider text-muted">{season.import_status || "inconnu"}{report?.scopeLabel ? ` · ${report.scopeLabel}` : ""}</div></div><div className="min-w-[150px] sm:w-52"><div className="mb-1 flex justify-between text-[10px] font-bold uppercase tracking-wider text-muted"><span>Contrôles</span><span>{report ? `${report.progress}%` : "…"}</span></div><div className="h-1.5 overflow-hidden rounded-full bg-bg"><div className={`h-full rounded-full ${report?.ok ? "bg-emerald-400" : "bg-amber-400"}`} style={{ width: `${report?.progress || 0}%` }} /></div></div>{season.public_active ? <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-bold text-emerald-300"><CheckCircle2 className="h-3.5 w-3.5" />Par défaut</span> : <>{["draft", "error", "importing"].includes(season.import_status) && <button type="button" onClick={() => markReady(season)} disabled={status === "saving" || !report?.ok} className="rounded-lg border border-amber-400/25 bg-amber-400/10 px-3 py-1.5 text-xs font-bold text-amber-200 disabled:cursor-not-allowed disabled:opacity-40">{report?.ok ? "Marquer prête" : "Contrôles incomplets"}</button>}{season.import_status === "ready" && <button type="button" onClick={() => activate(season)} disabled={status === "saving" || !report?.ok} className="rounded-lg border border-emerald-400/25 bg-emerald-400/10 px-3 py-1.5 text-xs font-bold text-emerald-200 disabled:cursor-not-allowed disabled:opacity-40">{report?.ok ? "Utiliser par défaut" : "Revalidation requise"}</button>}</>}</div>{report && <div className="mt-3 grid gap-2 lg:grid-cols-[minmax(0,1fr)_auto]"><div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted"><span>{report.counts.matches}{report.counts.expectedMatches ? ` / ${report.counts.expectedMatches}` : ""} matchs</span><span>{report.counts.clubs}{report.counts.expectedClubs ? ` / ${report.counts.expectedClubs}` : ""} clubs</span>{report.scope !== "base" && <span>{report.counts.memberships} affectations d’effectif</span>}{report.scope === "complete" && <span>{report.counts.pendingEvents + report.counts.pendingLineups + report.counts.pendingPlayerStats} traitements de match restants</span>}</div>{failedChecks.length > 0 && <div className="text-[11px] text-amber-200">{failedChecks.map((item) => `${item.label} : ${item.detail}`).join(" · ")}</div>}</div>}</div>; })}</div></section>
     <div className="mt-5 flex items-start gap-2 rounded-xl border border-amber-400/20 bg-amber-400/5 p-3 text-xs text-amber-100"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /><p>Les projections sont volontairement hautes et réparties sur plusieurs journées si nécessaire. Le préflight basé sur les données déjà importées donnera le coût précis avant chaque pipeline.</p></div>
   </div>;
 }
