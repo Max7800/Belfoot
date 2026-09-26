@@ -4,6 +4,7 @@ import Link from "next/link";
 import {
   ArrowRight,
   CalendarDays,
+  ChevronLeft,
   ChevronRight,
   Crown,
   Flame,
@@ -26,6 +27,7 @@ const normal = (value) => String(value || "").trim().toLocaleLowerCase("fr");
 const year = (value) => Number((String(value || "").match(/\d{4}/) || [0])[0]);
 const isBelgian = (value) => normal(value).startsWith("belg");
 const isEurope = (competition) => /(champions|europa|conference)/i.test(competition?.name || "");
+const FOLLOWED_BELGIANS_SLIDE_ID = "followed-belgians";
 
 function latestPlayerTotals(rows = []) {
   const latest = Math.max(0, ...rows.map((row) => year(row.season)));
@@ -73,6 +75,7 @@ function HeroTitle({ value }) {
 export default function Home() {
   const config = useHomeConfig();
   const [data, setData] = useState({ loading: true, matches: [], clubs: {}, competitions: [], seasons: [], players: [], stats: [], news: [], votwSessions: [], topics: [] });
+  const [activeCompetitionId, setActiveCompetitionId] = useState("");
 
   useEffect(() => { (async () => {
     const [matchResult, clubResult, competitionResult, seasonResult, playerResult, statsResult, newsResult, votwResult, topicsResult] = await Promise.all([
@@ -90,7 +93,7 @@ export default function Home() {
       loading: false,
       matches: matchResult.data || [],
       clubs: Object.fromEntries((clubResult.data || []).map((club) => [club.id, club])),
-      competitions: (competitionResult.data || []).filter((competition) => competition.public_visible !== false),
+      competitions: competitionResult.data || [],
       seasons: seasonResult.data || [],
       players: playerResult.data || [],
       stats: statsResult.data || [],
@@ -147,29 +150,84 @@ export default function Home() {
   const heroPlayers = view.players.slice(0, 3);
   const featured = view.players[0];
   const followedClubIds = useMemo(() => [...new Set(data.players.map((player) => player.club_id).filter(Boolean))], [data.players]);
+  const publicCompetitions = useMemo(() => data.competitions.filter((competition) => competition.public_visible !== false), [data.competitions]);
+  const competitionSlides = useMemo(() => {
+    const configuredIds = config.competition_carousel?.competition_ids || [];
+    const featuredId = config.competition_carousel?.featured_competition_id || "";
+    const allowedIds = new Set(configuredIds.length ? configuredIds : publicCompetitions.map((competition) => competition.id));
+    if (featuredId) allowedIds.add(featuredId);
+    const now = new Date();
+    const slides = data.competitions.filter((competition) => allowedIds.has(competition.id)).map((competition) => {
+      const activeSeason = sortPublicSeasons(data.seasons.filter((season) => season.competition_id === competition.id))[0];
+      const matches = data.matches.filter((match) => match.competition_id === competition.id && (!activeSeason || !match.season_id || match.season_id === activeSeason.id));
+      const phaseCounts = new Map();
+      matches.forEach((match) => phaseCounts.set(match.phase || "—", (phaseCounts.get(match.phase || "—") || 0) + 1));
+      const primaryPhase = [...phaseCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+      const primaryMatches = primaryPhase ? matches.filter((match) => (match.phase || "—") === primaryPhase) : matches;
+      const finished = primaryMatches.filter((match) => match.status === "finished" && match.home_score != null && match.away_score != null);
+      return {
+        competition,
+        href: competitionPath(competition),
+        activeSeason,
+        standings: computeStandings(finished),
+        recent: finished.sort((a, b) => new Date(b.kickoff || 0) - new Date(a.kickoff || 0)).slice(0, 5),
+        upcoming: primaryMatches.filter((match) => match.status !== "finished" && new Date(match.kickoff || 0) >= now).sort((a, b) => new Date(a.kickoff || 0) - new Date(b.kickoff || 0)).slice(0, 5),
+      };
+    });
+    if (allowedIds.has(FOLLOWED_BELGIANS_SLIDE_ID)) slides.push({
+      competition: { id: FOLLOWED_BELGIANS_SLIDE_ID, name: "Matchs des Belges suivis", position: 998 },
+      href: "/matchs",
+      kind: "belgians",
+      activeSeason: null,
+      standings: [],
+      recent: [],
+      upcoming: view.watched.map(({ match }) => match).slice(0, 5),
+      players: view.watched.map(({ item }) => item).filter((item, index, rows) => rows.findIndex((candidate) => candidate.player.id === item.player.id) === index).slice(0, 5),
+    });
+    return slides.sort((a, b) => {
+      if (a.competition.id === featuredId) return -1;
+      if (b.competition.id === featuredId) return 1;
+      return (a.competition.position ?? 999) - (b.competition.position ?? 999) || a.competition.name.localeCompare(b.competition.name, "fr");
+    });
+  }, [config.competition_carousel, data.competitions, data.matches, data.seasons, publicCompetitions, view.watched]);
+  useEffect(() => {
+    const preferred = config.competition_carousel?.featured_competition_id;
+    setActiveCompetitionId((current) => competitionSlides.some((slide) => slide.competition.id === current) ? current : (competitionSlides.find((slide) => slide.competition.id === preferred)?.competition.id || competitionSlides[0]?.competition.id || ""));
+  }, [competitionSlides, config.competition_carousel?.featured_competition_id]);
+  const activeCompetitionIndex = Math.max(0, competitionSlides.findIndex((slide) => slide.competition.id === activeCompetitionId));
+  const activeCompetitionSlide = competitionSlides[activeCompetitionIndex];
+  const moveCompetition = (direction) => {
+    if (competitionSlides.length < 2) return;
+    const nextIndex = (activeCompetitionIndex + direction + competitionSlides.length) % competitionSlides.length;
+    setActiveCompetitionId(competitionSlides[nextIndex].competition.id);
+  };
 
   const content = {
-    live: <LiveScoreRibbon config={sectionMap.live} competitions={data.competitions} clubs={data.clubs} followedClubIds={followedClubIds} />,
-    jpl: view.league ? (
+    live: <LiveScoreRibbon config={sectionMap.live} competitions={publicCompetitions} clubs={data.clubs} followedClubIds={followedClubIds} />,
+    jpl: activeCompetitionSlide ? (
       <div className="overflow-hidden rounded-2xl border border-sky-400/20 bg-[linear-gradient(145deg,rgba(12,31,52,.96),rgba(5,18,34,.96))] shadow-[0_22px_60px_-45px_rgba(56,189,248,.65)]">
-        <div className="flex flex-col gap-3 border-b border-line/10 px-4 py-4 sm:flex-row sm:items-center sm:px-5">
+        <div className="border-b border-line/10 px-4 py-4 sm:px-5">
+          {competitionSlides.length > 1 && <div className="mb-4 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none]">{competitionSlides.map((slide) => <button key={slide.competition.id} onClick={() => setActiveCompetitionId(slide.competition.id)} className={`flex shrink-0 items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-bold transition ${slide.competition.id === activeCompetitionSlide.competition.id ? "border-sky-300/60 bg-sky-400/15 text-sky-100" : "border-line/15 bg-white/[0.025] text-muted hover:text-content"}`}>{slide.competition.logo_url && <img src={slide.competition.logo_url} className="h-4 w-4 object-contain" alt="" />}{slide.competition.name}</button>)}</div>}
+          <div className="flex items-center gap-3">
           <div className="flex min-w-0 flex-1 items-center gap-3">
-            {view.league.logo_url && <img src={view.league.logo_url} className="h-11 w-11 flex-shrink-0 object-contain" alt="" />}
-            <div className="min-w-0"><div className="truncate text-xl font-black sm:text-2xl">{sectionMap.jpl?.label}</div><div className="truncate text-xs text-muted">{sectionMap.jpl?.subtitle}</div></div>
+            {activeCompetitionSlide.competition.logo_url && <img src={activeCompetitionSlide.competition.logo_url} className="h-10 w-10 flex-shrink-0 object-contain sm:h-11 sm:w-11" alt="" />}
+            <div className="min-w-0"><div className="truncate text-lg font-black sm:text-2xl">{activeCompetitionSlide.competition.name}</div><div className="truncate text-xs text-muted">{activeCompetitionSlide.kind === "belgians" ? "Les prochains rendez-vous de nos joueurs à l'étranger" : (activeCompetitionSlide.activeSeason?.label || sectionMap.jpl?.subtitle)}</div></div>
           </div>
-          <Link href={competitionPath(view.league)} className="inline-flex flex-shrink-0 items-center justify-center gap-1 rounded-lg border border-line/20 px-3 py-2 text-xs font-bold hover:border-accent/50">{sectionMap.jpl?.action}<ArrowRight className="h-3.5 w-3.5" /></Link>
+          {competitionSlides.length > 1 && <div className="flex shrink-0 gap-1"><button onClick={() => moveCompetition(-1)} aria-label="Compétition précédente" className="rounded-lg border border-line/15 p-2 text-muted hover:text-content"><ChevronLeft className="h-4 w-4" /></button><button onClick={() => moveCompetition(1)} aria-label="Compétition suivante" className="rounded-lg border border-line/15 p-2 text-muted hover:text-content"><ChevronRight className="h-4 w-4" /></button></div>}
+          <Link href={activeCompetitionSlide.href} className="hidden flex-shrink-0 items-center justify-center gap-1 rounded-lg border border-line/20 px-3 py-2 text-xs font-bold hover:border-accent/50 sm:inline-flex">{activeCompetitionSlide.kind === "belgians" ? "Voir les matchs" : sectionMap.jpl?.action}<ArrowRight className="h-3.5 w-3.5" /></Link>
+          </div>
         </div>
         <div className="grid lg:grid-cols-3">
-          <Link href={`${competitionPath(view.league)}?tab=classement`} className="p-4 transition hover:bg-white/[0.025]"><div className="mb-3 text-sm font-black">Classement <span className="text-muted">(Top 5)</span></div><div className="divide-y divide-line/10">{view.standings.slice(0, 5).map((row, index) => <div key={row.club} className="flex items-center gap-2 py-2"><span className="w-5 text-center text-xs text-muted">{index + 1}</span>{data.clubs[row.club]?.logo_url && <img src={data.clubs[row.club].logo_url} className="h-5 w-5 object-contain" alt="" />}<span className="min-w-0 flex-1 truncate text-xs font-semibold">{data.clubs[row.club]?.name || "—"}</span><b className="text-xs">{row.pts}</b></div>)}</div></Link>
-          <div className="border-t border-line/10 p-4 lg:border-l lg:border-t-0"><div className="mb-3 text-sm font-black">Derniers résultats</div><div className="space-y-1.5">{view.leagueRecent.map((match) => <MatchRow key={match.id} m={match} clubs={data.clubs} href={`/matchs/${match.id}`} compact />)}{!view.leagueRecent.length && <p className="text-xs text-muted">Aucun résultat disponible.</p>}</div></div>
-          <div className="border-t border-line/10 p-4 lg:border-l lg:border-t-0"><div className="mb-3 text-sm font-black">Prochains matchs</div><div className="space-y-1.5">{view.leagueUpcoming.map((match) => <MatchRow key={match.id} m={match} clubs={data.clubs} href={`/matchs/${match.id}`} compact />)}{!view.leagueUpcoming.length && <p className="text-xs text-muted">Aucun match programmé.</p>}</div></div>
+          {activeCompetitionSlide.kind === "belgians" ? <div className="p-4"><div className="mb-3 text-sm font-black">À suivre cette semaine</div><p className="text-xs leading-5 text-muted">Une vue rapide des rencontres des clubs où évoluent les Belges suivis par Belfoot.</p><Link href="/belges-a-l-etranger" className="mt-3 inline-flex items-center gap-1 text-xs font-bold text-amber-300">Voir les joueurs<ArrowRight className="h-3.5 w-3.5" /></Link></div> : <Link href={`${activeCompetitionSlide.href}?tab=classement`} className="p-4 transition hover:bg-white/[0.025]"><div className="mb-3 text-sm font-black">Classement <span className="text-muted">(Top 5)</span></div><div className="divide-y divide-line/10">{activeCompetitionSlide.standings.slice(0, 5).map((row, index) => <div key={row.club} className="flex items-center gap-2 py-2"><span className="w-5 text-center text-xs text-muted">{index + 1}</span>{data.clubs[row.club]?.logo_url && <img src={data.clubs[row.club].logo_url} className="h-5 w-5 object-contain" alt="" />}<span className="min-w-0 flex-1 truncate text-xs font-semibold">{data.clubs[row.club]?.name || "—"}</span><b className="text-xs">{row.pts}</b></div>)}{!activeCompetitionSlide.standings.length && <p className="py-2 text-xs text-muted">Classement non disponible pour ce format.</p>}</div></Link>}
+          <div className="border-t border-line/10 p-4 lg:border-l lg:border-t-0">{activeCompetitionSlide.kind === "belgians" ? <><div className="mb-3 text-sm font-black">Belges concernés</div><div className="space-y-2">{activeCompetitionSlide.players.map((item) => <Link key={item.player.id} href={`/players/${item.player.id}`} className="flex items-center gap-2 rounded-lg p-1 transition hover:bg-white/[0.03]"><PlayerPhoto player={item.player} className="h-8 w-8 rounded-lg" /><span className="min-w-0"><span className="block truncate text-xs font-bold">{item.player.name}</span><span className="block truncate text-[10px] text-muted">{item.club?.name}</span></span></Link>)}{!activeCompetitionSlide.players.length && <p className="text-xs text-muted">Aucun joueur concerné pour le moment.</p>}</div></> : <><div className="mb-3 text-sm font-black">Derniers résultats</div><div className="space-y-1.5">{activeCompetitionSlide.recent.map((match) => <MatchRow key={match.id} m={match} clubs={data.clubs} href={`/matchs/${match.id}`} compact />)}{!activeCompetitionSlide.recent.length && <p className="text-xs text-muted">Aucun résultat disponible.</p>}</div></>}</div>
+          <div className="border-t border-line/10 p-4 lg:border-l lg:border-t-0"><div className="mb-3 text-sm font-black">Prochains matchs</div><div className="space-y-1.5">{activeCompetitionSlide.upcoming.map((match) => <MatchRow key={match.id} m={match} clubs={data.clubs} href={`/matchs/${match.id}`} compact />)}{!activeCompetitionSlide.upcoming.length && <p className="text-xs text-muted">Aucun match programmé.</p>}</div><Link href={activeCompetitionSlide.href} className="mt-3 inline-flex items-center gap-1 text-xs font-bold text-sky-300 sm:hidden">{activeCompetitionSlide.kind === "belgians" ? "Voir les matchs" : sectionMap.jpl?.action}<ArrowRight className="h-3.5 w-3.5" /></Link></div>
         </div>
       </div>
-    ) : <EmptyBlock>La compétition principale apparaîtra ici dès qu'elle sera disponible.</EmptyBlock>,
+    ) : <EmptyBlock>Les compétitions choisies dans l'administration apparaîtront ici.</EmptyBlock>,
 
     watch: view.watched.length ? <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">{view.watched.map(({ match, item }) => { const home = data.clubs[match.home_club_id]; const away = data.clubs[match.away_club_id]; return <Link key={match.id} href={`/matchs/${match.id}`} className="group overflow-hidden rounded-2xl border border-line/10 bg-gradient-to-b from-surface to-bg/60 p-3 transition hover:-translate-y-0.5 hover:border-amber-400/40"><div className="flex items-center justify-between text-[10px] text-muted"><b className="text-content">{new Date(match.kickoff).toLocaleTimeString("fr-BE", { hour: "2-digit", minute: "2-digit" })}</b><span className="truncate pl-2">{item.competition}</span></div><div className="my-4 flex items-center justify-center gap-3">{home?.logo_url && <img src={home.logo_url} className="h-8 w-8 object-contain" alt="" />}<span className="text-xs text-muted">—</span>{away?.logo_url && <img src={away.logo_url} className="h-8 w-8 object-contain" alt="" />}</div><div className="flex items-center gap-2 border-t border-line/10 pt-3"><PlayerPhoto player={item.player} className="h-10 w-10" /><div className="min-w-0"><div className="truncate text-xs font-black group-hover:text-amber-300">{item.player.name}</div><div className="truncate text-[10px] text-muted">{item.club?.name}</div></div></div></Link>; })}</div> : view.players.length ? <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">{view.players.slice(0, 5).map((item) => <Link key={item.player.id} href={`/players/${item.player.id}`} className="flex items-center gap-3 rounded-2xl border border-line/10 bg-surface p-3 transition hover:border-amber-400/40"><PlayerPhoto player={item.player} className="h-12 w-12" /><div className="min-w-0"><div className="truncate text-sm font-black">{item.player.name}</div><div className="truncate text-xs text-muted">{item.club?.name}</div><div className="mt-1 text-[10px] text-amber-300">Prochain match à alimenter</div></div></Link>)}</div> : <EmptyBlock>Les joueurs suivis et leurs prochains matchs apparaîtront ici.</EmptyBlock>,
 
-    form: view.players.length ? <div className="grid gap-4 lg:grid-cols-[2.2fr_1fr]"><div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">{view.players.slice(0, 5).map((item) => <Link key={item.player.id} href={`/players/${item.player.id}`} className="overflow-hidden rounded-2xl border border-line/10 bg-gradient-to-b from-surface to-bg/50 p-3 text-center transition hover:border-orange-400/40"><PlayerPhoto player={item.player} className="mx-auto h-16 w-16" /><div className="mt-2 truncate text-sm font-black">{item.player.name}</div><div className="truncate text-[10px] text-muted">{item.club?.name}</div><div className="mt-2 text-lg font-black">{item.totals.goals}<span className="ml-1 text-[10px] font-normal uppercase text-muted">buts</span></div>{item.totals.assists > 0 && <div className="text-[10px] text-muted">{item.totals.assists} passe{item.totals.assists > 1 ? "s" : ""} décisive{item.totals.assists > 1 ? "s" : ""}</div>}</Link>)}</div>{featured && <Link href={`/players/${featured.player.id}`} className="relative overflow-hidden rounded-2xl border border-violet-400/30 bg-gradient-to-br from-violet-950/80 via-surface to-bg p-4"><Crown className="h-5 w-5 text-amber-300" /><div className="mt-1 text-lg font-black">Le Belge du moment</div><div className="mt-4 flex items-end gap-3"><PlayerPhoto player={featured.player} className="h-24 w-24" /><div className="min-w-0 pb-1"><div className="truncate font-black">{featured.player.name}</div><div className="truncate text-xs text-muted">{featured.club?.name}</div><div className="mt-2 text-xs"><b>{featured.totals.goals}</b> buts · <b>{featured.totals.assists}</b> passes</div></div></div></Link>}</div> : <EmptyBlock>Les statistiques des joueurs suivis alimenteront ce bloc.</EmptyBlock>,
+    form: view.players.length ? <div className="space-y-3">{featured && <Link href={`/players/${featured.player.id}`} className="flex items-center gap-3 overflow-hidden rounded-2xl border border-violet-400/30 bg-gradient-to-r from-violet-950/80 via-surface to-bg p-3 transition hover:border-violet-300/50 sm:p-4"><PlayerPhoto player={featured.player} className="h-16 w-16 sm:h-20 sm:w-20" /><div className="min-w-0 flex-1"><div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[.14em] text-amber-300"><Crown className="h-4 w-4" />Le Belge du moment</div><div className="mt-1 truncate text-base font-black sm:text-lg">{featured.player.name}</div><div className="truncate text-xs text-muted">{featured.club?.name}</div></div><div className="shrink-0 text-right text-xs text-muted"><div><b className="text-lg text-content">{featured.totals.goals}</b> buts</div><div><b className="text-content">{featured.totals.assists}</b> passes</div></div></Link>}<div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{view.players.slice(1, 5).map((item) => <Link key={item.player.id} href={`/players/${item.player.id}`} className="flex min-w-0 items-center gap-2 rounded-xl border border-line/10 bg-gradient-to-b from-surface to-bg/50 p-2.5 transition hover:border-orange-400/40 sm:p-3"><PlayerPhoto player={item.player} className="h-11 w-11 rounded-xl sm:h-14 sm:w-14" /><div className="min-w-0 flex-1"><div className="truncate text-xs font-black sm:text-sm">{item.player.name}</div><div className="truncate text-[10px] text-muted">{item.club?.name}</div><div className="mt-1 text-[10px] text-muted"><b className="text-sm text-content">{item.totals.goals}</b> buts{item.totals.assists > 0 ? ` · ${item.totals.assists} pd` : ""}</div></div></Link>)}</div></div> : <EmptyBlock>Les statistiques des joueurs suivis alimenteront ce bloc.</EmptyBlock>,
 
     leagues: view.leagues.length ? <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">{view.leagues.map((league, index) => <Link key={league.name} href="/belges-a-l-etranger" className="rounded-2xl border border-line/10 bg-gradient-to-br from-surface to-bg/50 p-3 transition hover:-translate-y-0.5 hover:border-sky-400/40">{league.logo ? <img src={league.logo} className="h-8 w-8 object-contain" alt="" /> : <Globe2 className={`h-7 w-7 ${index % 2 ? "text-violet-400" : "text-sky-400"}`} />}<div className="mt-3 truncate text-xs font-black">{league.name}</div><div className="mt-1 text-xl font-black">{league.count}</div><div className="text-[10px] text-muted">Belge{league.count > 1 ? "s" : ""} suivi{league.count > 1 ? "s" : ""}</div></Link>)}</div> : <EmptyBlock>Les championnats étrangers suivis apparaîtront automatiquement ici.</EmptyBlock>,
 

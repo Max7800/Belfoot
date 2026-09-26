@@ -1507,6 +1507,26 @@ tant que la migration n'est pas enregistrée.
   compacts. Les hauteurs et tailles desktop restent inchangées.
 - Aucun SQL et aucun appel API-Football pour ce lot.
 
+### 2026-09-26 — ChatGPT — accueil compact et carrousel éditorial
+
+- Le bloc `En forme` affiche désormais le `Belge du moment` en premier dans une ligne compacte,
+  puis exactement quatre autres joueurs dans une grille compacte. Le joueur mis en avant n'est plus
+  répété dans la liste et les portraits sont nettement plus petits sur mobile.
+- L'ancien encart fixe Pro League devient un carrousel de compétitions. Chaque vue conserve le top 5
+  lorsqu'un classement est disponible, les derniers résultats et les prochains matchs. Les boutons
+  horizontaux et les flèches permettent de changer de compétition sans quitter l'accueil.
+- Dans `Administration → Page d'accueil`, l'admin choisit les compétitions proposées et celle ouverte
+  en premier pour la semaine. Une compétition internationale masquée du portail général peut être
+  mise en avant ici sans modifier sa visibilité globale.
+- Une vue spéciale `Matchs des Belges suivis` peut également être ajoutée ou mise en avant. Elle
+  réutilise les joueurs et matchs déjà présents dans Belfoot et ne déclenche aucun appel provider.
+- La configuration est enregistrée dans `site_settings.data.home.competition_carousel`. Aucune
+  migration SQL n'est nécessaire. Sans sélection explicite, le carrousel reprend les compétitions
+  publiques existantes afin de préserver le comportement actuel.
+- Lint validé sans erreur (92 avertissements historiques) et build de production validé avec des
+  variables Supabase factices, l'environnement local ne contenant pas les variables publiques.
+- Aucun appel API-Football n'a été effectué.
+
 ---
 
 ## SOCLE_CANDIDATES  (documenter seulement — NE PAS remonter au socle maintenant)
