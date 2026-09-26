@@ -6,13 +6,14 @@ import { useAuth } from "@/lib/auth";
 
 // Notes des Diables + Diable du match, pour un match Belgique A terminé.
 // Fenêtre : ouverte à la fin du match, ~4 jours (imposée aussi côté base).
-export default function DiableRatings({ match, squad }) {
+export default function DiableRatings({ match, squad, title = "Notez les Diables", compact = false, showAllLabel = "Voir tous les joueurs", showLessLabel = "Réduire" }) {
   const { session } = useAuth();
   const userId = session?.user?.id || null;
   const [myRatings, setMyRatings] = useState({});
   const [myMotm, setMyMotm] = useState(null);
   const [avgs, setAvgs] = useState({});
   const [motmAgg, setMotmAgg] = useState({});
+  const [expanded, setExpanded] = useState(false);
 
   const open = match.status === "finished" && match.kickoff && new Date(match.kickoff).getTime() + 4 * 86400000 > Date.now();
 
@@ -54,11 +55,12 @@ export default function DiableRatings({ match, squad }) {
     return best;
   }, [motmAgg]);
   const leaderPlayer = motmLeader && squad.find((s) => s.player.id === motmLeader.pid)?.player;
+  const shownSquad = compact && !expanded ? squad.slice(0, 10) : squad;
 
   return (
     <div className="rounded-2xl border border-line/10 bg-surface/60 p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <div className="text-xs font-black uppercase tracking-wider text-red-300">Notez les Diables</div>
+        <div className="text-xs font-black uppercase tracking-wider text-red-300">{title}</div>
         {open ? <span className="rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-[11px] font-bold text-emerald-300">Ouvert</span> : <span className="rounded-full bg-surface2 px-2.5 py-0.5 text-[11px] text-muted">Notation fermée</span>}
       </div>
 
@@ -72,7 +74,7 @@ export default function DiableRatings({ match, squad }) {
       {!userId && open && <p className="mb-3 rounded-lg border border-amber-400/25 bg-amber-400/5 p-2 text-sm text-amber-200">Connecte-toi pour noter les Diables et élire ton Diable du match.</p>}
 
       <div className="divide-y divide-line/10">
-        {squad.map((row) => {
+        {shownSquad.map((row) => {
           const p = row.player;
           const agg = avgs[p.id];
           return (
@@ -89,6 +91,7 @@ export default function DiableRatings({ match, squad }) {
         })}
         {squad.length === 0 && <p className="py-3 text-sm text-muted">L'effectif de cette sélection apparaîtra ici après synchronisation.</p>}
       </div>
+      {compact && squad.length > 10 && <button type="button" onClick={() => setExpanded((value) => !value)} className="mt-3 w-full rounded-xl border border-line/10 px-3 py-2 text-xs font-bold text-muted transition hover:border-red-400/30 hover:text-white">{expanded ? showLessLabel : `${showAllLabel} (${squad.length})`}</button>}
     </div>
   );
 }

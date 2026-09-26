@@ -1264,14 +1264,15 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
 ## CURRENT_GIT_STATE
 
 - **Branche** : `main`
-- **Dernier commit distant** : `dce3dcc` — « Notes & Diable du match - sous-lot 1 » (migration
-  `football/0031` À APPLIQUER). Avant : lot communautaire `ae74bf6` + sécurité `ec0e1eb` (0003 appliquées).
-- **Lot courant (non poussé)** : **préparation mois Pro — sous-lot A (runner)**. Pipelines : **budget
-  GLOBAL** partagé sur toute la séquence (décompté à chaque étape via `requests` renvoyé par le job) ;
-  **reprise** après erreur (bouton « Reprendre » depuis l'étape échouée) ; **simulation** (🔎 Simuler
-  affiche le coût estimé de chaque étape sans lancer). Garde-fou migrations **étendu** au-delà des
-  sélections (squads→`0024`, live-sync→`0026`, + national→`0028`). `lib/jobCatalog.js` +
-  `components/admin/panels.js` (JobsPanel). Aucun appel API, aucune migration.
+- **Dernier commit distant avant le lot courant** : `632766e` — « Preparation mois Pro - sous-lot A
+  (runner) ». Pipelines : budget global, reprise après erreur, simulation et garde-fous migrations.
+- **Lot courant (non poussé au moment de cette note)** : réorganisation responsive de
+  `/diables-rouges` d'après la maquette validée : grille éditoriale 8/4 sur desktop, ordre linéaire
+  mobile, match principal, FIFA, quatre KPI, résultats, notation compacte, sélection limitée à dix
+  joueurs et prochains rendez-vous. Résultats/sélection/notation sont dépliables. Les nouveaux
+  intitulés sont administrables dans le panneau Sélections via `site_settings.data.national_teams.labels`.
+  Aucun SQL ni appel API requis. Fichiers : `app/diables-rouges/page.js`,
+  `components/football/DiableRatings.js`, `lib/nationalTeams.js`, `components/admin/panels.js`.
   **Reste sous-lot B** : (5) bascule 2026 par compétition — **déjà possible** via le sélecteur de saison +
   sync par compétition (à formaliser/sécuriser) ; (6) **plan d'import** (whitelist + ordre Pro League →
   Challenger → Croky → sélections → compétitions étrangères avec Belges) pour ne pas aspirer tous les
