@@ -225,6 +225,21 @@ const provider = {
       position: stat.games?.position || null,
     };
   },
+  // Historique d'appartenance : une requête par joueur, exécutée uniquement
+  // par lots explicitement plafonnés depuis l'administration.
+  async fetchPlayerCareer(player, ctx = {}) {
+    if (!player?.external_id) return [];
+    const rows = await api(`/players/teams?player=${player.external_id}`, ctx);
+    return rows.flatMap((row) => (row.seasons || []).map((year) => ({
+      team: {
+        external_id: row.team?.id ? String(row.team.id) : null,
+        name: row.team?.name || null,
+        logo_url: row.team?.logo || null,
+      },
+      season: `${year}-${Number(year) + 1}`,
+      ext: row,
+    }))).filter((row) => row.team.external_id && row.team.name);
+  },
   // TRACKING : stats agrégées de saison d'un joueur (1 requête).
   async fetchPlayerSeason(player, ctx = {}) {
     const y = seasonYear(ctx.season);

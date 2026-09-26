@@ -1410,6 +1410,19 @@ avant lancement : SEO minimal (sitemap/robots/metadata), CGU/vie privée, sécur
   suivante, budget, consommation, quota et heartbeat sont persistés. Une erreur reprend exactement à
   l'étape enregistrée ; après une coupure franche, la reprise est déverrouillée après 20 minutes sans
   battement afin d'éviter deux exécutions concurrentes.
+- Sous-lot E/F/G préparé localement : migration `football/0033_history_foundations`, file d'état des
+  carrières sur les joueurs et job `football.player-careers` par lots de 1 à 25 joueurs. Le provider
+  prépare `/players/teams` (un appel par joueur) et remplit `player_team_seasons` sans toucher aux
+  affectations verrouillées. Les noms U23/réserve/jeunes sont classés séparément dès l'import ; les
+  relations `parent_club_id` restent éditoriales et ne sont jamais inventées.
+- Le direct dispose d'un panneau **Stratégie du direct** (fréquence repos/jour de match/live/après-match,
+  plafond global de matchs simultanés et budget réservé). Le job live applique maintenant le plafond
+  de matchs globalement sur toutes les compétitions activées, et le préflight affiche le coût réel
+  `compétitions + matchs live`. Enregistrer la stratégie ne programme pas le cron Vercel.
+- `national_match_callups` historise la sélection propre à chaque match. Le job compositions alimente
+  cette table depuis les titulaires/remplaçants réels et respecte `locked`. Le bloc de notes Diables
+  n'utilise plus l'effectif courant pour un ancien match : il ne s'affiche que si l'effectif de ce match
+  est historisé. L'admin peut contrôler/corriger ces lignes via **Convocations par match**.
 - Les pages Accueil, Compétition, Matchs et Classement donnent priorité à `public_active` et masquent
   les saisons encore `draft/importing/error`, tout en conservant les saisons historiques prêtes dans
   les sélecteurs.
@@ -1418,12 +1431,14 @@ avant lancement : SEO minimal (sitemap/robots/metadata), CGU/vie privée, sécur
 
 **Avant déploiement de ce sous-lot :** appliquer, dans cet ordre,
 `modules/football/migrations/0032_season_rollout.sql` puis
-`supabase/migrations/0005_persistent_pipeline_runs.sql` dans Supabase avant de recharger l'admin. La
-whitelist doit ensuite être enregistrée explicitement ; sans elle, les imports 2026 restent bloqués
-par conception.
+`supabase/migrations/0005_persistent_pipeline_runs.sql`, puis
+`modules/football/migrations/0033_history_foundations.sql` dans Supabase avant de recharger l'admin.
+La whitelist doit ensuite être enregistrée explicitement ; sans elle, les imports 2026 restent bloqués
+par conception. Le job carrière et le job compositions sont volontairement bloqués tant que `0033`
+n'est pas enregistrée.
 
-**Suite prévue :** séparation U23/jeunes et carrières par lots, stratégie direct et convocations
-historisées par match.
+**Suite prévue :** revue visuelle de l'admin sur la vraie base après migrations, puis réglage des budgets
+et fréquences avec le quota Pro réel. Aucun appel provider n'a encore été effectué.
 
 ---
 

@@ -14,11 +14,17 @@ export default {
     if (error) throw error;
     if (!comps?.length) return competitionId ? "compétition introuvable ou sans provider" : "aucune compétition activée pour le direct";
     const out = [];
+    let remainingMatchBudget = Math.max(1, Math.min(Number(ctx.matchCap) || 3, 20));
     for (const competition of comps) {
-      const { data: before, error: beforeError } = await db.from("matches").select("id").eq("competition_id", competition.id).eq("status", "live");
+      const { data: before, error: beforeError } = remainingMatchBudget > 0
+        ? await db.from("matches").select("id").eq("competition_id", competition.id).eq("status", "live").limit(remainingMatchBudget)
+        : { data: [], error: null };
       if (beforeError) throw beforeError;
       const scores = await syncCompetition(db, competition, { ...ctx, mode: "live" });
-      const events = await syncEvents(db, competition, { ...ctx, mode: "live", liveMatchIds: (before || []).map((match) => match.id) });
+      const events = before?.length
+        ? await syncEvents(db, competition, { ...ctx, matchCap: remainingMatchBudget, mode: "live", liveMatchIds: before.map((match) => match.id) })
+        : `${competition.name}: aucun événement live dans le plafond global`;
+      remainingMatchBudget -= before?.length || 0;
       out.push(`${scores} · ${events}`);
     }
     return out.join(" | ");

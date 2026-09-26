@@ -19,7 +19,7 @@ export async function syncLineups(db, competition, ctx = {}) {
 
   const cap = Math.max(1, Math.min(Number(ctx.matchCap) || 3, 20));
   const { data: candidates, error: matchesError } = await db.from("matches")
-    .select("id,external_id,competition_id,status,kickoff")
+    .select("id,external_id,competition_id,status,kickoff,home_club_id,away_club_id")
     .eq("competition_id", competition.id)
     .in("status", ["finished", "live"])
     .not("external_id", "is", null)
@@ -31,7 +31,7 @@ export async function syncLineups(db, competition, ctx = {}) {
   const [lineupRows, statRows, clubRows, playerRows, unresolvedRows] = await Promise.all([
     db.from("match_lineups").select("match_id").eq("competition_id", competition.id),
     db.from("match_player_stats").select("match_id,minutes").eq("competition_id", competition.id),
-    db.from("clubs").select("id,external_id").eq("source", competition.provider),
+    db.from("clubs").select("id,external_id,team_type").eq("source", competition.provider),
     db.from("players").select("id,external_id").eq("source", competition.provider),
     db.from("match_player_stats").select("id,player_external_id").eq("competition_id", competition.id).is("player_id", null),
   ]);
@@ -41,6 +41,7 @@ export async function syncLineups(db, competition, ctx = {}) {
   if (playerRows.error) throw playerRows.error;
   if (unresolvedRows.error) throw unresolvedRows.error;
   const clubMap = Object.fromEntries((clubRows.data || []).map((club) => [club.external_id, club.id]));
+  const nationalTeamIds = new Set((clubRows.data || []).filter((club) => club.team_type === "national").map((club) => club.id));
   const playerMap = Object.fromEntries((playerRows.data || []).map((player) => [player.external_id, player.id]));
   let relinked = 0;
   for (const row of unresolvedRows.data || []) {
@@ -89,6 +90,9 @@ export async function syncLineups(db, competition, ctx = {}) {
     }
     const { data: lockedPlayers } = await db.from("match_player_stats").select("player_external_id").eq("match_id", match.id).eq("locked", true);
     const lockedPlayerIds = new Set((lockedPlayers || []).map((row) => row.player_external_id));
+    const { data: lockedCallups, error: lockedCallupsError } = await db.from("national_match_callups").select("player_id").eq("match_id", match.id).eq("locked", true);
+    if (lockedCallupsError) throw lockedCallupsError;
+    const lockedCallupPlayerIds = new Set((lockedCallups || []).map((row) => row.player_id));
     for (const row of merged.values()) {
       if (!row.player_ext || lockedPlayerIds.has(row.player_ext)) continue;
       const payload = {
@@ -118,6 +122,23 @@ export async function syncLineups(db, competition, ctx = {}) {
       };
       const { error } = await db.from("match_player_stats").upsert(payload, { onConflict: "match_id,source,player_external_id" });
       if (error) throw error;
+      if (payload.club_id && payload.player_id && nationalTeamIds.has(payload.club_id) && !lockedCallupPlayerIds.has(payload.player_id)) {
+        const callupStatus = payload.starter ? "started" : (Number(payload.minutes) > 0 ? "played" : "bench");
+        const { error: callupError } = await db.from("national_match_callups").upsert({
+          match_id: match.id,
+          national_team_id: payload.club_id,
+          player_id: payload.player_id,
+          status: callupStatus,
+          shirt_number: payload.number,
+          position: payload.position,
+          source: competition.provider,
+          external_id: payload.player_external_id,
+          ext: payload.ext,
+          synced_at: now,
+          updated_at: now,
+        }, { onConflict: "match_id,player_id" });
+        if (callupError) throw callupError;
+      }
       players++;
     }
   }

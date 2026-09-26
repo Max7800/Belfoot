@@ -47,7 +47,7 @@ export async function POST(request) {
       const { data, error } = await db.from("pipeline_runs").insert({
         pipeline_key: pipeline.key,
         target_key: targetKey,
-        params: { season: input.season || null, competitionId: input.competitionId || null, matchCap: input.matchCap || null, teamExternalId: input.teamExternalId || null, nationalCategory: input.nationalCategory || null },
+        params: { season: input.season || null, competitionId: input.competitionId || null, matchCap: input.matchCap || null, batchSize: input.batchSize || null, teamExternalId: input.teamExternalId || null, nationalCategory: input.nationalCategory || null },
         steps: pipeline.jobs,
         request_limit: budget,
         created_by: user.id,

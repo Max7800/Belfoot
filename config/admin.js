@@ -27,6 +27,7 @@ export const adminSections = [
     { key: "nationalteams", label: "Page Diables Rouges" },
     { key: "rankings", label: "Classements Belgique" },
     { key: "nationalCallups", label: "Convocations" },
+    { key: "nationalMatchCallups", label: "Convocations par match" },
   ] },
   { label: "Match Center", icon: "activity", panels: [
     { key: "events", label: "Événements" },
@@ -36,6 +37,7 @@ export const adminSections = [
   { label: "Synchronisation", icon: "refresh", panels: [
     { key: "import-plan", label: "Plan d'import 2026" },
     { key: "jobs", label: "Jobs et historique" },
+    { key: "live-strategy", label: "Stratégie du direct" },
     { key: "providers", label: "Sources de données" },
     { key: "sync-errors", label: "Erreurs de synchronisation" },
     { key: "system-status", label: "Préparation 2026" },

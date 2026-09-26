@@ -91,6 +91,7 @@ export default function NationalTeamsPage() {
   const [clubs, setClubs] = useState({});
   const [competitions, setCompetitions] = useState({});
   const [squad, setSquad] = useState([]);
+  const [ratingSquad, setRatingSquad] = useState([]);
   const [loading, setLoading] = useState(true);
   const [schemaMissing, setSchemaMissing] = useState(false);
 
@@ -108,6 +109,7 @@ export default function NationalTeamsPage() {
   useEffect(() => {
     if (!selectedId) return;
     setLoading(true);
+    setRatingSquad([]);
     (async () => {
       const [matchesResult, callupsResult] = await Promise.all([
         supabase.from("matches").select("*").or(`home_club_id.eq.${selectedId},away_club_id.eq.${selectedId}`).order("kickoff", { ascending: true }).limit(120),
@@ -140,6 +142,19 @@ export default function NationalTeamsPage() {
       setClubs(clubMap);
       setCompetitions(Object.fromEntries((competitionsResult.data || []).map((competition) => [competition.id, competition])));
       setSquad(uniqueCallups.map((callup) => ({ ...callup, player: players[callup.player_id], club: currentClubs[players[callup.player_id]?.club_id] })).filter((row) => row.player));
+      const latestFinished = [...matchRows].filter((match) => match.status === "finished").sort((a, b) => new Date(b.kickoff) - new Date(a.kickoff))[0];
+      if (latestFinished) {
+        const { data: historicalCallups, error: historicalError } = await supabase.from("national_match_callups").select("*").eq("match_id", latestFinished.id).eq("national_team_id", selectedId);
+        if (!historicalError && historicalCallups?.length) {
+          const historicalIds = [...new Set(historicalCallups.map((row) => row.player_id).filter(Boolean))];
+          const { data: historicalPlayers } = await supabase.from("players").select("id,name,photo_url,position,club_id").in("id", historicalIds);
+          const historicalPlayerMap = Object.fromEntries((historicalPlayers || []).map((player) => [player.id, player]));
+          const historicalClubIds = [...new Set((historicalPlayers || []).map((player) => player.club_id).filter(Boolean))];
+          const { data: historicalClubs } = historicalClubIds.length ? await supabase.from("clubs").select("id,name,logo_url").in("id", historicalClubIds) : { data: [] };
+          const historicalClubMap = Object.fromEntries((historicalClubs || []).map((club) => [club.id, club]));
+          setRatingSquad(historicalCallups.map((callup) => ({ ...callup, player: historicalPlayerMap[callup.player_id], club: historicalClubMap[historicalPlayerMap[callup.player_id]?.club_id] })).filter((row) => row.player));
+        }
+      }
       setLoading(false);
     })().catch(() => { setSchemaMissing(true); setLoading(false); });
   }, [selectedId]);
@@ -197,8 +212,8 @@ export default function NationalTeamsPage() {
         {[[results.length, config.labels.stats_matches, "text-white"], [record.wins, config.labels.stats_wins, "text-emerald-400"], [record.goals, config.labels.stats_goals, "text-white"], [fifaRank, config.labels.stats_fifa, "text-amber-300"]].map(([value, label, color]) => <div key={label} className="rounded-2xl border border-line/10 bg-surface/60 px-2 py-4 text-center sm:py-5"><b className={`block text-xl sm:text-2xl ${color}`}>{value}</b><span className="mt-1 block text-[8px] font-bold uppercase tracking-wider text-muted sm:text-[9px]">{label}</span></div>)}
       </div>
 
-      {selectedTeam?.national_category === "senior" && (selectedTeam?.national_gender || "men") === "men" && results[0] && <div className="order-6 lg:order-none lg:col-span-4 lg:row-span-2">
-        <DiableRatings match={results[0]} squad={squad} title={config.labels.ratings} showAllLabel={config.labels.show_all_players} showLessLabel={config.labels.show_less_players} compact />
+      {selectedTeam?.national_category === "senior" && (selectedTeam?.national_gender || "men") === "men" && results[0] && ratingSquad.length > 0 && <div className="order-6 lg:order-none lg:col-span-4 lg:row-span-2">
+        <DiableRatings match={results[0]} squad={ratingSquad} title={config.labels.ratings} showAllLabel={config.labels.show_all_players} showLessLabel={config.labels.show_less_players} compact />
       </div>}
 
       {sectionConfig.results?.enabled && <ModuleCard className="order-3 lg:order-none lg:col-span-8">

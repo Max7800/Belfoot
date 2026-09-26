@@ -89,6 +89,7 @@ export function JobsPanel() {
   const [comps, setComps] = useState([]);
   const [compId, setCompId] = useState("");
   const [matchCap, setMatchCap] = useState(3);
+  const [batchSize, setBatchSize] = useState(5);
   const [requestLimit, setRequestLimit] = useState(10);
   const [teamExternalId, setTeamExternalId] = useState("44");
   const [nationalCategory, setNationalCategory] = useState("senior");
@@ -108,7 +109,7 @@ export function JobsPanel() {
     const r = await fetch("/api/admin/run-job", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token}` },
-      body: JSON.stringify({ key, season, competitionId: compId || null, matchCap, requestLimit: budget ?? requestLimit, teamExternalId, nationalCategory }),
+      body: JSON.stringify({ key, season, competitionId: compId || null, matchCap, batchSize, requestLimit: budget ?? requestLimit, teamExternalId, nationalCategory }),
     });
     const txt = await r.text();
     if (!r.ok) throw new Error(txt || ("HTTP " + r.status));
@@ -120,7 +121,7 @@ export function JobsPanel() {
     const response = await fetch("/api/admin/run-pipeline", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token}` },
-      body: JSON.stringify({ ...payload, season, competitionId: compId || null, matchCap, requestLimit, teamExternalId, nationalCategory }),
+      body: JSON.stringify({ ...payload, season, competitionId: compId || null, matchCap, batchSize, requestLimit, teamExternalId, nationalCategory }),
     });
     const text = await response.text();
     if (!response.ok) throw new Error(text || `HTTP ${response.status}`);
@@ -131,7 +132,7 @@ export function JobsPanel() {
     const response = await fetch("/api/admin/job-preflight", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token}` },
-      body: JSON.stringify({ ...payload, season, competitionId: compId || null, matchCap, requestLimit, teamExternalId, nationalCategory }),
+      body: JSON.stringify({ ...payload, season, competitionId: compId || null, matchCap, batchSize, requestLimit, teamExternalId, nationalCategory }),
     });
     const text = await response.text();
     if (!response.ok) throw new Error(text || `HTTP ${response.status}`);
@@ -199,6 +200,8 @@ export function JobsPanel() {
       <input value={season} onChange={(e) => setSeason(e.target.value)} className="w-28 rounded border border-line/10 bg-surface2 px-2 py-1 text-sm" />
       <label className="text-xs text-muted">Max matchs</label>
       <input type="number" min="1" max="20" value={matchCap} onChange={(e) => setMatchCap(Math.max(1, Math.min(20, Number(e.target.value) || 1)))} className="w-16 rounded border border-line/10 bg-surface2 px-2 py-1 text-sm" />
+      <label className="text-xs text-muted">Lot joueurs</label>
+      <input type="number" min="1" max="25" value={batchSize} onChange={(e) => setBatchSize(Math.max(1, Math.min(25, Number(e.target.value) || 1)))} className="w-16 rounded border border-line/10 bg-surface2 px-2 py-1 text-sm" />
       <label className="text-xs text-muted">Budget API</label>
       <input type="number" min="1" max="100" value={requestLimit} onChange={(e) => setRequestLimit(Math.max(1, Math.min(100, Number(e.target.value) || 1)))} className="w-16 rounded border border-line/10 bg-surface2 px-2 py-1 text-sm" />
       {latestQuota != null && <span className="ml-auto rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-bold text-emerald-300" title="Quota restant lu lors de la dernière synchronisation">≈ {latestQuota} appels restants</span>}

@@ -18,11 +18,12 @@ async function handle(request, { params }) {
     const season = url.searchParams.get("season") || undefined;
     const competitionId = url.searchParams.get("competitionId") || null;
     const matchCap = url.searchParams.get("matchCap") || undefined;
+    const batchSize = url.searchParams.get("batchSize") || undefined;
     const requestLimit = url.searchParams.get("requestLimit") || undefined;
     const teamExternalId = url.searchParams.get("teamExternalId") || null;
     const nationalCategory = url.searchParams.get("nationalCategory") || null;
     return Response.json(await runJob(key, {
-      db: getAdmin(), season, competitionId, matchCap, requestLimit, teamExternalId, nationalCategory,
+      db: getAdmin(), season, competitionId, matchCap, batchSize, requestLimit, teamExternalId, nationalCategory,
       thesportsdbKey: process.env.THESPORTSDB_KEY,
       apifootballKey: process.env.APIFOOTBALL_KEY,
     }));

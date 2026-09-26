@@ -70,6 +70,17 @@ export const FOOTBALL_ENTITIES = {
       { key: "active", label: "Dans la sélection actuelle", type: "bool" },
     ],
   },
+  nationalMatchCallups: {
+    table: "national_match_callups", title: "Convocations par match", singular: "Convocation par match", orderBy: "updated_at", orderAsc: false, hasSource: true, pageSize: 40,
+    fields: [
+      { key: "match_id", label: "Match", type: "relation", table: "matches", labelCol: "kickoff" },
+      { key: "national_team_id", label: "Sélection", type: "relation", table: "clubs", labelCol: "name" },
+      { key: "player_id", label: "Joueur", type: "relation", table: "players", labelCol: "name" },
+      { key: "status", label: "Statut", type: "select", options: ["called_up", "started", "bench", "played", "unavailable"] },
+      { key: "shirt_number", label: "Numéro", type: "number" },
+      { key: "position", label: "Poste", type: "text" },
+    ],
+  },
   players: {
     table: "players", title: "Joueurs", singular: "Joueur", orderBy: "name", hasSource: true, search: true,
     pageSize: 40, grouped: false, groupBy: { field: "club_id", relTable: "clubs", relLabel: "name" },
