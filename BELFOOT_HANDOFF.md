@@ -1586,6 +1586,24 @@ tant que la migration n'est pas enregistrée.
   existantes `core/0004` et `football/0023`, `0024`, `0032`, `0033`, `0034` selon le niveau choisi.
 - État Git à la fin du lot : commit local uniquement ; ne pas pousser sans autorisation explicite.
 
+### 2026-09-27 — ChatGPT — cohérence du carrousel et confrontations aller-retour
+
+- Le Top 5 de l’accueil était faux malgré le bon filtrage de saison : la requête globale était limitée
+  aux 500 matchs les plus récents de toute la base. Elle ne contenait plus les premières journées de
+  Pro League et de Challenger (par exemple Genk apparaissait à 46 points sur l’accueil contre 68 sur
+  la page compétition). L’accueil complète maintenant cet échantillon avec la saison entière de
+  chaque compétition réellement présente dans le carrousel, puis déduplique les matchs par ID.
+- Ce complément reste ciblé : il ne charge pas automatiquement toutes les saisons ni tous les
+  championnats. Une requête au maximum est faite pour chaque compétition configurée dans le carrousel,
+  sur sa saison publique courante uniquement. Aucun appel API-Football n’est effectué.
+- Les quatre lignes API des demi-finales 2024-2025 de Croky Cup sont correctes : deux affiches se sont
+  jouées en aller-retour. Le bracket regroupe désormais les matchs partageant la même paire de clubs,
+  affiche deux demi-finales et calcule le score cumulé, avec un badge « 2 manches ». La liste « Tous
+  les tours » conserve bien les quatre matchs individuels et leurs Match Centers.
+- Sur mobile, « Voir la compétition » n’occupe plus toute la largeur de la carte d’accueil : il devient
+  un lien secondaire compact et discret, tout en restant placé sous le titre de la compétition.
+- Aucun SQL et aucun appel provider pour ces corrections.
+
 ---
 
 ## SOCLE_CANDIDATES  (documenter seulement — NE PAS remonter au socle maintenant)

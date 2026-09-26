@@ -17,12 +17,41 @@ function stageMeta(phase) {
   return STAGES.find((stage) => stage.test.test(phase || "") && !stage.reject?.test(phase || "")) || null;
 }
 
+function collapseTwoLeggedTies(rows) {
+  const ties = new Map();
+  rows.forEach((match) => {
+    const clubs = [match.home_club_id, match.away_club_id].filter(Boolean).sort();
+    const key = clubs.length === 2 ? clubs.join(":") : match.id;
+    const tie = ties.get(key) || [];
+    tie.push(match);
+    ties.set(key, tie);
+  });
+  return [...ties.values()].map((legs) => {
+    const ordered = [...legs].sort((a, b) => new Date(a.kickoff || 0) - new Date(b.kickoff || 0));
+    if (ordered.length === 1) return ordered[0];
+    const first = ordered[0];
+    const latest = ordered[ordered.length - 1];
+    const scoreFor = (clubId) => ordered.reduce((total, leg) => total
+      + Number(leg.home_club_id === clubId ? leg.home_score : leg.away_club_id === clubId ? leg.away_score : 0), 0);
+    return {
+      ...latest,
+      id: latest.id,
+      home_club_id: first.home_club_id,
+      away_club_id: first.away_club_id,
+      home_score: scoreFor(first.home_club_id),
+      away_score: scoreFor(first.away_club_id),
+      status: ordered.every(isMatchFinished) ? "finished" : latest.status,
+      legCount: ordered.length,
+    };
+  }).sort((a, b) => new Date(a.kickoff || 0) - new Date(b.kickoff || 0));
+}
+
 function orderedBracketStages(matches, phases) {
   const grouped = new Map();
   phases.forEach((phase) => {
     const meta = stageMeta(phase);
     if (!meta) return;
-    const rows = matches.filter((match) => (match.phase || "—") === phase).sort((a, b) => new Date(a.kickoff || 0) - new Date(b.kickoff || 0));
+    const rows = collapseTwoLeggedTies(matches.filter((match) => (match.phase || "—") === phase));
     if (rows.length) grouped.set(meta.rank, { ...meta, phase, matches: rows });
   });
   const stages = [...grouped.values()].sort((a, b) => a.rank - b.rank);
@@ -54,6 +83,7 @@ function BracketCard({ match, clubs, top, cardHeight, leftConnector, rightConnec
     {leftConnector && <span className="absolute -left-5 top-1/2 w-5 border-t border-sky-400/35" />}
     {rightConnector && <span className="absolute -right-5 top-1/2 w-5 border-t border-sky-400/35" />}
     {pairHeight > 0 && <span className="absolute -right-5 top-1/2 border-r border-sky-400/35" style={{ height: pairHeight }} />}
+    {match.legCount > 1 && <span className="absolute -top-2 right-2 z-10 rounded-full border border-sky-300/25 bg-surface2 px-2 py-0.5 text-[8px] font-black uppercase tracking-wider text-sky-200">Cumul · {match.legCount} manches</span>}
     <Link href={`/matchs/${match.id}`} className="block overflow-hidden rounded-xl border border-line/15 bg-[linear-gradient(145deg,rgba(18,31,50,.98),rgba(7,17,31,.98))] shadow-sm transition hover:border-sky-300/45">
       {team(home, match.home_score, "home")}
       <div className="border-t border-line/10">{team(away, match.away_score, "away")}</div>

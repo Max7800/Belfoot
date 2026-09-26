@@ -75,11 +75,13 @@ function HeroTitle({ value }) {
 
 export default function Home() {
   const config = useHomeConfig();
+  const configuredCompetitionIds = (config.competition_carousel?.competition_ids || []).join(",");
+  const featuredCompetitionId = config.competition_carousel?.featured_competition_id || "";
   const [data, setData] = useState({ loading: true, matches: [], clubs: {}, competitions: [], seasons: [], players: [], stats: [], news: [], votwSessions: [], topics: [] });
   const [activeCompetitionId, setActiveCompetitionId] = useState("");
 
   useEffect(() => { (async () => {
-    const [matchResult, clubResult, competitionResult, seasonResult, playerResult, statsResult, newsResult, votwResult, topicsResult] = await Promise.all([
+    const [recentMatchResult, clubResult, competitionResult, seasonResult, playerResult, statsResult, newsResult, votwResult, topicsResult] = await Promise.all([
       supabase.from("matches").select("*").order("kickoff", { ascending: false }).limit(500),
       supabase.from("clubs").select("id,name,logo_url"),
       supabase.from("competitions").select("*"),
@@ -90,19 +92,34 @@ export default function Home() {
       supabase.from("votw_sessions").select("id,matchday,season_label,formation,status,closes_at").order("created_at", { ascending: false }).limit(5),
       supabase.from("forum_topics").select("id,title,author_name,last_activity").order("last_activity", { ascending: false }).limit(4),
     ]);
+    const competitionRows = competitionResult.data || [];
+    const seasonRows = seasonResult.data || [];
+    const requestedIds = new Set(configuredCompetitionIds.split(",").filter(Boolean));
+    if (featuredCompetitionId) requestedIds.add(featuredCompetitionId);
+    const carouselCompetitions = requestedIds.size
+      ? competitionRows.filter((competition) => requestedIds.has(competition.id))
+      : competitionRows.filter((competition) => competition.public_visible !== false);
+    const carouselMatchResults = await Promise.all(carouselCompetitions.map((competition) => {
+      const activeSeason = sortPublicSeasons(seasonRows.filter((season) => season.competition_id === competition.id))[0];
+      let query = supabase.from("matches").select("*").eq("competition_id", competition.id).order("kickoff", { ascending: false }).limit(1000);
+      if (activeSeason) query = query.eq("season_id", activeSeason.id);
+      return query;
+    }));
+    const matchesById = new Map((recentMatchResult.data || []).map((match) => [match.id, match]));
+    carouselMatchResults.forEach((result) => (result.data || []).forEach((match) => matchesById.set(match.id, match)));
     setData({
       loading: false,
-      matches: matchResult.data || [],
+      matches: [...matchesById.values()],
       clubs: Object.fromEntries((clubResult.data || []).map((club) => [club.id, club])),
-      competitions: competitionResult.data || [],
-      seasons: seasonResult.data || [],
+      competitions: competitionRows,
+      seasons: seasonRows,
       players: playerResult.data || [],
       stats: statsResult.data || [],
       news: newsResult.data || [],
       votwSessions: votwResult.data || [],
       topics: topicsResult.data || [],
     });
-  })().catch(() => setData((current) => ({ ...current, loading: false }))); }, []);
+  })().catch(() => setData((current) => ({ ...current, loading: false }))); }, [configuredCompetitionIds, featuredCompetitionId]);
 
   const view = useMemo(() => {
     const now = new Date();
@@ -222,7 +239,7 @@ export default function Home() {
           {competitionSlides.length > 1 && <div className="flex shrink-0 gap-1"><button onClick={() => moveCompetition(-1)} aria-label="Compétition précédente" className="rounded-lg border border-line/15 p-2 text-muted hover:text-content"><ChevronLeft className="h-4 w-4" /></button><button onClick={() => moveCompetition(1)} aria-label="Compétition suivante" className="rounded-lg border border-line/15 p-2 text-muted hover:text-content"><ChevronRight className="h-4 w-4" /></button></div>}
           <Link href={activeCompetitionSlide.href} className="hidden flex-shrink-0 items-center justify-center gap-1 rounded-lg border border-line/20 px-3 py-2 text-xs font-bold hover:border-accent/50 sm:inline-flex">{activeCompetitionSlide.kind === "belgians" ? "Voir les matchs" : sectionMap.jpl?.action}<ArrowRight className="h-3.5 w-3.5" /></Link>
           </div>
-          <Link href={activeCompetitionSlide.href} className="mt-3 flex w-full items-center justify-center gap-1 rounded-xl bg-sky-300 px-3 py-2.5 text-xs font-black text-slate-950 sm:hidden">{activeCompetitionSlide.kind === "belgians" ? "Voir les matchs" : (sectionMap.jpl?.action || "Voir la compétition")}<ArrowRight className="h-3.5 w-3.5" /></Link>
+          <Link href={activeCompetitionSlide.href} className="mt-2 inline-flex items-center gap-1 rounded-lg border border-sky-300/30 bg-sky-300/[0.07] px-2.5 py-1.5 text-[11px] font-bold text-sky-100 transition hover:border-sky-300/60 sm:hidden">{activeCompetitionSlide.kind === "belgians" ? "Voir les matchs" : (sectionMap.jpl?.action || "Voir la compétition")}<ArrowRight className="h-3 w-3" /></Link>
         </div>
         <div className="grid lg:grid-cols-3">
           {activeCompetitionSlide.kind === "belgians" ? <div className="p-4"><div className="mb-3 text-sm font-black">À suivre cette semaine</div><p className="text-xs leading-5 text-muted">Une vue rapide des rencontres des clubs où évoluent les Belges suivis par Belfoot.</p><Link href="/belges-a-l-etranger" className="mt-3 inline-flex items-center gap-1 text-xs font-bold text-amber-300">Voir les joueurs<ArrowRight className="h-3.5 w-3.5" /></Link></div> : activeCompetitionSlide.knockout ? <div className="p-4"><div className="mb-3 flex items-center gap-2 text-sm font-black"><Trophy className="h-4 w-4 text-amber-300" />Élimination directe</div><p className="text-xs leading-5 text-muted">Les rencontres sont présentées tour par tour : aucun faux classement n'est calculé pour cette coupe.</p><Link href={activeCompetitionSlide.href} className="mt-3 inline-flex items-center gap-1 text-xs font-bold text-amber-300">Voir tous les tours<ArrowRight className="h-3.5 w-3.5" /></Link></div> : <Link href={`${activeCompetitionSlide.href}?tab=classement`} className="p-4 transition hover:bg-white/[0.025]"><div className="mb-3 text-sm font-black">Classement <span className="text-muted">(Top 5)</span></div><div className="divide-y divide-line/10">{activeCompetitionSlide.standings.slice(0, 5).map((row, index) => <div key={row.club} className="flex items-center gap-2 py-2"><span className="w-5 text-center text-xs text-muted">{index + 1}</span>{data.clubs[row.club]?.logo_url && <img src={data.clubs[row.club].logo_url} className="h-5 w-5 object-contain" alt="" />}<span className="min-w-0 flex-1 truncate text-xs font-semibold">{data.clubs[row.club]?.name || "—"}</span><b className="text-xs">{row.pts}</b></div>)}{!activeCompetitionSlide.standings.length && <p className="py-2 text-xs text-muted">Classement non disponible pour ce format.</p>}</div></Link>}
