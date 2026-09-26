@@ -51,10 +51,10 @@ function FeaturedMatch({ match, clubs, competitions }) {
   </Link>;
 }
 
-function SmallMatch({ match, clubs, competitions }) {
+function SmallMatch({ match, clubs, competitions, className = "" }) {
   const home = clubs[match.home_club_id] || {}, away = clubs[match.away_club_id] || {};
   const status = matchStatusMeta(match);
-  return <Link href={`/matchs/${match.id}`} className="block min-w-[270px] rounded-2xl border border-white/10 bg-surface/75 p-4 transition hover:-translate-y-0.5 hover:border-red-400/35 sm:min-w-0">
+  return <Link href={`/matchs/${match.id}`} className={`min-w-[270px] rounded-2xl border border-white/10 bg-surface/75 p-4 transition hover:-translate-y-0.5 hover:border-red-400/35 sm:min-w-0 ${className}`}>
     <div className="flex items-center justify-between gap-2 text-[10px] text-muted"><span className="truncate">{competitions[match.competition_id]?.name || "International"}</span><time className="shrink-0">{dateLabel(match.kickoff)}</time></div>
     <div className="mt-4 flex items-center gap-2"><TeamVisual club={home} /><div className="shrink-0 rounded-xl border border-line/10 bg-surface2 px-3 py-2 text-center text-sm font-black tabular-nums">{status.key === "scheduled" ? "VS" : `${match.home_score ?? "-"} : ${match.away_score ?? "-"}`}</div><TeamVisual club={away} /></div>
   </Link>;
@@ -71,6 +71,16 @@ function ModuleCard({ children, className = "" }) {
   return <section className={`rounded-2xl border border-line/10 bg-surface/60 p-4 sm:p-5 ${className}`}>{children}</section>;
 }
 
+function SquadPreview({ rows, accent, className = "" }) {
+  return <div className={`space-y-5 ${className}`}>{groupByPosition(rows, (row) => row.position || row.player?.position).map((group) => <div key={group.key}>
+    <div className="mb-2 flex items-center gap-2"><span className="h-4 w-1 rounded-full" style={{ backgroundColor: accent }} /><h3 className="text-[10px] font-black uppercase tracking-wider text-muted">{group.label}</h3></div>
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">{group.rows.map((row) => <Link key={row.id} href={`/players/${row.player.id}`} className="group rounded-2xl border border-line/10 bg-gradient-to-b from-surface to-bg/60 p-3 text-center transition hover:border-amber-400/35">
+      <div className="mx-auto h-16 w-16 overflow-hidden rounded-full border border-white/10 bg-surface2 sm:h-20 sm:w-20">{row.player.photo_url ? <img src={row.player.photo_url} alt="" className="h-full w-full object-cover object-top" /> : <Users className="m-4 h-8 w-8 text-muted sm:m-5 sm:h-10 sm:w-10" />}</div>
+      <div className="mt-2 truncate text-sm font-black group-hover:text-amber-300">{row.player.name}</div><div className="truncate text-[9px] uppercase tracking-wider text-muted">{row.position || row.player.position || "Joueur"}</div>
+    </Link>)}</div>
+  </div>)}</div>;
+}
+
 export default function NationalTeamsPage() {
   const config = useNationalTeamsConfig();
   const rankings = useRankings();
@@ -83,8 +93,6 @@ export default function NationalTeamsPage() {
   const [squad, setSquad] = useState([]);
   const [loading, setLoading] = useState(true);
   const [schemaMissing, setSchemaMissing] = useState(false);
-  const [allResults, setAllResults] = useState(false);
-  const [allPlayers, setAllPlayers] = useState(false);
 
   useEffect(() => {
     supabase.from("clubs").select("id,name,short_name,logo_url,national_category,national_gender,fifa_ranking").eq("team_type", "national").eq("national_followed", true).then(({ data, error }) => {
@@ -156,8 +164,9 @@ export default function NationalTeamsPage() {
     }, { wins: 0, draws: 0, losses: 0, goals: 0 });
   }, [results, selectedId]);
   const sectionConfig = Object.fromEntries(config.sections.map((section) => [section.key, section]));
-  const displayedResults = allResults ? results : results.slice(0, 6);
-  const displayedSquad = allPlayers ? squad : squad.slice(0, 10);
+  const displayedResults = results.slice(0, 6);
+  const displayedSquad = squad.slice(0, 10);
+  const mobileSquad = squad.slice(0, 4);
   const otherUpcoming = upcoming.filter((match) => match.id !== featured?.id).slice(0, 2);
 
   if (schemaMissing) return <div className="mx-auto max-w-3xl rounded-3xl border border-amber-400/20 bg-amber-400/5 p-8 text-center"><Shield className="mx-auto h-10 w-10 text-amber-300" /><h1 className="mt-3 text-2xl font-black">Le module Sélections est prêt</h1><p className="mt-2 text-sm leading-6 text-muted">Il reste à appliquer la migration SQL 0027, puis à lancer « Synchroniser une sélection » dans l'administration.</p></div>;
@@ -165,7 +174,7 @@ export default function NationalTeamsPage() {
   const heroStyle = { backgroundColor: config.hero.background_color, borderColor: config.hero.border_color };
   return <div className="space-y-8">
     <section className="relative overflow-hidden rounded-3xl border px-5 py-8 sm:px-8 sm:py-11" style={heroStyle}>
-      {config.hero.image_url && <img src={config.hero.image_url} alt="" className="absolute inset-0 h-full w-full object-cover" />}
+      {config.hero.image_url && <img src={config.hero.image_url} alt="" className="absolute inset-0 h-full w-full object-cover object-[72%_center] sm:object-center" />}
       <div className="absolute inset-0 bg-gradient-to-r from-black via-black/75 to-black/20" style={{ opacity: config.hero.overlay }} />
       <div className="relative z-10 max-w-2xl"><div className="text-[11px] font-black uppercase tracking-[.25em]" style={{ color: config.hero.secondary_color }}>{config.hero.kicker}</div><h1 className="mt-3 text-4xl font-black uppercase leading-none sm:text-6xl">{selectedTeam?.national_category === "senior" || !selectedTeam ? config.hero.title : CATEGORY_LABELS[selectedTeam.national_category] || selectedTeam.name}</h1><p className="mt-4 max-w-xl text-sm leading-6 text-slate-300 sm:text-base">{config.hero.intro}</p>
         {genders.length > 1 && <div className="mt-5 inline-flex rounded-xl border border-white/15 bg-black/25 p-1">{genders.map((gender) => <button key={gender} onClick={() => { setSelectedGender(gender); const first = teams.find((team) => (team.national_gender || "men") === gender); if (first) setSelectedId(first.id); }} className={`rounded-lg px-4 py-1.5 text-sm font-bold transition ${(selectedGender || "men") === gender ? "bg-white text-black" : "text-slate-300 hover:text-white"}`}>{gender === "women" ? "Femmes" : "Hommes"}</button>)}</div>}
@@ -175,7 +184,7 @@ export default function NationalTeamsPage() {
 
     {loading ? <div className="h-72 animate-pulse rounded-3xl bg-surface" /> : teams.length === 0 ? <div className="rounded-3xl border border-dashed border-line/20 p-10 text-center"><div className="text-5xl">🇧🇪</div><h2 className="mt-4 text-xl font-black">Les sélections sont prêtes à être reliées</h2><p className="mt-2 text-sm text-muted">Lance la synchronisation ciblée depuis l’administration avec l’identifiant API-Football de la Belgique.</p></div> : <div className="grid items-start gap-4 lg:grid-cols-12">
       <ModuleCard className="order-1 lg:order-none lg:col-span-8">
-        <PanelHeader icon={CalendarDays} title={config.labels.featured} action={config.labels.all_matches} actionHref="/matchs" />
+        <PanelHeader icon={CalendarDays} title={config.labels.featured} />
         <FeaturedMatch match={featured} clubs={clubs} competitions={competitions} />
       </ModuleCard>
 
@@ -193,13 +202,16 @@ export default function NationalTeamsPage() {
       </div>}
 
       {sectionConfig.results?.enabled && <ModuleCard className="order-3 lg:order-none lg:col-span-8">
-        <PanelHeader icon={Trophy} title={sectionConfig.results.label} subtitle={sectionConfig.results.subtitle} accent={sectionConfig.results.accent} action={results.length > 6 ? (allResults ? config.labels.show_less_results : config.labels.show_all_results) : null} onAction={() => setAllResults((value) => !value)} />
-        {results.length ? <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{displayedResults.map((match) => <SmallMatch key={match.id} match={match} clubs={clubs} competitions={competitions} />)}</div> : <p className="text-sm text-muted">Aucun résultat importé.</p>}
+        <PanelHeader icon={Trophy} title={sectionConfig.results.label} subtitle={sectionConfig.results.subtitle} accent={sectionConfig.results.accent} action={results.length > 4 ? config.labels.show_all_results : null} actionHref={`/diables-rouges/matchs?equipe=${selectedId}`} />
+        {results.length ? <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{displayedResults.map((match, index) => <SmallMatch key={match.id} match={match} clubs={clubs} competitions={competitions} className={index >= 4 ? "hidden sm:block" : "block"} />)}</div> : <p className="text-sm text-muted">Aucun résultat importé.</p>}
       </ModuleCard>}
 
       {sectionConfig.squad?.enabled && <ModuleCard className="order-4 lg:order-none lg:col-span-8">
-        <PanelHeader icon={Users} title={sectionConfig.squad.label} subtitle={sectionConfig.squad.subtitle} accent={sectionConfig.squad.accent} action={squad.length > 10 ? (allPlayers ? config.labels.show_less_players : `${config.labels.show_all_players} (${squad.length})`) : null} onAction={() => setAllPlayers((value) => !value)} />
-        {squad.length ? <div className="space-y-5">{groupByPosition(displayedSquad, (row) => row.position || row.player?.position).map((group) => <div key={group.key}><div className="mb-2 flex items-center gap-2"><span className="h-4 w-1 rounded-full" style={{ backgroundColor: sectionConfig.squad.accent }} /><h3 className="text-[10px] font-black uppercase tracking-wider text-muted">{group.label}</h3></div><div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">{group.rows.map((row) => <Link key={row.id} href={`/players/${row.player.id}`} className="group rounded-2xl border border-line/10 bg-gradient-to-b from-surface to-bg/60 p-3 text-center transition hover:border-amber-400/35"><div className="mx-auto h-16 w-16 overflow-hidden rounded-full border border-white/10 bg-surface2 sm:h-20 sm:w-20">{row.player.photo_url ? <img src={row.player.photo_url} alt="" className="h-full w-full object-cover object-top" /> : <Users className="m-4 h-8 w-8 text-muted sm:m-5 sm:h-10 sm:w-10" />}</div><div className="mt-2 truncate text-sm font-black group-hover:text-amber-300">{row.player.name}</div><div className="truncate text-[9px] uppercase tracking-wider text-muted">{row.position || row.player.position || "Joueur"}</div></Link>)}</div></div>)}</div> : <p className="text-sm text-muted">La sélection apparaîtra après sa synchronisation.</p>}
+        <PanelHeader icon={Users} title={sectionConfig.squad.label} subtitle={sectionConfig.squad.subtitle} accent={sectionConfig.squad.accent} action={squad.length > 4 ? `${config.labels.show_all_players} (${squad.length})` : null} actionHref={`/diables-rouges/selection?equipe=${selectedId}`} />
+        {squad.length ? <>
+          <SquadPreview rows={mobileSquad} accent={sectionConfig.squad.accent} className="sm:hidden" />
+          <SquadPreview rows={displayedSquad} accent={sectionConfig.squad.accent} className="hidden sm:block" />
+        </> : <p className="text-sm text-muted">La sélection apparaîtra après sa synchronisation.</p>}
       </ModuleCard>}
 
       {sectionConfig.schedule?.enabled && <ModuleCard className="order-7 lg:order-none lg:col-span-4">
