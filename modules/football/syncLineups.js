@@ -1,4 +1,5 @@
 import { getProvider } from "./providers";
+import { seasonLabel } from "./season";
 
 function coverageFlags(competition) {
   const fixtures = competition.ext?.coverage?.fixtures || {};
@@ -16,11 +17,16 @@ export async function syncLineups(db, competition, ctx = {}) {
   const canLineups = coverage.lineups && !!provider.fetchMatchLineups;
   const canStats = coverage.playerStats && !!provider.fetchMatchPlayerStats;
   if (!canLineups && !canStats) return `${competition.name}: compositions/statistiques non couvertes`;
+  const selectedSeason = seasonLabel(ctx.season);
+  const { data: season, error: seasonError } = await db.from("seasons").select("id").eq("competition_id", competition.id).eq("label", selectedSeason).maybeSingle();
+  if (seasonError) throw seasonError;
+  if (!season) return `${competition.name}: saison ${selectedSeason} introuvable`;
 
   const cap = Math.max(1, Math.min(Number(ctx.matchCap) || 3, 20));
   const { data: candidates, error: matchesError } = await db.from("matches")
-    .select("id,external_id,competition_id,status,kickoff,home_club_id,away_club_id")
+    .select("id,external_id,competition_id,status,kickoff,home_club_id,away_club_id,lineups_synced_at,player_stats_synced_at")
     .eq("competition_id", competition.id)
+    .eq("season_id", season.id)
     .in("status", ["finished", "live"])
     .not("external_id", "is", null)
     .order("kickoff", { ascending: false })
@@ -28,15 +34,11 @@ export async function syncLineups(db, competition, ctx = {}) {
   if (matchesError) throw matchesError;
 
   if (!candidates?.length) return `${competition.name}: aucun match éligible`;
-  const [lineupRows, statRows, clubRows, playerRows, unresolvedRows] = await Promise.all([
-    db.from("match_lineups").select("match_id").eq("competition_id", competition.id),
-    db.from("match_player_stats").select("match_id,minutes").eq("competition_id", competition.id),
+  const [clubRows, playerRows, unresolvedRows] = await Promise.all([
     db.from("clubs").select("id,external_id,team_type").eq("source", competition.provider),
     db.from("players").select("id,external_id").eq("source", competition.provider),
     db.from("match_player_stats").select("id,player_external_id").eq("competition_id", competition.id).is("player_id", null),
   ]);
-  if (lineupRows.error) throw lineupRows.error;
-  if (statRows.error) throw statRows.error;
   if (clubRows.error) throw clubRows.error;
   if (playerRows.error) throw playerRows.error;
   if (unresolvedRows.error) throw unresolvedRows.error;
@@ -51,17 +53,19 @@ export async function syncLineups(db, competition, ctx = {}) {
     if (error) throw error;
     relinked++;
   }
-  const hasLineup = new Set((lineupRows.data || []).map((row) => row.match_id));
-  const hasFinalStats = new Set((statRows.data || []).filter((row) => row.minutes !== null).map((row) => row.match_id));
-  const todo = (candidates || []).filter((match) => canStats ? !hasFinalStats.has(match.id) : !hasLineup.has(match.id)).slice(0, cap);
+  const todo = (candidates || []).filter((match) => match.status === "live"
+    || (canLineups && !match.lineups_synced_at)
+    || (canStats && !match.player_stats_synced_at)).slice(0, cap);
   if (!todo.length) return `${competition.name}: compositions déjà à jour${relinked ? `, ${relinked} joueurs reliés` : ""}`;
 
   let teams = 0;
   let players = 0;
   for (const match of todo) {
+    const fetchLineups = canLineups && (match.status === "live" || !match.lineups_synced_at);
+    const fetchStats = canStats && (match.status === "live" || !match.player_stats_synced_at);
     const [lineups, stats] = await Promise.all([
-      canLineups ? provider.fetchMatchLineups({ external_id: match.external_id }, ctx) : Promise.resolve([]),
-      canStats ? provider.fetchMatchPlayerStats({ external_id: match.external_id }, ctx) : Promise.resolve([]),
+      fetchLineups ? provider.fetchMatchLineups({ external_id: match.external_id }, ctx) : Promise.resolve([]),
+      fetchStats ? provider.fetchMatchPlayerStats({ external_id: match.external_id }, ctx) : Promise.resolve([]),
     ]);
     const now = new Date().toISOString();
     const { data: lockedLineups } = await db.from("match_lineups").select("club_id").eq("match_id", match.id).eq("locked", true);
@@ -140,6 +144,13 @@ export async function syncLineups(db, competition, ctx = {}) {
         if (callupError) throw callupError;
       }
       players++;
+    }
+    if (match.status === "finished") {
+      const syncState = {};
+      if (fetchLineups) syncState.lineups_synced_at = now;
+      if (fetchStats) syncState.player_stats_synced_at = now;
+      const { error: syncStateError } = await db.from("matches").update(syncState).eq("id", match.id);
+      if (syncStateError) throw syncStateError;
     }
   }
   return `${competition.name}: ${todo.length} matchs, ${teams} formations, ${players} joueurs${relinked ? `, ${relinked} reliés` : ""}`;

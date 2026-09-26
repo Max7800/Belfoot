@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic";
 
 const EXPECTED_MIGRATIONS = {
   core: ["0002_profile_role_hardening", "0003_media_storage_hardening", "0004_job_execution_guardrails", "0005_persistent_pipeline_runs"],
-  football: ["0023_season_safe_sync", "0024_player_team_seasons", "0025_membership_backfill_repair", "0026_match_center_live", "0027_national_teams", "0028_followed_national_teams", "0029_national_fifa_ranking", "0030_backfill_seasons", "0031_diable_ratings", "0032_season_rollout", "0033_history_foundations"],
+  football: ["0023_season_safe_sync", "0024_player_team_seasons", "0025_membership_backfill_repair", "0026_match_center_live", "0027_national_teams", "0028_followed_national_teams", "0029_national_fifa_ranking", "0030_backfill_seasons", "0031_diable_ratings", "0032_season_rollout", "0033_history_foundations", "0034_match_sync_state"],
 };
 
 async function requireAdmin(request, db) {
@@ -49,6 +49,7 @@ export async function GET(request) {
       probe("Pipelines persistants", db.from("pipeline_runs").select("next_step,request_count,heartbeat_at").limit(1)),
       probe("Carrières importées par lots", db.from("players").select("career_sync_status,career_synced_at").limit(1)),
       probe("Convocations historisées par match", db.from("national_match_callups").select("match_id,national_team_id,status,locked").limit(1)),
+      probe("États de synchronisation par match", db.from("matches").select("events_synced_at,lineups_synced_at,player_stats_synced_at").limit(1)),
     ]);
 
     const applied = migrationResult.data || [];

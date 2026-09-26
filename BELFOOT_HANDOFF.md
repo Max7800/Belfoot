@@ -1468,6 +1468,29 @@ estimations clubs/matchs si les formats 2026 changent, puis lancer chaque pipeli
 préflight. Le calendrier admin est une répartition prévisionnelle ; la consommation réelle et le
 quota retourné par le provider restent les garde-fous d'exécution.
 
+### 2026-09-26 — ChatGPT — fiabilisation match par match avant le mois Pro
+
+- Nouvelle migration idempotente `football/0034_match_sync_state.sql`. Elle ajoute sur chaque match
+  les dates de synchronisation des événements, compositions et performances, avec backfill des
+  données provider déjà présentes et index partiels pour les files restantes.
+- Une réponse vide pour un match terminé est désormais un résultat traité : le job ne consomme plus
+  le même endpoint à chaque passage. Un match encore live reste réinterrogé ; il n'est marqué complet
+  qu'une fois terminé.
+- Les événements provider sont remplacés par la RPC transactionnelle
+  `replace_provider_match_events`. Si l'insertion échoue, la suppression est annulée et les anciens
+  événements restent présents. Les événements manuels ou d'une autre source ne sont jamais touchés.
+- Les jobs événements et compositions filtrent maintenant réellement par `season_id`. Le préflight
+  le faisait déjà, mais l'exécution pouvait auparavant choisir un match d'une autre saison de la même
+  compétition — risque devenu critique avec trois saisons conservées simultanément. La collecte des
+  matchs live précédents applique le même filtre.
+- Le préflight des compositions compte les endpoints encore manquants au lieu d'appliquer
+  systématiquement deux appels par match. Le diagnostic admin vérifie la migration et les nouveaux
+  marqueurs. Aucun appel API-Football n'a été effectué.
+
+**Avant d'utiliser à nouveau Événements ou Compositions :** appliquer
+`modules/football/migrations/0034_match_sync_state.sql`. Les deux jobs sont bloqués par leur préflight
+tant que la migration n'est pas enregistrée.
+
 ---
 
 ## SOCLE_CANDIDATES  (documenter seulement — NE PAS remonter au socle maintenant)

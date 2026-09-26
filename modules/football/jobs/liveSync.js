@@ -2,6 +2,7 @@ import "@/modules/football/thesportsdb";
 import "@/modules/football/apifootball";
 import { syncCompetition } from "../syncCompetition";
 import { syncEvents } from "../syncEvents";
+import { ensureSeason } from "../season";
 
 // Live : même mécanique (ré-upsert scores/statuts). À planifier plus fréquemment.
 export default {
@@ -16,8 +17,9 @@ export default {
     const out = [];
     let remainingMatchBudget = Math.max(1, Math.min(Number(ctx.matchCap) || 3, 20));
     for (const competition of comps) {
+      const season = await ensureSeason(db, competition.id, ctx.season || competition.ext?.season);
       const { data: before, error: beforeError } = remainingMatchBudget > 0
-        ? await db.from("matches").select("id").eq("competition_id", competition.id).eq("status", "live").limit(remainingMatchBudget)
+        ? await db.from("matches").select("id").eq("competition_id", competition.id).eq("season_id", season.id).eq("status", "live").limit(remainingMatchBudget)
         : { data: [], error: null };
       if (beforeError) throw beforeError;
       const scores = await syncCompetition(db, competition, { ...ctx, mode: "live" });

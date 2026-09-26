@@ -315,7 +315,10 @@ les tables statistiques séparées.
 **Correctif du 18 septembre 2026 :** `0004_job_execution_guardrails.sql` ajoute un verrou unique par
 job/cible, heartbeat, expiration après 20 minutes, compteur d'appels, budget et quota restant. Dans
 l'admin, chaque lancement affiche son coût estimé et demande confirmation avec un budget strict.
-Le traitement durable des réponses événements/compositions vides reste à ajouter.
+**Correctif du 26 septembre 2026 :** `0034_match_sync_state.sql` ajoute des marqueurs de traitement
+par match pour les événements, compositions et performances. Une réponse vide d'un match terminé est
+donc mémorisée et n'est plus refacturée au passage suivant. Les matchs live restent volontairement
+réinterrogés jusqu'à leur fin. Le préflight ne compte plus que les endpoints réellement manquants.
 
 - aucun verrou n'empêche deux jobs identiques de tourner en parallèle ;
 - aucune estimation de coût n'est confirmée avant un job lourd ;
@@ -343,6 +346,10 @@ retry borné, lecture des headers quota et redaction des erreurs.
 `syncEvents` supprime les événements existants avant l'insertion des nouveaux. Si l'insert échoue,
 le match perd ses données. Préférer une RPC transactionnelle ou insérer/upserter dans une transaction
 côté base.
+
+**Correctif du 26 septembre 2026 :** la RPC `replace_provider_match_events` effectue suppression,
+insertion et marquage dans une transaction PostgreSQL unique. Une erreur restaure les anciens
+événements et les lignes manuelles ou provenant d'une autre source ne sont jamais supprimées.
 
 ---
 
