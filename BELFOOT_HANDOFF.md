@@ -1440,6 +1440,34 @@ n'est pas enregistrée.
 **Suite prévue :** revue visuelle de l'admin sur la vraie base après migrations, puis réglage des budgets
 et fréquences avec le quota Pro réel. Aucun appel provider n'a encore été effectué.
 
+### 2026-09-26 — ChatGPT — point 4, plan historique sur trois saisons
+
+- Le plan d'import admin passe en version multi-saisons et conserve séparément `2024-2025`,
+  `2025-2026` et `2026-2027` (le libellé demandé « 2026/2026 » est interprété comme `2026-2027`).
+  Chaque couple saison-compétition/sélection possède son propre interrupteur et son niveau
+  `Calendrier`, `+ Effectifs` ou `Complet`.
+- Les trois saisons sont proposées en import complet par défaut pour les cibles autorisées. Les
+  compétitions étrangères restent désactivées par défaut et doivent être ajoutées explicitement :
+  aucun balayage automatique de tous les championnats n'est possible.
+- Le quota Pro de 7 500 appels est traité comme un **quota quotidien**, avec deux réserves quotidiennes
+  distinctes pour les carrières et le direct. L'admin affiche le volume historique total, la capacité
+  restante par jour et répartit automatiquement les cibles, dans l'ordre de la whitelist, sur Jour 1,
+  Jour 2, etc.
+- Une cible dont l'estimation dépasse à elle seule la capacité quotidienne, ou des réserves qui
+  consomment tout le quota, bloque l'enregistrement. Le préflight serveur continue de recalculer le
+  coût réel avant chaque pipeline et le contrôle de whitelist serveur vérifie maintenant le couple
+  exact saison-cible ainsi que le niveau d'import autorisé.
+- La lecture de l'ancien plan à saison unique reste compatible jusqu'au premier enregistrement
+  volontaire du plan version 2. Le plan est stocké dans `site_settings.data.football_import_plan` :
+  aucune migration supplémentaire n'est nécessaire pour ce lot.
+- Enregistrer ou modifier ce plan ne lance aucun appel API-Football et n'active aucune saison sur le
+  site public.
+
+**À faire avant les imports réels :** enregistrer et relire le plan sur la vraie base, ajuster les
+estimations clubs/matchs si les formats 2026 changent, puis lancer chaque pipeline depuis son
+préflight. Le calendrier admin est une répartition prévisionnelle ; la consommation réelle et le
+quota retourné par le provider restent les garde-fous d'exécution.
+
 ---
 
 ## SOCLE_CANDIDATES  (documenter seulement — NE PAS remonter au socle maintenant)
