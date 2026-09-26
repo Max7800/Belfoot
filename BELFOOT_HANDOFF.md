@@ -1527,6 +1527,17 @@ tant que la migration n'est pas enregistrée.
   variables Supabase factices, l'environnement local ne contenant pas les variables publiques.
 - Aucun appel API-Football n'a été effectué.
 
+### 2026-09-26 — ChatGPT — contrôle du déploiement du carrousel
+
+- Le déploiement Vercel de `c7e83bf` a été contrôlé sur l'accueil, `/diables-rouges` et
+  `/competitions`. Le carrousel change correctement de compétition et le nouveau bloc `En forme`
+  affiche bien le joueur mis en avant suivi de quatre joueurs sans répétition.
+- Le contrôle réel a révélé un défaut fonctionnel : la Croky Cup héritait d'un faux top 5 calculé à
+  partir des résultats d'un tour. Les compétitions à élimination directe sont maintenant détectées
+  et affichent une explication de leur format à la place du classement.
+- Pour une coupe, les derniers résultats et prochains matchs sont désormais recherchés sur tous les
+  tours, plutôt que dans la phase comptant le plus de rencontres. Aucun SQL et aucun appel provider.
+
 ---
 
 ## SOCLE_CANDIDATES  (documenter seulement — NE PAS remonter au socle maintenant)
