@@ -81,6 +81,13 @@ function SquadPreview({ rows, accent, className = "" }) {
   </div>)}</div>;
 }
 
+function SquadNamesPreview({ rows, accent }) {
+  return <div className="space-y-3">{groupByPosition(rows, (row) => row.position || row.player?.position).map((group) => <div key={group.key} className="rounded-xl border border-line/10 bg-bg/35 px-3 py-2.5">
+    <div className="mb-1.5 flex items-center gap-2"><span className="h-3.5 w-1 rounded-full" style={{ backgroundColor: accent }} /><h3 className="text-[10px] font-black uppercase tracking-wider text-muted">{group.label} · {group.rows.length}</h3></div>
+    <p className="text-sm font-semibold leading-6 text-slate-200">{group.rows.map((row) => row.player.name).join(" · ")}</p>
+  </div>)}</div>;
+}
+
 export default function NationalTeamsPage() {
   const config = useNationalTeamsConfig();
   const rankings = useRankings();
@@ -181,7 +188,6 @@ export default function NationalTeamsPage() {
   const sectionConfig = Object.fromEntries(config.sections.map((section) => [section.key, section]));
   const displayedResults = results.slice(0, 6);
   const displayedSquad = squad.slice(0, 10);
-  const mobileSquad = squad.slice(0, 4);
   const otherUpcoming = upcoming.filter((match) => match.id !== featured?.id).slice(0, 2);
 
   if (schemaMissing) return <div className="mx-auto max-w-3xl rounded-3xl border border-amber-400/20 bg-amber-400/5 p-8 text-center"><Shield className="mx-auto h-10 w-10 text-amber-300" /><h1 className="mt-3 text-2xl font-black">Le module Sélections est prêt</h1><p className="mt-2 text-sm leading-6 text-muted">Il reste à appliquer la migration SQL 0027, puis à lancer « Synchroniser une sélection » dans l'administration.</p></div>;
@@ -224,7 +230,7 @@ export default function NationalTeamsPage() {
       {sectionConfig.squad?.enabled && <ModuleCard className="order-4 lg:order-none lg:col-span-8">
         <PanelHeader icon={Users} title={sectionConfig.squad.label} subtitle={sectionConfig.squad.subtitle} accent={sectionConfig.squad.accent} action={squad.length > 4 ? `${config.labels.show_all_players} (${squad.length})` : null} actionHref={`/diables-rouges/selection?equipe=${selectedId}`} />
         {squad.length ? <>
-          <SquadPreview rows={mobileSquad} accent={sectionConfig.squad.accent} className="sm:hidden" />
+          <div className="sm:hidden"><SquadNamesPreview rows={squad} accent={sectionConfig.squad.accent} /></div>
           <SquadPreview rows={displayedSquad} accent={sectionConfig.squad.accent} className="hidden sm:block" />
         </> : <p className="text-sm text-muted">La sélection apparaîtra après sa synchronisation.</p>}
       </ModuleCard>}

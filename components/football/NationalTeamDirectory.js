@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, CalendarDays, MapPin, Shield, Trophy, Users } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
-import { groupByPosition } from "@/lib/positions";
+import { groupByPosition, positionGroup } from "@/lib/positions";
 import { matchStatusMeta } from "@/lib/matchStatus";
 
 const CATEGORY_LABELS = { senior: "Diables Rouges", u23: "U23", u21: "Espoirs U21", u20: "U20", u19: "U19", u18: "U18", u17: "U17", women: "Red Flames" };
@@ -55,6 +55,8 @@ export default function NationalTeamDirectory({ mode }) {
   const [clubs, setClubs] = useState({});
   const [competitions, setCompetitions] = useState({});
   const [squad, setSquad] = useState([]);
+  const [positionFilter, setPositionFilter] = useState("ALL");
+  const [competitionFilter, setCompetitionFilter] = useState("ALL");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -106,9 +108,18 @@ export default function NationalTeamDirectory({ mode }) {
     })().catch((loadError) => { setError(loadError.message || String(loadError)); setLoading(false); });
   }, [mode, selectedId]);
 
+  useEffect(() => {
+    setPositionFilter("ALL");
+    setCompetitionFilter("ALL");
+  }, [mode, selectedId]);
+
   const selectedTeam = teams.find((team) => team.id === selectedId);
-  const upcoming = useMemo(() => matches.filter((match) => match.status === "live" || (match.status === "scheduled" && new Date(match.kickoff).getTime() >= Date.now())).sort((a, b) => new Date(a.kickoff) - new Date(b.kickoff)), [matches]);
-  const results = useMemo(() => matches.filter((match) => match.status === "finished").sort((a, b) => new Date(b.kickoff) - new Date(a.kickoff)), [matches]);
+  const competitionOptions = useMemo(() => [...new Set(matches.map((match) => match.competition_id).filter(Boolean))].map((id) => ({ id, label: competitions[id]?.name || "Compétition internationale" })).sort((a, b) => a.label.localeCompare(b.label, "fr")), [matches, competitions]);
+  const filteredMatches = useMemo(() => competitionFilter === "ALL" ? matches : matches.filter((match) => match.competition_id === competitionFilter), [matches, competitionFilter]);
+  const upcoming = useMemo(() => filteredMatches.filter((match) => match.status === "live" || (match.status === "scheduled" && new Date(match.kickoff).getTime() >= Date.now())).sort((a, b) => new Date(a.kickoff) - new Date(b.kickoff)), [filteredMatches]);
+  const results = useMemo(() => filteredMatches.filter((match) => match.status === "finished").sort((a, b) => new Date(b.kickoff) - new Date(a.kickoff)), [filteredMatches]);
+  const squadGroups = useMemo(() => groupByPosition(squad, (row) => row.position || row.player?.position), [squad]);
+  const filteredSquadGroups = positionFilter === "ALL" ? squadGroups : squadGroups.filter((group) => group.key === positionFilter);
 
   return <div className="space-y-6">
     <Link href="/diables-rouges" className="inline-flex items-center gap-2 text-sm font-bold text-muted transition hover:text-white"><ArrowLeft className="h-4 w-4" />Retour aux Diables Rouges</Link>
@@ -119,9 +130,13 @@ export default function NationalTeamDirectory({ mode }) {
       <div className="mt-5"><TeamSelector teams={teams} selectedId={selectedId} onSelect={setSelectedId} /></div>
     </header>
 
+    {!loading && !error && mode === "matches" && competitionOptions.length > 1 && <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1"><button type="button" onClick={() => setCompetitionFilter("ALL")} className={`shrink-0 rounded-full border px-3 py-2 text-xs font-bold transition ${competitionFilter === "ALL" ? "border-red-400/50 bg-red-500/15 text-white" : "border-line/10 bg-surface text-muted"}`}>Toutes</button>{competitionOptions.map((competition) => <button key={competition.id} type="button" onClick={() => setCompetitionFilter(competition.id)} className={`shrink-0 rounded-full border px-3 py-2 text-xs font-bold transition ${competitionFilter === competition.id ? "border-red-400/50 bg-red-500/15 text-white" : "border-line/10 bg-surface text-muted"}`}>{competition.label}</button>)}</div>}
+
+    {!loading && !error && mode === "squad" && squadGroups.length > 1 && <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1"><button type="button" onClick={() => setPositionFilter("ALL")} className={`shrink-0 rounded-full border px-3 py-2 text-xs font-bold transition ${positionFilter === "ALL" ? "border-amber-400/50 bg-amber-400/15 text-white" : "border-line/10 bg-surface text-muted"}`}>Tous · {squad.length}</button>{squadGroups.map((group) => <button key={group.key} type="button" onClick={() => setPositionFilter(group.key)} className={`shrink-0 rounded-full border px-3 py-2 text-xs font-bold transition ${positionFilter === group.key ? "border-amber-400/50 bg-amber-400/15 text-white" : "border-line/10 bg-surface text-muted"}`}>{group.label} · {group.rows.length}</button>)}</div>}
+
     {loading ? <div className="h-64 animate-pulse rounded-3xl bg-surface" /> : error ? <div className="rounded-2xl border border-red-400/20 bg-red-500/10 p-5 text-sm text-red-200">Chargement impossible : {error}</div> : mode === "matches" ? <>
       {upcoming.length > 0 && <section><h2 className="mb-3 flex items-center gap-2 text-sm font-black uppercase tracking-wider"><CalendarDays className="h-4 w-4 text-amber-300" />Prochains matchs</h2><div className="grid gap-3 lg:grid-cols-2">{upcoming.map((match) => <MatchCard key={match.id} match={match} clubs={clubs} competitions={competitions} />)}</div></section>}
-      <section><h2 className="mb-3 flex items-center gap-2 text-sm font-black uppercase tracking-wider"><Trophy className="h-4 w-4 text-red-300" />Résultats</h2>{results.length ? <div className="grid gap-3 lg:grid-cols-2">{results.map((match) => <MatchCard key={match.id} match={match} clubs={clubs} competitions={competitions} />)}</div> : <p className="rounded-2xl border border-dashed border-line/15 p-8 text-center text-sm text-muted">Aucun résultat importé pour cette sélection.</p>}</section>
-    </> : squad.length ? <div className="space-y-7">{groupByPosition(squad, (row) => row.position || row.player?.position).map((group) => <section key={group.key}><h2 className="mb-3 flex items-center gap-2 text-sm font-black uppercase tracking-wider"><span className="h-5 w-1 rounded-full bg-amber-300" />{group.label} <span className="text-muted">· {group.rows.length}</span></h2><div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">{group.rows.map((row) => <Link key={row.id} href={`/players/${row.player.id}`} className="group rounded-2xl border border-line/10 bg-surface/70 p-4 text-center transition hover:-translate-y-0.5 hover:border-amber-400/35"><div className="mx-auto h-24 w-24 overflow-hidden rounded-full border border-white/10 bg-surface2">{row.player.photo_url ? <img src={row.player.photo_url} alt="" className="h-full w-full object-cover object-top" /> : <Users className="m-7 h-10 w-10 text-muted" />}</div><div className="mt-3 truncate font-black group-hover:text-amber-300">{row.player.name}</div><div className="mt-1 truncate text-[10px] uppercase tracking-wider text-muted">{row.position || row.player.position || "Joueur"}</div><div className="mt-2 truncate text-xs text-slate-400">{row.club?.name || "Club à compléter"}</div></Link>)}</div></section>)}</div> : <p className="rounded-2xl border border-dashed border-line/15 p-8 text-center text-sm text-muted">La sélection apparaîtra après sa synchronisation.</p>}
+      <section><h2 className="mb-3 flex items-center gap-2 text-sm font-black uppercase tracking-wider"><Trophy className="h-4 w-4 text-red-300" />Résultats</h2>{results.length ? <div className="grid gap-3 lg:grid-cols-2">{results.map((match) => <MatchCard key={match.id} match={match} clubs={clubs} competitions={competitions} />)}</div> : <p className="rounded-2xl border border-dashed border-line/15 p-8 text-center text-sm text-muted">Aucun résultat pour ce filtre.</p>}</section>
+    </> : squad.length ? <div className="space-y-7">{filteredSquadGroups.map((group) => <section key={group.key}><h2 className="mb-3 flex items-center gap-2 text-sm font-black uppercase tracking-wider"><span className="h-5 w-1 rounded-full bg-amber-300" />{group.label} <span className="text-muted">· {group.rows.length}</span></h2><div className="grid gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-4 xl:grid-cols-5">{group.rows.map((row) => <Link key={row.id} href={`/players/${row.player.id}`} className="group flex items-center gap-3 rounded-2xl border border-line/10 bg-surface/70 p-2.5 text-left transition hover:-translate-y-0.5 hover:border-amber-400/35 sm:block sm:p-4 sm:text-center"><div className="h-14 w-14 shrink-0 overflow-hidden rounded-full border border-white/10 bg-surface2 sm:mx-auto sm:h-24 sm:w-24">{row.player.photo_url ? <img src={row.player.photo_url} alt="" className="h-full w-full object-cover object-top" /> : <Users className="m-3.5 h-7 w-7 text-muted sm:m-7 sm:h-10 sm:w-10" />}</div><div className="min-w-0 flex-1 sm:mt-3"><div className="truncate font-black group-hover:text-amber-300">{row.player.name}</div><div className="mt-0.5 truncate text-[10px] uppercase tracking-wider text-muted sm:mt-1">{positionGroup(row.position || row.player.position).label}</div><div className="mt-1 truncate text-xs text-slate-400 sm:mt-2">{row.club?.name || "Club à compléter"}</div></div></Link>)}</div></section>)}</div> : <p className="rounded-2xl border border-dashed border-line/15 p-8 text-center text-sm text-muted">La sélection apparaîtra après sa synchronisation.</p>}
   </div>;
 }

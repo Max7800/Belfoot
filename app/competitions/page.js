@@ -83,7 +83,7 @@ export default function CompetitionsPage() {
           return (
             <article
               key={competition.id}
-              className={`group relative min-h-[340px] overflow-hidden rounded-3xl border bg-[#07182b] transition duration-300 hover:-translate-y-1 ${featured ? "lg:col-span-2 lg:min-h-[310px]" : ""}`}
+              className={`group relative overflow-hidden rounded-3xl border bg-[#07182b] transition duration-300 hover:-translate-y-1 sm:min-h-[340px] ${featured ? "lg:col-span-2 lg:min-h-[310px]" : ""}`}
               style={{ borderColor: `${borderColor}8c`, boxShadow: `0 26px 70px -48px ${borderColor}` }}
             >
               <div className="absolute inset-0 bg-cover bg-center transition duration-500 group-hover:scale-[1.025]" style={{ backgroundImage: `url(${banner})` }} />
@@ -91,25 +91,25 @@ export default function CompetitionsPage() {
               <div className="absolute inset-0 bg-gradient-to-t from-[#061426] via-[#07182b]/85 to-black/15" />
               <div className="pointer-events-none absolute inset-x-0 top-0 h-px opacity-90" style={{ background: `linear-gradient(90deg, transparent, ${borderColor}, transparent)` }} />
               <div className="pointer-events-none absolute -right-16 -top-20 h-52 w-52 rounded-full opacity-[0.15] blur-3xl" style={{ backgroundColor: borderColor }} />
-              <Link href={path} className={`relative flex flex-col p-5 sm:p-6 ${featured ? "min-h-[270px] lg:min-h-[240px] lg:px-8" : "min-h-[270px]"}`}>
+              <Link href={path} className={`relative flex flex-col p-4 sm:min-h-[270px] sm:p-6 ${featured ? "lg:min-h-[240px] lg:px-8" : ""}`}>
                 <div className="flex items-start justify-between gap-4">
                   <span className="inline-flex items-center gap-1.5 rounded-full border bg-black/30 px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] backdrop-blur-sm" style={{ borderColor: `${borderColor}80`, color: borderColor }}>{isCup ? <Trophy className="h-3.5 w-3.5" /> : <Shield className="h-3.5 w-3.5" />}{isCup ? L("competitions.cup", "Coupe") : L("competitions.league", "Championnat")}</span>
                   <span className="text-sm text-white/75">{competition.ext?.country_flag ? <img src={competition.ext.country_flag} className="h-4 w-6 rounded-sm object-cover" alt="" /> : FLAG[country] || "🇧🇪"}</span>
                 </div>
-                <div className={`mt-auto flex items-end gap-4 ${featured ? "pt-12 lg:gap-6 lg:pt-8" : "pt-16"}`}>
-                  {competition.logo_url && <div className={`flex shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-black/30 p-2 backdrop-blur-sm ${featured ? "h-20 w-20 lg:h-24 lg:w-24" : "h-20 w-20"}`}><img src={competition.logo_url} className="h-full w-full object-contain drop-shadow-xl" alt="" /></div>}
+                <div className={`mt-7 flex items-center gap-3 sm:mt-auto sm:items-end sm:gap-4 ${featured ? "sm:pt-12 lg:gap-6 lg:pt-8" : "sm:pt-16"}`}>
+                  {competition.logo_url && <div className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-black/30 p-2 backdrop-blur-sm sm:h-20 sm:w-20 ${featured ? "lg:h-24 lg:w-24" : ""}`}><img src={competition.logo_url} className="h-full w-full object-contain drop-shadow-xl" alt="" /></div>}
                   <div className="min-w-0 flex-1">
-                    <h2 className={`font-black leading-none text-white ${featured ? "text-3xl sm:text-4xl lg:text-5xl" : "text-3xl sm:text-4xl"}`}>{title}</h2>
-                    <p className={`mt-2 line-clamp-2 leading-5 text-white/70 ${featured ? "max-w-2xl text-sm sm:text-base" : "text-sm"}`}>{subtitle}</p>
+                    <h2 className={`text-2xl font-black leading-none text-white ${featured ? "sm:text-4xl lg:text-5xl" : "sm:text-4xl"}`}>{title}</h2>
+                    <p className={`mt-2 line-clamp-2 text-xs leading-5 text-white/70 sm:text-sm ${featured ? "max-w-2xl sm:text-base" : ""}`}>{subtitle}</p>
                   </div>
                   {featured && <ArrowRight className="mb-2 hidden h-7 w-7 shrink-0 text-white/55 transition group-hover:translate-x-1 group-hover:text-white lg:block" />}
                 </div>
               </Link>
-              <div className="relative grid grid-cols-2 border-t border-white/10 bg-[#020b15]/60 p-2 backdrop-blur-md sm:grid-cols-4">
-                <Link href={path} className="flex items-center justify-center gap-1.5 rounded-xl px-2 py-2.5 text-[11px] font-bold text-white/90 transition hover:bg-white/[0.08] hover:text-white"><ArrowRight className="h-3.5 w-3.5" />{L("comp.tab.overview", "Vue d'ensemble")}</Link>
-                <Link href={`${path}?tab=matchs`} className="flex items-center justify-center gap-1.5 rounded-xl px-2 py-2.5 text-[11px] font-bold text-white/90 transition hover:bg-white/[0.08] hover:text-white"><CalendarDays className="h-3.5 w-3.5" />{L("nav.matchs", "Matchs")}</Link>
-                <Link href={`${path}?tab=classement`} className="flex items-center justify-center gap-1.5 rounded-xl px-2 py-2.5 text-[11px] font-bold text-white/90 transition hover:bg-white/[0.08] hover:text-white"><ListOrdered className="h-3.5 w-3.5" />{isCup ? L("cup.rounds", "Tours") : L("nav.classement", "Classement")}</Link>
-                <Link href={`${path}?tab=clubs`} className="flex items-center justify-center gap-1.5 rounded-xl px-2 py-2.5 text-[11px] font-bold text-white/90 transition hover:bg-white/[0.08] hover:text-white"><UsersRound className="h-3.5 w-3.5" />{L("nav.clubs", "Clubs")}</Link>
+              <div className="relative grid grid-cols-2 border-t border-white/10 bg-[#020b15]/60 p-1.5 backdrop-blur-md sm:grid-cols-4 sm:p-2">
+                <Link href={path} className="flex items-center justify-center gap-1.5 rounded-xl px-2 py-2 text-[10px] font-bold text-white/90 transition hover:bg-white/[0.08] hover:text-white sm:py-2.5 sm:text-[11px]"><ArrowRight className="h-3.5 w-3.5" />{L("comp.tab.overview", "Vue d'ensemble")}</Link>
+                <Link href={`${path}?tab=matchs`} className="flex items-center justify-center gap-1.5 rounded-xl px-2 py-2 text-[10px] font-bold text-white/90 transition hover:bg-white/[0.08] hover:text-white sm:py-2.5 sm:text-[11px]"><CalendarDays className="h-3.5 w-3.5" />{L("nav.matchs", "Matchs")}</Link>
+                <Link href={`${path}?tab=classement`} className="flex items-center justify-center gap-1.5 rounded-xl px-2 py-2 text-[10px] font-bold text-white/90 transition hover:bg-white/[0.08] hover:text-white sm:py-2.5 sm:text-[11px]"><ListOrdered className="h-3.5 w-3.5" />{isCup ? L("cup.rounds", "Tours") : L("nav.classement", "Classement")}</Link>
+                <Link href={`${path}?tab=clubs`} className="flex items-center justify-center gap-1.5 rounded-xl px-2 py-2 text-[10px] font-bold text-white/90 transition hover:bg-white/[0.08] hover:text-white sm:py-2.5 sm:text-[11px]"><UsersRound className="h-3.5 w-3.5" />{L("nav.clubs", "Clubs")}</Link>
               </div>
             </article>
           );

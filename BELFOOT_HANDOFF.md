@@ -1491,6 +1491,22 @@ quota retourné par le provider restent les garde-fous d'exécution.
 `modules/football/migrations/0034_match_sync_state.sql`. Les deux jobs sont bloqués par leur préflight
 tant que la migration n'est pas enregistrée.
 
+### 2026-09-26 — ChatGPT — compactage mobile Diables et portail Compétitions
+
+- Sur l'accueil `/diables-rouges`, la sélection mobile n'affiche plus quatre grandes cartes avec
+  portraits : elle présente tous les noms dans quatre lignes compactes par poste. Le lien « Voir tous
+  les joueurs » ouvre toujours `/diables-rouges/selection`.
+- La page de sélection complète dispose désormais de filtres horizontaux `Tous`, `Gardiens`,
+  `Défenseurs`, `Milieux`, `Attaquants`. Sur mobile, chaque joueur devient une ligne compacte avec un
+  portrait de 56 px ; le rendu en grandes cartes est conservé à partir de la tablette.
+- La page `/diables-rouges/matchs` génère ses filtres depuis les compétitions réellement importées
+  (qualifications, Nations League, amicaux, Euro, etc.). Le filtre s'applique ensemble aux prochains
+  matchs et aux résultats, sans codage en dur des noms provider.
+- Les portes de `/competitions` n'imposent plus une grande hauteur minimale sur mobile. Le contenu
+  remonte sous le badge de type, les logos/titres sont réduits et les raccourcis sont légèrement plus
+  compacts. Les hauteurs et tailles desktop restent inchangées.
+- Aucun SQL et aucun appel API-Football pour ce lot.
+
 ---
 
 ## SOCLE_CANDIDATES  (documenter seulement — NE PAS remonter au socle maintenant)
