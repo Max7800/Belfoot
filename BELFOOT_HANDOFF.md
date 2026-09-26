@@ -1544,6 +1544,21 @@ tant que la migration n'est pas enregistrée.
 - Sur mobile, le bouton d'accès à la compétition est remonté dans l'en-tête du carrousel sous le nom
   et la saison, avec un fond contrasté. L'ancien lien placé après les prochains matchs est supprimé.
 
+### 2026-09-26 — ChatGPT — tableau final de la Croky Cup
+
+- L'onglet `Tours` des compétitions à élimination directe devient `Tableau`. Pour la Croky Cup, un
+  bracket relie désormais les `Round of 32`, `Round of 16`, quarts, demi-finales et finale.
+- Les matchs du tour précédent sont réordonnés à partir des clubs réellement présents au tour
+  suivant. Les branches restent ainsi cohérentes même si le provider renvoie les rencontres dans un
+  ordre différent.
+- Sur desktop, le tableau commence aux seizièmes de finale. Sur mobile, il commence aux huitièmes et
+  se parcourt horizontalement afin d'éviter une colonne initiale trop longue. Chaque affiche ouvre le
+  Match Center correspondant.
+- La liste historique par tour reste disponible sous le bracket avec les filtres existants, afin de
+  conserver l'accès aux six premiers tours de qualification.
+- Aucun SQL et aucun appel API-Football : le tableau est construit depuis `matches.phase` et les clubs
+  déjà enregistrés.
+
 ---
 
 ## SOCLE_CANDIDATES  (documenter seulement — NE PAS remonter au socle maintenant)
