@@ -9,6 +9,7 @@ import CupRounds from "@/components/football/CupRounds";
 import { useLabels } from "@/lib/labels";
 import { competitionPath } from "@/lib/competitionRoutes";
 import { zonesForPhase } from "@/lib/standingsZones";
+import { sortPublicSeasons } from "@/lib/publicSeasons";
 
 export default function ClassementPage() {
   const L = useLabels();
@@ -30,7 +31,7 @@ export default function ClassementPage() {
     if (matchError) throw matchError;
     if (seasonError) throw seasonError;
     setMatches(m || []); setPhase(null);
-    const orderedSeasons = [...(seasonRows || [])].sort((a, b) => (b.label || "").localeCompare(a.label || ""));
+    const orderedSeasons = sortPublicSeasons(seasonRows || []);
     setSeasons(orderedSeasons); setSeasonLabel(orderedSeasons[0]?.label || "");
     const ids = [...new Set((m || []).flatMap((x) => [x.home_club_id, x.away_club_id]).filter(Boolean))];
     if (ids.length) { const { data: cl } = await supabase.from("clubs").select("id,name,logo_url").in("id", ids); setClubs(Object.fromEntries((cl || []).map((x) => [x.id, x]))); }

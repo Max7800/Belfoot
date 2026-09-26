@@ -87,7 +87,7 @@ export function JobsPanel() {
   const [busy, setBusy] = useState(null);
   const [msg, setMsg] = useState("");
   const [comps, setComps] = useState([]);
-  const [compId, setCompId] = useState("");   // "" = toutes
+  const [compId, setCompId] = useState("");
   const [matchCap, setMatchCap] = useState(3);
   const [requestLimit, setRequestLimit] = useState(10);
   const [teamExternalId, setTeamExternalId] = useState("44");
@@ -109,6 +109,10 @@ export function JobsPanel() {
     return d;
   };
   const run = async (key) => {
+    if (JOB_CATALOG[key]?.target === "competition" && !compId) {
+      setMsg("✗ Choisis une compétition : les imports globaux sont désactivés pour protéger le quota.");
+      return;
+    }
     const cost = describeJobCost(key, { competitionId: compId, competitionCount: comps.length, matchCap });
     if (!window.confirm(`${JOB_CATALOG[key]?.label || key}\n\nCoût estimé : ${cost}.\nBudget strict : ${requestLimit} appels API maximum.\n\nLancer la synchronisation ?`)) return;
     setBusy(key); setMsg("");
@@ -116,10 +120,18 @@ export function JobsPanel() {
     setBusy(null); load();
   };
   const simulate = (p) => {
+    if (!compId) {
+      setMsg("✗ Choisis une compétition avant de simuler ce pipeline.");
+      return;
+    }
     const lines = p.jobs.map((k, i) => `${i + 1}. ${JOB_CATALOG[k]?.label || k} — ${describeJobCost(k, { competitionId: compId, competitionCount: comps.length, matchCap })}`);
     setMsg(`🔎 Simulation « ${p.label} » — budget GLOBAL ${requestLimit} appels pour la séquence :\n${lines.join("\n")}\n(Estimations hautes ; rien n'est lancé.)`);
   };
   const runPipeline = async (p, fromIndex = 0) => {
+    if (!compId) {
+      setMsg("✗ Choisis une compétition : un pipeline ne peut jamais viser tout le catalogue.");
+      return;
+    }
     const chain = p.jobs.map((j) => JOB_CATALOG[j]?.label || j).join("  →  ");
     if (fromIndex === 0 && !window.confirm(`${p.label}\n\n${chain}\n\nBudget GLOBAL ${requestLimit} appels pour TOUTE la séquence. Reprenable après une erreur.\n\nLancer ?`)) return;
     setBusy(p.key); setResume(null);
@@ -139,7 +151,7 @@ export function JobsPanel() {
     <h2 className="mb-4 text-lg font-bold">Jobs & synchronisation</h2>
     <p className="mb-3 text-xs leading-5 text-muted">Chaque lancement affiche maintenant son coût estimé et respecte un budget strict. Une relance identique est bloquée tant que le premier job travaille. La base 2024/2025 reste la référence de développement ; le passage à 2026/2027 se fera ici, compétition par compétition, lorsque l'abonnement API sera actif.</p>
     <div className="mb-3 flex flex-wrap items-center gap-2">
-      <select value={compId} onChange={(e) => setCompId(e.target.value)} className="rounded border border-line/10 bg-surface2 px-2 py-1 text-sm"><option value="">Toutes les compétitions activées</option>{comps.map((c) => <option key={c.id} value={c.id}>{c.live_enabled ? "🔴 " : ""}{c.name}</option>)}</select>
+      <select value={compId} onChange={(e) => setCompId(e.target.value)} className="rounded border border-line/10 bg-surface2 px-2 py-1 text-sm"><option value="">Choisir une compétition…</option>{comps.map((c) => <option key={c.id} value={c.id}>{c.live_enabled ? "🔴 " : ""}{c.name}</option>)}</select>
       <label className="text-xs text-muted">Saison</label>
       <input value={season} onChange={(e) => setSeason(e.target.value)} className="w-28 rounded border border-line/10 bg-surface2 px-2 py-1 text-sm" />
       <label className="text-xs text-muted">Max matchs</label>
@@ -154,8 +166,8 @@ export function JobsPanel() {
       <div className="space-y-1.5">
         {jobPipelines().map((p) => (
           <div key={p.key} className="flex flex-wrap items-center gap-2">
-            <button disabled={!!busy} onClick={() => runPipeline(p)} title={`${p.description}\n${p.jobs.map((j) => JOB_CATALOG[j]?.label || j).join(" → ")}`} className="rounded-lg border border-accent/30 bg-accent/10 px-3 py-1.5 text-sm font-bold text-accent disabled:opacity-50">{p.label}{busy === p.key ? " …" : ""}</button>
-            <button disabled={!!busy} onClick={() => simulate(p)} className="rounded-lg border border-line/20 px-2 py-1.5 text-xs text-muted hover:border-accent/40 disabled:opacity-50">🔎 Simuler</button>
+            <button disabled={!!busy || !compId} onClick={() => runPipeline(p)} title={`${p.description}\n${p.jobs.map((j) => JOB_CATALOG[j]?.label || j).join(" → ")}`} className="rounded-lg border border-accent/30 bg-accent/10 px-3 py-1.5 text-sm font-bold text-accent disabled:opacity-50">{p.label}{busy === p.key ? " …" : ""}</button>
+            <button disabled={!!busy || !compId} onClick={() => simulate(p)} className="rounded-lg border border-line/20 px-2 py-1.5 text-xs text-muted hover:border-accent/40 disabled:opacity-50">🔎 Simuler</button>
             <span className="text-[11px] text-muted">{p.description}</span>
           </div>
         ))}
@@ -172,7 +184,7 @@ export function JobsPanel() {
           <div className="mb-1.5 text-xs font-black uppercase tracking-wider text-muted">{meta.label}</div>
           <div className="flex flex-wrap gap-2">
             {keys.map((k) => (
-              <button key={k} disabled={!!busy} onClick={() => run(k)} title={JOB_CATALOG[k]?.requires ? `À lancer après : ${JOB_CATALOG[k].requires.map((r) => JOB_CATALOG[r]?.label || r).join(", ")}` : ""} className="rounded bg-accent px-3 py-1.5 text-sm font-bold text-white disabled:opacity-50">
+              <button key={k} disabled={!!busy || (JOB_CATALOG[k]?.target === "competition" && !compId)} onClick={() => run(k)} title={JOB_CATALOG[k]?.requires ? `À lancer après : ${JOB_CATALOG[k].requires.map((r) => JOB_CATALOG[r]?.label || r).join(", ")}` : ""} className="rounded bg-accent px-3 py-1.5 text-sm font-bold text-white disabled:opacity-50">
                 {(JOB_CATALOG[k]?.label || k)}{JOB_CATALOG[k]?.requires ? " ·" : ""}{busy === k ? " …" : ""}
               </button>
             ))}
@@ -180,8 +192,8 @@ export function JobsPanel() {
         </div>
       );
     })}
-    <div className="mb-3 rounded-xl border border-amber-400/15 bg-amber-400/5 p-3"><div className="mb-2 text-xs font-black uppercase tracking-wider text-amber-300">Imports ciblés</div><div className="flex flex-wrap items-center gap-2"><label className="text-xs text-muted">ID équipe API</label><input value={teamExternalId} onChange={(e) => setTeamExternalId(e.target.value.replace(/\D/g, ""))} placeholder="ID" className="w-20 rounded border border-line/10 bg-surface2 px-2 py-1 text-sm" /><label className="text-xs text-muted">Catégorie</label><select value={nationalCategory} onChange={(e) => setNationalCategory(e.target.value)} className="rounded border border-line/10 bg-surface2 px-2 py-1 text-sm"><option value="senior">Équipe A</option><option value="u21">U21</option><option value="u19">U19</option><option value="u17">U17</option><option value="women">Red Flames</option></select>{jobKeys().filter((key) => targetedJobs.has(key)).map((k) => <button key={k} disabled={!!busy} onClick={() => run(k)} className="rounded border border-amber-400/25 bg-amber-400/10 px-3 py-1.5 text-sm font-bold text-amber-100 disabled:opacity-50">{JOB_CATALOG[k]?.label || k}{busy === k ? " …" : ""}</button>)}</div><p className="mt-2 text-[11px] leading-5 text-muted">1. Trouve les IDs. 2. Synchronise la sélection : toutes ses compétitions de la saison, amicaux compris, sont créées automatiquement et restent masquées du portail général. 3. « Compléter les clubs » traite au maximum le nombre indiqué dans « Max matchs », à raison d'un appel par joueur.</p></div>
-    <p className="mb-3 rounded-lg border border-red-400/15 bg-red-500/5 p-3 text-xs leading-5 text-muted"><b className="text-content">Direct :</b> sans compétition choisie, le job traite uniquement celles dont « Direct activé » est coché. Il consomme un appel pour la journée, puis au maximum « Max matchs » appels pour les événements des rencontres en cours. L&apos;affichage public et Supabase Realtime ne consomment aucun appel API-Football.</p>
+      <div className="mb-3 rounded-xl border border-amber-400/15 bg-amber-400/5 p-3"><div className="mb-2 text-xs font-black uppercase tracking-wider text-amber-300">Imports ciblés</div><div className="flex flex-wrap items-center gap-2"><label className="text-xs text-muted">ID équipe API</label><input value={teamExternalId} onChange={(e) => setTeamExternalId(e.target.value.replace(/\D/g, ""))} placeholder="ID" className="w-20 rounded border border-line/10 bg-surface2 px-2 py-1 text-sm" /><label className="text-xs text-muted">Catégorie</label><select value={nationalCategory} onChange={(e) => setNationalCategory(e.target.value)} className="rounded border border-line/10 bg-surface2 px-2 py-1 text-sm"><option value="senior">Équipe A</option><option value="u21">U21</option><option value="u19">U19</option><option value="u17">U17</option><option value="women">Red Flames</option></select>{jobKeys().filter((key) => targetedJobs.has(key)).map((k) => <button key={k} disabled={!!busy || (JOB_CATALOG[k]?.target === "competition" && !compId) || (JOB_CATALOG[k]?.target === "national" && !teamExternalId)} onClick={() => run(k)} className="rounded border border-amber-400/25 bg-amber-400/10 px-3 py-1.5 text-sm font-bold text-amber-100 disabled:opacity-50">{JOB_CATALOG[k]?.label || k}{busy === k ? " …" : ""}</button>)}</div><p className="mt-2 text-[11px] leading-5 text-muted">1. Trouve les IDs. 2. Synchronise la sélection : toutes ses compétitions de la saison, amicaux compris, sont créées automatiquement et restent masquées du portail général. 3. « Compléter les clubs » traite au maximum le nombre indiqué dans « Max matchs », à raison d'un appel par joueur.</p></div>
+    <p className="mb-3 rounded-lg border border-red-400/15 bg-red-500/5 p-3 text-xs leading-5 text-muted"><b className="text-content">Direct :</b> c&apos;est le seul job autorisé sans compétition choisie ; il traite alors uniquement celles dont « Direct activé » est coché. Il consomme un appel pour la journée, puis au maximum « Max matchs » appels pour les événements des rencontres en cours. L&apos;affichage public et Supabase Realtime ne consomment aucun appel API-Football.</p>
     {msg && <p className="mb-3 whitespace-pre-line rounded border border-line/10 bg-surface p-2 text-sm text-muted">{msg}</p>}
     <div className="divide-y divide-line/10 rounded-xl border border-line/10">
       {rows.map((j) => <div key={j.id} className="flex items-center justify-between p-3 text-sm"><span>{j.job_key} · {new Date(j.started_at).toLocaleString()}</span><span className={j.status === "error" ? "text-red-400" : j.status === "ok" ? "text-green-400" : "text-muted"}>{j.status}{j.detail ? ` · ${j.detail}` : ""}</span></div>)}

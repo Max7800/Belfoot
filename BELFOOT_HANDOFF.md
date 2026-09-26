@@ -1374,6 +1374,48 @@ avant lancement : SEO minimal (sitemap/robots/metadata), CGU/vie privée, sécur
 
 ---
 
+## RÉCAP SESSION 2026-09-26 — Diables + préparation Pro sous-lot B
+
+**État Git : changements locaux uniquement, ne rien pousser sans l'accord explicite de l'utilisateur.**
+
+- Correctif Diables validé et commité localement (`fd2a40f`) : bannière mobile recadrée vers le logo
+  fédéral ; aperçu limité à 4 matchs et 4 joueurs sur mobile ; suppression du lien ambigu vers le
+  calendrier Pro League ; pages dédiées `/diables-rouges/matchs` et `/diables-rouges/selection` avec
+  filtre de sélection et mention de la compétition sur chaque match. L'effectif desktop paraît encore
+  un peu vide à l'utilisateur, mais ce polish est volontairement reporté.
+- Préparation 2026 sous-lot B codée localement : migration idempotente
+  `football/0032_season_rollout.sql`, états `draft/importing/ready/active/error`, saison publique par
+  défaut unique par compétition et RPC admin `activate_competition_season`. Les saisons existantes hors
+  2026 restent disponibles ; une saison 2026 en cours d'import n'est pas proposée dans les pages
+  publiques et ne devient jamais la valeur par défaut automatiquement.
+- Nouveau panneau admin **Synchronisation → Plan d'import 2026** : whitelist, ordre explicite Pro League
+  → Challenger → Croky Cup → sélections belges → compétitions étrangères, puis passage manuel
+  « prête » et activation publique compétition par compétition. Enregistrer ce plan ne lance aucun
+  appel provider.
+- Garde-fou serveur : les jobs lourds exigent une compétition ou une sélection explicite ; les imports
+  globaux sont refusés avant tout appel API. Pour 2026, la cible doit aussi être autorisée dans la
+  whitelist. Le direct reste le seul job qui peut traiter plusieurs compétitions, limité à celles avec
+  `live_enabled`.
+- Chaque job vérifie désormais le couple `(module, version)` de toutes ses migrations requises, y
+  compris `core/0004`; les jobs 2026 exigent `football/0032`. Le panneau Diagnostic connaît les
+  migrations football `0029` à `0032` et sonde l'état de bascule.
+- Les pages Accueil, Compétition, Matchs et Classement donnent priorité à `public_active` et masquent
+  les saisons encore `draft/importing/error`, tout en conservant les saisons historiques prêtes dans
+  les sélecteurs.
+- Aucun appel API-Football effectué. Build Next complet validé avec variables factices ; ESLint ciblé :
+  0 erreur (avertissements historiques `<img>`/hooks uniquement).
+
+**Avant déploiement de ce sous-lot :** appliquer `modules/football/migrations/0032_season_rollout.sql`
+dans Supabase avant de recharger l'admin. La whitelist doit ensuite être enregistrée explicitement ;
+sans elle, les imports 2026 restent bloqués par conception.
+
+**Suite prévue :** sous-lot C = préflight chiffré calculé côté serveur (coût min/max, quota, migrations,
+blocages) avant chaque job/pipeline ; sous-lot D = pipelines persistants réellement reprenables après
+rechargement ou interruption ; puis séparation U23/jeunes et carrières par lots, stratégie direct et
+convocations historisées par match.
+
+---
+
 ## SOCLE_CANDIDATES  (documenter seulement — NE PAS remonter au socle maintenant)
 
 Fonctionnalités Belfoot qui seraient de bons candidats à généraliser dans le socle plus tard :

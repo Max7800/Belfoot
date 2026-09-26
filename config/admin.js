@@ -34,6 +34,7 @@ export const adminSections = [
     { key: "matchPlayerStats", label: "Performances joueurs" },
   ] },
   { label: "Synchronisation", icon: "refresh", panels: [
+    { key: "import-plan", label: "Plan d'import 2026" },
     { key: "jobs", label: "Jobs et historique" },
     { key: "providers", label: "Sources de données" },
     { key: "sync-errors", label: "Erreurs de synchronisation" },

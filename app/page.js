@@ -20,6 +20,7 @@ import { competitionPath } from "@/lib/competitionRoutes";
 import { useHomeConfig } from "@/lib/homeSections";
 import { computeStandings } from "@/lib/standings";
 import { supabase } from "@/lib/supabaseClient";
+import { sortPublicSeasons } from "@/lib/publicSeasons";
 
 const normal = (value) => String(value || "").trim().toLocaleLowerCase("fr");
 const year = (value) => Number((String(value || "").match(/\d{4}/) || [0])[0]);
@@ -118,7 +119,7 @@ export default function Home() {
     const watched = chronological.filter((match) => match.status !== "finished" && new Date(match.kickoff) >= now && (byClub.has(match.home_club_id) || byClub.has(match.away_club_id))).map((match) => ({ match, item: byClub.get(match.home_club_id) || byClub.get(match.away_club_id) })).slice(0, 5);
 
     const league = data.competitions.find((competition) => /(jupiler|pro league)/i.test(competition.name || "") && !/challenger/i.test(competition.name || "")) || data.competitions.find((competition) => !/cup|coupe/i.test(competition.name || ""));
-    const leagueSeasons = data.seasons.filter((season) => season.competition_id === league?.id).sort((a, b) => (b.label || "").localeCompare(a.label || ""));
+    const leagueSeasons = sortPublicSeasons(data.seasons.filter((season) => season.competition_id === league?.id));
     const activeSeason = leagueSeasons[0];
     const leagueMatches = data.matches.filter((match) => match.competition_id === league?.id && (!activeSeason || !match.season_id || match.season_id === activeSeason.id));
     const phaseCounts = new Map();

@@ -78,6 +78,13 @@ export async function syncCompetition(db, competition, ctx = {}) {
   const mode = ctx.mode || "full";
   const selectedSeason = seasonLabel(ctx.season || competition.ext?.season);
   const season = await ensureSeason(db, competition.id, selectedSeason);
+  if (mode === "full" && Number(seasonYear(selectedSeason)) >= 2026) {
+    const { error: rolloutError } = await db.from("seasons")
+      .update({ import_status: "importing" })
+      .eq("id", season.id)
+      .eq("public_active", false);
+    if (rolloutError) throw rolloutError;
+  }
   const technicalExt = { ...(competition.ext || {}), season: seasonYear(selectedSeason), season_label: selectedSeason };
   const { error: seasonUpdateError } = await db.from("competitions").update({ ext: technicalExt }).eq("id", competition.id);
   if (seasonUpdateError) throw seasonUpdateError;

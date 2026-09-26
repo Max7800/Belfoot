@@ -17,6 +17,7 @@ import { useLabels } from "@/lib/labels";
 import { useTiles } from "@/lib/tiles";
 import { zoneAt, zonesForPhase } from "@/lib/standingsZones";
 import { useStatsSections } from "@/lib/statsSections";
+import { sortPublicSeasons } from "@/lib/publicSeasons";
 
 const POS = { Goalkeeper: 0, Defender: 1, Midfielder: 2, Attacker: 3 };
 const VARIANTS = {
@@ -103,7 +104,7 @@ export default function CompetitionPage() {
       supabase.from("matches").select("*").eq("competition_id", c.id).order("round_number", { ascending: true, nullsFirst: false }).order("kickoff", { ascending: true }),
       supabase.from("match_player_stats").select("*").eq("competition_id", c.id),
     ]);
-    const orderedSeasons = [...(se.data || [])].sort((a, b) => (b.label || "").localeCompare(a.label || ""));
+    const orderedSeasons = sortPublicSeasons(se.data || []);
     setSeasons(orderedSeasons); setSeasonLabel(orderedSeasons[0]?.label || ""); setMatches(ma.data || []); setMatchPlayerStats(matchStats.data || []);
     const ids = [...new Set((ma.data || []).flatMap((m) => [m.home_club_id, m.away_club_id]).filter(Boolean))];
     if (ids.length) {

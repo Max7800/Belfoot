@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic";
 
 const EXPECTED_MIGRATIONS = {
   core: ["0002_profile_role_hardening", "0003_media_storage_hardening", "0004_job_execution_guardrails"],
-  football: ["0023_season_safe_sync", "0024_player_team_seasons", "0025_membership_backfill_repair", "0026_match_center_live", "0027_national_teams", "0028_followed_national_teams"],
+  football: ["0023_season_safe_sync", "0024_player_team_seasons", "0025_membership_backfill_repair", "0026_match_center_live", "0027_national_teams", "0028_followed_national_teams", "0029_national_fifa_ranking", "0030_backfill_seasons", "0031_diable_ratings", "0032_season_rollout"],
 };
 
 async function requireAdmin(request, db) {
@@ -35,7 +35,7 @@ export async function GET(request) {
     const [migrationResult, competitionsResult, seasonsResult, playersResult, ...checks] = await Promise.all([
       db.from("schema_migrations").select("module,version,applied_at").order("applied_at", { ascending: false }),
       db.from("competitions").select("id,live_enabled,public_visible", { count: "exact" }),
-      db.from("seasons").select("id,label", { count: "exact" }),
+      db.from("seasons").select("id,label,import_status,public_active", { count: "exact" }),
       db.from("players").select("id", { count: "exact", head: true }).eq("tracked", true).eq("active", true),
       probe("Garde-fous des synchronisations", db.from("job_runs").select("target_key,request_count,request_limit,heartbeat_at,params").limit(1)),
       probe("Saisons et zones par phase", db.from("seasons").select("zones_by_phase").limit(1)),
@@ -45,6 +45,7 @@ export async function GET(request) {
       probe("Compositions de match", db.from("match_lineups").select("id").limit(1)),
       probe("Performances individuelles", db.from("match_player_stats").select("id").limit(1)),
       probe("Sélections et convocations", db.from("clubs").select("national_followed,national_category").eq("team_type", "national").limit(1)),
+      probe("Bascule progressive des saisons", db.from("seasons").select("import_status,public_active,activated_at").limit(1)),
     ]);
 
     const applied = migrationResult.data || [];
@@ -76,6 +77,7 @@ export async function GET(request) {
         live_competitions: competitions.filter((competition) => competition.live_enabled).length,
         seasons: seasonsResult.count ?? seasons.length,
         seasons_2026: currentSeasonCount,
+        active_seasons: seasons.filter((season) => season.public_active).length,
         tracked_players: playersResult.count ?? 0,
       },
       errors: [migrationResult.error, competitionsResult.error, seasonsResult.error, playersResult.error].filter(Boolean).map((error) => error.message),

@@ -5,6 +5,7 @@ import { ArrowRight, CalendarDays, List, Radio } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import MatchRow from "@/components/football/MatchRow";
 import SeasonCalendar from "@/components/football/SeasonCalendar";
+import { sortPublicSeasons } from "@/lib/publicSeasons";
 
 export default function MatchsPage() {
   const [comps, setComps] = useState([]); const [cid, setCid] = useState("");
@@ -22,7 +23,7 @@ export default function MatchsPage() {
       supabase.from("seasons").select("*").eq("competition_id", cid),
     ]);
     setMatches(m || []); setPhase(null); setRound("all");
-    const orderedSeasons = [...(seasonRows || [])].sort((a, b) => (b.label || "").localeCompare(a.label || ""));
+    const orderedSeasons = sortPublicSeasons(seasonRows || []);
     setSeasons(orderedSeasons); setSeasonLabel(orderedSeasons[0]?.label || "");
     const ids = [...new Set((m || []).flatMap((x) => [x.home_club_id, x.away_club_id]).filter(Boolean))];
     if (ids.length) { const { data: cl } = await supabase.from("clubs").select("id,name,logo_url").in("id", ids); setClubs(Object.fromEntries((cl || []).map((x) => [x.id, x]))); }

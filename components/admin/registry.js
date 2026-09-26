@@ -7,6 +7,7 @@ import ContributionsQueue from "./ContributionsQueue";
 import SystemStatusPanel from "./SystemStatusPanel";
 import VotwSessionsPanel from "./VotwSessionsPanel";
 import ForumModerationPanel from "./ForumModerationPanel";
+import ImportPlanPanel from "./ImportPlanPanel";
 import { ProfilesPanel, ReportsPanel, JobsPanel, SyncHistoryPanel, ProvidersPanel, SettingsInfo, LabelsPanel, TilesPanel, ClubSectionsPanel, HomePanel, BelgiansAbroadPanel, CompetitionHubPanel, NationalTeamsPanel, StatsSectionsPanel, ProposePanel, RankingsPanel, Placeholder } from "./panels";
 import { FOOTBALL_ENTITIES } from "@/config/football-admin";
 import { getCollection } from "@/config/collections";
@@ -32,6 +33,7 @@ export function panelComponent(key) {
   if (key === "clubpage") return { Comp: ClubSectionsPanel, props: {} };
   if (key === "statspage") return { Comp: StatsSectionsPanel, props: {} };
   if (key === "system-status") return { Comp: SystemStatusPanel, props: {} };
+  if (key === "import-plan") return { Comp: ImportPlanPanel, props: {} };
   if (key === "propose") return { Comp: ProposePanel, props: {} };
   if (key === "rankings") return { Comp: RankingsPanel, props: {} };
   if (key === "votw-sessions") return { Comp: VotwSessionsPanel, props: {} };
