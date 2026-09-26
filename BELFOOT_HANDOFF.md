@@ -1537,6 +1537,12 @@ tant que la migration n'est pas enregistrée.
   et affichent une explication de leur format à la place du classement.
 - Pour une coupe, les derniers résultats et prochains matchs sont désormais recherchés sur tous les
   tours, plutôt que dans la phase comptant le plus de rencontres. Aucun SQL et aucun appel provider.
+- Le classement résumé de l'accueil applique maintenant exactement la même règle de saison que la
+  fiche compétition : dès que les matchs sont rattachés à une saison, les anciennes lignes sans
+  `season_id` ne sont plus mélangées au calcul. Les points du top 5 restent donc cohérents entre
+  l'accueil et la page Pro League.
+- Sur mobile, le bouton d'accès à la compétition est remonté dans l'en-tête du carrousel sous le nom
+  et la saison, avec un fond contrasté. L'ancien lien placé après les prochains matchs est supprimé.
 
 ---
 
