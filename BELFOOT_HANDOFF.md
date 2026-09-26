@@ -1399,20 +1399,31 @@ avant lancement : SEO minimal (sitemap/robots/metadata), CGU/vie privée, sécur
 - Chaque job vérifie désormais le couple `(module, version)` de toutes ses migrations requises, y
   compris `core/0004`; les jobs 2026 exigent `football/0032`. Le panneau Diagnostic connaît les
   migrations football `0029` à `0032` et sonde l'état de bascule.
+- Sous-lot C codé localement : route admin `/api/admin/job-preflight` et `lib/jobPreflight.js`. Le
+  préflight compte côté serveur les cibles réellement présentes (clubs, matchs, joueurs suivis ou
+  appelés), renvoie un coût numérique min/max par étape, le total, le budget strict, le dernier quota
+  connu, les migrations et tous les blocages. Tous les jobs repassent aussi par ce préflight dans
+  `runJob`, donc un appel direct ne contourne pas l'admin. Cette opération ne contacte jamais le
+  provider.
+- Sous-lot D codé localement : migration idempotente `core/0005_persistent_pipeline_runs`, route
+  `/api/admin/run-pipeline` et reprise depuis le panneau Jobs. Pipeline, cible, paramètres, étape
+  suivante, budget, consommation, quota et heartbeat sont persistés. Une erreur reprend exactement à
+  l'étape enregistrée ; après une coupure franche, la reprise est déverrouillée après 20 minutes sans
+  battement afin d'éviter deux exécutions concurrentes.
 - Les pages Accueil, Compétition, Matchs et Classement donnent priorité à `public_active` et masquent
   les saisons encore `draft/importing/error`, tout en conservant les saisons historiques prêtes dans
   les sélecteurs.
 - Aucun appel API-Football effectué. Build Next complet validé avec variables factices ; ESLint ciblé :
   0 erreur (avertissements historiques `<img>`/hooks uniquement).
 
-**Avant déploiement de ce sous-lot :** appliquer `modules/football/migrations/0032_season_rollout.sql`
-dans Supabase avant de recharger l'admin. La whitelist doit ensuite être enregistrée explicitement ;
-sans elle, les imports 2026 restent bloqués par conception.
+**Avant déploiement de ce sous-lot :** appliquer, dans cet ordre,
+`modules/football/migrations/0032_season_rollout.sql` puis
+`supabase/migrations/0005_persistent_pipeline_runs.sql` dans Supabase avant de recharger l'admin. La
+whitelist doit ensuite être enregistrée explicitement ; sans elle, les imports 2026 restent bloqués
+par conception.
 
-**Suite prévue :** sous-lot C = préflight chiffré calculé côté serveur (coût min/max, quota, migrations,
-blocages) avant chaque job/pipeline ; sous-lot D = pipelines persistants réellement reprenables après
-rechargement ou interruption ; puis séparation U23/jeunes et carrières par lots, stratégie direct et
-convocations historisées par match.
+**Suite prévue :** séparation U23/jeunes et carrières par lots, stratégie direct et convocations
+historisées par match.
 
 ---
 

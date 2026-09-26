@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import siteConfig from "@/config/site";
-import { describeJobCost, JOB_CATALOG, jobKeys, JOB_GROUPS, jobsInGroup, jobPipelines } from "@/lib/jobCatalog";
+import { JOB_CATALOG, jobKeys, JOB_GROUPS, jobsInGroup, jobPipelines } from "@/lib/jobCatalog";
 import ImageField from "@/components/ui/ImageField";
 import { CLUB_SECTIONS } from "@/lib/clubSections";
 import { normalizeStatsConfig } from "@/lib/statsSections";
@@ -92,9 +92,16 @@ export function JobsPanel() {
   const [requestLimit, setRequestLimit] = useState(10);
   const [teamExternalId, setTeamExternalId] = useState("44");
   const [nationalCategory, setNationalCategory] = useState("senior");
-  const [resume, setResume] = useState(null);
+  const [pipelineRuns, setPipelineRuns] = useState([]);
   const targetedJobs = new Set(["football.team-test", "football.national-team", "football.find-national-teams", "football.resolve-national-clubs"]);
-  const load = () => supabase.from("job_runs").select("*").order("started_at", { ascending: false }).limit(30).then(({ data }) => setRows(data || []));
+  const load = async () => {
+    const [jobResult, pipelineResult] = await Promise.all([
+      supabase.from("job_runs").select("*").order("started_at", { ascending: false }).limit(30),
+      supabase.from("pipeline_runs").select("*").order("started_at", { ascending: false }).limit(12),
+    ]);
+    setRows(jobResult.data || []);
+    setPipelineRuns(pipelineResult.data || []);
+  };
   useEffect(() => { load(); supabase.from("competitions").select("*").order("name").then(({ data }) => setComps(data || [])); }, []);
   const callJob = async (key, budget) => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -108,43 +115,79 @@ export function JobsPanel() {
     let d; try { d = JSON.parse(txt); } catch { d = { detail: txt }; }
     return d;
   };
+  const callPipeline = async (payload) => {
+    const { data: { session } } = await supabase.auth.getSession();
+    const response = await fetch("/api/admin/run-pipeline", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token}` },
+      body: JSON.stringify({ ...payload, season, competitionId: compId || null, matchCap, requestLimit, teamExternalId, nationalCategory }),
+    });
+    const text = await response.text();
+    if (!response.ok) throw new Error(text || `HTTP ${response.status}`);
+    return JSON.parse(text);
+  };
+  const fetchPreflight = async (payload) => {
+    const { data: { session } } = await supabase.auth.getSession();
+    const response = await fetch("/api/admin/job-preflight", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token}` },
+      body: JSON.stringify({ ...payload, season, competitionId: compId || null, matchCap, requestLimit, teamExternalId, nationalCategory }),
+    });
+    const text = await response.text();
+    if (!response.ok) throw new Error(text || `HTTP ${response.status}`);
+    return JSON.parse(text);
+  };
+  const preflightText = (result) => {
+    const lines = result.steps.map((step, index) => `${index + 1}. ${step.label} : ${step.min === step.max ? step.max : `${step.min}–${step.max}`} appel(s) — ${step.basis}`);
+    const quota = result.quotaRemaining == null ? "quota inconnu" : `dernier quota connu ${result.quotaRemaining}`;
+    const warnings = result.warnings?.length ? `\nAVERTISSEMENTS :\n- ${result.warnings.join("\n- ")}` : "";
+    const blockers = result.blockers.length ? `\nBLOCAGES :\n- ${result.blockers.join("\n- ")}` : "\n✓ Préflight validé.";
+    return `Cible : ${result.target} · saison ${result.season || "auto"}\n${lines.join("\n")}\nTOTAL : ${result.total.min}–${result.total.max} appel(s) · budget ${result.budget} · ${quota}${warnings}${blockers}`;
+  };
   const run = async (key) => {
     if (JOB_CATALOG[key]?.target === "competition" && !compId) {
       setMsg("✗ Choisis une compétition : les imports globaux sont désactivés pour protéger le quota.");
       return;
     }
-    const cost = describeJobCost(key, { competitionId: compId, competitionCount: comps.length, matchCap });
-    if (!window.confirm(`${JOB_CATALOG[key]?.label || key}\n\nCoût estimé : ${cost}.\nBudget strict : ${requestLimit} appels API maximum.\n\nLancer la synchronisation ?`)) return;
-    setBusy(key); setMsg("");
-    try { const d = await callJob(key); setMsg(`✓ ${key} : ${d.detail || "ok"}`); } catch (e) { setMsg(`✗ ${key} : ${e.message}`); }
+    setBusy(`preflight-${key}`); setMsg("⏳ Calcul du préflight…");
+    try {
+      const preflight = await fetchPreflight({ key });
+      setMsg(preflightText(preflight));
+      if (!preflight.ok || !window.confirm(`${JOB_CATALOG[key]?.label || key}\n\n${preflightText(preflight)}\n\nLancer la synchronisation ?`)) { setBusy(null); return; }
+      setBusy(key); setMsg("⏳ Synchronisation en cours…");
+      const d = await callJob(key); setMsg(`✓ ${key} : ${d.detail || "ok"}`);
+    } catch (e) { setMsg(`✗ ${key} : ${e.message}`); }
     setBusy(null); load();
   };
-  const simulate = (p) => {
+  const simulate = async (p) => {
     if (!compId) {
       setMsg("✗ Choisis une compétition avant de simuler ce pipeline.");
       return;
     }
-    const lines = p.jobs.map((k, i) => `${i + 1}. ${JOB_CATALOG[k]?.label || k} — ${describeJobCost(k, { competitionId: compId, competitionCount: comps.length, matchCap })}`);
-    setMsg(`🔎 Simulation « ${p.label} » — budget GLOBAL ${requestLimit} appels pour la séquence :\n${lines.join("\n")}\n(Estimations hautes ; rien n'est lancé.)`);
+    setBusy(`preflight-${p.key}`); setMsg("⏳ Calcul du préflight du pipeline…");
+    try { const preflight = await fetchPreflight({ pipelineKey: p.key }); setMsg(`🔎 ${p.label}\n${preflightText(preflight)}\n(Aucun appel provider n’a été lancé.)`); }
+    catch (e) { setMsg(`✗ Préflight impossible : ${e.message}`); }
+    setBusy(null);
   };
-  const runPipeline = async (p, fromIndex = 0) => {
-    if (!compId) {
+  const runPipeline = async (p, pipelineRunId = null) => {
+    if (!pipelineRunId && !compId) {
       setMsg("✗ Choisis une compétition : un pipeline ne peut jamais viser tout le catalogue.");
       return;
     }
-    const chain = p.jobs.map((j) => JOB_CATALOG[j]?.label || j).join("  →  ");
-    if (fromIndex === 0 && !window.confirm(`${p.label}\n\n${chain}\n\nBudget GLOBAL ${requestLimit} appels pour TOUTE la séquence. Reprenable après une erreur.\n\nLancer ?`)) return;
-    setBusy(p.key); setResume(null);
-    let remaining = requestLimit;
-    for (let i = fromIndex; i < p.jobs.length; i++) {
-      const key = p.jobs[i];
-      if (remaining <= 0) { setMsg(`⏸ Budget global épuisé avant l'étape ${i + 1} « ${JOB_CATALOG[key]?.label || key} ». Augmente le budget et reprends.`); setResume({ p, fromIndex: i }); setBusy(null); load(); return; }
-      setMsg(`⏳ ${p.label} — étape ${i + 1}/${p.jobs.length} : ${JOB_CATALOG[key]?.label || key}… (budget restant ${remaining})`);
-      try { const d = await callJob(key, remaining); remaining -= (d.requests || 0); }
-      catch (e) { setMsg(`✗ Stoppé à l'étape ${i + 1} « ${JOB_CATALOG[key]?.label || key} » : ${e.message}`); setResume({ p, fromIndex: i }); setBusy(null); load(); return; }
+    if (!pipelineRunId) {
+      setBusy(`preflight-${p.key}`); setMsg("⏳ Calcul du préflight du pipeline…");
+      try {
+        const preflight = await fetchPreflight({ pipelineKey: p.key });
+        setMsg(preflightText(preflight));
+        if (!preflight.ok || !window.confirm(`${p.label}\n\n${preflightText(preflight)}\n\nLancer le pipeline ?`)) { setBusy(null); return; }
+      } catch (e) { setMsg(`✗ Préflight impossible : ${e.message}`); setBusy(null); return; }
     }
-    setMsg(`✓ ${p.label} — terminé (${requestLimit - remaining} appels consommés).`);
-    setResume(null); setBusy(null); load();
+    setBusy(p.key); setMsg(`⏳ ${pipelineRunId ? "Reprise" : "Exécution"} de ${p.label}…`);
+    try {
+      const result = await callPipeline(pipelineRunId ? { pipelineRunId } : { pipelineKey: p.key });
+      setMsg(`✓ ${p.label} — terminé (${result.request_count || 0}/${result.request_limit} appels consommés).`);
+    } catch (e) { setMsg(`✗ ${p.label} interrompu : ${e.message}. L’étape reste enregistrée et peut être reprise.`); }
+    setBusy(null); load();
   };
   const latestQuota = rows.find((r) => r.quota_remaining != null)?.quota_remaining;
   return (<div>
@@ -172,8 +215,8 @@ export function JobsPanel() {
           </div>
         ))}
       </div>
-      {resume && <div className="mt-2 flex items-center gap-2 rounded-lg border border-amber-400/30 bg-amber-400/10 p-2 text-xs text-amber-200"><span className="flex-1">Séquence « {resume.p.label} » interrompue à l'étape {resume.fromIndex + 1}.</span><button disabled={!!busy} onClick={() => runPipeline(resume.p, resume.fromIndex)} className="rounded bg-amber-400/20 px-3 py-1 font-bold text-amber-200 disabled:opacity-50">Reprendre</button></div>}
-      <p className="mt-2 text-[11px] leading-5 text-muted">Budget <b>global</b> (« Budget API » ci-dessus) partagé sur toute la séquence, décompté à chaque étape. Reprenable après une erreur.</p>
+      {pipelineRuns.filter((runItem) => ["error", "paused", "running"].includes(runItem.status)).map((runItem) => { const definition = jobPipelines().find((item) => item.key === runItem.pipeline_key); if (!definition) return null; const recentlyRunning = runItem.status === "running" && Date.now() - new Date(runItem.heartbeat_at || runItem.started_at).getTime() < 20 * 60 * 1000; return <div key={runItem.id} className="mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-amber-400/30 bg-amber-400/10 p-2 text-xs text-amber-200"><span className="flex-1">« {definition.label} » · étape {Math.min((runItem.next_step || 0) + 1, definition.jobs.length)}/{definition.jobs.length} · {runItem.request_count || 0}/{runItem.request_limit} appels{runItem.detail ? ` · ${runItem.detail}` : ""}</span><button disabled={!!busy || recentlyRunning} title={recentlyRunning ? "Exécution encore active ; reprise disponible après 20 minutes sans battement." : "Reprendre à l’étape enregistrée"} onClick={() => runPipeline(definition, runItem.id)} className="rounded bg-amber-400/20 px-3 py-1 font-bold text-amber-200 disabled:opacity-50">{recentlyRunning ? "En cours" : "Reprendre"}</button></div>; })}
+      <p className="mt-2 text-[11px] leading-5 text-muted">Budget <b>global</b> (« Budget API » ci-dessus) partagé sur toute la séquence. L’étape suivante et la consommation sont enregistrées en base : une reprise reste disponible après rechargement ou interruption.</p>
     </div>
 
     {Object.entries(JOB_GROUPS).sort((a, b) => a[1].order - b[1].order).map(([g, meta]) => {

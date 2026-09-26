@@ -3,7 +3,7 @@ import { getAdmin } from "@/lib/supabaseAdmin";
 export const dynamic = "force-dynamic";
 
 const EXPECTED_MIGRATIONS = {
-  core: ["0002_profile_role_hardening", "0003_media_storage_hardening", "0004_job_execution_guardrails"],
+  core: ["0002_profile_role_hardening", "0003_media_storage_hardening", "0004_job_execution_guardrails", "0005_persistent_pipeline_runs"],
   football: ["0023_season_safe_sync", "0024_player_team_seasons", "0025_membership_backfill_repair", "0026_match_center_live", "0027_national_teams", "0028_followed_national_teams", "0029_national_fifa_ranking", "0030_backfill_seasons", "0031_diable_ratings", "0032_season_rollout"],
 };
 
@@ -46,6 +46,7 @@ export async function GET(request) {
       probe("Performances individuelles", db.from("match_player_stats").select("id").limit(1)),
       probe("Sélections et convocations", db.from("clubs").select("national_followed,national_category").eq("team_type", "national").limit(1)),
       probe("Bascule progressive des saisons", db.from("seasons").select("import_status,public_active,activated_at").limit(1)),
+      probe("Pipelines persistants", db.from("pipeline_runs").select("next_step,request_count,heartbeat_at").limit(1)),
     ]);
 
     const applied = migrationResult.data || [];
