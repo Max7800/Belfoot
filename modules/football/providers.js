@@ -11,6 +11,7 @@
 //     async fetchCurrentCoach(club, ctx), // optionnel (entraîneur actuel)
 //     async fetchMatchLineups(match, ctx), // optionnel (formation + titulaires/remplaçants)
 //     async fetchMatchPlayerStats(match, ctx), // optionnel (performance individuelle du match)
+//     async fetchMatchTeamStats(match, ctx), // optionnel (possession, tirs, passes, xG...)
 //   }
 //
 // Chaque compétition choisit son provider (colonne competitions.provider),

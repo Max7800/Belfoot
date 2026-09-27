@@ -1674,6 +1674,33 @@ tant que la migration n'est pas enregistrée.
   citations restent compatibles avec les messages texte déjà stockés.
 - Aucun SQL et aucun appel API-Football. État Git : second commit local séparé, sans push avant accord.
 
+### 2026-09-27 — ChatGPT — Match Center comparatif et statistiques collectives
+
+- Le détail `/matchs/[id]` devient un Match Center responsive inspiré de la lisibilité d’API-Sports,
+  sans copie graphique : score et écussons renforcés, navigation horizontale `Résumé / Événements /
+  Compos / Stats / Joueurs`, synthèse des temps forts et comparatif symétrique rouge–bleu.
+- Deux composants dédiés isolent le rendu : `MatchTeamStats` pour la possession, les tirs, les xG,
+  les passes et les données disciplinaires ; `MatchPlayerRatings` pour les minutes, notes et actions
+  décisives. Les états vides restent explicites tant que le provider n’a pas été appelé.
+- Pour un match des Diables A, les notes communautaires sont maintenant proposées dans ce Match
+  Center à partir de `national_match_callups` pour ce match précis. Un ancien match ne reprend donc
+  jamais l’effectif actuel. Les cartes de `/diables-rouges/matchs` pointaient déjà vers ce détail.
+- Nouvelle migration idempotente `football/0035_match_team_stats` : table
+  `match_team_stats`, marqueur `matches.team_stats_synced_at`, file de reprise, RLS publique en
+  lecture/admin en écriture et RPC transactionnelle. Les lignes manuelles ou verrouillées ne sont
+  jamais écrasées par une synchronisation.
+- Le job plafonné `football.lineups` récupère désormais aussi `/fixtures/statistics`. Le préflight
+  calcule chaque endpoint encore nécessaire (maximum trois appels par match), bloque si `0035`
+  manque et conserve séparément les marqueurs compositions, joueurs et statistiques collectives.
+  `Promise.allSettled` permet de conserver et marquer les endpoints réussis avant de remonter une
+  erreur : la relance ne refait que les parties incomplètes.
+- Le contrôle de préparation d’une saison complète inclut les statistiques collectives et le panneau
+  système vérifie la migration, la table et le nouveau marqueur. Aucun appel API-Football n’a été
+  effectué pendant ce lot.
+- Vérifications : `npm run lint` termine sans erreur (avertissements historiques sur les images) ;
+  `npm run build` passe avec les variables Supabase factices recommandées par l’audit.
+- État Git à la fin du lot : commit local uniquement ; ne pas pousser sans autorisation explicite.
+
 ---
 
 ## SOCLE_CANDIDATES  (documenter seulement — NE PAS remonter au socle maintenant)

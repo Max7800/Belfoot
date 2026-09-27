@@ -6,17 +6,19 @@ function coverageFlags(competition) {
   return {
     lineups: fixtures.lineups !== false,
     playerStats: fixtures.statistics_players !== false,
+    teamStats: fixtures.statistics_fixtures !== false,
   };
 }
 
 export async function syncLineups(db, competition, ctx = {}) {
   const provider = getProvider(competition.provider);
-  if (!provider?.fetchMatchLineups && !provider?.fetchMatchPlayerStats) return `${competition.name}: compositions non supportées`;
+  if (!provider?.fetchMatchLineups && !provider?.fetchMatchPlayerStats && !provider?.fetchMatchTeamStats) return `${competition.name}: données de match non supportées`;
 
   const coverage = coverageFlags(competition);
   const canLineups = coverage.lineups && !!provider.fetchMatchLineups;
   const canStats = coverage.playerStats && !!provider.fetchMatchPlayerStats;
-  if (!canLineups && !canStats) return `${competition.name}: compositions/statistiques non couvertes`;
+  const canTeamStats = coverage.teamStats && !!provider.fetchMatchTeamStats;
+  if (!canLineups && !canStats && !canTeamStats) return `${competition.name}: compositions/statistiques non couvertes`;
   const selectedSeason = seasonLabel(ctx.season);
   const { data: season, error: seasonError } = await db.from("seasons").select("id").eq("competition_id", competition.id).eq("label", selectedSeason).maybeSingle();
   if (seasonError) throw seasonError;
@@ -24,7 +26,7 @@ export async function syncLineups(db, competition, ctx = {}) {
 
   const cap = Math.max(1, Math.min(Number(ctx.matchCap) || 3, 20));
   const { data: candidates, error: matchesError } = await db.from("matches")
-    .select("id,external_id,competition_id,status,kickoff,home_club_id,away_club_id,lineups_synced_at,player_stats_synced_at")
+    .select("id,external_id,competition_id,status,kickoff,home_club_id,away_club_id,lineups_synced_at,player_stats_synced_at,team_stats_synced_at")
     .eq("competition_id", competition.id)
     .eq("season_id", season.id)
     .in("status", ["finished", "live"])
@@ -55,18 +57,26 @@ export async function syncLineups(db, competition, ctx = {}) {
   }
   const todo = (candidates || []).filter((match) => match.status === "live"
     || (canLineups && !match.lineups_synced_at)
-    || (canStats && !match.player_stats_synced_at)).slice(0, cap);
+    || (canStats && !match.player_stats_synced_at)
+    || (canTeamStats && !match.team_stats_synced_at)).slice(0, cap);
   if (!todo.length) return `${competition.name}: compositions déjà à jour${relinked ? `, ${relinked} joueurs reliés` : ""}`;
 
   let teams = 0;
   let players = 0;
+  let collectiveStats = 0;
   for (const match of todo) {
     const fetchLineups = canLineups && (match.status === "live" || !match.lineups_synced_at);
     const fetchStats = canStats && (match.status === "live" || !match.player_stats_synced_at);
-    const [lineups, stats] = await Promise.all([
+    const fetchTeamStats = canTeamStats && (match.status === "live" || !match.team_stats_synced_at);
+    const results = await Promise.allSettled([
       fetchLineups ? provider.fetchMatchLineups({ external_id: match.external_id }, ctx) : Promise.resolve([]),
       fetchStats ? provider.fetchMatchPlayerStats({ external_id: match.external_id }, ctx) : Promise.resolve([]),
+      fetchTeamStats ? provider.fetchMatchTeamStats({ external_id: match.external_id }, ctx) : Promise.resolve([]),
     ]);
+    const [lineupResult, playerResult, teamResult] = results;
+    const lineups = lineupResult.status === "fulfilled" ? lineupResult.value : [];
+    const stats = playerResult.status === "fulfilled" ? playerResult.value : [];
+    const teamStats = teamResult.status === "fulfilled" ? teamResult.value : [];
     const now = new Date().toISOString();
     const { data: lockedLineups } = await db.from("match_lineups").select("club_id").eq("match_id", match.id).eq("locked", true);
     const lockedClubIds = new Set((lockedLineups || []).map((row) => row.club_id));
@@ -145,13 +155,33 @@ export async function syncLineups(db, competition, ctx = {}) {
       }
       players++;
     }
+    if (fetchTeamStats && teamResult.status === "fulfilled") {
+      const rows = teamStats.map((row) => ({
+        ...row,
+        club_id: clubMap[row.team_ext] || null,
+        team_ext: undefined,
+      })).filter((row) => row.club_id);
+      const { data: replaced, error: teamStatsError } = await db.rpc("replace_provider_match_team_stats", {
+        target_match_id: match.id,
+        target_competition_id: competition.id,
+        target_source: competition.provider,
+        stat_rows: rows,
+        target_synced_at: now,
+        mark_complete: match.status === "finished",
+      });
+      if (teamStatsError) throw teamStatsError;
+      collectiveStats += Number(replaced) || 0;
+    }
     if (match.status === "finished") {
       const syncState = {};
-      if (fetchLineups) syncState.lineups_synced_at = now;
-      if (fetchStats) syncState.player_stats_synced_at = now;
+      if (fetchLineups && lineupResult.status === "fulfilled") syncState.lineups_synced_at = now;
+      if (fetchStats && playerResult.status === "fulfilled") syncState.player_stats_synced_at = now;
+      if (fetchTeamStats && teamResult.status === "fulfilled") syncState.team_stats_synced_at = now;
       const { error: syncStateError } = await db.from("matches").update(syncState).eq("id", match.id);
       if (syncStateError) throw syncStateError;
     }
+    const failed = results.find((result) => result.status === "rejected");
+    if (failed) throw failed.reason;
   }
-  return `${competition.name}: ${todo.length} matchs, ${teams} formations, ${players} joueurs${relinked ? `, ${relinked} reliés` : ""}`;
+  return `${competition.name}: ${todo.length} matchs, ${teams} formations, ${players} joueurs, ${collectiveStats} lignes collectives${relinked ? `, ${relinked} reliés` : ""}`;
 }

@@ -330,6 +330,40 @@ const provider = {
     }
     return output;
   },
+  // Une troisième requête, indépendante et reprenable : comparaison collective des équipes.
+  async fetchMatchTeamStats(match, ctx = {}) {
+    if (!match?.external_id) return [];
+    const teams = await api(`/fixtures/statistics?fixture=${match.external_id}`, ctx);
+    const number = (value) => {
+      if (value == null || value === "") return null;
+      const parsed = Number(String(value).replace("%", "").replace(",", "."));
+      return Number.isFinite(parsed) ? parsed : null;
+    };
+    return teams.map((team) => {
+      const values = Object.fromEntries((team.statistics || []).map((item) => [item.type, item.value]));
+      return {
+        team_ext: team.team?.id ? String(team.team.id) : null,
+        possession: number(values["Ball Possession"]),
+        shots_total: number(values["Total Shots"]),
+        shots_on_goal: number(values["Shots on Goal"]),
+        shots_off_goal: number(values["Shots off Goal"]),
+        shots_blocked: number(values["Blocked Shots"]),
+        shots_inside_box: number(values["Shots insidebox"]),
+        shots_outside_box: number(values["Shots outsidebox"]),
+        fouls: number(values.Fouls),
+        corners: number(values["Corner Kicks"]),
+        offsides: number(values.Offsides),
+        yellow: number(values["Yellow Cards"]),
+        red: number(values["Red Cards"]),
+        goalkeeper_saves: number(values["Goalkeeper Saves"]),
+        passes_total: number(values["Total passes"]),
+        passes_accurate: number(values["Passes accurate"]),
+        pass_accuracy: number(values["Passes %"]),
+        expected_goals: number(values.expected_goals),
+        ext: team,
+      };
+    }).filter((row) => row.team_ext);
+  },
 };
 provider.fetchEvents = async function (match, ctx = {}) {
   const raw = await api(`/fixtures/events?fixture=${match.external_id}`, ctx);
