@@ -1654,6 +1654,26 @@ tant que la migration n'est pas enregistrée.
   `2025-2026` et `2026-2027` sans mélanger les classements ni multiplier le volume côté navigateur.
 - État Git à la fin du lot : commit local uniquement ; ne pas pousser sans autorisation explicite.
 
+### 2026-09-27 — ChatGPT — densification et lisibilité du Noyau
+
+- La page d’entrée du Noyau passe à une largeur éditoriale plus généreuse, affiche les volumes de la
+  communauté, différencie visuellement les quatre espaces et ajoute une colonne des six discussions
+  les plus actives ainsi qu’un rappel de conduite compact.
+- Les listes de sujets reprennent une lecture de forum classique sur desktop : discussion/auteur,
+  nombre de messages et dernière activité. Les lignes restent compactes sur mobile, les sujets
+  épinglés/verrouillés restent identifiables et la création bénéficie de compteurs et limites visibles.
+- Une discussion sépare désormais clairement l’auteur du contenu sur desktop, avec avatar initiales,
+  numéro d’ancre `#N`, date, actions regroupées et fil d’Ariane vers la catégorie. Sur mobile, ces
+  informations repassent en bandeau horizontal pour ne pas réduire la largeur du message.
+- Nouveau composant `ForumPostBody` : les anciennes citations commençant par `>` et les nouvelles
+  citations sont rendues dans un vrai encart bleu avec icône et liseré. « Répondre en citant » prépare
+  une citation courte au-dessus du formulaire, place directement le curseur dans la réponse et évite
+  d’imbriquer indéfiniment les anciennes citations.
+- Le formulaire de réponse affiche une erreur de publication, une limite préventive de 9 500
+  caractères et un bouton d’envoi plus explicite. Aucun schéma supplémentaire n’est requis : les
+  citations restent compatibles avec les messages texte déjà stockés.
+- Aucun SQL et aucun appel API-Football. État Git : second commit local séparé, sans push avant accord.
+
 ---
 
 ## SOCLE_CANDIDATES  (documenter seulement — NE PAS remonter au socle maintenant)
