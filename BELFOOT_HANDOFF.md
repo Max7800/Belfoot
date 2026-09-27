@@ -1604,6 +1604,27 @@ tant que la migration n'est pas enregistrée.
   un lien secondaire compact et discret, tout en restant placé sous le titre de la compétition.
 - Aucun SQL et aucun appel provider pour ces corrections.
 
+### 2026-09-27 — ChatGPT — ajustements desktop des pages éditoriales
+
+- La page Diables Rouges ne force plus chaque module dans une même grille à deux colonnes. Le match
+  principal et ses indicateurs restent groupés, le classement FIFA et les modules secondaires forment
+  une vraie colonne latérale, tandis que les résultats et la sélection utilisent toute la largeur.
+  Le bloc des prochains matchs n’est plus affiché lorsqu’il est vide. Sur mobile, l’ordre reste
+  match principal, résultats, sélection, puis informations secondaires.
+- Le terrain du Onze de la semaine passe de 380 à 520 px maximum sur desktop et utilise un ratio plus
+  adapté à cette largeur. La liste de composition occupe l’autre colonne et défile dans sa carte ; un
+  récapitulatif sous le terrain indique le nombre de joueurs choisis et l’enregistrement automatique.
+  Le rendu mobile du terrain reste inchangé.
+- L’annuaire des Belges à l’étranger passe à quatre cartes par ligne sur desktop, avec portraits,
+  typographie et statistiques plus compacts. Les dimensions mobiles des portraits sont conservées.
+- Le « Belge du moment » de l’accueil peut être choisi parmi les joueurs suivis depuis le panneau
+  Accueil. Une courte mention éditoriale facultative peut compléter la tuile, qui affiche désormais
+  matchs, buts, passes et note sur desktop. Sans choix administratif, le premier joueur du classement
+  de forme reste utilisé automatiquement ; le joueur mis en avant est exclu des quatre cartes suivantes.
+- Ces réglages utilisent `site_settings.data.home.form_spotlight` : aucune migration SQL et aucun appel
+  API-Football ne sont nécessaires.
+- État Git à la fin du lot : commit local uniquement ; ne pas pousser sans autorisation explicite.
+
 ---
 
 ## SOCLE_CANDIDATES  (documenter seulement — NE PAS remonter au socle maintenant)

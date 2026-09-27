@@ -204,40 +204,39 @@ export default function NationalTeamsPage() {
     </section>
 
     {loading ? <div className="h-72 animate-pulse rounded-3xl bg-surface" /> : teams.length === 0 ? <div className="rounded-3xl border border-dashed border-line/20 p-10 text-center"><div className="text-5xl">🇧🇪</div><h2 className="mt-4 text-xl font-black">Les sélections sont prêtes à être reliées</h2><p className="mt-2 text-sm text-muted">Lance la synchronisation ciblée depuis l’administration avec l’identifiant API-Football de la Belgique.</p></div> : <div className="grid items-start gap-4 lg:grid-cols-12">
-      <ModuleCard className="order-1 lg:order-none lg:col-span-8">
-        <PanelHeader icon={CalendarDays} title={config.labels.featured} />
-        <FeaturedMatch match={featured} clubs={clubs} competitions={competitions} />
-      </ModuleCard>
-
-      {rankings.fifa.length > 0 && <ModuleCard className="order-5 lg:order-none lg:col-span-4">
-        <PanelHeader icon={Trophy} title={config.labels.fifa} />
-        <div className="space-y-1">{rankings.fifa.map((row, index) => <div key={index} className={`flex items-center justify-between rounded-lg px-3 py-2 text-sm ${row.isBelgium ? "border border-red-400/20 bg-red-500/15 font-black text-white" : "text-muted"}`}><span><span className="mr-2 inline-block w-7 tabular-nums text-slate-500">{row.rank}</span>{row.nation}</span>{row.points !== "" && <span className="text-xs tabular-nums">{row.points} pts</span>}</div>)}</div>
-      </ModuleCard>}
-
-      <div className="order-2 grid grid-cols-4 gap-2 lg:order-none lg:col-span-8">
-        {[[results.length, config.labels.stats_matches, "text-white"], [record.wins, config.labels.stats_wins, "text-emerald-400"], [record.goals, config.labels.stats_goals, "text-white"], [fifaRank, config.labels.stats_fifa, "text-amber-300"]].map(([value, label, color]) => <div key={label} className="rounded-2xl border border-line/10 bg-surface/60 px-2 py-4 text-center sm:py-5"><b className={`block text-xl sm:text-2xl ${color}`}>{value}</b><span className="mt-1 block text-[8px] font-bold uppercase tracking-wider text-muted sm:text-[9px]">{label}</span></div>)}
+      <div className="order-1 space-y-4 lg:col-span-8">
+        <ModuleCard>
+          <PanelHeader icon={CalendarDays} title={config.labels.featured} />
+          <FeaturedMatch match={featured} clubs={clubs} competitions={competitions} />
+        </ModuleCard>
+        <div className="grid grid-cols-4 gap-2">
+          {[[results.length, config.labels.stats_matches, "text-white"], [record.wins, config.labels.stats_wins, "text-emerald-400"], [record.goals, config.labels.stats_goals, "text-white"], [fifaRank, config.labels.stats_fifa, "text-amber-300"]].map(([value, label, color]) => <div key={label} className="rounded-2xl border border-line/10 bg-surface/60 px-2 py-4 text-center sm:py-5"><b className={`block text-xl sm:text-2xl ${color}`}>{value}</b><span className="mt-1 block text-[8px] font-bold uppercase tracking-wider text-muted sm:text-[9px]">{label}</span></div>)}
+        </div>
       </div>
 
-      {selectedTeam?.national_category === "senior" && (selectedTeam?.national_gender || "men") === "men" && results[0] && ratingSquad.length > 0 && <div className="order-6 lg:order-none lg:col-span-4 lg:row-span-2">
-        <DiableRatings match={results[0]} squad={ratingSquad} title={config.labels.ratings} showAllLabel={config.labels.show_all_players} showLessLabel={config.labels.show_less_players} compact />
-      </div>}
+      <aside className="order-4 space-y-4 lg:order-2 lg:col-span-4">
+        {rankings.fifa.length > 0 && <ModuleCard>
+          <PanelHeader icon={Trophy} title={config.labels.fifa} />
+          <div className="space-y-1">{rankings.fifa.map((row, index) => <div key={index} className={`flex items-center justify-between rounded-lg px-3 py-2 text-sm ${row.isBelgium ? "border border-red-400/20 bg-red-500/15 font-black text-white" : "text-muted"}`}><span><span className="mr-2 inline-block w-7 tabular-nums text-slate-500">{row.rank}</span>{row.nation}</span>{row.points !== "" && <span className="text-xs tabular-nums">{row.points} pts</span>}</div>)}</div>
+        </ModuleCard>}
+        {selectedTeam?.national_category === "senior" && (selectedTeam?.national_gender || "men") === "men" && results[0] && ratingSquad.length > 0 && <DiableRatings match={results[0]} squad={ratingSquad} title={config.labels.ratings} showAllLabel={config.labels.show_all_players} showLessLabel={config.labels.show_less_players} compact />}
+        {sectionConfig.schedule?.enabled && otherUpcoming.length > 0 && <ModuleCard>
+          <PanelHeader icon={CalendarDays} title={sectionConfig.schedule.label} subtitle={sectionConfig.schedule.subtitle} accent={sectionConfig.schedule.accent} />
+          <div className="space-y-3">{otherUpcoming.map((match) => <SmallMatch key={match.id} match={match} clubs={clubs} competitions={competitions} />)}</div>
+        </ModuleCard>}
+      </aside>
 
-      {sectionConfig.results?.enabled && <ModuleCard className="order-3 lg:order-none lg:col-span-8">
+      {sectionConfig.results?.enabled && <ModuleCard className="order-2 lg:order-3 lg:col-span-12">
         <PanelHeader icon={Trophy} title={sectionConfig.results.label} subtitle={sectionConfig.results.subtitle} accent={sectionConfig.results.accent} action={results.length > 4 ? config.labels.show_all_results : null} actionHref={`/diables-rouges/matchs?equipe=${selectedId}`} />
         {results.length ? <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{displayedResults.map((match, index) => <SmallMatch key={match.id} match={match} clubs={clubs} competitions={competitions} className={index >= 4 ? "hidden sm:block" : "block"} />)}</div> : <p className="text-sm text-muted">Aucun résultat importé.</p>}
       </ModuleCard>}
 
-      {sectionConfig.squad?.enabled && <ModuleCard className="order-4 lg:order-none lg:col-span-8">
+      {sectionConfig.squad?.enabled && <ModuleCard className="order-3 lg:order-4 lg:col-span-12">
         <PanelHeader icon={Users} title={sectionConfig.squad.label} subtitle={sectionConfig.squad.subtitle} accent={sectionConfig.squad.accent} action={squad.length > 4 ? `${config.labels.show_all_players} (${squad.length})` : null} actionHref={`/diables-rouges/selection?equipe=${selectedId}`} />
         {squad.length ? <>
           <div className="sm:hidden"><SquadNamesPreview rows={squad} accent={sectionConfig.squad.accent} /></div>
           <SquadPreview rows={displayedSquad} accent={sectionConfig.squad.accent} className="hidden sm:block" />
         </> : <p className="text-sm text-muted">La sélection apparaîtra après sa synchronisation.</p>}
-      </ModuleCard>}
-
-      {sectionConfig.schedule?.enabled && <ModuleCard className="order-7 lg:order-none lg:col-span-4">
-        <PanelHeader icon={CalendarDays} title={sectionConfig.schedule.label} subtitle={sectionConfig.schedule.subtitle} accent={sectionConfig.schedule.accent} />
-        {otherUpcoming.length ? <div className="space-y-3">{otherUpcoming.map((match) => <SmallMatch key={match.id} match={match} clubs={clubs} competitions={competitions} />)}</div> : <div className="rounded-2xl border border-dashed border-line/15 px-4 py-9 text-center"><CalendarDays className="mx-auto h-7 w-7 text-muted" /><p className="mt-3 text-sm text-muted">Aucun autre prochain match enregistré.</p></div>}
       </ModuleCard>}
     </div>}
   </div>;

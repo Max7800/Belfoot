@@ -10,7 +10,7 @@ import { formationSlots, CATEGORY_LABEL } from "@/lib/votw";
 // lignes, cartes joueur), sans toucher à la logique. Utilise les tokens du site
 // (surface/muted/accent…) là où c'est pertinent ; le vert du terrain reste local.
 const PITCH = {
-  field: "relative mx-auto aspect-[2/3] w-full max-w-md overflow-hidden rounded-3xl border border-line/15 bg-gradient-to-b from-emerald-800/50 to-emerald-950/70",
+  field: "relative mx-auto aspect-[2/3] w-full max-w-md overflow-hidden rounded-3xl border border-line/15 bg-gradient-to-b from-emerald-800/50 to-emerald-950/70 lg:aspect-[3/4] lg:max-w-none",
   line: "bg-white/15",
   lineBorder: "border-white/15",
   avatar: "h-11 w-11 overflow-hidden rounded-full border-2 border-white/70 bg-surface2 sm:h-14 sm:w-14",
@@ -43,6 +43,7 @@ export default function OnzePage() {
   const slots = formationSlots(sess?.formation || "4-3-3");
   const votable = !!sess && sess.status === "open" && (!sess.closes_at || new Date(sess.closes_at) > new Date());
   const filled = Object.keys(picks).length;
+  const displayedCount = votable ? filled : Object.keys(view === "belfoot" ? belfoot : results).length;
 
   async function loadData(s) {
     const { data: cand } = await supabase.from("votw_candidates").select("player_id,position").eq("session_id", s.id);
@@ -183,7 +184,7 @@ export default function OnzePage() {
   );
 
   return (
-    <div className="mx-auto max-w-5xl space-y-5">
+    <div className="mx-auto max-w-6xl space-y-5">
       <div className="flex flex-wrap items-center gap-3">
         <Star className="h-7 w-7 text-amber-300" />
         <h1 className="text-2xl font-black sm:text-3xl">Le 11 de la semaine</h1>
@@ -209,8 +210,8 @@ export default function OnzePage() {
         </div>
       )}
 
-      <div className="lg:flex lg:items-start lg:gap-8">
-      <div className="lg:w-[380px] lg:flex-shrink-0">
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,520px)_minmax(0,1fr)] lg:gap-8">
+      <div>
       {/* Terrain — style regroupé dans la constante PITCH (haut du fichier) */}
       <div className={PITCH.field}>
         <div className="pointer-events-none absolute inset-0">
@@ -236,10 +237,15 @@ export default function OnzePage() {
           );
         })}
       </div>
+      <div className="mt-3 rounded-2xl border border-line/10 bg-surface/60 p-4">
+        <div className="flex items-center justify-between gap-3"><div><div className="text-xs font-black uppercase tracking-wider text-muted">{votable ? "Ton XI" : view === "belfoot" ? "Onze Belfoot" : "Onze des lecteurs"}</div><div className="mt-1 text-sm font-bold">{displayedCount} joueur{displayedCount > 1 ? "s" : ""} sur 11</div></div><b className={`text-2xl ${displayedCount === 11 ? "text-emerald-300" : "text-amber-300"}`}>{displayedCount}/11</b></div>
+        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-bg"><div className="h-full rounded-full bg-gradient-to-r from-amber-400 to-emerald-400 transition-all" style={{ width: `${Math.min(100, (displayedCount / 11) * 100)}%` }} /></div>
+        <p className="mt-3 text-xs leading-5 text-muted">{votable ? filled === 11 ? "Composition complète et enregistrée. Tu peux encore modifier un poste tant que le vote reste ouvert." : `Choisis encore ${11 - filled} joueur${11 - filled > 1 ? "s" : ""}. Chaque sélection est enregistrée automatiquement.` : "Partage cette composition ou compare-la avec le choix de Belfoot lorsqu’il est disponible."}</p>
+      </div>
       </div>
 
-      <div className="mt-6 flex-1 lg:mt-0">
-        <div className="rounded-2xl border border-line/10 bg-surface/60 p-4">
+      <div>
+        <div className="rounded-2xl border border-line/10 bg-surface/60 p-4 lg:max-h-[690px] lg:overflow-y-auto lg:[scrollbar-color:rgba(251,191,36,.3)_transparent]">
           <div className="mb-3 text-sm font-black">{votable ? "Ta composition" : view === "belfoot" ? "Onze Belfoot" : "Onze des lecteurs"}</div>
           <div className="space-y-4">
             {["GK", "DEF", "MID", "FWD"].map((cat) => (
@@ -262,12 +268,10 @@ export default function OnzePage() {
                 </div>
               </div>
             ))}
-          </div>
-        </div>
       </div>
       </div>
-
-      {votable && userId && filled === 11 && <p className="text-center text-sm font-bold text-emerald-300">Ton XI est complet et enregistré. Tu peux encore le modifier tant que le vote est ouvert.</p>}
+      </div>
+      </div>
 
       {/* Panneau / drawer de choix */}
       {openSlot && (
