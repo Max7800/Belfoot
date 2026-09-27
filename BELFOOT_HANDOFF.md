@@ -1625,6 +1625,15 @@ tant que la migration n'est pas enregistrée.
   API-Football ne sont nécessaires.
 - État Git à la fin du lot : commit local uniquement ; ne pas pousser sans autorisation explicite.
 
+### 2026-09-27 — ChatGPT — drapeaux du classement FIFA
+
+- Le classement FIFA de la page Diables Rouges affiche désormais le drapeau devant chaque nation.
+  Les principaux noms français et anglais sont reconnus, avec un globe neutre en repli si une nation
+  saisie manuellement n’est pas encore connue.
+- Aucun changement du bloc Sélection dans ce micro-lot, afin d’abord d’évaluer son équilibre une fois
+  davantage de nations ajoutées au classement FIFA.
+- Aucun SQL et aucun appel API-Football.
+
 ---
 
 ## SOCLE_CANDIDATES  (documenter seulement — NE PAS remonter au socle maintenant)
