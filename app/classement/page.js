@@ -9,39 +9,34 @@ import CupRounds from "@/components/football/CupRounds";
 import { useLabels } from "@/lib/labels";
 import { competitionPath } from "@/lib/competitionRoutes";
 import { zonesForPhase } from "@/lib/standingsZones";
-import { sortPublicSeasons } from "@/lib/publicSeasons";
+import { loadClubsForMatches, loadCompetitionSeasons, loadSeasonMatches } from "@/lib/publicFootballData";
 
 export default function ClassementPage() {
   const L = useLabels();
   const [comps, setComps] = useState([]); const [cid, setCid] = useState("");
   const [matches, setMatches] = useState([]); const [clubs, setClubs] = useState({}); const [phase, setPhase] = useState(null);
   const [seasons, setSeasons] = useState([]); const [seasonLabel, setSeasonLabel] = useState("");
-  const [error, setError] = useState("");
-  useEffect(() => { supabase.from("competitions").select("*").order("name").then(({ data, error: loadError }) => {
+  const [error, setError] = useState(""); const [loading, setLoading] = useState(false);
+  const activeSeason = seasons.find((season) => season.label === seasonLabel) || null;
+  useEffect(() => { supabase.from("competitions").select("id,name,logo_url,public_visible,position,competition_type,ext,zones").order("name").then(({ data, error: loadError }) => {
     if (loadError) { setError(loadError.message); return; }
     const arr = (data || []).filter((c) => c.public_visible !== false).sort((a, b) => (a.position ?? 999) - (b.position ?? 999) || (a.name || "").localeCompare(b.name || ""));
     setComps(arr); if (arr[0]) setCid(arr[0].id);
   }); }, []);
   useEffect(() => { if (!cid) return; (async () => {
     setError(""); setClubs({}); setMatches([]);
-    const [{ data: m, error: matchError }, { data: seasonRows, error: seasonError }] = await Promise.all([
-      supabase.from("matches").select("*").eq("competition_id", cid),
-      supabase.from("seasons").select("*").eq("competition_id", cid),
-    ]);
-    if (matchError) throw matchError;
-    if (seasonError) throw seasonError;
-    setMatches(m || []); setPhase(null);
-    const orderedSeasons = sortPublicSeasons(seasonRows || []);
+    const orderedSeasons = await loadCompetitionSeasons(supabase, cid);
     setSeasons(orderedSeasons); setSeasonLabel(orderedSeasons[0]?.label || "");
-    const ids = [...new Set((m || []).flatMap((x) => [x.home_club_id, x.away_club_id]).filter(Boolean))];
-    if (ids.length) { const { data: cl } = await supabase.from("clubs").select("id,name,logo_url").in("id", ids); setClubs(Object.fromEntries((cl || []).map((x) => [x.id, x]))); }
   })().catch((e) => setError(e.message || String(e))); }, [cid]);
+  useEffect(() => { if (!cid || (seasons.length && !activeSeason)) return; let alive = true; (async () => {
+    setLoading(true); setError(""); setPhase(null);
+    const rows = await loadSeasonMatches(supabase, cid, activeSeason?.id);
+    const clubMap = await loadClubsForMatches(supabase, rows);
+    if (!alive) return;
+    setMatches(rows); setClubs(clubMap); setLoading(false);
+  })().catch((loadError) => { if (alive) { setLoading(false); setError(loadError.message || String(loadError)); } }); return () => { alive = false; }; }, [cid, activeSeason, seasons.length]);
   const comp = comps.find((c) => c.id === cid) || null;
-  const activeSeason = seasons.find((season) => season.label === seasonLabel) || null;
-  const seasonMatches = useMemo(() => {
-    if (!activeSeason || !matches.some((match) => match.season_id)) return matches;
-    return matches.filter((match) => match.season_id === activeSeason.id);
-  }, [matches, activeSeason]);
+  const seasonMatches = matches;
   const type = getCompetitionType(comp, seasonMatches);
   const isCup = type === "cup";
   const phases = useMemo(() => competitionPhases(seasonMatches, type), [seasonMatches, type]);
@@ -63,7 +58,7 @@ export default function ClassementPage() {
       </div>
       {seasons.length > 0 && <div className="mb-4 flex justify-end"><select value={seasonLabel} onChange={(e) => { setSeasonLabel(e.target.value); setPhase(null); }} className="rounded-xl border border-line/10 bg-surface px-3 py-2 text-sm">{seasons.map((season) => <option key={season.id}>{season.label}</option>)}</select></div>}
       {error && <p className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">{error}</p>}
-      {isCup ? (
+      {loading ? <div className="h-56 animate-pulse rounded-2xl bg-surface" /> : isCup ? (
         <div>
           <CupRounds matches={seasonMatches} clubs={clubs} phases={phases} activePhase={cur} onPhaseChange={setPhase} L={L} />
           {comp && <Link href={competitionPath(comp)} className="mt-4 inline-flex rounded-xl border border-accent/30 px-3 py-2 text-sm font-semibold text-accent hover:bg-accent/10">Voir la page complète de la coupe →</Link>}

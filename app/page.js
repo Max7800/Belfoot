@@ -22,6 +22,7 @@ import { useHomeConfig } from "@/lib/homeSections";
 import { computeStandings } from "@/lib/standings";
 import { supabase } from "@/lib/supabaseClient";
 import { sortPublicSeasons } from "@/lib/publicSeasons";
+import { PUBLIC_MATCH_FIELDS, PUBLIC_PLAYER_FIELDS, loadPlayerStatsForPlayers } from "@/lib/publicFootballData";
 
 const normal = (value) => String(value || "").trim().toLocaleLowerCase("fr");
 const year = (value) => Number((String(value || "").match(/\d{4}/) || [0])[0]);
@@ -81,17 +82,17 @@ export default function Home() {
   const [activeCompetitionId, setActiveCompetitionId] = useState("");
 
   useEffect(() => { (async () => {
-    const [recentMatchResult, clubResult, competitionResult, seasonResult, playerResult, statsResult, newsResult, votwResult, topicsResult] = await Promise.all([
-      supabase.from("matches").select("*").order("kickoff", { ascending: false }).limit(500),
+    const [recentMatchResult, clubResult, competitionResult, seasonResult, playerResult, newsResult, votwResult, topicsResult] = await Promise.all([
+      supabase.from("matches").select(PUBLIC_MATCH_FIELDS).order("kickoff", { ascending: false }).limit(250),
       supabase.from("clubs").select("id,name,logo_url"),
       supabase.from("competitions").select("*"),
       supabase.from("seasons").select("*"),
-      supabase.from("players").select("*").eq("tracked", true).eq("active", true),
-      supabase.from("player_season_stats").select("*"),
-      supabase.from("entries").select("*").eq("collection", "news").eq("published", true).is("deleted_at", null).order("published_at", { ascending: false, nullsFirst: false }).limit(9),
+      supabase.from("players").select(PUBLIC_PLAYER_FIELDS).eq("tracked", true).eq("active", true),
+      supabase.from("entries").select("id,slug,title,excerpt,category,cover_url,published_at").eq("collection", "news").eq("published", true).is("deleted_at", null).order("published_at", { ascending: false, nullsFirst: false }).limit(9),
       supabase.from("votw_sessions").select("id,matchday,season_label,formation,status,closes_at").order("created_at", { ascending: false }).limit(5),
       supabase.from("forum_topics").select("id,title,author_name,last_activity").order("last_activity", { ascending: false }).limit(4),
     ]);
+    const statsRows = await loadPlayerStatsForPlayers(supabase, (playerResult.data || []).map((player) => player.id));
     const competitionRows = competitionResult.data || [];
     const seasonRows = seasonResult.data || [];
     const requestedIds = new Set(configuredCompetitionIds.split(",").filter(Boolean));
@@ -101,7 +102,7 @@ export default function Home() {
       : competitionRows.filter((competition) => competition.public_visible !== false);
     const carouselMatchResults = await Promise.all(carouselCompetitions.map((competition) => {
       const activeSeason = sortPublicSeasons(seasonRows.filter((season) => season.competition_id === competition.id))[0];
-      let query = supabase.from("matches").select("*").eq("competition_id", competition.id).order("kickoff", { ascending: false }).limit(1000);
+      let query = supabase.from("matches").select(PUBLIC_MATCH_FIELDS).eq("competition_id", competition.id).order("kickoff", { ascending: false }).limit(600);
       if (activeSeason) query = query.eq("season_id", activeSeason.id);
       return query;
     }));
@@ -114,7 +115,7 @@ export default function Home() {
       competitions: competitionRows,
       seasons: seasonRows,
       players: playerResult.data || [],
-      stats: statsResult.data || [],
+      stats: statsRows,
       news: newsResult.data || [],
       votwSessions: votwResult.data || [],
       topics: topicsResult.data || [],

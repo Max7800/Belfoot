@@ -18,6 +18,7 @@ import { useTiles } from "@/lib/tiles";
 import { zoneAt, zonesForPhase } from "@/lib/standingsZones";
 import { useStatsSections } from "@/lib/statsSections";
 import { sortPublicSeasons } from "@/lib/publicSeasons";
+import { PUBLIC_PLAYER_FIELDS, PUBLIC_PLAYER_STATS_FIELDS, loadClubsForMatches, loadMatchStatsForMatches, loadPlayersByIds, loadSeasonMatches } from "@/lib/publicFootballData";
 
 const POS = { Goalkeeper: 0, Defender: 1, Midfielder: 2, Attacker: 3 };
 const VARIANTS = {
@@ -70,6 +71,7 @@ export default function CompetitionPage() {
   const [clubsMap, setClubsMap] = useState({});
   const [players, setPlayers] = useState([]); const [playerStats, setPlayerStats] = useState([]);
   const [matchPlayerStats, setMatchPlayerStats] = useState([]);
+  const [seasonLoading, setSeasonLoading] = useState(false); const [dataError, setDataError] = useState("");
   const [phase, setPhase] = useState(null); const [round, setRound] = useState("all");
   const [matchView, setMatchView] = useState("list");
   const matchViewChosen = useRef(false);
@@ -91,6 +93,7 @@ export default function CompetitionPage() {
   }, [searchParams]);
 
   useEffect(() => { (async () => {
+    setDataError("");
     setPlayerStats([]);
     setMatchPlayerStats([]);
     const { data: competitionRows, error: competitionError } = await supabase.from("competitions").select("*");
@@ -99,39 +102,42 @@ export default function CompetitionPage() {
     const c = resolveCompetitionRoute(competitionRows || [], slug);
     if (!c) { setComp(null); return; }
     setComp(c);
-    const [se, ma, matchStats] = await Promise.all([
-      supabase.from("seasons").select("*").eq("competition_id", c.id),
-      supabase.from("matches").select("*").eq("competition_id", c.id).order("round_number", { ascending: true, nullsFirst: false }).order("kickoff", { ascending: true }),
-      supabase.from("match_player_stats").select("*").eq("competition_id", c.id),
-    ]);
+    const se = await supabase.from("seasons").select("*").eq("competition_id", c.id);
+    if (se.error) throw se.error;
     const orderedSeasons = sortPublicSeasons(se.data || []);
-    setSeasons(orderedSeasons); setSeasonLabel(orderedSeasons[0]?.label || ""); setMatches(ma.data || []); setMatchPlayerStats(matchStats.data || []);
-    const ids = [...new Set((ma.data || []).flatMap((m) => [m.home_club_id, m.away_club_id]).filter(Boolean))];
-    if (ids.length) {
-      const { data: cl } = await supabase.from("clubs").select("*").in("id", ids);
-      setClubsMap(Object.fromEntries((cl || []).map((x) => [x.id, x])));
-      const { data: s, error: statsError } = await supabase.from("player_season_stats").select("*").eq("competition_id", c.id);
-      if (statsError) throw statsError;
-      const pids = [...new Set((s || []).map((row) => row.player_id).filter(Boolean))];
-      const { data: pl, error: playersError } = pids.length
-        ? await supabase.from("players").select("*").in("id", pids).order("name")
-        : await supabase.from("players").select("*").in("club_id", ids).order("name");
-      if (playersError) throw playersError;
-      setPlayers(pl || []);
-      setPlayerStats(s || []);
-    }
+    setSeasons(orderedSeasons); setSeasonLabel(orderedSeasons[0]?.label || "");
   })().catch(() => setComp(null)); }, [slug]);
+
+  const activeSeason = seasons.find((season) => season.label === seasonLabel) || null;
+  useEffect(() => { if (!comp?.id || (seasons.length && !activeSeason)) return; let alive = true; (async () => {
+    setSeasonLoading(true); setDataError(""); setMatches([]); setClubsMap({}); setPlayers([]); setPlayerStats([]); setMatchPlayerStats([]); setPhase(null); setRound("all");
+    const seasonMatches = await loadSeasonMatches(supabase, comp.id, activeSeason?.id);
+    const clubMap = await loadClubsForMatches(supabase, seasonMatches);
+    let statsQuery = supabase.from("player_season_stats").select(PUBLIC_PLAYER_STATS_FIELDS).eq("competition_id", comp.id);
+    const activeYear = seasonKey(activeSeason?.label);
+    if (activeYear) statsQuery = statsQuery.ilike("season", `${activeYear}%`);
+    const statsResult = await statsQuery;
+    if (statsResult.error) throw statsResult.error;
+    const statsRows = statsResult.data || [];
+    const playerIds = [...new Set(statsRows.map((row) => row.player_id).filter(Boolean))];
+    const clubIds = Object.keys(clubMap);
+    let playerRows = playerIds.length ? await loadPlayersByIds(supabase, playerIds) : [];
+    if (!playerRows.length && clubIds.length) {
+      const fallback = await supabase.from("players").select(PUBLIC_PLAYER_FIELDS).in("club_id", clubIds).order("name");
+      if (fallback.error) throw fallback.error;
+      playerRows = fallback.data || [];
+    }
+    const exactMatchStats = await loadMatchStatsForMatches(supabase, seasonMatches.map((match) => match.id));
+    if (!alive) return;
+    setMatches(seasonMatches); setClubsMap(clubMap); setPlayers(playerRows); setPlayerStats(statsRows); setMatchPlayerStats(exactMatchStats); setSeasonLoading(false);
+  })().catch((loadError) => { if (alive) { setSeasonLoading(false); setDataError(loadError.message || String(loadError)); } }); return () => { alive = false; }; }, [comp?.id, activeSeason, seasons.length]);
 
   const pss = useMemo(() => {
     const activeSeason = seasonKey(seasonLabel);
     const rows = activeSeason ? playerStats.filter((stat) => seasonKey(stat.season) === activeSeason) : playerStats;
     return statsByPlayer(rows);
   }, [playerStats, seasonLabel]);
-  const activeSeason = seasons.find((season) => season.label === seasonLabel) || null;
-  const seasonMatches = useMemo(() => {
-    if (!activeSeason || !matches.some((match) => match.season_id)) return matches;
-    return matches.filter((match) => match.season_id === activeSeason.id);
-  }, [matches, activeSeason]);
+  const seasonMatches = matches;
   const phases = useMemo(() => competitionPhases(seasonMatches, competitionType), [seasonMatches, competitionType]);
   const primaryPhase = (isCup ? phases[phases.length - 1] : phases[0]) || null;
   const curPhase = phase && phases.includes(phase) ? phase : primaryPhase;
@@ -308,7 +314,10 @@ export default function CompetitionPage() {
         {seasons.length > 0 && <select value={seasonLabel} onChange={(e) => { setSeasonLabel(e.target.value); setPhase(null); setRound("all"); }} className="mb-3 mt-2 w-full rounded-xl border border-line/10 bg-surface px-3 py-2 text-sm sm:hidden">{seasons.map((s) => <option key={s.id}>{s.label}</option>)}</select>}
       </div>
 
-      {tab === "overview" && (
+      {dataError && <p className="mb-5 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">Impossible de charger les données de cette saison : {dataError}</p>}
+      {seasonLoading && <div className="h-72 animate-pulse rounded-3xl bg-surface" />}
+
+      {!seasonLoading && tab === "overview" && (
         <div className="space-y-6">
           <div className="grid gap-4 lg:grid-cols-3">
             {isCup ? (
@@ -381,7 +390,7 @@ export default function CompetitionPage() {
         </div>
       )}
 
-      {tab === "matchs" && (
+      {!seasonLoading && tab === "matchs" && (
         <div>
           <PhaseChips />
           <div className="mb-4 flex sm:justify-end"><div className="inline-flex w-full rounded-xl border border-line/10 bg-surface p-1 sm:w-auto"><button onClick={() => chooseMatchView("calendar")} className={`order-1 flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold sm:order-2 sm:flex-none sm:py-1.5 ${matchView === "calendar" ? "bg-accent text-white" : "text-muted hover:text-content"}`}><CalendarDays className="h-3.5 w-3.5" />Calendrier</button><button onClick={() => chooseMatchView("list")} className={`order-2 flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold sm:order-1 sm:flex-none sm:py-1.5 ${matchView === "list" ? "bg-accent text-white" : "text-muted hover:text-content"}`}><List className="h-3.5 w-3.5" />Liste</button></div></div>
@@ -394,18 +403,18 @@ export default function CompetitionPage() {
         </div>
       )}
 
-      {tab === "classement" && (isCup
+      {!seasonLoading && tab === "classement" && (isCup
         ? <CupRounds matches={seasonMatches} clubs={clubsMap} phases={phases} activePhase={curPhase} onPhaseChange={(next) => { setPhase(next); setRound("all"); }} L={L} />
         : <div><PhaseChips /><StandingsTable standings={standings} clubs={clubsMap} zones={zones} L={L} /></div>)}
 
-      {tab === "clubs" && (
+      {!seasonLoading && tab === "clubs" && (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {clubsList.map((c) => <Link key={c.id} href={`/clubs/${c.id}`} className="flex items-center gap-3 rounded-xl border border-line/10 bg-surface p-3 transition hover:border-accent/40">{c.logo_url && <img src={c.logo_url} className="h-8 w-8 object-contain" alt="" />}<span className="font-semibold">{c.name}</span></Link>)}
           {clubsList.length === 0 && <p className="text-muted">{L("empty.clubs", "Aucun club.")}</p>}
         </div>
       )}
 
-      {tab === "joueurs" && (
+      {!seasonLoading && tab === "joueurs" && (
         selClub === null ? (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             {[...clubsList].sort((a, b) => a.name.localeCompare(b.name)).map((c) => (
@@ -430,7 +439,7 @@ export default function CompetitionPage() {
         })()
       )}
 
-      {tab === "stats" && (
+      {!seasonLoading && tab === "stats" && (
         <div className="space-y-5">
           <PhaseChips />
           <div className="relative overflow-hidden rounded-3xl border border-line/10 bg-gradient-to-r from-surface to-bg/40 px-5 py-6 sm:px-7">

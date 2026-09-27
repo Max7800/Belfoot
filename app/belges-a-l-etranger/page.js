@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ArrowRight, CalendarDays, Clock3, Flame, Globe2, MapPin, Search, Sparkles, Trophy, Users } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useBelgiansAbroadConfig } from "@/lib/belgiansAbroad";
+import { PUBLIC_MATCH_FIELDS, PUBLIC_MATCH_PLAYER_STATS_FIELDS, PUBLIC_PLAYER_FIELDS, loadMatchesByIds, loadPlayerStatsForPlayers } from "@/lib/publicFootballData";
 import { supabase } from "@/lib/supabaseClient";
 
 const FLAGS = { England: "🏴", France: "🇫🇷", Germany: "🇩🇪", Italy: "🇮🇹", Spain: "🇪🇸", Netherlands: "🇳🇱", Portugal: "🇵🇹", Scotland: "🏴", Turkey: "🇹🇷", Austria: "🇦🇹", Switzerland: "🇨🇭", Greece: "🇬🇷", USA: "🇺🇸", Belgium: "🇧🇪" };
@@ -56,30 +57,34 @@ export default function BelgiansAbroadPage() {
 
   useEffect(() => { (async () => {
     const [playerResult, competitionResult] = await Promise.all([
-      supabase.from("players").select("*").eq("tracked", true).eq("active", true),
+      supabase.from("players").select(PUBLIC_PLAYER_FIELDS).eq("tracked", true).eq("active", true),
       supabase.from("competitions").select("*"),
     ]);
     if (playerResult.error) throw playerResult.error;
     if (competitionResult.error) throw competitionResult.error;
     const players = (playerResult.data || []).filter((player) => isBelgian(player.nationality));
     const playerIds = players.map((player) => player.id);
-    const [clubResult, statsResult, matchResult, performanceResult] = await Promise.all([
+    const [clubResult, statsRows, performanceResult] = await Promise.all([
       supabase.from("clubs").select("id,name,logo_url"),
-      playerIds.length ? supabase.from("player_season_stats").select("*").in("player_id", playerIds) : Promise.resolve({ data: [] }),
-      supabase.from("matches").select("*").order("kickoff", { ascending: false }).limit(700),
-      playerIds.length ? supabase.from("match_player_stats").select("*").in("player_id", playerIds).order("synced_at", { ascending: false }).limit(500) : Promise.resolve({ data: [] }),
+      loadPlayerStatsForPlayers(supabase, playerIds),
+      playerIds.length ? supabase.from("match_player_stats").select(PUBLIC_MATCH_PLAYER_STATS_FIELDS).in("player_id", playerIds).order("synced_at", { ascending: false }).limit(500) : Promise.resolve({ data: [] }),
     ]);
     if (clubResult.error) throw clubResult.error;
-    if (statsResult.error) throw statsResult.error;
+    if (performanceResult.error) throw performanceResult.error;
+    const clubIds = [...new Set(players.map((player) => player.club_id).filter(Boolean))];
+    const upcomingResult = clubIds.length ? await supabase.from("matches").select(PUBLIC_MATCH_FIELDS).or(`home_club_id.in.(${clubIds.join(",")}),away_club_id.in.(${clubIds.join(",")})`).neq("status", "finished").gte("kickoff", new Date().toISOString()).order("kickoff", { ascending: true }).limit(100) : { data: [] };
+    if (upcomingResult.error) throw upcomingResult.error;
+    const performanceMatches = await loadMatchesByIds(supabase, (performanceResult.data || []).map((row) => row.match_id));
+    const matchMap = new Map([...(upcomingResult.data || []), ...performanceMatches].map((match) => [match.id, match]));
     const stats = {};
-    for (const row of statsResult.data || []) (stats[row.player_id] ||= []).push(row);
+    for (const row of statsRows) (stats[row.player_id] ||= []).push(row);
     setData({
       players,
       clubs: Object.fromEntries((clubResult.data || []).map((item) => [item.id, item])),
       competitions: Object.fromEntries((competitionResult.data || []).map((item) => [item.id, item])),
       stats,
-      matches: matchResult.data || [],
-      performances: performanceResult.error ? [] : performanceResult.data || [],
+      matches: [...matchMap.values()],
+      performances: performanceResult.data || [],
       loading: false,
       error: "",
     });

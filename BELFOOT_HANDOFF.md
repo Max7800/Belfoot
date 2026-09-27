@@ -1634,6 +1634,26 @@ tant que la migration n'est pas enregistrée.
   davantage de nations ajoutées au classement FIFA.
 - Aucun SQL et aucun appel API-Football.
 
+### 2026-09-27 — ChatGPT — passage à l’échelle public sur trois saisons
+
+- Nouvelle couche `lib/publicFootballData.js` : sélections de colonnes publiques, chargement d’une
+  saison de matchs à la fois, résolution des clubs et requêtes découpées par lots pour éviter les URL
+  Supabase trop longues. Le repli vers les anciens matchs sans `season_id` n’est autorisé que si une
+  compétition ne possède encore aucun match correctement rattaché à une saison.
+- Les pages Compétition, Matchs et Classement ne téléchargent plus toutes les saisons d’une
+  compétition. Le changement de saison recharge uniquement ses matchs, clubs et statistiques ; les
+  réponses devenues obsolètes sont ignorées et l’interface affiche chargement ou erreur explicite.
+- La page Compétition limite également les statistiques de joueurs à la saison affichée et ne charge
+  les performances individuelles que pour les matchs visibles de cette saison.
+- L’accueil ne lit plus toutes les statistiques de tous les joueurs : seules celles des joueurs
+  belges suivis sont récupérées par lots. Son échantillon transversal de matchs est réduit à 250 ; le
+  carrousel conserve séparément la saison publique complète des seules compétitions configurées.
+- La page Belges à l’étranger ne charge plus 700 matchs arbitraires. Elle récupère seulement les
+  prochains matchs des clubs concernés et les matchs référencés par les performances récentes.
+- Aucun SQL et aucun appel API-Football. Ce lot prépare l’affichage simultané de `2024-2025`,
+  `2025-2026` et `2026-2027` sans mélanger les classements ni multiplier le volume côté navigateur.
+- État Git à la fin du lot : commit local uniquement ; ne pas pousser sans autorisation explicite.
+
 ---
 
 ## SOCLE_CANDIDATES  (documenter seulement — NE PAS remonter au socle maintenant)
