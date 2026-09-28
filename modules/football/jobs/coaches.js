@@ -9,8 +9,18 @@ export default {
     if (competitionId) query = query.eq("id", competitionId);
     const { data: competitions } = await query;
     if (!competitions?.length) return "aucune compétition avec provider";
+    const ordered = [...competitions].sort((a, b) => String(a.id).localeCompare(String(b.id)));
+    const startCompetition = Number(ctx.resumeState?.competitionIndex) || 0;
     const output = [];
-    for (const competition of competitions) output.push(await syncCoaches(db, competition, ctx));
+    for (let index = startCompetition; index < ordered.length; index++) {
+      const competition = ordered[index];
+      output.push(await syncCoaches(db, competition, {
+        ...ctx,
+        startClubIndex: index === startCompetition ? Number(ctx.resumeState?.clubIndex) || 0 : 0,
+        saveClubCheckpoint: async (clubIndex) => ctx.saveCheckpoint?.({ competitionIndex: index, clubIndex }),
+      }));
+      await ctx.saveCheckpoint?.({ competitionIndex: index + 1, clubIndex: 0 });
+    }
     return output.join(" | ");
   },
 };

@@ -16,12 +16,15 @@ export async function syncSquads(db, competition, ctx = {}) {
   if (matchesError) throw matchesError;
   const clubIds = [...new Set((ms || []).flatMap((m) => [m.home_club_id, m.away_club_id]).filter(Boolean))];
   if (!clubIds.length) return `${competition.name}: aucun club (fais d'abord l'import)`;
-  const { data: clubs, error: clubsError } = await db.from("clubs").select("id,name,external_id,team_type,parent_club_id").in("id", clubIds);
+  const { data: clubs, error: clubsError } = await db.from("clubs").select("id,name,external_id,team_type,parent_club_id").in("id", clubIds).order("id");
   if (clubsError) throw clubsError;
 
   const now = new Date().toISOString();
   let n = 0;
-  for (const club of clubs || []) {
+  const orderedClubs = clubs || [];
+  const startClubIndex = Math.max(0, Number(ctx.startClubIndex) || 0);
+  for (let clubIndex = startClubIndex; clubIndex < orderedClubs.length; clubIndex++) {
+    const club = orderedClubs[clubIndex];
     const players = await provider.fetchSquadPlayers({ external_id: club.external_id }, { ...ctx, season, leagueId: competition.external_id });
     for (const p of players) {
       const { data: existing, error: existingError } = await db.from("players").select("id,locked,club_id").eq("source", competition.provider).eq("external_id", p.external_id).maybeSingle();
@@ -56,6 +59,7 @@ export async function syncSquads(db, competition, ctx = {}) {
       });
       n++;
     }
+    await ctx.saveClubCheckpoint?.(clubIndex + 1);
   }
-  return `${competition.name}: ${n} joueurs (+ stats saison)`;
+  return `${competition.name}: ${n} joueurs (+ stats saison), ${orderedClubs.length} club(s) parcouru(s)`;
 }

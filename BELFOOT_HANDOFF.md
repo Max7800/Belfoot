@@ -121,8 +121,8 @@ Sur Vercel (Production + Preview) :
 - `NEXT_PUBLIC_ADMIN_EMAIL` — email admin (indicatif).
 - `SUPABASE_SERVICE_ROLE_KEY` — **secret**, serveur uniquement (jobs, bypass RLS). SANS `NEXT_PUBLIC_`.
 - `JOBS_SECRET` — protège l'endpoint `/api/jobs/[key]` (cron).
-- `CRON_SECRET` — secret Bearer ajouté automatiquement par Vercel Cron. Peut être distinct de
-  `JOBS_SECRET`. Aucun cron live n'est activé dans le dépôt avant le forfait API 2026.
+- `CRON_SECRET` — secret Bearer partagé avec le cron Supabase qui appelle le dispatcher live. Peut
+  être distinct de `JOBS_SECRET`. La valeur est stockée dans Vercel et Supabase Vault, jamais dans Git.
 - `APIFOOTBALL_KEY` — clé API-Football (provider principal).
 - `THESPORTSDB_KEY` — provider secondaire/test (défaut `3`).
 
@@ -1886,6 +1886,22 @@ tant que la migration n'est pas enregistrée.
   minutes. Il exige deux secrets créés au préalable dans Vault (`belfoot_site_url` et
   `belfoot_cron_secret`) et ne contient aucune valeur secrète. Hors fenêtre de match, les appels au
   provider restent à zéro ; désactiver `cron.job.active` coupe immédiatement l'automatisation.
+- Le cron Supabase `belfoot-live-window` a été installé et contrôlé le 28/09/2026 : réponse HTTP 200 du
+  dispatcher. Le direct automatique est donc actif uniquement dans la fenêtre calculée autour des matchs.
+
+### 2026-09-28 — reprise réelle des pipelines sur Vercel Hobby
+
+- Le premier pipeline Pro League 2024-2025 a terminé `football.sync`, puis Vercel a interrompu
+  `football.squads` (`FUNCTION_INVOCATION_TIMEOUT`). Cette situation a révélé deux défauts : verrou de
+  reprise conservé vingt minutes et absence de curseur par club.
+- Le runner conserve désormais le coût global du pipeline à chaque appel API, réconcilie les compteurs
+  des tentatives après interruption et autorise une reprise après deux minutes sans battement.
+- `football.squads` et `football.coaches` enregistrent un checkpoint après chaque club. Une reprise
+  repart du prochain club au lieu de rappeler indéfiniment les premiers. Aucun SQL supplémentaire :
+  l'état est stocké dans le JSON `pipeline_runs.params` déjà présent.
+- Les entraîneurs sont maintenant limités à la saison demandée, comme les effectifs. Les entrées
+  manuelles verrouillées restent ignorées. Après déploiement, reprendre le pipeline existant depuis
+  l'admin ; ne pas en créer un second et ne pas relancer l'import de base.
 
 #### État à récupérer avant toute modification
 
