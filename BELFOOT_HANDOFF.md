@@ -1834,6 +1834,11 @@ tant que la migration n'est pas enregistrée.
   l'API exige qu'une ligne ait réellement été modifiée et journalise l'action. Aucun SQL n'est requis.
 - Les changements de fonds sont envoyés champ par champ et mis en file côté admin. Plusieurs uploads
   rapprochés ne peuvent donc plus partir avec une copie périmée de la configuration et s'écraser entre eux.
+- Correctif de portée : une compétition `hybrid` n'est plus automatiquement considérée comme une coupe
+  européenne de clubs. La Nations League lit maintenant réellement les fonds `international`, tandis que
+  Champions/Europa/Conference restent dans `europe`.
+- Les sélecteurs Ligue A/B/C/D ne sont plus réinitialisés par la phase API principale. Le choix reste actif
+  dans la vue d'ensemble et le classement, et le résumé précise le nombre de groupes de la ligue affichée.
 - Le portail `/competitions` mémorise son univers dans `?univers=national|international`. Un retour
   navigateur depuis la Champions League ou une compétition de sélections revient donc sur l'onglet
   International ; chaque fiche propose également un lien de retour explicite vers le bon univers.

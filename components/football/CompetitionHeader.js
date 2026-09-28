@@ -6,10 +6,11 @@ const FLAG = { Belgium: "🇧🇪", France: "🇫🇷", England: "🏴", Spain: 
 export default function CompetitionHeader({ comp, seasonLabel, kicker }) {
   const banner = comp.banner_url || "/competition-banner.png";
   const european = isEuropeanClubCompetition(comp);
-  const flagUrl = european ? null : comp.ext?.country_flag;
-  const flagEmoji = european ? null : FLAG[comp.ext?.country];
+  const international = comp.competition_scope === "international";
+  const flagUrl = european || international ? null : comp.ext?.country_flag;
+  const flagEmoji = european || international ? null : FLAG[comp.ext?.country];
   const title = formatCompetitionName(comp.header_title?.trim() || comp.name);
-  const automaticSubtitle = [european ? "Europe" : comp.ext?.country, seasonLabel].filter(Boolean).join(" · ");
+  const automaticSubtitle = [international ? "Sélections internationales" : european ? "Europe" : comp.ext?.country, seasonLabel].filter(Boolean).join(" · ");
   const subtitle = comp.header_subtitle?.trim() || automaticSubtitle;
   return (
     <div className="relative -mx-4 mb-6 overflow-hidden sm:mx-0 sm:rounded-2xl">
@@ -23,7 +24,9 @@ export default function CompetitionHeader({ comp, seasonLabel, kicker }) {
           <h1 className="truncate text-3xl font-black leading-none text-white sm:text-5xl">{title}</h1>
           <div className="mt-2 h-[3px] w-24 overflow-hidden rounded-full">{european
             ? <div className="h-full bg-gradient-to-r from-sky-400 via-white to-indigo-500 opacity-90" />
-            : <div className="flex h-full opacity-80"><span className="flex-1 bg-black" /><span className="flex-1 bg-yellow-400" /><span className="flex-1 bg-red-600" /></div>}</div>
+            : international
+              ? <div className="h-full bg-gradient-to-r from-cyan-400 via-blue-400 to-violet-500 opacity-90" />
+              : <div className="flex h-full opacity-80"><span className="flex-1 bg-black" /><span className="flex-1 bg-yellow-400" /><span className="flex-1 bg-red-600" /></div>}</div>
           {subtitle && <div className="mt-2 flex items-start gap-2 text-sm text-white/75">
             {flagUrl ? <img src={flagUrl} className="mt-0.5 h-4 w-6 flex-shrink-0 rounded-sm object-cover shadow" alt="" /> : flagEmoji ? <span className="text-base">{flagEmoji}</span> : null}
             <span className="line-clamp-2">{subtitle}</span>

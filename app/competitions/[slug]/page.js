@@ -19,7 +19,7 @@ import { useTiles } from "@/lib/tiles";
 import { zoneAt, zonesForPhase } from "@/lib/standingsZones";
 import { useStatsSections } from "@/lib/statsSections";
 import { sortPublicSeasons } from "@/lib/publicSeasons";
-import { isNationsLeagueCompetition, nationsLeagueDivision, nationsLeagueGroups } from "@/lib/nationsLeague";
+import { isNationsLeagueCompetition, nationsLeagueGroups } from "@/lib/nationsLeague";
 import { PUBLIC_PLAYER_FIELDS, PUBLIC_PLAYER_STATS_FIELDS, loadClubsForMatches, loadMatchStatsForMatches, loadPlayersByIds, loadSeasonMatches } from "@/lib/publicFootballData";
 
 const POS = { Goalkeeper: 0, Defender: 1, Midfielder: 2, Attacker: 3 };
@@ -65,7 +65,7 @@ export default function CompetitionPage() {
   const searchParams = useSearchParams();
   const L = useLabels();
   const [comp, setComp] = useState(undefined);
-  const tileScope = isEuropeanClubCompetition(comp) ? "europe" : (comp?.competition_scope === "international" || isNationsLeagueCompetition(comp)) ? "international" : "national";
+  const tileScope = (comp?.competition_scope === "international" || isNationsLeagueCompetition(comp)) ? "international" : isEuropeanClubCompetition(comp) ? "europe" : "national";
   const tiles = useTiles(tileScope);
   const [competitions, setCompetitions] = useState([]);
   const [tab, setTab] = useState("overview");
@@ -155,10 +155,8 @@ export default function CompetitionPage() {
   const nationsDivisions = useMemo(() => [...new Set(nationsGroups.map((group) => group.division).filter(Boolean))].sort(), [nationsGroups]);
   useEffect(() => {
     if (!nationsDivisions.length) return;
-    const phaseDivision = nationsLeagueDivision(curPhase);
-    if (phaseDivision && nationsDivisions.includes(phaseDivision)) setNationsDivision(phaseDivision);
-    else if (!nationsDivisions.includes(nationsDivision)) setNationsDivision(nationsDivisions[0]);
-  }, [curPhase, nationsDivisions, nationsDivision]);
+    setNationsDivision((current) => nationsDivisions.includes(current) ? current : nationsDivisions.includes("A") ? "A" : nationsDivisions[0]);
+  }, [nationsDivisions]);
   const zones = zonesForPhase(comp, activeSeason, curPhase, primaryPhase);
   const phaseFinished = phaseMatches.filter((m) => m.status === "finished" && m.home_score != null);
   const standings = useMemo(() => phaseIsKnockout ? [] : computeStandings(phaseFinished), [phaseFinished, phaseIsKnockout]);

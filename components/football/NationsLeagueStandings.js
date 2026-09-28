@@ -14,7 +14,10 @@ export default function NationsLeagueStandings({ groups, clubs, division, onDivi
   if (!divisions.length) return <p className="text-sm text-muted">Les groupes ne sont pas encore disponibles.</p>;
 
   if (compact) return <div className="space-y-3">
-    <DivisionSwitch divisions={divisions} value={active} onChange={onDivisionChange} />
+    <div className="flex flex-wrap items-center justify-between gap-2">
+      <DivisionSwitch divisions={divisions} value={active} onChange={onDivisionChange} />
+      <span className="text-[10px] font-bold uppercase tracking-wider text-muted">{shown.length} groupe{shown.length > 1 ? "s" : ""}</span>
+    </div>
     <div className="space-y-1.5">{shown.map((group, index) => {
       const leader = group.rows[0];
       const club = leader ? clubs[leader.club] : null;
