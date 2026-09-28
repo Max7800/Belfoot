@@ -1839,6 +1839,14 @@ tant que la migration n'est pas enregistrée.
   Champions/Europa/Conference restent dans `europe`.
 - Les sélecteurs Ligue A/B/C/D ne sont plus réinitialisés par la phase API principale. Le choix reste actif
   dans la vue d'ensemble et le classement, et le résumé précise le nombre de groupes de la ligue affichée.
+- Dans la vue d'ensemble Nations League, le résumé est désormais un carrousel compact : choix de la division,
+  classement du groupe courant, flèches précédent/suivant et indicateurs de groupe. Le classement complet
+  reste disponible dans son onglet dédié.
+- Prochaine validation conseillée pour la saison `2026-2027` : lancer uniquement `football.sync` avec un
+  budget strict de 5 appels, contrôler matchs/sélections/groupes, puis tester manuellement `football.live-sync`
+  avec un `matchCap` de 3. Un second passage une à deux minutes plus tard permet de charger les événements
+  des matchs passés en direct lors du premier passage. Ne pas lancer encore `football.squads` sur les 54
+  sélections : charger d'abord la Belgique de façon ciblée, puis les compositions d'un match avec un cap réduit.
 - Le portail `/competitions` mémorise son univers dans `?univers=national|international`. Un retour
   navigateur depuis la Champions League ou une compétition de sélections revient donc sur l'onglet
   International ; chaque fiche propose également un lien de retour explicite vers le bon univers.
