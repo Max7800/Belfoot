@@ -11,7 +11,7 @@ import CupRounds from "@/components/football/CupRounds";
 import CompetitionHeader from "@/components/football/CompetitionHeader";
 import Watermark from "@/components/football/Watermark";
 import { computeStandings } from "@/lib/standings";
-import { competitionPhases, getCompetitionType, isKnockoutPhase } from "@/lib/competitionType";
+import { competitionPhases, formatCompetitionName, getCompetitionType, isEuropeanClubCompetition, isKnockoutPhase } from "@/lib/competitionType";
 import { competitionPath, resolveCompetitionRoute } from "@/lib/competitionRoutes";
 import { useLabels } from "@/lib/labels";
 import { useTiles } from "@/lib/tiles";
@@ -165,7 +165,7 @@ export default function CompetitionPage() {
   if (comp === null) return <p className="text-muted">Compétition introuvable.</p>;
   const seasonClubIds = new Set(seasonMatches.flatMap((match) => [match.home_club_id, match.away_club_id]).filter(Boolean));
   const clubsList = Object.values(clubsMap).filter((club) => seasonClubIds.has(club.id));
-  const isEuropeanClubCompetition = comp.competition_scope === "europe";
+  const europeanClubCompetition = isEuropeanClubCompetition(comp);
   const zoneFor = (pos) => zoneAt(zones, pos);
 
   const goals = phaseFinished.reduce((s, m) => s + m.home_score + m.away_score, 0);
@@ -305,7 +305,7 @@ export default function CompetitionPage() {
           <div className="inline-flex max-w-full items-center gap-1 overflow-x-auto rounded-full border border-line/10 bg-surface2/80 p-1 shadow-[0_12px_30px_-20px_rgba(0,0,0,0.9)] backdrop-blur [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {competitions.map((item) => {
               const active = item.id === comp.id;
-              return <Link key={item.id} href={`${competitionPath(item)}?tab=${tab}`} aria-current={active ? "page" : undefined} className={`group flex shrink-0 items-center gap-2 rounded-full px-3 py-1.5 text-xs font-bold transition sm:px-4 ${active ? "bg-accent text-white shadow-[0_5px_18px_-8px_rgba(239,68,68,0.9)]" : "text-muted hover:bg-white/[0.05] hover:text-content"}`}>{item.logo_url && <img src={item.logo_url} className="h-5 w-5 object-contain" alt="" />}<span>{item.header_title?.trim() || item.name}</span></Link>;
+              return <Link key={item.id} href={`${competitionPath(item)}?tab=${tab}`} aria-current={active ? "page" : undefined} className={`group flex shrink-0 items-center gap-2 rounded-full px-3 py-1.5 text-xs font-bold transition sm:px-4 ${active ? "bg-accent text-white shadow-[0_5px_18px_-8px_rgba(239,68,68,0.9)]" : "text-muted hover:bg-white/[0.05] hover:text-content"}`}>{item.logo_url && <img src={item.logo_url} className="h-5 w-5 object-contain" alt="" />}<span>{formatCompetitionName(item.header_title?.trim() || item.name)}</span></Link>;
             })}
           </div>
         </div>
@@ -417,7 +417,7 @@ export default function CompetitionPage() {
 
       {!seasonLoading && tab === "clubs" && (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {clubsList.map((c) => { const belgian = isEuropeanClubCompetition && String(c.ext?.country || "").toLowerCase() === "belgium"; return <Link key={c.id} href={`/clubs/${c.id}`} className={`flex items-center gap-3 rounded-xl border bg-surface p-3 transition hover:border-accent/40 ${belgian ? "border-amber-300/35 ring-1 ring-amber-300/10" : "border-line/10"}`}>{c.logo_url && <img src={c.logo_url} className="h-8 w-8 object-contain" alt="" />}<span className="min-w-0 flex-1 truncate font-semibold">{c.name}</span>{belgian && <span className="shrink-0 rounded-full bg-amber-300/10 px-2 py-1 text-[9px] font-black uppercase tracking-wider text-amber-200">🇧🇪 Belge</span>}</Link>; })}
+          {clubsList.map((c) => { const belgian = europeanClubCompetition && String(c.ext?.country || "").toLowerCase() === "belgium"; return <Link key={c.id} href={`/clubs/${c.id}`} className={`flex items-center gap-3 rounded-xl border bg-surface p-3 transition hover:border-accent/40 ${belgian ? "border-amber-300/35 ring-1 ring-amber-300/10" : "border-line/10"}`}>{c.logo_url && <img src={c.logo_url} className="h-8 w-8 object-contain" alt="" />}<span className="min-w-0 flex-1 truncate font-semibold">{c.name}</span>{belgian && <span className="shrink-0 rounded-full bg-amber-300/10 px-2 py-1 text-[9px] font-black uppercase tracking-wider text-amber-200">🇧🇪 Belge</span>}</Link>; })}
           {clubsList.length === 0 && <p className="text-muted">{L("empty.clubs", "Aucun club.")}</p>}
         </div>
       )}

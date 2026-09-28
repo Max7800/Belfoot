@@ -4,7 +4,7 @@ import Link from "next/link";
 import { ArrowRight, CalendarDays, Flag, Globe2, ListOrdered, Shield, Sparkles, Trophy, UsersRound } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useRankings } from "@/lib/rankings";
-import { getCompetitionType } from "@/lib/competitionType";
+import { formatCompetitionName, getCompetitionType, isEuropeanClubCompetition } from "@/lib/competitionType";
 import { competitionPath } from "@/lib/competitionRoutes";
 import { useCompetitionHub } from "@/lib/competitionHub";
 import { useLabels } from "@/lib/labels";
@@ -24,8 +24,9 @@ function CompetitionCard({ competition, index, L }) {
   const path = competitionPath(competition);
   const isCup = competition.display_type === "cup";
   const isHybrid = competition.display_type === "hybrid";
+  const isEuropean = isEuropeanClubCompetition(competition);
   const banner = competition.portal_background_url || competition.banner_url || "/competition-banner.png";
-  const title = competition.portal_title?.trim() || competition.header_title?.trim() || competition.name;
+  const title = formatCompetitionName(competition.portal_title?.trim() || competition.header_title?.trim() || competition.name);
   const subtitle = competition.portal_subtitle?.trim() || competition.header_subtitle?.trim() || (isCup ? L("competitions.cupFallback", "La coupe, sans droit à l'erreur.") : isHybrid ? "Une phase de ligue avant les soirées à élimination directe." : L("competitions.leagueFallback", "Une saison entière pour écrire la hiérarchie."));
   const country = competition.ext?.country;
   const featured = index === 0;
@@ -40,7 +41,7 @@ function CompetitionCard({ competition, index, L }) {
     <Link href={path} className={`relative flex flex-col p-4 sm:min-h-[270px] sm:p-6 ${featured ? "lg:min-h-[240px] lg:px-8" : ""}`}>
       <div className="flex items-start justify-between gap-4">
         <span className="inline-flex items-center gap-1.5 rounded-full border bg-black/30 px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] backdrop-blur-sm" style={{ borderColor: `${borderColor}80`, color: borderColor }}>{isCup || isHybrid ? <Trophy className="h-3.5 w-3.5" /> : <Shield className="h-3.5 w-3.5" />}{typeLabel}</span>
-        <span className="text-sm text-white/75">{competition.ext?.country_flag ? <img src={competition.ext.country_flag} className="h-4 w-6 rounded-sm object-cover" alt="" /> : FLAG[country] || (competitionScope(competition) === "europe" ? "🇪🇺" : "🇧🇪")}</span>
+        {!isEuropean && <span className="text-sm text-white/75">{competition.ext?.country_flag ? <img src={competition.ext.country_flag} className="h-4 w-6 rounded-sm object-cover" alt="" /> : FLAG[country] || "🇧🇪"}</span>}
       </div>
       <div className={`mt-7 flex items-center gap-3 sm:mt-auto sm:items-end sm:gap-4 ${featured ? "sm:pt-12 lg:gap-6 lg:pt-8" : "sm:pt-16"}`}>
         {competition.logo_url && <div className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-black/30 p-2 backdrop-blur-sm sm:h-20 sm:w-20 ${featured ? "lg:h-24 lg:w-24" : ""}`}><img src={competition.logo_url} className="h-full w-full object-contain drop-shadow-xl" alt="" /></div>}

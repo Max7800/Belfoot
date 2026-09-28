@@ -1741,6 +1741,11 @@ tant que la migration n'est pas enregistrée.
   compétitions existantes dans le portail belge par défaut, reclasse uniquement les compétitions déjà
   créées pour les sélections et ajoute le contrôle système correspondant. Aucun appel API-Football
   n’a été effectué pendant ce lot.
+- Finition visuelle après contrôle du premier écran Champions League : les compétitions européennes
+  n’affichent plus de drapeau national ni le soulignement noir-jaune-rouge du championnat belge. Elles
+  utilisent un accent bleu UEFA. L’affichage corrige aussi automatiquement la graphie erronée
+  `Champion's League` en `Champions League` dans le bandeau, le portail et le sélecteur rapide, sans
+  modifier les autres titres éditoriaux.
 
 ---
 
