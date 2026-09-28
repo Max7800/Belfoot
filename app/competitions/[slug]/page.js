@@ -166,6 +166,7 @@ export default function CompetitionPage() {
   const seasonClubIds = new Set(seasonMatches.flatMap((match) => [match.home_club_id, match.away_club_id]).filter(Boolean));
   const clubsList = Object.values(clubsMap).filter((club) => seasonClubIds.has(club.id));
   const europeanClubCompetition = isEuropeanClubCompetition(comp);
+  const partialCompetition = comp.ext?.imported_for === "national-teams" && !comp.ext?.full_competition_seasons?.[seasonLabel];
   const zoneFor = (pos) => zoneAt(zones, pos);
 
   const goals = phaseFinished.reduce((s, m) => s + m.home_score + m.away_score, 0);
@@ -319,12 +320,20 @@ export default function CompetitionPage() {
       </div>
 
       {dataError && <p className="mb-5 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">Impossible de charger les données de cette saison : {dataError}</p>}
+      {partialCompetition && <p className="mb-5 rounded-xl border border-amber-400/30 bg-amber-400/10 p-3 text-sm leading-6 text-amber-100"><b>Données partielles.</b> Seuls les matchs de la sélection belge suivie sont importés pour le moment. Le classement et le tableau complets apparaîtront après la synchronisation de base de cette compétition.</p>}
       {seasonLoading && <div className="h-72 animate-pulse rounded-3xl bg-surface" />}
 
       {!seasonLoading && tab === "overview" && (
         <div className="space-y-6">
           <div className="grid gap-4 lg:grid-cols-3">
-            {phaseIsKnockout ? (
+            {partialCompetition ? (
+              <Card title="Import en préparation">
+                <div className="flex h-full flex-col justify-center rounded-xl border border-amber-400/20 bg-amber-400/5 p-4">
+                  <div className="text-lg font-black text-amber-200">Vue volontairement limitée</div>
+                  <p className="mt-2 text-xs leading-5 text-muted">Belfoot affiche les matchs déjà connus, sans fabriquer de classement à partir d'un sous-ensemble incomplet.</p>
+                </div>
+              </Card>
+            ) : phaseIsKnockout ? (
               <Card title={L("cup.currentRound", "Tour sélectionné")} onSee={() => setTab("classement")}>
                 <div className="flex h-full flex-col justify-center rounded-xl border border-accent/15 bg-accent/5 p-4">
                   <div className="text-2xl font-black">{curPhase || "—"}</div>
@@ -407,7 +416,9 @@ export default function CompetitionPage() {
         </div>
       )}
 
-      {!seasonLoading && tab === "classement" && (isCup
+      {!seasonLoading && tab === "classement" && (partialCompetition
+        ? <div className="rounded-2xl border border-amber-400/25 bg-amber-400/5 p-6 text-center"><div className="font-black text-amber-200">Classement indisponible pendant l’import partiel</div><p className="mt-2 text-sm text-muted">Lance la synchronisation complète et contrôlée de la compétition depuis l’administration pour afficher toutes les équipes et tous les matchs.</p></div>
+        : isCup
         ? <CupRounds matches={seasonMatches} clubs={clubsMap} phases={phases} activePhase={curPhase} onPhaseChange={(next) => { setPhase(next); setRound("all"); }} L={L} />
         : isHybrid
           ? <div><PhaseChips />{phaseIsKnockout

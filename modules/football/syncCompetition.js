@@ -125,17 +125,26 @@ export async function syncCompetition(db, competition, ctx = {}) {
     ["competition_id", "season_id", "home_club_id", "away_club_id", "home_score", "away_score", "status", "minute", "kickoff", "matchday", "round_raw", "phase", "round_number"]);
 
   let leagueName = competition.name;
+  let finalExt = technicalExt;
   if (provider.fetchLeagueInfo) {
     let info = null;
     try { info = await provider.fetchLeagueInfo(competition, ctx); }
     catch (error) { warnings.push(`infos ligue: ${error.message}`); }
     if (info) {
       leagueName = info.name || leagueName;
-      const patch = { ext: { ...technicalExt, coverage: info.coverage, providerName: info.name, providerType: info.type, country: info.country, country_flag: info.flag } };
+      finalExt = { ...technicalExt, coverage: info.coverage, providerName: info.name, providerType: info.type, country: info.country, country_flag: info.flag };
+      const patch = { ext: finalExt };
       if (!competition.locked && info.logo && !competition.logo_url) patch.logo_url = info.logo;   // logo auto SEULEMENT si vide -> le logo manuel est prioritaire
       const { error } = await db.from("competitions").update(patch).eq("id", competition.id);
       if (error) throw error;
     }
   }
+  // Ces marqueurs ne sont posés qu'après la fin du job de base. La carte par
+  // saison évite qu'un import complet 2024 fasse passer une saison 2026 encore
+  // partielle pour complète. Les imports ciblés des sélections ne les posent pas.
+  const completedAt = new Date().toISOString();
+  const completedSeasons = { ...(finalExt.full_competition_seasons || {}), [selectedSeason]: completedAt };
+  const { error: completionError } = await db.from("competitions").update({ ext: { ...finalExt, full_competition_synced_at: completedAt, full_competition_seasons: completedSeasons } }).eq("id", competition.id);
+  if (completionError) throw completionError;
   return `${leagueName}: ${clubsN} clubs, ${matchN} matchs${warnings.length ? ` · avertissements: ${warnings.join("; ")}` : ""}`;
 }

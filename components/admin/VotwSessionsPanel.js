@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { generateEligibles, computeResult, formationSlots } from "@/lib/votw";
+import { generateEligibles, computeResult, FORMATION_OPTIONS, formationSlots } from "@/lib/votw";
 
 const CATS = ["GK", "DEF", "MID", "FWD"];
 const STATUS = ["open", "closed", "published"];
@@ -12,7 +12,10 @@ export default function VotwSessionsPanel() {
   const [sessions, setSessions] = useState([]);
   const [competitions, setCompetitions] = useState([]);
   const [seasons, setSeasons] = useState([]);
-  const [draft, setDraft] = useState({ competition_id: "", season_id: "", matchday: "", formation: "4-3-3", season_label: "", opens_at: "", closes_at: "", status: "open" });
+  const [draft, setDraft] = useState({ kind: "week", competition_id: "", season_id: "", matchday: "", match_id: "", national_team_id: "", formation: "4-3-3", season_label: "", opens_at: "", closes_at: "", status: "open" });
+  const [nationalTeams, setNationalTeams] = useState([]);
+  const [nationalMatches, setNationalMatches] = useState([]);
+  const [clubNames, setClubNames] = useState({});
   const [expanded, setExpanded] = useState(null);
   const [candidates, setCandidates] = useState([]);
   const [voteCount, setVoteCount] = useState(0);
@@ -23,27 +26,49 @@ export default function VotwSessionsPanel() {
   const [busy, setBusy] = useState(false);
 
   const loadSessions = () => supabase.from("votw_sessions").select("*").order("created_at", { ascending: false }).then(({ data }) => setSessions(data || []));
-  useEffect(() => {
+  useEffect(() => { (async () => {
     loadSessions();
-    supabase.from("competitions").select("id,name").order("name").then(({ data }) => setCompetitions(data || []));
-    supabase.from("seasons").select("id,label,competition_id").order("label", { ascending: false }).then(({ data }) => setSeasons(data || []));
-  }, []);
+    const [competitionResult, seasonResult, teamResult] = await Promise.all([
+      supabase.from("competitions").select("id,name").order("name"),
+      supabase.from("seasons").select("id,label,competition_id").order("label", { ascending: false }),
+      supabase.from("clubs").select("id,name").eq("team_type", "national").eq("national_followed", true).order("name"),
+    ]);
+    setCompetitions(competitionResult.data || []);
+    setSeasons(seasonResult.data || []);
+    const followed = teamResult.data || [];
+    setNationalTeams(followed);
+    const teamIds = followed.map((team) => team.id);
+    if (!teamIds.length) return;
+    const [homeResult, awayResult] = await Promise.all([
+      supabase.from("matches").select("id,kickoff,status,home_club_id,away_club_id,competition_id").in("home_club_id", teamIds).order("kickoff", { ascending: false }).limit(100),
+      supabase.from("matches").select("id,kickoff,status,home_club_id,away_club_id,competition_id").in("away_club_id", teamIds).order("kickoff", { ascending: false }).limit(100),
+    ]);
+    const matchRows = [...new Map([...(homeResult.data || []), ...(awayResult.data || [])].map((match) => [match.id, match])).values()].sort((a, b) => new Date(b.kickoff || 0) - new Date(a.kickoff || 0));
+    const clubIds = [...new Set(matchRows.flatMap((match) => [match.home_club_id, match.away_club_id]).filter(Boolean))];
+    const { data: clubs } = clubIds.length ? await supabase.from("clubs").select("id,name").in("id", clubIds) : { data: [] };
+    setClubNames(Object.fromEntries((clubs || []).map((club) => [club.id, club.name])));
+    setNationalMatches(matchRows);
+  })(); }, []);
 
   const compName = (id) => competitions.find((c) => c.id === id)?.name || "—";
   const seasonLabel = (id) => seasons.find((s) => s.id === id)?.label || "";
+  const matchLabel = (match) => `${new Date(match.kickoff).toLocaleDateString("fr-BE")} · ${clubNames[match.home_club_id] || "?"} – ${clubNames[match.away_club_id] || "?"}`;
 
   const create = async () => {
-    if (!draft.competition_id || !draft.season_id || draft.matchday === "") { setMsg("Compétition, saison et journée sont requises."); return; }
+    const preMatch = draft.kind === "pre_match";
+    if (preMatch && (!draft.match_id || !draft.national_team_id)) { setMsg("Match et sélection sont requis."); return; }
+    if (!preMatch && (!draft.competition_id || !draft.season_id || draft.matchday === "")) { setMsg("Compétition, saison et journée sont requises."); return; }
+    const selectedMatch = nationalMatches.find((match) => match.id === draft.match_id);
     setBusy(true); setMsg("");
     const { error } = await supabase.from("votw_sessions").insert({
-      kind: "week", competition_id: draft.competition_id, season_id: draft.season_id,
-      matchday: Number(draft.matchday), formation: draft.formation || "4-3-3",
+      kind: draft.kind, competition_id: preMatch ? selectedMatch?.competition_id || null : draft.competition_id, season_id: preMatch ? null : draft.season_id,
+      matchday: preMatch ? null : Number(draft.matchday), match_id: preMatch ? draft.match_id : null, national_team_id: preMatch ? draft.national_team_id : null, formation: draft.formation || "4-3-3",
       season_label: draft.season_label || null, status: draft.status || "open",
-      opens_at: draft.opens_at || null, closes_at: draft.closes_at || null,
+      opens_at: draft.opens_at || null, closes_at: draft.closes_at || (preMatch ? selectedMatch?.kickoff || null : null),
     });
     setBusy(false);
     if (error) setMsg(error.message);
-    else { setDraft({ competition_id: "", season_id: "", matchday: "", formation: "4-3-3", season_label: "", opens_at: "", closes_at: "", status: "open" }); loadSessions(); }
+    else { setDraft({ kind: "week", competition_id: "", season_id: "", matchday: "", match_id: "", national_team_id: "", formation: "4-3-3", season_label: "", opens_at: "", closes_at: "", status: "open" }); loadSessions(); }
   };
 
   const patch = async (id, obj) => { await supabase.from("votw_sessions").update(obj).eq("id", id); loadSessions(); };
@@ -81,7 +106,7 @@ export default function VotwSessionsPanel() {
 
   const generate = async (session) => {
     setBusy(true); setMsg("");
-    try { const r = await generateEligibles(session); const src = r.source === "squad" ? " — repli effectifs (pas de stats de match)" : r.source === "no-season" ? " — des matchs existent mais SANS saison rattachée (season_id manquant) : corrige la saison des matchs" : r.source === "none" ? " — aucun match pour cette journée" : ""; setMsg(`${r.added} ajouté(s) · ${r.found} trouvé(s) sur ${r.matches} match(s)${src}.`); await loadCandidates(session.id); }
+    try { const r = await generateEligibles(session); const src = r.source === "squad" ? " — repli effectifs (pas de stats de match)" : r.source === "current-callups" ? " — noyau actuel utilisé : vérifie manuellement les convoqués" : r.source === "match-callups" ? " — convocations exactes du match" : r.source === "no-season" ? " — des matchs existent mais SANS saison rattachée (season_id manquant) : corrige la saison des matchs" : r.source === "none" ? " — aucun match pour cette journée" : ""; setMsg(`${r.added} ajouté(s) · ${r.found} trouvé(s) sur ${r.matches} match(s)${src}.`); await loadCandidates(session.id); }
     catch (e) { setMsg(e.message); }
     setBusy(false);
   };
@@ -104,17 +129,23 @@ export default function VotwSessionsPanel() {
 
   return (
     <div>
-      <h2 className="mb-2 text-lg font-bold">Onze de la semaine</h2>
-      <p className="mb-4 text-xs text-muted">Crée une session de vote pour une journée, génère les joueurs éligibles depuis les stats de match (aucun appel API), ajuste-les, puis ouvre le vote. La composition du terrain + la publication du résultat arrivent dans les prochaines briques.</p>
+      <h2 className="mb-2 text-lg font-bold">Onze de la semaine & avant-match</h2>
+      <p className="mb-4 text-xs text-muted">Crée un vote Pro League par journée ou un « Ton 11 des Diables » lié à un match. La génération lit uniquement la base et ne lance aucun appel API.</p>
       {msg && <p className="mb-3 rounded-lg border border-amber-400/30 bg-amber-400/10 p-2 text-sm text-amber-200">{msg}</p>}
 
       <div className="mb-6 rounded-xl border border-line/10 bg-surface p-3">
         <div className="mb-2 text-xs font-semibold text-muted">Nouvelle session</div>
         <div className="grid gap-2 sm:grid-cols-2">
-          <label className="text-xs text-muted">Compétition<select value={draft.competition_id} onChange={(e) => setDraft({ ...draft, competition_id: e.target.value })} className={`mt-1 w-full ${box}`}><option value="">—</option>{competitions.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
-          <label className="text-xs text-muted">Saison<select value={draft.season_id} onChange={(e) => setDraft({ ...draft, season_id: e.target.value })} className={`mt-1 w-full ${box}`}><option value="">—</option>{seasons.filter((s) => !draft.competition_id || s.competition_id === draft.competition_id).map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}</select></label>
-          <label className="text-xs text-muted">Journée<input type="number" value={draft.matchday} onChange={(e) => setDraft({ ...draft, matchday: e.target.value })} className={`mt-1 w-full ${box}`} /></label>
-          <label className="text-xs text-muted">Formation<input value={draft.formation} onChange={(e) => setDraft({ ...draft, formation: e.target.value })} className={`mt-1 w-full ${box}`} /></label>
+          <label className="text-xs text-muted">Type<select value={draft.kind} onChange={(e) => setDraft({ ...draft, kind: e.target.value })} className={`mt-1 w-full ${box}`}><option value="week">Onze de la semaine — championnat</option><option value="pre_match">Ton 11 des Diables — avant-match</option></select></label>
+          <label className="text-xs text-muted">Formation par défaut<select value={draft.formation} onChange={(e) => setDraft({ ...draft, formation: e.target.value })} className={`mt-1 w-full ${box}`}>{FORMATION_OPTIONS.map((formation) => <option key={formation}>{formation}</option>)}</select></label>
+          {draft.kind === "pre_match" ? <>
+            <label className="text-xs text-muted">Sélection<select value={draft.national_team_id} onChange={(e) => setDraft({ ...draft, national_team_id: e.target.value })} className={`mt-1 w-full ${box}`}><option value="">—</option>{nationalTeams.map((team) => <option key={team.id} value={team.id}>{team.name}</option>)}</select></label>
+            <label className="text-xs text-muted">Match<select value={draft.match_id} onChange={(e) => setDraft({ ...draft, match_id: e.target.value })} className={`mt-1 w-full ${box}`}><option value="">—</option>{nationalMatches.filter((match) => !draft.national_team_id || match.home_club_id === draft.national_team_id || match.away_club_id === draft.national_team_id).map((match) => <option key={match.id} value={match.id}>{matchLabel(match)}</option>)}</select></label>
+          </> : <>
+            <label className="text-xs text-muted">Compétition<select value={draft.competition_id} onChange={(e) => setDraft({ ...draft, competition_id: e.target.value })} className={`mt-1 w-full ${box}`}><option value="">—</option>{competitions.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
+            <label className="text-xs text-muted">Saison<select value={draft.season_id} onChange={(e) => setDraft({ ...draft, season_id: e.target.value })} className={`mt-1 w-full ${box}`}><option value="">—</option>{seasons.filter((s) => !draft.competition_id || s.competition_id === draft.competition_id).map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}</select></label>
+            <label className="text-xs text-muted">Journée<input type="number" value={draft.matchday} onChange={(e) => setDraft({ ...draft, matchday: e.target.value })} className={`mt-1 w-full ${box}`} /></label>
+          </>}
           <label className="text-xs text-muted">Étiquette saison (archive)<input value={draft.season_label} onChange={(e) => setDraft({ ...draft, season_label: e.target.value })} placeholder="2024-2025" className={`mt-1 w-full ${box}`} /></label>
           <label className="text-xs text-muted">Statut<select value={draft.status} onChange={(e) => setDraft({ ...draft, status: e.target.value })} className={`mt-1 w-full ${box}`}>{STATUS.map((s) => <option key={s} value={s}>{s}</option>)}</select></label>
           <label className="text-xs text-muted">Ouverture<input type="datetime-local" value={draft.opens_at} onChange={(e) => setDraft({ ...draft, opens_at: e.target.value })} className={`mt-1 w-full ${box}`} /></label>
@@ -127,12 +158,12 @@ export default function VotwSessionsPanel() {
         {sessions.map((s) => (
           <div key={s.id} className="rounded-xl border border-line/10 bg-surface p-3">
             <div className="flex flex-wrap items-center gap-2 text-sm">
-              <button onClick={() => toggle(s)} className="font-bold hover:text-accent">Journée {s.matchday ?? "—"} · {compName(s.competition_id)}</button>
+              <button onClick={() => toggle(s)} className="font-bold hover:text-accent">{s.kind === "pre_match" ? `Avant-match · ${nationalMatches.find((match) => match.id === s.match_id) ? matchLabel(nationalMatches.find((match) => match.id === s.match_id)) : "match"}` : `Journée ${s.matchday ?? "—"} · ${compName(s.competition_id)}`}</button>
               <span className="text-xs text-muted">{seasonLabel(s.season_id)} · {s.formation || "4-3-3"}</span>
               <select value={s.status} onChange={(e) => patch(s.id, { status: e.target.value, published_at: e.target.value === "published" ? new Date().toISOString() : null })} className={`ml-auto ${box}`}>{STATUS.map((st) => <option key={st} value={st}>{st}</option>)}</select>
             </div>
             <div className="mt-2 grid gap-2 sm:grid-cols-3">
-              <label className="text-[11px] text-muted">Journée<input type="number" defaultValue={s.matchday ?? ""} onBlur={(e) => patch(s.id, { matchday: e.target.value === "" ? null : Number(e.target.value) })} className={`mt-1 w-full ${box}`} /></label>
+              {s.kind !== "pre_match" && <label className="text-[11px] text-muted">Journée<input type="number" defaultValue={s.matchday ?? ""} onBlur={(e) => patch(s.id, { matchday: e.target.value === "" ? null : Number(e.target.value) })} className={`mt-1 w-full ${box}`} /></label>}
               <label className="text-[11px] text-muted">Ouverture<input type="datetime-local" defaultValue={dt(s.opens_at)} onBlur={(e) => patch(s.id, { opens_at: e.target.value || null })} className={`mt-1 w-full ${box}`} /></label>
               <label className="text-[11px] text-muted">Fermeture<input type="datetime-local" defaultValue={dt(s.closes_at)} onBlur={(e) => patch(s.id, { closes_at: e.target.value || null })} className={`mt-1 w-full ${box}`} /></label>
             </div>

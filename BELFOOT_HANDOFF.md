@@ -1751,6 +1751,102 @@ tant que la migration n'est pas enregistrée.
   une largeur fixe. La résolution des drapeaux normalise accents, espaces et caractères parasites,
   ce qui corrige notamment le Brésil sans multiplier les cas particuliers.
 
+### 2026-09-28 — ChatGPT — chantier « Ton 11 des Diables » et garde-fou international
+
+- Le moteur existant du Onze de la semaine accepte désormais des sessions `kind = pre_match`, liées
+  à un match et à une sélection précise. Quatre tactiques sont disponibles : `4-3-3`, `4-4-2`,
+  `3-4-3` et `3-5-2`. Le membre peut changer de tactique (avec remise à zéro explicite de son XI),
+  enregistrer ses titulaires puis partager une URL qui fige sa composition.
+- La génération des joueurs éligibles reste sans appel API. Elle prend d’abord les convocations
+  historisées de `national_match_callups` pour le match exact ; si elles ne sont pas encore remplies,
+  elle replie explicitement sur le noyau actif et le signale à l’administrateur afin d’éviter de faire
+  passer la sélection actuelle pour une sélection historique.
+- Le panneau `Communauté > Onze & avant-match` permet de choisir la sélection, le match, la tactique,
+  les dates d’ouverture/fermeture et de générer ou corriger les candidats. Sur la page Diables, le CTA
+  « Compose ton 11 » n’apparaît que pour le match principal si une session réellement ouverte existe.
+- Nouvelle migration additive et idempotente `votw/0004_pre_match_lineups` : relations match/sélection,
+  tactique conservée sur chaque bulletin et prise en charge des nouveaux identifiants de poste. Elle ne
+  modifie aucune ancienne migration et doit être appliquée avant de tester ce nouveau module.
+- Une compétition créée par l’import ciblé d’une sélection (`ext.imported_for = national-teams`) est
+  maintenant reconnue comme partielle tant qu’un import complet n’a pas abouti. Le public peut voir
+  les matchs belges connus, mais le faux classement/tableau incomplet est masqué avec une explication.
+  `syncCompetition` ne marque la saison dans `ext.full_competition_seasons` qu’à la fin d’un job de
+  base réussi (et conserve aussi la date globale du dernier import complet).
+- Aucun appel API-Football n’a été exécuté pendant ce chantier. Les données existantes ne sont ni
+  supprimées ni remplacées. `npm run lint` passe sans erreur (97 avertissements historiques) et le
+  build de production passe à froid avec les variables Supabase factices. État Git : commit local
+  uniquement ; aucun push sans autorisation.
+
+### ROADMAP CLAUDE — relais de soirée (ordre conseillé)
+
+#### État à récupérer avant toute modification
+
+1. Faire `git status`, `git log -5 --oneline`, puis lire ce bloc et le dernier commit local. Ne pas
+   écraser les changements présents et ne pousser qu’avec une nouvelle autorisation explicite.
+2. Vérifier dans `Préparation 2026` quelles migrations sont réellement appliquées. La nouvelle
+   `modules/votw/migrations/0004_pre_match_lineups.sql` est nécessaire au 11 avant-match. Les migrations
+   football `0035` et `0036` restent à confirmer depuis l’admin au lieu de le déduire des captures.
+3. Ne lancer aucun appel API-Football sans accord explicite. Une clé Pro disponible ne constitue pas
+   une autorisation de consommer le quota.
+
+#### Lot A — contrôle après déploiement (prioritaire, petit et réversible)
+
+1. Après application de `votw/0004`, créer dans l’admin une session avant-match sur un match futur de
+   la Belgique, générer les éligibles et vérifier le message de source : `convocations exactes` est le
+   cas normal ; `noyau actuel` nécessite une vérification éditoriale avant ouverture.
+2. Tester `/diables-rouges` puis `/onze?match=<uuid>` sur mobile et desktop : CTA conditionnel,
+   quatre tactiques, onze joueurs uniques, changement de tactique, reconnexion et lien partagé.
+3. Tester une Nations League actuellement alimentée seulement par l’import Belgique : matchs visibles,
+   avertissement partiel visible, classement masqué. Ne retirer ce garde-fou sous aucun prétexte en
+   remplissant artificiellement le tableau.
+4. Amélioration suivante déjà identifiée : pour le résultat communautaire multi-tactiques, choisir une
+   règle claire (tactique majoritaire puis XI de cette tactique, ou résultat séparé par tactique) avant
+   d’étendre `computeResult`. Ne pas agréger silencieusement des postes incompatibles.
+
+#### Lot B — premier remplissage Pro contrôlé (uniquement après accord API)
+
+1. Commencer par les imports de base, peu coûteux, d’une compétition à la fois. Pour corriger la
+   Nations League incomplète : lancer le pipeline de base de sa saison 2024-2025 (environ trois appels :
+   matchs, équipes, informations), vérifier le préflight, puis contrôler le marqueur
+   `full_competition_seasons[\"2024-2025\"]`, le nombre de participants et le classement.
+2. Enchaîner seulement après validation : Pro League, Challenger Pro League, Croky Cup, puis Champions
+   League/Europa League/Conference League. Les coupes européennes doivent importer tous les clubs de
+   la compétition, pas seulement les clubs belges. Chaque compétition reste whitelistée séparément.
+3. Remplir d’abord `2024-2025` de bout en bout pour valider les identifiants, phases et reprises ; faire
+   ensuite `2025-2026`, puis préparer `2026-2027` sans l’activer publiquement avant contrôle. Ne jamais
+   remplacer la saison 2024 : les trois saisons doivent cohabiter avec leur `season_id`.
+4. Après chaque pipeline : comparer coût estimé/réel, vérifier erreurs et curseur de reprise, compter
+   matchs/clubs, contrôler phases et doublons, puis seulement passer à la compétition suivante.
+
+#### Lot C — enrichissements après les bases
+
+1. Lancer les détails de match par lots bornés : événements, compositions, statistiques joueurs et
+   statistiques collectives. Les jobs doivent reprendre seulement les endpoints dont le marqueur est
+   absent ; conserver `Promise.allSettled` et les saisies manuelles/verrouillées.
+2. Historiser les convocations belges match par match avant d’ouvrir votes et notes. Un ancien match ne
+   doit jamais retomber silencieusement sur le noyau courant côté public.
+3. Importer les carrières des joueurs suivis par petits lots avec estimation, plafond, progression et
+   reprise. Priorité aux Diables et Belges suivis, pas à tous les joueurs de tous les championnats.
+4. Contrôler les liens équipe première/U23/jeunes. Les correspondances connues peuvent être proposées,
+   mais une liaison manuelle ou verrouillée ne doit jamais être écrasée par la synchronisation.
+
+#### Lot D — direct, seulement quand les données de base sont fiables
+
+1. Activer le live compétition par compétition. Hors match : aucune interrogation fréquente. Fenêtre
+   proche du coup d’envoi : fréquence modérée ; match en direct : fréquence configurable dans l’admin.
+2. Un tick doit regrouper tous les matchs simultanés couverts par l’endpoint live, pas multiplier un
+   appel par match. Afficher dans l’admin coût projeté par heure, nombre de matchs suivis et quota restant.
+3. Prévoir arrêt automatique après statut final, heartbeat, verrou anti-double runner et reprise après
+   interruption. Tester d’abord sur une seule compétition et un créneau court.
+
+#### À ne pas mélanger avec la préparation API
+
+- Les finitions purement visuelles (densité de la sélection, forum, page Belges, etc.) peuvent faire
+  l’objet de commits séparés, mais ne doivent ni déclencher un import ni masquer un défaut de données.
+- Le prochain chantier produit naturel après le contrôle est le résultat communautaire multi-tactiques
+  et une carte de partage plus visuelle pour le 11 des Diables. Aucun SQL supplémentaire n’est nécessaire
+  tant que la règle éditoriale d’agrégation n’est pas décidée.
+
 ---
 
 ## SOCLE_CANDIDATES  (documenter seulement — NE PAS remonter au socle maintenant)

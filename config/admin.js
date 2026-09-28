@@ -53,7 +53,7 @@ export const adminSections = [
   ] },
   { label: "Communauté", icon: "community", panels: [
     { key: "profiles", label: "Profils" },
-    { key: "votw-sessions", label: "Onze de la semaine" },
+    { key: "votw-sessions", label: "Onze & avant-match" },
     { key: "forum-moderation", label: "Forum" },
     { key: "reports", label: "Signalements" },
   ] },

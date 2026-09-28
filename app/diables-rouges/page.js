@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { CalendarDays, ChevronRight, Globe2, MapPin, Shield, Trophy, Users } from "lucide-react";
+import { CalendarDays, ChevronRight, Globe2, MapPin, Shield, Star, Trophy, Users } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { useNationalTeamsConfig } from "@/lib/nationalTeams";
 import { useRankings } from "@/lib/rankings";
@@ -112,6 +112,7 @@ export default function NationalTeamsPage() {
   const [competitions, setCompetitions] = useState({});
   const [squad, setSquad] = useState([]);
   const [ratingSquad, setRatingSquad] = useState([]);
+  const [preMatchSessions, setPreMatchSessions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [schemaMissing, setSchemaMissing] = useState(false);
 
@@ -130,6 +131,7 @@ export default function NationalTeamsPage() {
     if (!selectedId) return;
     setLoading(true);
     setRatingSquad([]);
+    setPreMatchSessions([]);
     (async () => {
       const [matchesResult, callupsResult] = await Promise.all([
         supabase.from("matches").select("*").or(`home_club_id.eq.${selectedId},away_club_id.eq.${selectedId}`).order("kickoff", { ascending: true }).limit(120),
@@ -159,6 +161,15 @@ export default function NationalTeamsPage() {
         if (!rankError) for (const row of rankRows || []) { if (clubMap[row.id]) clubMap[row.id].fifa_ranking = row.fifa_ranking; }
       }
       setMatches(matchRows);
+      const matchIds = matchRows.map((match) => match.id);
+      if (matchIds.length) {
+        // Tolérant tant que la migration votw/0004 n'est pas appliquée : la page
+        // Diables reste entièrement fonctionnelle et le CTA est simplement absent.
+        const { data: sessionRows, error: sessionError } = await supabase.from("votw_sessions")
+          .select("id,match_id,status,opens_at,closes_at")
+          .eq("kind", "pre_match").in("match_id", matchIds);
+        if (!sessionError) setPreMatchSessions(sessionRows || []);
+      }
       setClubs(clubMap);
       setCompetitions(Object.fromEntries((competitionsResult.data || []).map((competition) => [competition.id, competition])));
       setSquad(uniqueCallups.map((callup) => ({ ...callup, player: players[callup.player_id], club: currentClubs[players[callup.player_id]?.club_id] })).filter((row) => row.player));
@@ -186,6 +197,9 @@ export default function NationalTeamsPage() {
   const upcoming = matches.filter((match) => match.status === "live" || (match.status === "scheduled" && new Date(match.kickoff).getTime() >= now));
   const results = matches.filter((match) => match.status === "finished").sort((a, b) => new Date(b.kickoff) - new Date(a.kickoff));
   const featured = upcoming[0] || results[0] || null;
+  const preMatchSession = featured && ["scheduled", "live"].includes(featured.status)
+    ? preMatchSessions.find((item) => item.match_id === featured.id && item.status === "open" && (!item.opens_at || new Date(item.opens_at).getTime() <= now) && (!item.closes_at || new Date(item.closes_at).getTime() > now))
+    : null;
   const fifaRank = selectedTeam?.fifa_ranking || rankings.fifa.find((row) => row.isBelgium)?.rank || "—";
   const record = useMemo(() => {
     if (!selectedId) return { wins: 0, draws: 0, losses: 0, goals: 0 };
@@ -226,7 +240,7 @@ export default function NationalTeamsPage() {
         </div>
       </div>
 
-      <aside className="order-4 space-y-4 lg:order-2 lg:col-span-4">
+      <aside className="order-5 space-y-4 lg:order-2 lg:col-span-4">
         {rankings.fifa.length > 0 && <ModuleCard>
           <PanelHeader icon={Trophy} title={config.labels.fifa} />
           <div className="divide-y divide-line/10 overflow-hidden rounded-xl border border-line/10 bg-black/10">{rankings.fifa.map((row, index) => <div key={index} className={`flex items-center justify-between px-3 py-1.5 text-sm lg:py-2.5 ${row.isBelgium ? "bg-gradient-to-r from-red-500/20 to-amber-300/[0.06] font-black text-white" : "text-slate-300"}`}><span className="flex min-w-0 items-center gap-2.5"><span className={`inline-block w-5 shrink-0 text-center text-xs font-black tabular-nums ${Number(row.rank) <= 3 ? "text-amber-300" : "text-slate-500"}`}>{row.rank}</span><CountryFlag nation={row.nation} /><span className="truncate">{row.nation}</span></span><span className={`ml-2 w-[78px] shrink-0 text-right text-[11px] tabular-nums ${row.isBelgium ? "text-amber-200" : "text-muted"}`}>{row.points !== "" ? <>{row.points} <span className="text-[9px]">pts</span></> : "—"}</span></div>)}</div>
@@ -238,12 +252,18 @@ export default function NationalTeamsPage() {
         </ModuleCard>}
       </aside>
 
-      {sectionConfig.results?.enabled && <ModuleCard className="order-2 lg:order-3 lg:col-span-12">
+      {preMatchSession && <Link href={`/onze?match=${featured.id}`} className="group order-2 flex flex-col gap-4 overflow-hidden rounded-2xl border border-red-400/25 bg-gradient-to-r from-red-950/60 via-surface to-amber-950/25 p-5 transition hover:border-red-400/55 sm:flex-row sm:items-center lg:order-3 lg:col-span-12">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-amber-300/25 bg-amber-300/10"><Star className="h-5 w-5 text-amber-300" /></div>
+        <div className="min-w-0 flex-1"><div className="text-[10px] font-black uppercase tracking-[.18em] text-amber-300">Avant-match communautaire</div><h2 className="mt-1 text-lg font-black text-white">Compose ton 11 des Diables</h2><p className="mt-1 text-xs leading-5 text-muted">Choisis ta tactique et tes titulaires, puis partage ta composition avant le coup d’envoi.</p></div>
+        <span className="inline-flex shrink-0 items-center gap-1 text-sm font-black text-white">Faire mon 11 <ChevronRight className="h-4 w-4 transition group-hover:translate-x-1" /></span>
+      </Link>}
+
+      {sectionConfig.results?.enabled && <ModuleCard className="order-3 lg:order-4 lg:col-span-12">
         <PanelHeader icon={Trophy} title={sectionConfig.results.label} subtitle={sectionConfig.results.subtitle} accent={sectionConfig.results.accent} action={results.length > 4 ? config.labels.show_all_results : null} actionHref={`/diables-rouges/matchs?equipe=${selectedId}`} />
         {results.length ? <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{displayedResults.map((match, index) => <SmallMatch key={match.id} match={match} clubs={clubs} competitions={competitions} className={index >= 4 ? "hidden sm:block" : "block"} />)}</div> : <p className="text-sm text-muted">Aucun résultat importé.</p>}
       </ModuleCard>}
 
-      {sectionConfig.squad?.enabled && <ModuleCard className="order-3 lg:order-4 lg:col-span-12">
+      {sectionConfig.squad?.enabled && <ModuleCard className="order-4 lg:order-5 lg:col-span-12">
         <PanelHeader icon={Users} title={sectionConfig.squad.label} subtitle={sectionConfig.squad.subtitle} accent={sectionConfig.squad.accent} action={squad.length > 4 ? `${config.labels.show_all_players} (${squad.length})` : null} actionHref={`/diables-rouges/selection?equipe=${selectedId}`} />
         {squad.length ? <>
           <div className="sm:hidden"><SquadNamesPreview rows={squad} accent={sectionConfig.squad.accent} /></div>
