@@ -129,6 +129,11 @@ const provider = {
     const y = seasonYear(ctx.season || competition.ext?.season);
     return (await api(`/fixtures?league=${competition.external_id}&season=${y}`, ctx)).map(mapFixture);
   },
+  async fetchStandings(competition, ctx = {}) {
+    const y = seasonYear(ctx.season || competition.ext?.season);
+    const rows = await api(`/standings?league=${competition.external_id}&season=${y}`, ctx);
+    return rows[0]?.league?.standings || [];
+  },
   async fetchTeamMatches(competition, teamExternalId, ctx = {}) {
     const y = seasonYear(ctx.season || competition.ext?.season);
     const rows = await api(`/fixtures?team=${teamExternalId}&season=${y}`, ctx);

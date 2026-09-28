@@ -2,14 +2,14 @@
 import Link from "next/link";
 import { zoneAt } from "@/lib/standingsZones";
 
-export default function StandingsTable({ standings, clubs, zones = [], L = (k, d) => d }) {
+export default function StandingsTable({ standings, clubs, zones = [], L = (k, d) => d, entityLabel = null }) {
   const zoneFor = (pos) => zoneAt(zones, pos);
   const name = (id) => clubs[id]?.name || "—";
   return (
     <div>
       <div className="overflow-x-auto overflow-y-hidden rounded-2xl border border-line/10 bg-gradient-to-b from-surface to-bg/30 shadow-[0_18px_45px_-30px_rgba(0,0,0,0.9)]">
         <table className="w-full text-sm">
-          <thead className="bg-surface2/80 text-[11px] uppercase tracking-wider text-muted"><tr><th className="min-w-[190px] p-3 text-left">{L("std.club", "Club")}</th><th className="px-2">{L("std.played", "J")}</th><th className="px-2">{L("std.won", "G")}</th><th className="px-2">{L("std.drawn", "N")}</th><th className="px-2">{L("std.lost", "P")}</th><th className="px-2">{L("std.gd", "Diff")}</th><th className="px-3">{L("std.pts", "Pts")}</th></tr></thead>
+          <thead className="bg-surface2/80 text-[11px] uppercase tracking-wider text-muted"><tr><th className="min-w-[190px] p-3 text-left">{entityLabel || L("std.club", "Club")}</th><th className="px-2">{L("std.played", "J")}</th><th className="px-2">{L("std.won", "G")}</th><th className="px-2">{L("std.drawn", "N")}</th><th className="px-2">{L("std.lost", "P")}</th><th className="px-2">{L("std.gd", "Diff")}</th><th className="px-3">{L("std.pts", "Pts")}</th></tr></thead>
           <tbody>
             {standings.map((r, i) => {
               const z = zoneFor(i + 1);

@@ -310,15 +310,24 @@ export function TilesPanel() {
   const DEFAULT_COLORS = { topscorer: "#f4c430", topassist: "#ef4444", cleansheet: "#38bdf8", note: "#a78bfa", upcoming: "#2563eb" };
   const [cfg, setCfg] = useState({});
   const [scope, setScope] = useState("national");
+  const [saveState, setSaveState] = useState("");
   const load = () => supabase.from("site_settings").select("data").eq("id", 1).maybeSingle().then(({ data }) => setCfg((data?.data && data.data.tiles) || {}));
   useEffect(() => { load(); }, []);
-  const persist = async (obj) => { const { data } = await supabase.from("site_settings").select("data").eq("id", 1).maybeSingle(); await supabase.from("site_settings").update({ data: { ...(data?.data || {}), tiles: obj } }).eq("id", 1); invalidateTilesCache(); setCfg(obj); };
+  const persist = async (obj) => {
+    setCfg(obj); invalidateTilesCache(); setSaveState("Enregistrement…");
+    const { data, error: readError } = await supabase.from("site_settings").select("data").eq("id", 1).maybeSingle();
+    if (readError) { setSaveState(`Erreur : ${readError.message}`); return; }
+    const { error } = await supabase.from("site_settings").update({ data: { ...(data?.data || {}), tiles: obj } }).eq("id", 1);
+    if (error) { setSaveState(`Erreur : ${error.message}`); await load(); return; }
+    setSaveState("Enregistré ✓");
+  };
   const scopedTile = (key) => ({ ...(cfg[key] || {}), ...(cfg[scope]?.[key] || {}) });
   const upd = (k, field, v) => ({ ...cfg, [scope]: { ...(cfg[scope] || {}), [k]: { ...(cfg[scope]?.[k] || {}), [field]: v } } });
   return (
     <div>
       <h2 className="mb-2 text-lg font-bold">Tuiles (fonds)</h2>
       <p className="mb-4 text-xs text-muted">Choisis un univers puis personnalise ses cartes. Les réglages historiques servent de repli : une valeur définie ici ne s’applique qu’à cet univers et n’est jamais touchée par les synchronisations.</p>
+      {saveState && <p className={`mb-3 text-xs ${saveState.startsWith("Erreur") ? "text-red-300" : "text-emerald-300"}`}>{saveState}</p>}
       <div className="mb-4 grid gap-2 sm:grid-cols-3">
         {TILE_SCOPES.map((item) => <button key={item.key} type="button" onClick={() => setScope(item.key)} className={`rounded-xl border p-3 text-left transition ${scope === item.key ? "border-accent bg-accent/10 text-content" : "border-line/10 bg-surface text-muted hover:border-line/25 hover:text-content"}`}><b className="block text-sm">{item.label}</b><span className="mt-1 block text-[10px] leading-4">{item.description}</span></button>)}
       </div>

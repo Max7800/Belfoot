@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { ArrowRight, CalendarDays, Flag, Globe2, ListOrdered, Shield, Sparkles, Trophy, UsersRound } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useRankings } from "@/lib/rankings";
 import { formatCompetitionName, getCompetitionType, isEuropeanClubCompetition } from "@/lib/competitionType";
 import { competitionPath } from "@/lib/competitionRoutes";
@@ -25,6 +26,7 @@ function CompetitionCard({ competition, index, L }) {
   const isCup = competition.display_type === "cup";
   const isHybrid = competition.display_type === "hybrid";
   const isEuropean = isEuropeanClubCompetition(competition);
+  const isInternational = competitionScope(competition) === "international";
   const banner = competition.portal_background_url || competition.banner_url || "/competition-banner.png";
   const title = formatCompetitionName(competition.portal_title?.trim() || competition.header_title?.trim() || competition.name);
   const subtitle = competition.portal_subtitle?.trim() || competition.header_subtitle?.trim() || (isCup ? L("competitions.cupFallback", "La coupe, sans droit à l'erreur.") : isHybrid ? "Une phase de ligue avant les soirées à élimination directe." : L("competitions.leagueFallback", "Une saison entière pour écrire la hiérarchie."));
@@ -53,19 +55,28 @@ function CompetitionCard({ competition, index, L }) {
       <Link href={path} className="flex items-center justify-center gap-1.5 rounded-xl px-2 py-2 text-[10px] font-bold text-white/90 transition hover:bg-white/[0.08] hover:text-white sm:py-2.5 sm:text-[11px]"><ArrowRight className="h-3.5 w-3.5" />{L("comp.tab.overview", "Vue d'ensemble")}</Link>
       <Link href={`${path}?tab=matchs`} className="flex items-center justify-center gap-1.5 rounded-xl px-2 py-2 text-[10px] font-bold text-white/90 transition hover:bg-white/[0.08] hover:text-white sm:py-2.5 sm:text-[11px]"><CalendarDays className="h-3.5 w-3.5" />{L("nav.matchs", "Matchs")}</Link>
       <Link href={`${path}?tab=classement`} className="flex items-center justify-center gap-1.5 rounded-xl px-2 py-2 text-[10px] font-bold text-white/90 transition hover:bg-white/[0.08] hover:text-white sm:py-2.5 sm:text-[11px]"><ListOrdered className="h-3.5 w-3.5" />{isHybrid ? "Classement / tableau" : isCup ? L("cup.rounds", "Tours") : L("nav.classement", "Classement")}</Link>
-      <Link href={`${path}?tab=clubs`} className="flex items-center justify-center gap-1.5 rounded-xl px-2 py-2 text-[10px] font-bold text-white/90 transition hover:bg-white/[0.08] hover:text-white sm:py-2.5 sm:text-[11px]"><UsersRound className="h-3.5 w-3.5" />{L("nav.clubs", "Clubs")}</Link>
+      <Link href={`${path}?tab=clubs`} className="flex items-center justify-center gap-1.5 rounded-xl px-2 py-2 text-[10px] font-bold text-white/90 transition hover:bg-white/[0.08] hover:text-white sm:py-2.5 sm:text-[11px]"><UsersRound className="h-3.5 w-3.5" />{isInternational ? "Sélections" : L("nav.clubs", "Clubs")}</Link>
     </div>
   </article>;
 }
 
-export default function CompetitionsPage() {
+function CompetitionsContent() {
   const L = useLabels();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const hub = useCompetitionHub();
   const [comps, setComps] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [portal, setPortal] = useState("national");
+  const requestedPortal = searchParams.get("univers") === "international" ? "international" : "national";
+  const [portal, setPortal] = useState(requestedPortal);
   const rankings = useRankings();
+
+  useEffect(() => { setPortal(requestedPortal); }, [requestedPortal]);
+  const choosePortal = (next) => {
+    setPortal(next);
+    router.replace(`/competitions?univers=${next}`, { scroll: false });
+  };
 
   useEffect(() => { (async () => {
     const [competitionsResult, matchesResult] = await Promise.all([
@@ -105,8 +116,8 @@ export default function CompetitionsPage() {
       </header>
 
       <div className="mb-6 grid grid-cols-2 gap-2 rounded-2xl border border-line/10 bg-surface/60 p-1.5">
-        <button type="button" onClick={() => setPortal("national")} className={`flex items-center justify-center gap-2 rounded-xl px-3 py-3 text-sm font-black transition ${portal === "national" ? "bg-white text-slate-950 shadow-lg" : "text-muted hover:bg-white/[0.04] hover:text-white"}`}><Flag className="h-4 w-4" />Belgique</button>
-        <button type="button" onClick={() => setPortal("international")} className={`flex items-center justify-center gap-2 rounded-xl px-3 py-3 text-sm font-black transition ${portal === "international" ? "bg-white text-slate-950 shadow-lg" : "text-muted hover:bg-white/[0.04] hover:text-white"}`}><Globe2 className="h-4 w-4" />International</button>
+        <button type="button" onClick={() => choosePortal("national")} className={`flex items-center justify-center gap-2 rounded-xl px-3 py-3 text-sm font-black transition ${portal === "national" ? "bg-white text-slate-950 shadow-lg" : "text-muted hover:bg-white/[0.04] hover:text-white"}`}><Flag className="h-4 w-4" />Belgique</button>
+        <button type="button" onClick={() => choosePortal("international")} className={`flex items-center justify-center gap-2 rounded-xl px-3 py-3 text-sm font-black transition ${portal === "international" ? "bg-white text-slate-950 shadow-lg" : "text-muted hover:bg-white/[0.04] hover:text-white"}`}><Globe2 className="h-4 w-4" />International</button>
       </div>
 
       {portal === "national" && (rankings.uefa.rank !== "" || rankings.uefa.points !== "") && (
@@ -136,4 +147,8 @@ export default function CompetitionsPage() {
       </div>
     </div>
   );
+}
+
+export default function CompetitionsPage() {
+  return <Suspense fallback={<div className="h-80 animate-pulse rounded-3xl bg-surface" />}><CompetitionsContent /></Suspense>;
 }

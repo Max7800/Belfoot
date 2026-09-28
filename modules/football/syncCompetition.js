@@ -30,6 +30,32 @@ function resolveMatches(matches, competitionId, seasonId, map) {
   });
 }
 
+function normalizeStandings(groups, map) {
+  return (groups || []).map((rows, index) => {
+    const label = rows?.[0]?.group || `Groupe ${index + 1}`;
+    const division = String(label).match(/(?:league|ligue)\s+([A-D])\b/i)?.[1]?.toUpperCase() || null;
+    return {
+      label,
+      division,
+      rows: (rows || []).map((row) => ({
+        club: map[String(row.team?.id)] || null,
+        rank: row.rank ?? null,
+        played: row.all?.played || 0,
+        won: row.all?.win || 0,
+        drawn: row.all?.draw || 0,
+        lost: row.all?.lose || 0,
+        gf: row.all?.goals?.for || 0,
+        ga: row.all?.goals?.against || 0,
+        gd: row.goalsDiff || 0,
+        pts: row.points || 0,
+        form: row.form || null,
+        status: row.status || null,
+        description: row.description || null,
+      })).filter((row) => row.club),
+    };
+  }).filter((group) => group.rows.length);
+}
+
 async function fillMissingClubProfile(db, source, rows) {
   const fields = ["founded_year", "stadium_name", "stadium_capacity", "stadium_address", "stadium_image_url"];
   for (const row of rows) {
@@ -138,6 +164,12 @@ export async function syncCompetition(db, competition, ctx = {}) {
       const { error } = await db.from("competitions").update(patch).eq("id", competition.id);
       if (error) throw error;
     }
+  }
+  if (provider.fetchStandings) {
+    try {
+      const groups = normalizeStandings(await provider.fetchStandings(competition, ctx), map);
+      if (groups.length) finalExt = { ...finalExt, standings_by_season: { ...(finalExt.standings_by_season || {}), [selectedSeason]: groups } };
+    } catch (error) { warnings.push(`classements: ${error.message}`); }
   }
   // Ces marqueurs ne sont posés qu'après la fin du job de base. La carte par
   // saison évite qu'un import complet 2024 fasse passer une saison 2026 encore

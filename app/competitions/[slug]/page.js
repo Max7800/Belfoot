@@ -8,6 +8,7 @@ import MatchRow from "@/components/football/MatchRow";
 import SeasonCalendar from "@/components/football/SeasonCalendar";
 import StandingsTable from "@/components/football/StandingsTable";
 import CupRounds from "@/components/football/CupRounds";
+import NationsLeagueStandings from "@/components/football/NationsLeagueStandings";
 import CompetitionHeader from "@/components/football/CompetitionHeader";
 import Watermark from "@/components/football/Watermark";
 import { computeStandings } from "@/lib/standings";
@@ -18,6 +19,7 @@ import { useTiles } from "@/lib/tiles";
 import { zoneAt, zonesForPhase } from "@/lib/standingsZones";
 import { useStatsSections } from "@/lib/statsSections";
 import { sortPublicSeasons } from "@/lib/publicSeasons";
+import { isNationsLeagueCompetition, nationsLeagueDivision, nationsLeagueGroups } from "@/lib/nationsLeague";
 import { PUBLIC_PLAYER_FIELDS, PUBLIC_PLAYER_STATS_FIELDS, loadClubsForMatches, loadMatchStatsForMatches, loadPlayersByIds, loadSeasonMatches } from "@/lib/publicFootballData";
 
 const POS = { Goalkeeper: 0, Defender: 1, Midfielder: 2, Attacker: 3 };
@@ -63,7 +65,7 @@ export default function CompetitionPage() {
   const searchParams = useSearchParams();
   const L = useLabels();
   const [comp, setComp] = useState(undefined);
-  const tileScope = isEuropeanClubCompetition(comp) ? "europe" : comp?.competition_scope === "international" ? "international" : "national";
+  const tileScope = isEuropeanClubCompetition(comp) ? "europe" : (comp?.competition_scope === "international" || isNationsLeagueCompetition(comp)) ? "international" : "national";
   const tiles = useTiles(tileScope);
   const [competitions, setCompetitions] = useState([]);
   const [tab, setTab] = useState("overview");
@@ -78,16 +80,19 @@ export default function CompetitionPage() {
   const matchViewChosen = useRef(false);
   const [selClub, setSelClub] = useState(null); const [posFilter, setPosFilter] = useState("all");
   const [anchor, setAnchor] = useState(null);
+  const [nationsDivision, setNationsDivision] = useState("A");
   const competitionType = getCompetitionType(comp, matches);
   const isCup = competitionType === "cup";
   const isHybrid = competitionType === "hybrid";
+  const isInternational = comp?.competition_scope === "international";
+  const isNationsLeague = isNationsLeagueCompetition(comp);
   const statsConfig = useStatsSections(comp?.id);
   useEffect(() => { if (!matchViewChosen.current && window.matchMedia("(max-width: 639px)").matches) setMatchView("calendar"); }, []);
   const chooseMatchView = (next) => { matchViewChosen.current = true; setMatchView(next); };
   useEffect(() => { if (tab === "stats" && anchor) { const el = document.getElementById(anchor); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); setAnchor(null); } }, [tab, anchor]);
   const goStats = (sec) => { setTab("stats"); setAnchor(sec); };
 
-  const TABS = [["overview", L("comp.tab.overview", "Vue d'ensemble")], ["matchs", L("nav.matchs", "Matchs")], ["classement", isHybrid ? "Classement & tableau" : isCup ? L("cup.bracket", "Tableau") : L("nav.classement", "Classement")], ["clubs", L("nav.clubs", "Clubs")], ["joueurs", L("nav.joueurs", "Joueurs")], ["stats", L("comp.tab.stats", "Stats")]];
+  const TABS = [["overview", L("comp.tab.overview", "Vue d'ensemble")], ["matchs", L("nav.matchs", "Matchs")], ["classement", isHybrid ? "Classement & tableau" : isCup ? L("cup.bracket", "Tableau") : L("nav.classement", "Classement")], ["clubs", isInternational ? "Sélections" : L("nav.clubs", "Clubs")], ["joueurs", L("nav.joueurs", "Joueurs")], ["stats", L("comp.tab.stats", "Stats")]];
 
   useEffect(() => {
     const requestedTab = searchParams.get("tab");
@@ -146,6 +151,14 @@ export default function CompetitionPage() {
   const phaseIsKnockout = isCup || (isHybrid && isKnockoutPhase(curPhase));
   const knockoutPhases = useMemo(() => phases.filter(isKnockoutPhase), [phases]);
   const phaseMatches = useMemo(() => seasonMatches.filter((m) => (m.phase || "—") === curPhase), [seasonMatches, curPhase]);
+  const nationsGroups = useMemo(() => isNationsLeague ? nationsLeagueGroups(comp, seasonLabel, seasonMatches, clubsMap) : [], [isNationsLeague, comp, seasonLabel, seasonMatches, clubsMap]);
+  const nationsDivisions = useMemo(() => [...new Set(nationsGroups.map((group) => group.division).filter(Boolean))].sort(), [nationsGroups]);
+  useEffect(() => {
+    if (!nationsDivisions.length) return;
+    const phaseDivision = nationsLeagueDivision(curPhase);
+    if (phaseDivision && nationsDivisions.includes(phaseDivision)) setNationsDivision(phaseDivision);
+    else if (!nationsDivisions.includes(nationsDivision)) setNationsDivision(nationsDivisions[0]);
+  }, [curPhase, nationsDivisions, nationsDivision]);
   const zones = zonesForPhase(comp, activeSeason, curPhase, primaryPhase);
   const phaseFinished = phaseMatches.filter((m) => m.status === "finished" && m.home_score != null);
   const standings = useMemo(() => phaseIsKnockout ? [] : computeStandings(phaseFinished), [phaseFinished, phaseIsKnockout]);
@@ -301,6 +314,7 @@ export default function CompetitionPage() {
         <div className="absolute inset-0" style={{ background: "radial-gradient(1100px 520px at 50% -120px, rgba(36,92,180,0.16), transparent 70%)" }} />
         <div className="absolute inset-0" style={{ background: "radial-gradient(760px 420px at 100% 110%, rgba(18,48,110,0.14), transparent 70%)" }} />
       </div>
+      <Link href={`/competitions?univers=${tileScope === "national" ? "national" : "international"}`} className="mb-3 inline-flex items-center gap-1 text-xs font-bold text-muted transition hover:text-content">← {tileScope === "national" ? "Compétitions belges" : "Compétitions internationales"}</Link>
       <CompetitionHeader comp={comp} seasonLabel={seasonLabel} kicker={L("comp.kicker", "Compétitions")} />
       {competitions.length > 1 && (
         <div className="-mt-2 mb-5 flex justify-center">
@@ -333,6 +347,10 @@ export default function CompetitionPage() {
                   <div className="text-lg font-black text-amber-200">Vue volontairement limitée</div>
                   <p className="mt-2 text-xs leading-5 text-muted">Belfoot affiche les matchs déjà connus, sans fabriquer de classement à partir d'un sous-ensemble incomplet.</p>
                 </div>
+              </Card>
+            ) : isNationsLeague && nationsGroups.length ? (
+              <Card title={`Classements — Ligue ${nationsDivision}`} onSee={() => setTab("classement")}>
+                <NationsLeagueStandings groups={nationsGroups} clubs={clubsMap} division={nationsDivision} onDivisionChange={setNationsDivision} compact />
               </Card>
             ) : phaseIsKnockout ? (
               <Card title={L("cup.currentRound", "Tour sélectionné")} onSee={() => setTab("classement")}>
@@ -376,6 +394,7 @@ export default function CompetitionPage() {
               <LeaderCard title={L("comp.topassist", "Meilleur passeur")} x={topAssist} unit={topAssist?.st.assists} onClick={() => goStats("passeurs")} variant="topassist" />
               <LeaderCard title={L("comp.cleansheets", "Clean sheets")} x={topCS} unit={topCS?.v} onClick={() => goStats("cleansheets")} variant="cleansheet" />
             </div>
+            {!withStats.length && <p className="mt-2 rounded-xl border border-dashed border-line/15 bg-surface/30 px-3 py-2 text-xs text-muted">Les fonds personnalisés restent visibles. Les noms et chiffres apparaîtront après l’import des effectifs et des statistiques.</p>}
           </div>
 
           <div>
@@ -388,7 +407,7 @@ export default function CompetitionPage() {
               </div>
             ) : (
               <div className="grid gap-3 sm:grid-cols-3">
-                <Link href={inForm ? `/clubs/${inForm.club}` : "#"} className="block rounded-2xl border border-line/10 bg-gradient-to-b from-surface to-bg/40 p-4 transition hover:border-accent/40"><div className="text-xs font-bold uppercase tracking-wider text-muted">🔥 {L("comp.inform", "Club en forme")}</div>{inForm ? <div className="mt-2"><ClubChip id={inForm.club} /><div className="mt-1 flex gap-1 text-xs">{inForm.res.map((r, i) => <span key={i} className={`rounded px-1 ${r === "V" ? "bg-green-500/20 text-green-400" : r === "N" ? "bg-white/10 text-muted" : "bg-red-500/20 text-red-400"}`}>{r}</span>)}</div></div> : <p className="mt-2 text-sm text-muted">—</p>}</Link>
+                <Link href={inForm ? `/clubs/${inForm.club}` : "#"} className="block rounded-2xl border border-line/10 bg-gradient-to-b from-surface to-bg/40 p-4 transition hover:border-accent/40"><div className="text-xs font-bold uppercase tracking-wider text-muted">🔥 {isInternational ? "Sélection en forme" : L("comp.inform", "Club en forme")}</div>{inForm ? <div className="mt-2"><ClubChip id={inForm.club} /><div className="mt-1 flex gap-1 text-xs">{inForm.res.map((r, i) => <span key={i} className={`rounded px-1 ${r === "V" ? "bg-green-500/20 text-green-400" : r === "N" ? "bg-white/10 text-muted" : "bg-red-500/20 text-red-400"}`}>{r}</span>)}</div></div> : <p className="mt-2 text-sm text-muted">—</p>}</Link>
                 <button onClick={() => setTab("classement")} className="rounded-2xl border border-line/10 bg-gradient-to-b from-surface to-bg/40 p-4 text-left transition hover:border-accent/40"><div className="text-xs font-bold uppercase tracking-wider text-muted">{L("stat.bestatk", "Meilleure attaque")}</div>{bestAtk ? <div className="mt-2 flex items-center justify-between"><ClubChip id={bestAtk.club} /><b className="text-xl">{bestAtk.gf}</b></div> : <p className="mt-2 text-sm text-muted">—</p>}</button>
                 <button onClick={() => setTab("classement")} className="rounded-2xl border border-line/10 bg-gradient-to-b from-surface to-bg/40 p-4 text-left transition hover:border-accent/40"><div className="text-xs font-bold uppercase tracking-wider text-muted">{L("stat.bestdef", "Meilleure défense")}</div>{bestDef ? <div className="mt-2 flex items-center justify-between"><ClubChip id={bestDef.club} /><b className="text-xl">{bestDef.ga}</b></div> : <p className="mt-2 text-sm text-muted">—</p>}</button>
               </div>
@@ -396,7 +415,7 @@ export default function CompetitionPage() {
           </div>
 
           <div className="grid grid-cols-2 gap-2 border-t border-line/10 pt-4 text-center text-xs text-muted sm:grid-cols-4">
-            <div><b className="block text-base text-content">{clubsList.length}</b>{L("nav.clubs", "clubs")}</div>
+            <div><b className="block text-base text-content">{clubsList.length}</b>{isInternational ? "sélections" : L("nav.clubs", "clubs")}</div>
             <div><b className="block text-base text-content">{seasonMatches.length}</b>{L("nav.matchs", "matchs")}</div>
             <div><b className="block text-base text-content">{visiblePlayers.length}</b>{L("nav.joueurs", "joueurs")}</div>
             <div><b className="block text-base text-content">{seasons.length}</b>saisons</div>
@@ -419,18 +438,20 @@ export default function CompetitionPage() {
 
       {!seasonLoading && tab === "classement" && (partialCompetition
         ? <div className="rounded-2xl border border-amber-400/25 bg-amber-400/5 p-6 text-center"><div className="font-black text-amber-200">Classement indisponible pendant l’import partiel</div><p className="mt-2 text-sm text-muted">Lance la synchronisation complète et contrôlée de la compétition depuis l’administration pour afficher toutes les équipes et tous les matchs.</p></div>
+        : isNationsLeague && nationsGroups.length
+        ? <div className="space-y-7"><NationsLeagueStandings groups={nationsGroups} clubs={clubsMap} division={nationsDivision} onDivisionChange={setNationsDivision} />{knockoutPhases.length > 0 && <section><h2 className="mb-3 text-sm font-black uppercase tracking-wider text-muted">Phase finale et barrages</h2><CupRounds matches={seasonMatches} clubs={clubsMap} phases={knockoutPhases} activePhase={knockoutPhases.includes(curPhase) ? curPhase : knockoutPhases[0]} onPhaseChange={(next) => { setPhase(next); setRound("all"); }} L={L} /></section>}</div>
         : isCup
         ? <CupRounds matches={seasonMatches} clubs={clubsMap} phases={phases} activePhase={curPhase} onPhaseChange={(next) => { setPhase(next); setRound("all"); }} L={L} />
         : isHybrid
           ? <div><PhaseChips />{phaseIsKnockout
             ? <CupRounds matches={seasonMatches} clubs={clubsMap} phases={knockoutPhases} activePhase={curPhase} onPhaseChange={(next) => { setPhase(next); setRound("all"); }} showPhaseSelector={false} L={L} />
-            : <StandingsTable standings={standings} clubs={clubsMap} zones={zones} L={L} />}</div>
-          : <div><PhaseChips /><StandingsTable standings={standings} clubs={clubsMap} zones={zones} L={L} /></div>)}
+            : <StandingsTable standings={standings} clubs={clubsMap} zones={zones} L={L} entityLabel={isInternational ? "Sélection" : null} />}</div>
+          : <div><PhaseChips /><StandingsTable standings={standings} clubs={clubsMap} zones={zones} L={L} entityLabel={isInternational ? "Sélection" : null} /></div>)}
 
       {!seasonLoading && tab === "clubs" && (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {clubsList.map((c) => { const belgian = europeanClubCompetition && String(c.ext?.country || "").toLowerCase() === "belgium"; return <Link key={c.id} href={`/clubs/${c.id}`} className={`flex items-center gap-3 rounded-xl border bg-surface p-3 transition hover:border-accent/40 ${belgian ? "border-amber-300/35 ring-1 ring-amber-300/10" : "border-line/10"}`}>{c.logo_url && <img src={c.logo_url} className="h-8 w-8 object-contain" alt="" />}<span className="min-w-0 flex-1 truncate font-semibold">{c.name}</span>{belgian && <span className="shrink-0 rounded-full bg-amber-300/10 px-2 py-1 text-[9px] font-black uppercase tracking-wider text-amber-200">🇧🇪 Belge</span>}</Link>; })}
-          {clubsList.length === 0 && <p className="text-muted">{L("empty.clubs", "Aucun club.")}</p>}
+          {clubsList.length === 0 && <p className="text-muted">{isInternational ? "Aucune sélection." : L("empty.clubs", "Aucun club.")}</p>}
         </div>
       )}
 
@@ -448,7 +469,7 @@ export default function CompetitionPage() {
           const shown = roster.filter((p) => posFilter === "all" || p.position === posFilter).sort((a, b) => (POS[a.position] ?? 9) - (POS[b.position] ?? 9) || (a.name || "").localeCompare(b.name || ""));
           return (
             <div>
-              <div className="mb-3 flex items-center gap-3"><button onClick={() => setSelClub(null)} className="text-sm text-muted hover:text-content">← {L("nav.clubs", "Clubs")}</button><span className="flex items-center gap-2 font-bold">{clubsMap[selClub]?.logo_url && <img src={clubsMap[selClub].logo_url} className="h-6 w-6 object-contain" alt="" />}{clubName(selClub)}</span></div>
+              <div className="mb-3 flex items-center gap-3"><button onClick={() => setSelClub(null)} className="text-sm text-muted hover:text-content">← {isInternational ? "Sélections" : L("nav.clubs", "Clubs")}</button><span className="flex items-center gap-2 font-bold">{clubsMap[selClub]?.logo_url && <img src={clubsMap[selClub].logo_url} className="h-6 w-6 object-contain" alt="" />}{clubName(selClub)}</span></div>
               <div className="mb-4 flex flex-wrap gap-1">{["all", "Goalkeeper", "Defender", "Midfielder", "Attacker"].map((pf) => <button key={pf} onClick={() => setPosFilter(pf)} className={`rounded-full border px-3 py-1 text-xs ${posFilter === pf ? "border-accent bg-accent/10 text-accent" : "border-line/20 text-muted"}`}>{POS_LABEL[pf]}</button>)}</div>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
                 {shown.map((p) => <Link key={p.id} href={`/players/${p.id}`} className="rounded-2xl border border-line/10 bg-surface p-3 text-center transition hover:border-accent/40"><img src={p.photo_url || ""} className="mx-auto h-16 w-16 rounded-full object-cover" alt="" /><div className="mt-2 truncate text-sm font-bold">{p.name}</div><div className="text-xs text-muted">{[p.position, p.age ? `${p.age} ans` : null].filter(Boolean).join(" · ")}</div>{p.nationality && <div className="mt-1 text-[10px] uppercase tracking-wider text-muted/60">{p.nationality}</div>}</Link>)}

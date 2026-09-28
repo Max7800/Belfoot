@@ -1810,6 +1810,31 @@ tant que la migration n'est pas enregistrée.
 - L'état `comp` est désormais déclaré avant le calcul de l'univers visuel. Aucun appel API et aucun SQL
   ne sont nécessaires pour ce correctif.
 
+### 2026-09-28 — ChatGPT — classement adapté à la Nations League
+
+- La Nations League n'utilise plus un faux Top 5 agrégeant plusieurs groupes. Sa vue d'ensemble
+  propose les Ligues A/B/C/D et affiche le leader de chaque groupe ; l'onglet classement présente les
+  tableaux complets groupe par groupe, puis conserve séparément la phase finale et les barrages.
+- Tant que les données officielles de classement ne sont pas encore enregistrées, Belfoot reconstitue
+  prudemment les groupes depuis les confrontations et les marque comme « détectés ».
+- Le provider possède maintenant un endpoint `fetchStandings`. `football.sync` consomme donc au plus
+  4 appels au lieu de 3 et enregistre les groupes officiels par saison dans
+  `competitions.ext.standings_by_season`, sans nouvelle table ni migration. Les estimations du plan,
+  du catalogue et du préflight ont été ajustées en conséquence.
+- Dans une compétition internationale, l'interface emploie désormais « Sélections » au lieu de
+  « Clubs ». Un texte explique que les noms et chiffres des leaders seront alimentés par l'import des
+  effectifs/statistiques, plutôt que de présenter l'absence de données comme une panne.
+- Les trois cartes de leaders restent rendues même avant l'import des statistiques afin que
+  les fonds configurés dans l'univers International soient immédiatement visibles. La détection de la
+  Nations League force aussi cet univers en repli si sa portée en base a été mal renseignée.
+- Le panneau admin des tuiles applique maintenant le nouveau fond immédiatement en aperçu et affiche
+  explicitement `Enregistrement…`, `Enregistré ✓` ou l'erreur Supabase au lieu d'échouer silencieusement.
+- Le portail `/competitions` mémorise son univers dans `?univers=national|international`. Un retour
+  navigateur depuis la Champions League ou une compétition de sélections revient donc sur l'onglet
+  International ; chaque fiche propose également un lien de retour explicite vers le bon univers.
+- Après déploiement, relancer une seule fois `football.sync` sur la Nations League 2024-2025 avec un
+  budget strict de 5 pour récupérer les libellés officiels des groupes. Aucun SQL n'est nécessaire.
+
 #### État à récupérer avant toute modification
 
 1. Faire `git status`, `git log -5 --oneline`, puis lire ce bloc et le dernier commit local. Ne pas
