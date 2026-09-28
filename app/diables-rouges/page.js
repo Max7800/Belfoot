@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { CalendarDays, ChevronRight, MapPin, Shield, Trophy, Users } from "lucide-react";
+import { CalendarDays, ChevronRight, Globe2, MapPin, Shield, Trophy, Users } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { useNationalTeamsConfig } from "@/lib/nationalTeams";
 import { useRankings } from "@/lib/rankings";
@@ -11,13 +11,18 @@ import { matchStatusMeta } from "@/lib/matchStatus";
 
 const CATEGORY_LABELS = { senior: "Diables Rouges", u23: "U23", u21: "Espoirs U21", u20: "U20", u19: "U19", u18: "U18", u17: "U17", women: "Red Flames" };
 const CATEGORY_ORDER = ["senior", "u21", "u19", "u17", "u23", "u20", "u18", "women"];
-const FLAGS = {
-  Belgium: "🇧🇪", Belgique: "🇧🇪", France: "🇫🇷", Netherlands: "🇳🇱", "Pays-Bas": "🇳🇱", Germany: "🇩🇪", Allemagne: "🇩🇪", England: "🏴", Angleterre: "🏴", Spain: "🇪🇸", Espagne: "🇪🇸", Italy: "🇮🇹", Italie: "🇮🇹", Portugal: "🇵🇹", Croatia: "🇭🇷", Croatie: "🇭🇷", Denmark: "🇩🇰", Danemark: "🇩🇰", Sweden: "🇸🇪", Suède: "🇸🇪", Norway: "🇳🇴", Norvège: "🇳🇴", Finland: "🇫🇮", Finlande: "🇫🇮", Switzerland: "🇨🇭", Suisse: "🇨🇭", Austria: "🇦🇹", Autriche: "🇦🇹", Poland: "🇵🇱", Pologne: "🇵🇱", Ukraine: "🇺🇦", Scotland: "🏴", Écosse: "🏴", Wales: "🏴", "Pays de Galles": "🏴", Ireland: "🇮🇪", Irlande: "🇮🇪", Greece: "🇬🇷", Grèce: "🇬🇷", Turkey: "🇹🇷", Turquie: "🇹🇷", Romania: "🇷🇴", Roumanie: "🇷🇴", Hungary: "🇭🇺", Hongrie: "🇭🇺", Serbia: "🇷🇸", Serbie: "🇷🇸", Albania: "🇦🇱", Albanie: "🇦🇱", Slovakia: "🇸🇰", Slovaquie: "🇸🇰", Slovenia: "🇸🇮", Slovénie: "🇸🇮", Czechia: "🇨🇿", Tchéquie: "🇨🇿", "Czech Republic": "🇨🇿", Luxembourg: "🇱🇺", Kazakhstan: "🇰🇿", Kosovo: "🇽🇰", Morocco: "🇲🇦", Maroc: "🇲🇦", Brazil: "🇧🇷", Brésil: "🇧🇷", Argentina: "🇦🇷", Argentine: "🇦🇷", Uruguay: "🇺🇾", Colombia: "🇨🇴", Colombie: "🇨🇴", Mexico: "🇲🇽", Mexique: "🇲🇽", USA: "🇺🇸", "États-Unis": "🇺🇸", Canada: "🇨🇦", Japan: "🇯🇵", Japon: "🇯🇵", Senegal: "🇸🇳", Sénégal: "🇸🇳", Nigeria: "🇳🇬", Algeria: "🇩🇿", Algérie: "🇩🇿", Egypt: "🇪🇬", Égypte: "🇪🇬", Australia: "🇦🇺", Australie: "🇦🇺", Iran: "🇮🇷", Korea: "🇰🇷", "Corée du Sud": "🇰🇷",
+const COUNTRY_CODES = {
+  Belgium: "be", Belgique: "be", France: "fr", Netherlands: "nl", "Pays-Bas": "nl", Germany: "de", Allemagne: "de", England: "gb-eng", Angleterre: "gb-eng", Spain: "es", Espagne: "es", Italy: "it", Italie: "it", Portugal: "pt", Croatia: "hr", Croatie: "hr", Denmark: "dk", Danemark: "dk", Sweden: "se", Suède: "se", Norway: "no", Norvège: "no", Finland: "fi", Finlande: "fi", Switzerland: "ch", Suisse: "ch", Austria: "at", Autriche: "at", Poland: "pl", Pologne: "pl", Ukraine: "ua", Scotland: "gb-sct", Écosse: "gb-sct", Wales: "gb-wls", "Pays de Galles": "gb-wls", Ireland: "ie", Irlande: "ie", Greece: "gr", Grèce: "gr", Turkey: "tr", Turquie: "tr", Romania: "ro", Roumanie: "ro", Hungary: "hu", Hongrie: "hu", Serbia: "rs", Serbie: "rs", Albania: "al", Albanie: "al", Slovakia: "sk", Slovaquie: "sk", Slovenia: "si", Slovénie: "si", Czechia: "cz", Tchéquie: "cz", "Czech Republic": "cz", Luxembourg: "lu", Kazakhstan: "kz", Kosovo: "xk", Morocco: "ma", Maroc: "ma", Brazil: "br", Brésil: "br", Argentina: "ar", Argentine: "ar", Uruguay: "uy", Colombia: "co", Colombie: "co", Mexico: "mx", Mexique: "mx", USA: "us", "États-Unis": "us", Canada: "ca", Japan: "jp", Japon: "jp", Senegal: "sn", Sénégal: "sn", Nigeria: "ng", Algeria: "dz", Algérie: "dz", Egypt: "eg", Égypte: "eg", Australia: "au", Australie: "au", Iran: "ir", Korea: "kr", "Corée du Sud": "kr",
 };
 
-function flagFor(name = "") {
+function countryCodeFor(name = "") {
   const clean = name.replace(/\s+(U\d+|W|Women)$/i, "").trim();
-  return FLAGS[clean] || "🌍";
+  return COUNTRY_CODES[clean] || null;
+}
+
+function CountryFlag({ nation, className = "h-4 w-6" }) {
+  const code = countryCodeFor(nation);
+  return code ? <img src={`https://flagcdn.com/${code}.svg`} alt="" className={`${className} rounded-[2px] object-cover shadow-sm`} /> : <span className={`flex items-center justify-center rounded bg-white/[0.05] text-muted ${className}`}><Globe2 className="h-3 w-3" /></span>;
 }
 
 function dateLabel(value, full = false) {
@@ -30,7 +35,7 @@ function dateLabel(value, full = false) {
 function TeamVisual({ club, large = false }) {
   return <div className="flex min-w-0 flex-1 flex-col items-center gap-2 text-center">
     <div className={`relative flex items-center justify-center rounded-2xl border border-white/10 bg-black/20 ${large ? "h-24 w-24 sm:h-28 sm:w-28" : "h-14 w-14"}`}>
-      <span className={`absolute opacity-25 ${large ? "text-6xl" : "text-4xl"}`}>{flagFor(club?.name)}</span>
+      <CountryFlag nation={club?.name} className={`absolute opacity-25 ${large ? "h-14 w-20" : "h-8 w-11"}`} />
       {club?.logo_url && <img src={club.logo_url} alt="" className={`relative object-contain drop-shadow-xl ${large ? "h-16 w-16 sm:h-20 sm:w-20" : "h-9 w-9"}`} />}
     </div>
     <strong className={`${large ? "text-lg sm:text-2xl" : "text-xs"} max-w-full truncate`}>{club?.name || "À confirmer"}</strong>
@@ -72,13 +77,13 @@ function ModuleCard({ children, className = "" }) {
 }
 
 function SquadPreview({ rows, accent, className = "" }) {
-  return <div className={`space-y-5 ${className}`}>{groupByPosition(rows, (row) => row.position || row.player?.position).map((group) => <div key={group.key}>
-    <div className="mb-2 flex items-center gap-2"><span className="h-4 w-1 rounded-full" style={{ backgroundColor: accent }} /><h3 className="text-[10px] font-black uppercase tracking-wider text-muted">{group.label}</h3></div>
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">{group.rows.map((row) => <Link key={row.id} href={`/players/${row.player.id}`} className="group rounded-2xl border border-line/10 bg-gradient-to-b from-surface to-bg/60 p-3 text-center transition hover:border-amber-400/35">
-      <div className="mx-auto h-16 w-16 overflow-hidden rounded-full border border-white/10 bg-surface2 sm:h-20 sm:w-20">{row.player.photo_url ? <img src={row.player.photo_url} alt="" className="h-full w-full object-cover object-top" /> : <Users className="m-4 h-8 w-8 text-muted sm:m-5 sm:h-10 sm:w-10" />}</div>
-      <div className="mt-2 truncate text-sm font-black group-hover:text-amber-300">{row.player.name}</div><div className="truncate text-[9px] uppercase tracking-wider text-muted">{row.position || row.player.position || "Joueur"}</div>
+  return <div className={`grid gap-3 sm:grid-cols-2 xl:grid-cols-4 ${className}`}>{groupByPosition(rows, (row) => row.position || row.player?.position).map((group) => <section key={group.key} className="overflow-hidden rounded-2xl border border-line/10 bg-gradient-to-b from-surface to-bg/50">
+    <header className="flex items-center justify-between border-b border-line/10 bg-white/[0.025] px-3 py-2.5"><span className="flex items-center gap-2"><span className="h-4 w-1 rounded-full" style={{ backgroundColor: accent }} /><b className="text-[10px] uppercase tracking-wider text-slate-300">{group.label}</b></span><span className="text-[10px] font-bold text-muted">{group.rows.length}</span></header>
+    <div className="divide-y divide-line/10">{group.rows.slice(0, 3).map((row) => <Link key={row.id} href={`/players/${row.player.id}`} className="group flex min-w-0 items-center gap-2.5 px-3 py-2.5 transition hover:bg-white/[0.025]">
+      <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full border border-white/10 bg-surface2">{row.player.photo_url ? <img src={row.player.photo_url} alt="" className="h-full w-full object-cover object-top" /> : <Users className="m-2.5 h-5 w-5 text-muted" />}</div>
+      <span className="min-w-0 flex-1"><b className="block truncate text-xs group-hover:text-amber-300">{row.player.name}</b><span className="block truncate text-[10px] text-muted">{row.club?.name || row.position || row.player.position || "Joueur"}</span></span><ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-600 transition group-hover:translate-x-0.5 group-hover:text-amber-300" />
     </Link>)}</div>
-  </div>)}</div>;
+  </section>)}</div>;
 }
 
 function SquadNamesPreview({ rows, accent }) {
@@ -187,7 +192,6 @@ export default function NationalTeamsPage() {
   }, [results, selectedId]);
   const sectionConfig = Object.fromEntries(config.sections.map((section) => [section.key, section]));
   const displayedResults = results.slice(0, 6);
-  const displayedSquad = squad.slice(0, 10);
   const otherUpcoming = upcoming.filter((match) => match.id !== featured?.id).slice(0, 2);
 
   if (schemaMissing) return <div className="mx-auto max-w-3xl rounded-3xl border border-amber-400/20 bg-amber-400/5 p-8 text-center"><Shield className="mx-auto h-10 w-10 text-amber-300" /><h1 className="mt-3 text-2xl font-black">Le module Sélections est prêt</h1><p className="mt-2 text-sm leading-6 text-muted">Il reste à appliquer la migration SQL 0027, puis à lancer « Synchroniser une sélection » dans l'administration.</p></div>;
@@ -217,7 +221,7 @@ export default function NationalTeamsPage() {
       <aside className="order-4 space-y-4 lg:order-2 lg:col-span-4">
         {rankings.fifa.length > 0 && <ModuleCard>
           <PanelHeader icon={Trophy} title={config.labels.fifa} />
-          <div className="space-y-1">{rankings.fifa.map((row, index) => <div key={index} className={`flex items-center justify-between rounded-lg px-3 py-2 text-sm ${row.isBelgium ? "border border-red-400/20 bg-red-500/15 font-black text-white" : "text-muted"}`}><span className="flex min-w-0 items-center"><span className="mr-2 inline-block w-7 shrink-0 tabular-nums text-slate-500">{row.rank}</span><span className="mr-2 text-base" aria-hidden="true">{flagFor(row.nation)}</span><span className="truncate">{row.nation}</span></span>{row.points !== "" && <span className="ml-2 shrink-0 text-xs tabular-nums">{row.points} pts</span>}</div>)}</div>
+          <div className="divide-y divide-line/10 overflow-hidden rounded-xl border border-line/10 bg-black/10">{rankings.fifa.map((row, index) => <div key={index} className={`flex items-center justify-between px-3 py-1.5 text-sm ${row.isBelgium ? "bg-gradient-to-r from-red-500/20 to-amber-300/[0.06] font-black text-white" : "text-slate-300"}`}><span className="flex min-w-0 items-center gap-2.5"><span className={`inline-block w-5 shrink-0 text-center text-xs font-black tabular-nums ${Number(row.rank) <= 3 ? "text-amber-300" : "text-slate-500"}`}>{row.rank}</span><CountryFlag nation={row.nation} /><span className="truncate">{row.nation}</span></span>{row.points !== "" && <span className={`ml-2 shrink-0 text-[11px] tabular-nums ${row.isBelgium ? "text-amber-200" : "text-muted"}`}>{row.points} <span className="text-[9px]">pts</span></span>}</div>)}</div>
         </ModuleCard>}
         {selectedTeam?.national_category === "senior" && (selectedTeam?.national_gender || "men") === "men" && results[0] && ratingSquad.length > 0 && <DiableRatings match={results[0]} squad={ratingSquad} title={config.labels.ratings} showAllLabel={config.labels.show_all_players} showLessLabel={config.labels.show_less_players} compact />}
         {sectionConfig.schedule?.enabled && otherUpcoming.length > 0 && <ModuleCard>
@@ -235,7 +239,7 @@ export default function NationalTeamsPage() {
         <PanelHeader icon={Users} title={sectionConfig.squad.label} subtitle={sectionConfig.squad.subtitle} accent={sectionConfig.squad.accent} action={squad.length > 4 ? `${config.labels.show_all_players} (${squad.length})` : null} actionHref={`/diables-rouges/selection?equipe=${selectedId}`} />
         {squad.length ? <>
           <div className="sm:hidden"><SquadNamesPreview rows={squad} accent={sectionConfig.squad.accent} /></div>
-          <SquadPreview rows={displayedSquad} accent={sectionConfig.squad.accent} className="hidden sm:block" />
+          <SquadPreview rows={squad} accent={sectionConfig.squad.accent} className="hidden sm:grid" />
         </> : <p className="text-sm text-muted">La sélection apparaîtra après sa synchronisation.</p>}
       </ModuleCard>}
     </div>}

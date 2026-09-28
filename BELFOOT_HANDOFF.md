@@ -1701,6 +1701,23 @@ tant que la migration n'est pas enregistrée.
   `npm run build` passe avec les variables Supabase factices recommandées par l’audit.
 - État Git à la fin du lot : commit local uniquement ; ne pas pousser sans autorisation explicite.
 
+### 2026-09-28 — ChatGPT — finition classement FIFA et aperçu de la sélection
+
+- Le classement FIFA de la page Diables Rouges n’utilise plus les émojis de drapeaux, qui étaient
+  rendus comme des codes pays (`ES`, `AR`, `FR`...) sous Windows. Un composant affiche désormais de
+  vrais SVG FlagCDN avec un globe neutre si la nation saisie dans l’administration est inconnue.
+- Le Top 10 est présenté dans un tableau visuel compact avec séparateurs, podium coloré, ligne belge
+  renforcée et points mieux hiérarchisés. La hauteur réduite de chaque ligne aligne le bas du panneau
+  avec les quatre indicateurs situés sous le match principal et supprime le vide constaté.
+- Sur desktop, l’aperçu de la sélection abandonne les grandes cartes isolées : une colonne compacte
+  par poste occupe toute la largeur, avec trois joueurs maximum, petit portrait, club et lien vers la
+  fiche. Tous les groupes partent de l’effectif complet afin que les attaquants ne disparaissent plus
+  à cause d’une coupe arbitraire sur les dix premiers joueurs.
+- Sur mobile, la liste textuelle complète par poste est conservée pour éviter les portraits trop grands.
+  La page dédiée reste accessible par « Voir tous les joueurs ».
+- Aucun SQL et aucun appel API-Football. Lint sans erreur et build de production validé avec variables
+  Supabase factices. État Git : commit local uniquement, sans push avant autorisation explicite.
+
 ---
 
 ## SOCLE_CANDIDATES  (documenter seulement — NE PAS remonter au socle maintenant)
