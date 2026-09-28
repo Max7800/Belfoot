@@ -1777,6 +1777,27 @@ tant que la migration n'est pas enregistrée.
   build de production passe à froid avec les variables Supabase factices. État Git : commit local
   uniquement ; aucun push sans autorisation.
 
+### 2026-09-28 — ChatGPT — univers visuels des tuiles et abonnement Pro actif
+
+- Le panneau `Apparence du site > Tuiles et couleurs` sépare désormais trois univers : `Belgique`
+  (Pro League, Challenger, Croky Cup), `Europe` (Champions League, Europa League, Conference League)
+  et `International` (Euro, Coupe du monde, Nations League). Chaque univers possède ses propres fonds,
+  overlays, accents et contours pour les cinq cartes statistiques.
+- La page compétition sélectionne automatiquement l’univers selon `competition_scope`, avec détection
+  de secours des coupes européennes. Les anciens réglages restent le repli commun et donc l’apparence
+  belge actuelle n’est pas perdue. Aucun SQL n’est nécessaire et les synchronisations ne modifient pas
+  ces choix éditoriaux.
+- Le plan d’import possède aussi un groupe explicite `Compétitions internationales`, afin que Nations
+  League, Euro et Coupe du monde ne soient plus classés avec les championnats étrangers de clubs.
+- Maximilien confirme avoir activé l’abonnement API-Football Pro. Aucun appel n’a encore été exécuté
+  par ChatGPT. Premier essai recommandé : Nations League `2024-2025`, compétition seule, job
+  `football.sync` uniquement, budget strict de 5 appels. Le préflight doit annoncer environ 3 appels.
+  Contrôler ensuite participants, matchs/phases, absence de doublons et disparition de l’état partiel.
+- Après validation de ce test minimal, importer uniquement les bases (`football.sync`) des autres
+  compétitions 2024-2025 avant tout pipeline d’effectifs ou de détails de match. L’ordre reste :
+  Pro League, Challenger, Croky Cup, sélections belges, puis coupes d’Europe. Les jobs coûteux seront
+  lancés ensuite par petits lots et jamais en même temps qu’un import global non contrôlé.
+
 ### ROADMAP CLAUDE — relais de soirée (ordre conseillé)
 
 #### État à récupérer avant toute modification
