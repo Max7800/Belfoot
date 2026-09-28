@@ -1800,6 +1800,16 @@ tant que la migration n'est pas enregistrée.
 
 ### ROADMAP CLAUDE — relais de soirée (ordre conseillé)
 
+### 2026-09-28 — ChatGPT — correctif urgent des fiches compétition après déploiement
+
+- Le premier import Pro contrôlé de la Nations League 2024-2025 a réussi : 54 équipes, 188 matchs,
+  3 appels sur un budget de 5, quota provider remonté à 7 497. L'abonnement Pro est donc bien actif.
+- Le crash de toutes les routes `/competitions/[slug]` observé juste après n'était pas provoqué par les
+  nouvelles données. Le commit des tuiles par univers calculait `tileScope` à partir de `comp` avant la
+  déclaration de l'état React correspondant, provoquant une `ReferenceError` au premier rendu.
+- L'état `comp` est désormais déclaré avant le calcul de l'univers visuel. Aucun appel API et aucun SQL
+  ne sont nécessaires pour ce correctif.
+
 #### État à récupérer avant toute modification
 
 1. Faire `git status`, `git log -5 --oneline`, puis lire ce bloc et le dernier commit local. Ne pas

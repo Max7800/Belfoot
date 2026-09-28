@@ -62,9 +62,9 @@ export default function CompetitionPage() {
   const { slug } = useParams();
   const searchParams = useSearchParams();
   const L = useLabels();
+  const [comp, setComp] = useState(undefined);
   const tileScope = isEuropeanClubCompetition(comp) ? "europe" : comp?.competition_scope === "international" ? "international" : "national";
   const tiles = useTiles(tileScope);
-  const [comp, setComp] = useState(undefined);
   const [competitions, setCompetitions] = useState([]);
   const [tab, setTab] = useState("overview");
   const [seasons, setSeasons] = useState([]); const [seasonLabel, setSeasonLabel] = useState("");
