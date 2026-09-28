@@ -45,19 +45,6 @@ function cleanTile(value) {
   return tile;
 }
 
-function cleanTiles(value) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Configuration des tuiles invalide.");
-  if (JSON.stringify(value).length > 100000) throw new Error("Configuration des tuiles trop volumineuse.");
-  const tiles = {};
-  for (const key of TILE_KEYS) if (value[key]) tiles[key] = cleanTile(value[key]);
-  for (const scope of TILE_SCOPES) {
-    if (!value[scope]) continue;
-    tiles[scope] = {};
-    for (const key of TILE_KEYS) if (value[scope][key]) tiles[scope][key] = cleanTile(value[scope][key]);
-  }
-  return tiles;
-}
-
 export async function POST(request) {
   try {
     const db = getAdmin();
@@ -65,9 +52,21 @@ export async function POST(request) {
     if (auth.response) return auth.response;
 
     const body = await request.json().catch(() => ({}));
-    const tiles = cleanTiles(body.tiles);
+    if (!TILE_SCOPES.includes(body.scope) || !TILE_KEYS.includes(body.key)) {
+      return new Response("Tuile ou univers invalide.", { status: 400 });
+    }
+    const patch = cleanTile(body.patch);
+    if (!Object.keys(patch).length) return new Response("Modification vide ou invalide.", { status: 400 });
     const { data: current, error: readError } = await db.from("site_settings").select("data").eq("id", 1).maybeSingle();
     if (readError) throw readError;
+    const currentTiles = current?.data?.tiles || {};
+    const tiles = {
+      ...currentTiles,
+      [body.scope]: {
+        ...(currentTiles[body.scope] || {}),
+        [body.key]: { ...(currentTiles[body.scope]?.[body.key] || {}), ...patch },
+      },
+    };
     const { data: saved, error: saveError } = await db.from("site_settings")
       .update({ data: { ...(current?.data || {}), tiles } })
       .eq("id", 1)
@@ -80,7 +79,7 @@ export async function POST(request) {
       actor: auth.user.id,
       action: "settings.tiles.update",
       target_table: "site_settings",
-      meta: { id: 1, scopes: TILE_SCOPES.filter((scope) => tiles[scope]) },
+      meta: { id: 1, scope: body.scope, tile: body.key, fields: Object.keys(patch) },
     });
     return Response.json({ ok: true, tiles });
   } catch (error) {

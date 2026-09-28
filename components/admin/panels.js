@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import siteConfig from "@/config/site";
 import { JOB_CATALOG, jobKeys, JOB_GROUPS, jobsInGroup, jobPipelines } from "@/lib/jobCatalog";
@@ -311,25 +311,30 @@ export function TilesPanel() {
   const [cfg, setCfg] = useState({});
   const [scope, setScope] = useState("national");
   const [saveState, setSaveState] = useState("");
+  const saveQueue = useRef(Promise.resolve());
+  const saveVersion = useRef(0);
   const load = () => supabase.from("site_settings").select("data").eq("id", 1).maybeSingle().then(({ data }) => setCfg((data?.data && data.data.tiles) || {}));
   useEffect(() => { load(); }, []);
-  const persist = async (obj) => {
-    setCfg(obj); invalidateTilesCache(); setSaveState("Enregistrement…");
-    const { data: { session } } = await supabase.auth.getSession();
-    const response = await fetch("/api/admin/site-settings", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token || ""}` },
-      body: JSON.stringify({ tiles: obj }),
-    });
-    if (!response.ok) {
-      const message = await response.text();
-      setSaveState(`Erreur : ${message || `HTTP ${response.status}`}`); await load(); return;
-    }
-    const result = await response.json();
-    setCfg(result.tiles || obj); invalidateTilesCache(); setSaveState("Enregistré ✓ — recharge la page publique");
+  const persist = (key, field, value) => {
+    const targetScope = scope;
+    const version = ++saveVersion.current;
+    setCfg((current) => ({ ...current, [targetScope]: { ...(current[targetScope] || {}), [key]: { ...(current[targetScope]?.[key] || {}), [field]: value } } }));
+    invalidateTilesCache(); setSaveState("Enregistrement…");
+    saveQueue.current = saveQueue.current.then(async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      const response = await fetch("/api/admin/site-settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token || ""}` },
+        body: JSON.stringify({ scope: targetScope, key, patch: { [field]: value } }),
+      });
+      if (!response.ok) {
+        const message = await response.text();
+        setSaveState(`Erreur : ${message || `HTTP ${response.status}`}`); await load(); return;
+      }
+      if (version === saveVersion.current) setSaveState("Enregistré ✓ — recharge la page publique");
+    }).catch(async (error) => { setSaveState(`Erreur : ${error.message || String(error)}`); await load(); });
   };
   const scopedTile = (key) => ({ ...(cfg[key] || {}), ...(cfg[scope]?.[key] || {}) });
-  const upd = (k, field, v) => ({ ...cfg, [scope]: { ...(cfg[scope] || {}), [k]: { ...(cfg[scope]?.[k] || {}), [field]: v } } });
   return (
     <div>
       <h2 className="mb-2 text-lg font-bold">Tuiles (fonds)</h2>
@@ -343,11 +348,11 @@ export function TilesPanel() {
           <div key={k} className="rounded-xl border border-line/10 p-3">
             <div className="mb-2 font-semibold">{label}</div>
             <div className="flex flex-wrap items-end gap-4 text-sm">
-              <label className="flex items-center gap-2"><input type="checkbox" checked={t.enabled !== false} onChange={(e) => persist(upd(k, "enabled", e.target.checked))} />Fond/accent actif</label>
-              <div><div className="mb-1 text-xs text-muted">Image de fond</div><ImageField value={t.background_url} onChange={(v) => persist(upd(k, "background_url", v))} /></div>
-              <div><div className="mb-1 text-xs text-muted">Overlay (0–1)</div><input type="number" step="0.1" min="0" max="1" value={t.overlay ?? ""} onChange={(e) => setCfg(upd(k, "overlay", e.target.value === "" ? undefined : Number(e.target.value)))} onBlur={() => persist(cfg)} className="w-20 rounded border border-line/10 bg-surface2 px-2 py-1" /></div>
-              <div><div className="mb-1 text-xs text-muted">Reflet / accent</div><input type="color" value={t.accent || DEFAULT_COLORS[k]} onChange={(e) => persist(upd(k, "accent", e.target.value))} className="h-8 w-10 rounded bg-transparent" /></div>
-              <div><div className="mb-1 text-xs text-muted">Contour</div><input type="color" value={t.border_color || t.accent || DEFAULT_COLORS[k]} onChange={(e) => persist(upd(k, "border_color", e.target.value))} className="h-8 w-10 rounded bg-transparent" /></div>
+              <label className="flex items-center gap-2"><input type="checkbox" checked={t.enabled !== false} onChange={(e) => persist(k, "enabled", e.target.checked)} />Fond/accent actif</label>
+              <div><div className="mb-1 text-xs text-muted">Image de fond</div><ImageField value={t.background_url} onChange={(v) => persist(k, "background_url", v)} /></div>
+              <div><div className="mb-1 text-xs text-muted">Overlay (0–1)</div><input type="number" step="0.1" min="0" max="1" value={t.overlay ?? ""} onChange={(e) => persist(k, "overlay", e.target.value === "" ? 0.5 : Number(e.target.value))} className="w-20 rounded border border-line/10 bg-surface2 px-2 py-1" /></div>
+              <div><div className="mb-1 text-xs text-muted">Reflet / accent</div><input type="color" value={t.accent || DEFAULT_COLORS[k]} onChange={(e) => persist(k, "accent", e.target.value)} className="h-8 w-10 rounded bg-transparent" /></div>
+              <div><div className="mb-1 text-xs text-muted">Contour</div><input type="color" value={t.border_color || t.accent || DEFAULT_COLORS[k]} onChange={(e) => persist(k, "border_color", e.target.value)} className="h-8 w-10 rounded bg-transparent" /></div>
             </div>
           </div>); })}
       </div>
