@@ -46,6 +46,7 @@ async function ensureInternationalCompetitions(db, providerKey, matches) {
       slug: `international-${definition.external_id}`,
       logo_url: definition.logo_url,
       competition_type: "cup",
+      competition_scope: "international",
       public_visible: false,
       ext: definition.ext,
       synced_at: new Date().toISOString(),

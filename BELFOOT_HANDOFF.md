@@ -1718,6 +1718,30 @@ tant que la migration n'est pas enregistrée.
 - Aucun SQL et aucun appel API-Football. Lint sans erreur et build de production validé avec variables
   Supabase factices. État Git : commit local uniquement, sans push avant autorisation explicite.
 
+### 2026-09-28 — ChatGPT — portail international et formats UEFA
+
+- `/competitions` propose désormais deux entrées principales, `Belgique` et `International`.
+  L’espace international sépare les coupes européennes de clubs des compétitions de sélections.
+  La Champions League, l’Europa League et la Conference League sont des compétitions européennes
+  complètes : l’import standard reste scoppé sur l’identifiant de la compétition et récupère tous
+  ses participants, jamais uniquement les clubs belges.
+- Nouvelle portée administrable `competition_scope` : `national` pour les compétitions belges de
+  clubs, `europe` pour les compétitions UEFA de clubs et `international` pour les sélections. Les
+  compétitions créées par le job des sélections sont automatiquement classées dans ce dernier groupe.
+- Le nouveau type éditorial `hybrid` couvre le format UEFA moderne. La phase de ligue affiche son
+  classement ; les barrages et tours suivants utilisent ensuite le tableau à élimination directe.
+  Le tableau reconnaît aussi les `Knockout Round Play-offs` et continue à regrouper les confrontations
+  aller-retour en un seul duel cumulé.
+- Les clubs européens ne sont pas filtrés par nationalité. Quand la fiche provider d’un club indique
+  `Belgium`, sa carte reçoit seulement un repère visuel belge dans l’onglet Clubs.
+- Le plan d’import ajoute un groupe ordonné `Coupes d’Europe`. Toute nouvelle compétition européenne
+  reste désactivée par défaut jusqu’à son ajout volontaire à la whitelist. L’estimation conservatrice
+  initiale est de 36 clubs et 189 matchs par saison, modifiable dans l’administration avant lancement.
+- Nouvelle migration idempotente `football/0036_competition_scope`. Elle conserve toutes les
+  compétitions existantes dans le portail belge par défaut, reclasse uniquement les compétitions déjà
+  créées pour les sélections et ajoute le contrôle système correspondant. Aucun appel API-Football
+  n’a été effectué pendant ce lot.
+
 ---
 
 ## SOCLE_CANDIDATES  (documenter seulement — NE PAS remonter au socle maintenant)

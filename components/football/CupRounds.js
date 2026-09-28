@@ -6,11 +6,12 @@ import MatchRow from "./MatchRow";
 import { isMatchFinished } from "@/lib/matchStatus";
 
 const STAGES = [
-  { rank: 0, test: /(round of 32|32nd|1\/16|16[eè]mes?|seizi[eè]mes?)/i, label: "16es de finale" },
-  { rank: 1, test: /(round of 16|16th|1\/8|8[eè]mes?|huiti[eè]mes?)/i, label: "8es de finale" },
-  { rank: 2, test: /(quarter|1\/4|quarts?)/i, label: "Quarts de finale" },
-  { rank: 3, test: /(semi|1\/2|demi)/i, label: "Demi-finales" },
-  { rank: 4, test: /(^|\b)final(e|s)?\b/i, reject: /(semi|demi|quarter|quart)/i, label: "Finale" },
+  { rank: 0, test: /(knockout(?: round)? play-?offs?|barrages?)/i, label: "Barrages" },
+  { rank: 1, test: /(round of 32|32nd|1\/16|16[eè]mes?|seizi[eè]mes?)/i, label: "16es de finale" },
+  { rank: 2, test: /(round of 16|16th|1\/8|8[eè]mes?|huiti[eè]mes?)/i, label: "8es de finale" },
+  { rank: 3, test: /(quarter|1\/4|quarts?)/i, label: "Quarts de finale" },
+  { rank: 4, test: /(semi|1\/2|demi)/i, label: "Demi-finales" },
+  { rank: 5, test: /(^|\b)final(e|s)?\b/i, reject: /(semi|demi|quarter|quart)/i, label: "Finale" },
 ];
 
 function stageMeta(phase) {
@@ -92,7 +93,7 @@ function BracketCard({ match, clubs, top, cardHeight, leftConnector, rightConnec
 }
 
 function Bracket({ stages, mobile = false }) {
-  const shown = mobile && stages.some((stage) => stage.rank >= 1) ? stages.filter((stage) => stage.rank >= 1) : stages;
+  const shown = mobile && stages.length > 4 ? stages.slice(-4) : stages;
   const baseCount = Math.max(1, ...shown.map((stage) => stage.matches.length));
   const slotHeight = mobile ? 72 : 76;
   const cardHeight = 62;
@@ -115,7 +116,7 @@ function Bracket({ stages, mobile = false }) {
   </div>;
 }
 
-export default function CupRounds({ matches, clubs, phases, activePhase, onPhaseChange, L = (key, fallback) => fallback }) {
+export default function CupRounds({ matches, clubs, phases, activePhase, onPhaseChange, showPhaseSelector = true, L = (key, fallback) => fallback }) {
   const selected = activePhase || phases[phases.length - 1] || null;
   const rows = matches.filter((match) => (match.phase || "—") === selected).sort((a, b) => new Date(a.kickoff || 0) - new Date(b.kickoff || 0));
   const bracketStages = orderedBracketStages(matches, phases).map((stage) => ({ ...stage, clubs }));
@@ -133,7 +134,7 @@ export default function CupRounds({ matches, clubs, phases, activePhase, onPhase
 
     <div className="mt-5 border-t border-line/10 pt-5">
       <h2 className="mb-3 text-sm font-black uppercase tracking-wider text-muted">Tous les tours</h2>
-      {phases.length > 1 && <div className="mb-4 flex gap-1 overflow-x-auto pb-1 [scrollbar-width:none]">{phases.map((phase) => <button key={phase} onClick={() => onPhaseChange?.(phase)} className={`shrink-0 rounded-full border px-3 py-1 text-xs ${selected === phase ? "border-accent bg-accent/10 text-accent" : "border-line/20 text-muted"}`}>{phase}</button>)}</div>}
+      {showPhaseSelector && phases.length > 1 && <div className="mb-4 flex gap-1 overflow-x-auto pb-1 [scrollbar-width:none]">{phases.map((phase) => <button key={phase} onClick={() => onPhaseChange?.(phase)} className={`shrink-0 rounded-full border px-3 py-1 text-xs ${selected === phase ? "border-accent bg-accent/10 text-accent" : "border-line/20 text-muted"}`}>{phase}</button>)}</div>}
       {selected && <h3 className="mb-3 text-lg font-black">{selected}</h3>}
       <div className="grid gap-2 lg:grid-cols-2">{rows.map((match) => <MatchRow key={match.id} m={match} clubs={clubs} href={`/matchs/${match.id}`} />)}</div>
       {rows.length === 0 && <p className="text-muted">{L("empty.matches", "Aucun match.")}</p>}

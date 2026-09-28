@@ -104,6 +104,7 @@ const provider = {
     const rows = await api(`/teams?league=${competition.external_id}&season=${y}`, ctx);
     return rows.map((x) => ({
       external_id: String(x.team.id), name: x.team.name, logo_url: x.team.logo || null, city: x.venue?.city || null,
+      country: x.team.country || null,
       founded_year: x.team.founded ?? null,
       stadium_name: x.venue?.name || null,
       stadium_capacity: x.venue?.capacity ?? null,

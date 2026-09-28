@@ -18,11 +18,12 @@ export const FOOTBALL_ENTITIES = {
       { key: "portal_title", label: "Portail : titre (vide = titre du bandeau)", type: "text" },
       { key: "portal_subtitle", label: "Portail : texte (vide = sous-titre du bandeau)", type: "textarea" },
       { key: "public_visible", label: "Visible dans les pages publiques", type: "bool" },
+      { key: "competition_scope", label: "Portail", type: "select", options: ["national", "europe", "international"] },
       { key: "zones", label: "Zones de classement", type: "zones" },
       { key: "rating_min", label: "Note : min. apparitions", type: "number" },
       { key: "live_enabled", label: "Direct activé pour les jobs automatiques", type: "bool" },
       { key: "live_refresh_seconds", label: "Direct : intervalle conseillé en secondes (30 à 900)", type: "number" },
-      { key: "competition_type", label: "Type", type: "select", options: ["league", "cup"] },
+      { key: "competition_type", label: "Type", type: "select", options: ["league", "cup", "hybrid"] },
     ],
   },
   seasons: {

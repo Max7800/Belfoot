@@ -53,7 +53,7 @@ export default function ImportPlanPanel() {
   const load = useCallback(async () => {
     setStatus("loading"); setMessage("");
     const [competitionResult, nationalResult, settingsResult, seasonResult] = await Promise.all([
-      supabase.from("competitions").select("id,name,external_id,provider,public_visible").not("provider", "is", null).order("name"),
+      supabase.from("competitions").select("id,name,external_id,provider,public_visible,competition_scope").not("provider", "is", null).order("name"),
       supabase.from("clubs").select("id,name,external_id,national_category,national_gender").eq("team_type", "national").eq("national_followed", true).order("name"),
       supabase.from("site_settings").select("data").eq("id", 1).maybeSingle(),
       supabase.from("seasons").select("id,label,competition_id,import_status,public_active,activated_at").order("label", { ascending: false }),

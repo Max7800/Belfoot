@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic";
 
 const EXPECTED_MIGRATIONS = {
   core: ["0002_profile_role_hardening", "0003_media_storage_hardening", "0004_job_execution_guardrails", "0005_persistent_pipeline_runs"],
-  football: ["0023_season_safe_sync", "0024_player_team_seasons", "0025_membership_backfill_repair", "0026_match_center_live", "0027_national_teams", "0028_followed_national_teams", "0029_national_fifa_ranking", "0030_backfill_seasons", "0031_diable_ratings", "0032_season_rollout", "0033_history_foundations", "0034_match_sync_state", "0035_match_team_stats"],
+  football: ["0023_season_safe_sync", "0024_player_team_seasons", "0025_membership_backfill_repair", "0026_match_center_live", "0027_national_teams", "0028_followed_national_teams", "0029_national_fifa_ranking", "0030_backfill_seasons", "0031_diable_ratings", "0032_season_rollout", "0033_history_foundations", "0034_match_sync_state", "0035_match_team_stats", "0036_competition_scope"],
 };
 
 async function requireAdmin(request, db) {
@@ -40,6 +40,7 @@ export async function GET(request) {
       probe("Garde-fous des synchronisations", db.from("job_runs").select("target_key,request_count,request_limit,heartbeat_at,params").limit(1)),
       probe("Saisons et zones par phase", db.from("seasons").select("zones_by_phase").limit(1)),
       probe("Portail et direct des compétitions", db.from("competitions").select("portal_background_url,live_enabled,live_refresh_seconds").limit(1)),
+      probe("Portée nationale et internationale", db.from("competitions").select("competition_scope,competition_type").limit(1)),
       probe("Relations équipes premières/U23", db.from("clubs").select("team_type,parent_club_id").limit(1)),
       probe("Affectations joueur-équipe-saison", db.from("player_team_seasons").select("id,season,squad_role").limit(1)),
       probe("Compositions de match", db.from("match_lineups").select("id").limit(1)),

@@ -11,7 +11,7 @@ import CupRounds from "@/components/football/CupRounds";
 import CompetitionHeader from "@/components/football/CompetitionHeader";
 import Watermark from "@/components/football/Watermark";
 import { computeStandings } from "@/lib/standings";
-import { competitionPhases, getCompetitionType } from "@/lib/competitionType";
+import { competitionPhases, getCompetitionType, isKnockoutPhase } from "@/lib/competitionType";
 import { competitionPath, resolveCompetitionRoute } from "@/lib/competitionRoutes";
 import { useLabels } from "@/lib/labels";
 import { useTiles } from "@/lib/tiles";
@@ -79,13 +79,14 @@ export default function CompetitionPage() {
   const [anchor, setAnchor] = useState(null);
   const competitionType = getCompetitionType(comp, matches);
   const isCup = competitionType === "cup";
+  const isHybrid = competitionType === "hybrid";
   const statsConfig = useStatsSections(comp?.id);
   useEffect(() => { if (!matchViewChosen.current && window.matchMedia("(max-width: 639px)").matches) setMatchView("calendar"); }, []);
   const chooseMatchView = (next) => { matchViewChosen.current = true; setMatchView(next); };
   useEffect(() => { if (tab === "stats" && anchor) { const el = document.getElementById(anchor); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); setAnchor(null); } }, [tab, anchor]);
   const goStats = (sec) => { setTab("stats"); setAnchor(sec); };
 
-  const TABS = [["overview", L("comp.tab.overview", "Vue d'ensemble")], ["matchs", L("nav.matchs", "Matchs")], ["classement", isCup ? L("cup.bracket", "Tableau") : L("nav.classement", "Classement")], ["clubs", L("nav.clubs", "Clubs")], ["joueurs", L("nav.joueurs", "Joueurs")], ["stats", L("comp.tab.stats", "Stats")]];
+  const TABS = [["overview", L("comp.tab.overview", "Vue d'ensemble")], ["matchs", L("nav.matchs", "Matchs")], ["classement", isHybrid ? "Classement & tableau" : isCup ? L("cup.bracket", "Tableau") : L("nav.classement", "Classement")], ["clubs", L("nav.clubs", "Clubs")], ["joueurs", L("nav.joueurs", "Joueurs")], ["stats", L("comp.tab.stats", "Stats")]];
 
   useEffect(() => {
     const requestedTab = searchParams.get("tab");
@@ -141,10 +142,12 @@ export default function CompetitionPage() {
   const phases = useMemo(() => competitionPhases(seasonMatches, competitionType), [seasonMatches, competitionType]);
   const primaryPhase = (isCup ? phases[phases.length - 1] : phases[0]) || null;
   const curPhase = phase && phases.includes(phase) ? phase : primaryPhase;
+  const phaseIsKnockout = isCup || (isHybrid && isKnockoutPhase(curPhase));
+  const knockoutPhases = useMemo(() => phases.filter(isKnockoutPhase), [phases]);
   const phaseMatches = useMemo(() => seasonMatches.filter((m) => (m.phase || "—") === curPhase), [seasonMatches, curPhase]);
   const zones = zonesForPhase(comp, activeSeason, curPhase, primaryPhase);
   const phaseFinished = phaseMatches.filter((m) => m.status === "finished" && m.home_score != null);
-  const standings = useMemo(() => isCup ? [] : computeStandings(phaseFinished), [phaseFinished, isCup]);
+  const standings = useMemo(() => phaseIsKnockout ? [] : computeStandings(phaseFinished), [phaseFinished, phaseIsKnockout]);
   const rounds = useMemo(() => { const seen = new Map(); for (const m of phaseMatches) { const k = m.round_number != null ? String(m.round_number) : (m.round_raw || "?"); if (!seen.has(k)) seen.set(k, { key: k, num: m.round_number, label: m.round_number != null ? `${L("comp.round", "Journée")} ${m.round_number}` : (m.round_raw || "Tour") }); } return [...seen.values()].sort((a, b) => (a.num ?? 999) - (b.num ?? 999)); }, [phaseMatches]);
   const shownMatches = round === "all" ? phaseMatches : phaseMatches.filter((m) => (m.round_number != null ? String(m.round_number) : (m.round_raw || "?")) === round);
   const grouped = useMemo(() => { const g = {}; for (const m of shownMatches) { const k = m.round_number != null ? String(m.round_number) : (m.round_raw || "?"); (g[k] ||= { label: m.round_number != null ? `${L("comp.round", "Journée")} ${m.round_number}` : (m.round_raw || "Tour"), num: m.round_number, items: [] }).items.push(m); } return Object.values(g).sort((a, b) => (a.num ?? 999) - (b.num ?? 999)); }, [shownMatches]);
@@ -162,6 +165,7 @@ export default function CompetitionPage() {
   if (comp === null) return <p className="text-muted">Compétition introuvable.</p>;
   const seasonClubIds = new Set(seasonMatches.flatMap((match) => [match.home_club_id, match.away_club_id]).filter(Boolean));
   const clubsList = Object.values(clubsMap).filter((club) => seasonClubIds.has(club.id));
+  const isEuropeanClubCompetition = comp.competition_scope === "europe";
   const zoneFor = (pos) => zoneAt(zones, pos);
 
   const goals = phaseFinished.reduce((s, m) => s + m.home_score + m.away_score, 0);
@@ -320,7 +324,7 @@ export default function CompetitionPage() {
       {!seasonLoading && tab === "overview" && (
         <div className="space-y-6">
           <div className="grid gap-4 lg:grid-cols-3">
-            {isCup ? (
+            {phaseIsKnockout ? (
               <Card title={L("cup.currentRound", "Tour sélectionné")} onSee={() => setTab("classement")}>
                 <div className="flex h-full flex-col justify-center rounded-xl border border-accent/15 bg-accent/5 p-4">
                   <div className="text-2xl font-black">{curPhase || "—"}</div>
@@ -346,10 +350,10 @@ export default function CompetitionPage() {
                 </div>
               </Card>
             )}
-            <Card title={isCup ? `${L("comp.results", "Résultats")} — ${curPhase || L("cup.round", "Tour")}` : (lastRound >= 0 ? `${L("comp.results", "Résultats")} — ${L("comp.round", "Journée")} ${lastRound}` : L("comp.results", "Derniers résultats"))} onSee={() => setTab("matchs")}>
+            <Card title={phaseIsKnockout ? `${L("comp.results", "Résultats")} — ${curPhase || L("cup.round", "Tour")}` : (lastRound >= 0 ? `${L("comp.results", "Résultats")} — ${L("comp.round", "Journée")} ${lastRound}` : L("comp.results", "Derniers résultats"))} onSee={() => setTab("matchs")}>
               <div className="space-y-1.5">{lastResults.map((m) => <MatchRow key={m.id} m={m} clubs={clubsMap} href={`/matchs/${m.id}`} compact />)}{lastResults.length === 0 && <p className="text-sm text-muted">—</p>}</div>
             </Card>
-            <Card title={!isCup && Number.isFinite(nextRound) ? `${L("comp.upcoming", "Prochaine journée")} — J${nextRound}` : L("comp.upcoming", "Prochains matchs")} onSee={() => setTab("matchs")} bgKey="upcoming">
+            <Card title={!phaseIsKnockout && Number.isFinite(nextRound) ? `${L("comp.upcoming", "Prochaine journée")} — J${nextRound}` : L("comp.upcoming", "Prochains matchs")} onSee={() => setTab("matchs")} bgKey="upcoming">
               {upcoming.length ? <div className="space-y-1.5">{upcoming.map((m) => <MatchRow key={m.id} m={m} clubs={clubsMap} href={`/matchs/${m.id}`} compact />)}</div>
                 : <div className="flex flex-col items-center gap-2 py-10 text-muted"><Calendar className="h-6 w-6" /><span className="text-sm">{allFinished ? L("empty.season", "Saison terminée") : L("empty.upcoming", "Aucun match à venir")}</span></div>}
             </Card>
@@ -366,7 +370,7 @@ export default function CompetitionPage() {
 
           <div>
             <div className="mb-2 flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-muted"><span className="h-3 w-1 rounded bg-accent" />{L("comp.otherstats", "Autres statistiques")}</div>
-            {isCup ? (
+            {phaseIsKnockout ? (
               <div className="grid gap-3 sm:grid-cols-3">
                 <div className="rounded-2xl border border-line/10 bg-gradient-to-b from-surface to-bg/40 p-4"><div className="text-xs font-bold uppercase tracking-wider text-muted">{L("cup.roundMatches", "Matchs du tour")}</div><b className="mt-2 block text-2xl">{phaseMatches.length}</b></div>
                 <div className="rounded-2xl border border-line/10 bg-gradient-to-b from-surface to-bg/40 p-4"><div className="text-xs font-bold uppercase tracking-wider text-muted">{L("cup.roundGoals", "Buts du tour")}</div><b className="mt-2 block text-2xl">{goals}</b></div>
@@ -405,11 +409,15 @@ export default function CompetitionPage() {
 
       {!seasonLoading && tab === "classement" && (isCup
         ? <CupRounds matches={seasonMatches} clubs={clubsMap} phases={phases} activePhase={curPhase} onPhaseChange={(next) => { setPhase(next); setRound("all"); }} L={L} />
-        : <div><PhaseChips /><StandingsTable standings={standings} clubs={clubsMap} zones={zones} L={L} /></div>)}
+        : isHybrid
+          ? <div><PhaseChips />{phaseIsKnockout
+            ? <CupRounds matches={seasonMatches} clubs={clubsMap} phases={knockoutPhases} activePhase={curPhase} onPhaseChange={(next) => { setPhase(next); setRound("all"); }} showPhaseSelector={false} L={L} />
+            : <StandingsTable standings={standings} clubs={clubsMap} zones={zones} L={L} />}</div>
+          : <div><PhaseChips /><StandingsTable standings={standings} clubs={clubsMap} zones={zones} L={L} /></div>)}
 
       {!seasonLoading && tab === "clubs" && (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {clubsList.map((c) => <Link key={c.id} href={`/clubs/${c.id}`} className="flex items-center gap-3 rounded-xl border border-line/10 bg-surface p-3 transition hover:border-accent/40">{c.logo_url && <img src={c.logo_url} className="h-8 w-8 object-contain" alt="" />}<span className="font-semibold">{c.name}</span></Link>)}
+          {clubsList.map((c) => { const belgian = isEuropeanClubCompetition && String(c.ext?.country || "").toLowerCase() === "belgium"; return <Link key={c.id} href={`/clubs/${c.id}`} className={`flex items-center gap-3 rounded-xl border bg-surface p-3 transition hover:border-accent/40 ${belgian ? "border-amber-300/35 ring-1 ring-amber-300/10" : "border-line/10"}`}>{c.logo_url && <img src={c.logo_url} className="h-8 w-8 object-contain" alt="" />}<span className="min-w-0 flex-1 truncate font-semibold">{c.name}</span>{belgian && <span className="shrink-0 rounded-full bg-amber-300/10 px-2 py-1 text-[9px] font-black uppercase tracking-wider text-amber-200">🇧🇪 Belge</span>}</Link>; })}
           {clubsList.length === 0 && <p className="text-muted">{L("empty.clubs", "Aucun club.")}</p>}
         </div>
       )}
