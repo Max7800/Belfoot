@@ -14,10 +14,18 @@ const CATEGORY_ORDER = ["senior", "u21", "u19", "u17", "u23", "u20", "u18", "wom
 const COUNTRY_CODES = {
   Belgium: "be", Belgique: "be", France: "fr", Netherlands: "nl", "Pays-Bas": "nl", Germany: "de", Allemagne: "de", England: "gb-eng", Angleterre: "gb-eng", Spain: "es", Espagne: "es", Italy: "it", Italie: "it", Portugal: "pt", Croatia: "hr", Croatie: "hr", Denmark: "dk", Danemark: "dk", Sweden: "se", Suède: "se", Norway: "no", Norvège: "no", Finland: "fi", Finlande: "fi", Switzerland: "ch", Suisse: "ch", Austria: "at", Autriche: "at", Poland: "pl", Pologne: "pl", Ukraine: "ua", Scotland: "gb-sct", Écosse: "gb-sct", Wales: "gb-wls", "Pays de Galles": "gb-wls", Ireland: "ie", Irlande: "ie", Greece: "gr", Grèce: "gr", Turkey: "tr", Turquie: "tr", Romania: "ro", Roumanie: "ro", Hungary: "hu", Hongrie: "hu", Serbia: "rs", Serbie: "rs", Albania: "al", Albanie: "al", Slovakia: "sk", Slovaquie: "sk", Slovenia: "si", Slovénie: "si", Czechia: "cz", Tchéquie: "cz", "Czech Republic": "cz", Luxembourg: "lu", Kazakhstan: "kz", Kosovo: "xk", Morocco: "ma", Maroc: "ma", Brazil: "br", Brésil: "br", Argentina: "ar", Argentine: "ar", Uruguay: "uy", Colombia: "co", Colombie: "co", Mexico: "mx", Mexique: "mx", USA: "us", "États-Unis": "us", Canada: "ca", Japan: "jp", Japon: "jp", Senegal: "sn", Sénégal: "sn", Nigeria: "ng", Algeria: "dz", Algérie: "dz", Egypt: "eg", Égypte: "eg", Australia: "au", Australie: "au", Iran: "ir", Korea: "kr", "Corée du Sud": "kr",
 };
+const normalizeNationName = (value) => String(value || "")
+  .normalize("NFD")
+  .replace(/[\u0300-\u036f]/g, "")
+  .replace(/[^a-zA-Z0-9 -]/g, " ")
+  .replace(/\s+/g, " ")
+  .trim()
+  .toLowerCase();
+const NORMALIZED_COUNTRY_CODES = Object.fromEntries(Object.entries(COUNTRY_CODES).map(([name, code]) => [normalizeNationName(name), code]));
 
 function countryCodeFor(name = "") {
   const clean = name.replace(/\s+(U\d+|W|Women)$/i, "").trim();
-  return COUNTRY_CODES[clean] || null;
+  return COUNTRY_CODES[clean] || NORMALIZED_COUNTRY_CODES[normalizeNationName(clean)] || null;
 }
 
 function CountryFlag({ nation, className = "h-4 w-6" }) {
@@ -221,7 +229,7 @@ export default function NationalTeamsPage() {
       <aside className="order-4 space-y-4 lg:order-2 lg:col-span-4">
         {rankings.fifa.length > 0 && <ModuleCard>
           <PanelHeader icon={Trophy} title={config.labels.fifa} />
-          <div className="divide-y divide-line/10 overflow-hidden rounded-xl border border-line/10 bg-black/10">{rankings.fifa.map((row, index) => <div key={index} className={`flex items-center justify-between px-3 py-1.5 text-sm ${row.isBelgium ? "bg-gradient-to-r from-red-500/20 to-amber-300/[0.06] font-black text-white" : "text-slate-300"}`}><span className="flex min-w-0 items-center gap-2.5"><span className={`inline-block w-5 shrink-0 text-center text-xs font-black tabular-nums ${Number(row.rank) <= 3 ? "text-amber-300" : "text-slate-500"}`}>{row.rank}</span><CountryFlag nation={row.nation} /><span className="truncate">{row.nation}</span></span>{row.points !== "" && <span className={`ml-2 shrink-0 text-[11px] tabular-nums ${row.isBelgium ? "text-amber-200" : "text-muted"}`}>{row.points} <span className="text-[9px]">pts</span></span>}</div>)}</div>
+          <div className="divide-y divide-line/10 overflow-hidden rounded-xl border border-line/10 bg-black/10">{rankings.fifa.map((row, index) => <div key={index} className={`flex items-center justify-between px-3 py-1.5 text-sm lg:py-2.5 ${row.isBelgium ? "bg-gradient-to-r from-red-500/20 to-amber-300/[0.06] font-black text-white" : "text-slate-300"}`}><span className="flex min-w-0 items-center gap-2.5"><span className={`inline-block w-5 shrink-0 text-center text-xs font-black tabular-nums ${Number(row.rank) <= 3 ? "text-amber-300" : "text-slate-500"}`}>{row.rank}</span><CountryFlag nation={row.nation} /><span className="truncate">{row.nation}</span></span><span className={`ml-2 w-[78px] shrink-0 text-right text-[11px] tabular-nums ${row.isBelgium ? "text-amber-200" : "text-muted"}`}>{row.points !== "" ? <>{row.points} <span className="text-[9px]">pts</span></> : "—"}</span></div>)}</div>
         </ModuleCard>}
         {selectedTeam?.national_category === "senior" && (selectedTeam?.national_gender || "men") === "men" && results[0] && ratingSquad.length > 0 && <DiableRatings match={results[0]} squad={ratingSquad} title={config.labels.ratings} showAllLabel={config.labels.show_all_players} showLessLabel={config.labels.show_less_players} compact />}
         {sectionConfig.schedule?.enabled && otherUpcoming.length > 0 && <ModuleCard>

@@ -1746,6 +1746,10 @@ tant que la migration n'est pas enregistrée.
   utilisent un accent bleu UEFA. L’affichage corrige aussi automatiquement la graphie erronée
   `Champion's League` en `Champions League` dans le bandeau, le portail et le sélecteur rapide, sans
   modifier les autres titres éditoriaux.
+- Finition du classement FIFA desktop : les dix lignes gagnent de la hauteur pour aligner le panneau
+  sur l’ensemble `match principal + indicateurs`, tandis que la colonne des points possède désormais
+  une largeur fixe. La résolution des drapeaux normalise accents, espaces et caractères parasites,
+  ce qui corrige notamment le Brésil sans multiplier les cas particuliers.
 
 ---
 
