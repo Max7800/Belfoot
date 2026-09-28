@@ -2,7 +2,9 @@ import { runJob } from "@/lib/jobs";
 import { getAdmin } from "@/lib/supabaseAdmin";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 300;
+// Vercel Hobby autorise au maximum 60 secondes par Function. Le plafond de
+// matchs simultanés et le verrou de job empêchent les cycles de s'empiler.
+export const maxDuration = 60;
 
 const DEFAULT_STRATEGY = {
   window_before_minutes: 15,

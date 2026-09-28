@@ -1881,6 +1881,11 @@ tant que la migration n'est pas enregistrée.
   par cycle et le plafond horaire. **Aucun cron Vercel n'est installé par ce commit** : l'endpoint est
   prêt, mais son activation doit rester une décision explicite après un dernier contrôle en production.
 - Ce lot ne nécessite aucune migration SQL et ne modifie aucune donnée football.
+- Le projet étant sur Vercel Hobby, le runner est plafonné à 60 secondes et le cron fréquent doit être
+  porté par Supabase. `supabase/live_cron_setup.sql` contient l'installation idempotente toutes les trois
+  minutes. Il exige deux secrets créés au préalable dans Vault (`belfoot_site_url` et
+  `belfoot_cron_secret`) et ne contient aucune valeur secrète. Hors fenêtre de match, les appels au
+  provider restent à zéro ; désactiver `cron.job.active` coupe immédiatement l'automatisation.
 
 #### État à récupérer avant toute modification
 
