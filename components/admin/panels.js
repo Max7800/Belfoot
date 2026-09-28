@@ -315,11 +315,18 @@ export function TilesPanel() {
   useEffect(() => { load(); }, []);
   const persist = async (obj) => {
     setCfg(obj); invalidateTilesCache(); setSaveState("Enregistrement…");
-    const { data, error: readError } = await supabase.from("site_settings").select("data").eq("id", 1).maybeSingle();
-    if (readError) { setSaveState(`Erreur : ${readError.message}`); return; }
-    const { error } = await supabase.from("site_settings").update({ data: { ...(data?.data || {}), tiles: obj } }).eq("id", 1);
-    if (error) { setSaveState(`Erreur : ${error.message}`); await load(); return; }
-    setSaveState("Enregistré ✓");
+    const { data: { session } } = await supabase.auth.getSession();
+    const response = await fetch("/api/admin/site-settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token || ""}` },
+      body: JSON.stringify({ tiles: obj }),
+    });
+    if (!response.ok) {
+      const message = await response.text();
+      setSaveState(`Erreur : ${message || `HTTP ${response.status}`}`); await load(); return;
+    }
+    const result = await response.json();
+    setCfg(result.tiles || obj); invalidateTilesCache(); setSaveState("Enregistré ✓ — recharge la page publique");
   };
   const scopedTile = (key) => ({ ...(cfg[key] || {}), ...(cfg[scope]?.[key] || {}) });
   const upd = (k, field, v) => ({ ...cfg, [scope]: { ...(cfg[scope] || {}), [k]: { ...(cfg[scope]?.[k] || {}), [field]: v } } });

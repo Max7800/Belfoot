@@ -1829,6 +1829,9 @@ tant que la migration n'est pas enregistrée.
   Nations League force aussi cet univers en repli si sa portée en base a été mal renseignée.
 - Le panneau admin des tuiles applique maintenant le nouveau fond immédiatement en aperçu et affiche
   explicitement `Enregistrement…`, `Enregistré ✓` ou l'erreur Supabase au lieu d'échouer silencieusement.
+- L'écriture des fonds passe par `/api/admin/site-settings`, qui revérifie le rôle administrateur puis
+  enregistre via le client serveur. Cela évite les mises à jour silencieusement ignorées par la RLS ;
+  l'API exige qu'une ligne ait réellement été modifiée et journalise l'action. Aucun SQL n'est requis.
 - Le portail `/competitions` mémorise son univers dans `?univers=national|international`. Un retour
   navigateur depuis la Champions League ou une compétition de sélections revient donc sur l'onglet
   International ; chaque fiche propose également un lien de retour explicite vers le bon univers.
