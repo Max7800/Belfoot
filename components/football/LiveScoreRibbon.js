@@ -39,19 +39,25 @@ function TeamRow({ club, score }) {
   </div>;
 }
 
-function FeaturedScore({ match, clubs, competition, latestEvent }) {
+function FeaturedScore({ match, clubs, competition, events = [] }) {
   const home = clubs[match.home_club_id] || {};
   const away = clubs[match.away_club_id] || {};
   const status = matchStatusMeta(match);
-  const event = eventSummary(latestEvent);
-  return <Link href={`/matchs/${match.id}`} className="group block h-full overflow-hidden rounded-2xl border border-red-400/25 bg-[radial-gradient(circle_at_top_right,rgba(239,68,68,.18),transparent_45%),rgba(0,0,0,.2)] p-4 transition hover:-translate-y-0.5 hover:border-red-300/45">
+  return <Link href={`/matchs/${match.id}`} className="group flex h-full flex-col overflow-hidden rounded-2xl border border-red-400/25 bg-[radial-gradient(circle_at_top_right,rgba(239,68,68,.18),transparent_45%),rgba(0,0,0,.2)] p-4 transition hover:-translate-y-0.5 hover:border-red-300/45">
     <div className="mb-3 flex items-center gap-2 text-[10px] text-white/55">
       {competition?.logo_url && <img src={competition.logo_url} alt="" className="h-5 w-5 object-contain" />}
       <span className="min-w-0 flex-1 truncate font-bold">{competition?.name || "Compétition"}</span>
       <span className={`rounded-full px-2 py-1 font-black uppercase ${status.live ? "bg-red-500/20 text-red-200" : "bg-white/[0.07] text-white/65"}`}>{status.live && <i className="mr-1 inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-red-400" />}{status.compact}</span>
     </div>
     <div className="space-y-2 rounded-2xl bg-black/20 p-3"><TeamRow club={home} score={match.home_score} /><div className="h-px bg-white/[0.07]" /><TeamRow club={away} score={match.away_score} /></div>
-    {event ? <div className="mt-3 flex items-center gap-2 rounded-xl border border-white/[0.07] bg-white/[0.035] px-3 py-2 text-[11px]"><span>{event.icon}</span><b className="shrink-0 text-white/80">{latestEvent.minute != null ? `${latestEvent.minute}'` : event.label}</b><span className="min-w-0 truncate text-white/60">{event.text}</span></div> : <p className="mt-3 text-[11px] text-white/45">Ouvre le match pour suivre tous les événements.</p>}
+    <div className="mt-3 flex flex-1 flex-col justify-end rounded-xl border border-white/[0.07] bg-white/[0.035] px-3 py-2.5">
+      <div className="mb-1.5 text-[9px] font-black uppercase tracking-[.16em] text-white/40">Temps forts</div>
+      {events.length ? <div className="space-y-1.5">{events.slice(0, 3).map((item) => {
+        const event = eventSummary(item);
+        return <div key={item.id} className="flex min-w-0 items-center gap-2 text-[11px]"><span>{event.icon}</span><b className="w-8 shrink-0 text-white/80">{item.minute != null ? `${item.minute}'` : "—"}</b><span className="truncate text-white/60">{event.text}</span></div>;
+      })}</div> : <div className="flex items-center gap-2 text-[11px] text-white/55"><Radio size={13} className={status.live ? "text-red-300" : "text-white/40"} /><span>{status.live ? "Aucun but ni carton signalé pour le moment." : "Le suivi commencera au coup d’envoi."}</span></div>}
+      <span className="mt-2 inline-flex items-center gap-1 text-[10px] font-black text-red-200">Suivre le match minute par minute <ArrowRight size={11} /></span>
+    </div>
   </Link>;
 }
 
@@ -72,7 +78,7 @@ function CompactScore({ match, clubs, competition, latestEvent }) {
 
 export default function LiveScoreRibbon({ config = {}, competitions = [], clubs = {}, followedClubIds = [] }) {
   const [matches, setMatches] = useState([]);
-  const [latestEvents, setLatestEvents] = useState({});
+  const [eventsByMatch, setEventsByMatch] = useState({});
   const [loading, setLoading] = useState(true);
   const scroller = useRef(null);
   const eventRefreshTimer = useRef(null);
@@ -81,11 +87,14 @@ export default function LiveScoreRibbon({ config = {}, competitions = [], clubs 
   const followed = useMemo(() => new Set(followedClubIds), [followedClubIds]);
 
   const loadEvents = useCallback(async (matchIds) => {
-    if (!matchIds.length) { setLatestEvents({}); return; }
+    if (!matchIds.length) { setEventsByMatch({}); return; }
     const { data } = await supabase.from("match_events").select("id,match_id,minute,type,player_name,detail,club_id").in("match_id", matchIds).order("minute", { ascending: false });
     const next = {};
-    for (const event of data || []) if (!next[event.match_id]) next[event.match_id] = event;
-    setLatestEvents(next);
+    for (const event of data || []) {
+      next[event.match_id] ||= [];
+      if (next[event.match_id].length < 3) next[event.match_id].push(event);
+    }
+    setEventsByMatch(next);
   }, []);
 
   const load = useCallback(async () => {
@@ -139,9 +148,9 @@ export default function LiveScoreRibbon({ config = {}, competitions = [], clubs 
     </div>
     {loading ? <div className="grid gap-3 p-3 sm:grid-cols-[minmax(260px,.9fr)_minmax(0,1.6fr)] sm:p-4"><div className="h-48 animate-pulse rounded-2xl bg-white/5" /><div className="h-48 animate-pulse rounded-2xl bg-white/5" /></div>
       : featured ? <div className="grid gap-3 p-3 sm:p-4 lg:grid-cols-[minmax(280px,.85fr)_minmax(0,1.65fr)]">
-        <FeaturedScore match={featured} clubs={clubs} competition={competitionMap[featured.competition_id]} latestEvent={latestEvents[featured.id]} />
+        <FeaturedScore match={featured} clubs={clubs} competition={competitionMap[featured.competition_id]} events={eventsByMatch[featured.id] || []} />
         {secondary.length ? <div ref={scroller} className="flex snap-x gap-3 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:grid sm:grid-cols-2 sm:overflow-visible">
-          {secondary.slice(0, 4).map((match) => <div key={match.id} className="snap-start"><CompactScore match={match} clubs={clubs} competition={competitionMap[match.competition_id]} latestEvent={latestEvents[match.id]} /></div>)}
+          {secondary.slice(0, 4).map((match) => <div key={match.id} className="snap-start"><CompactScore match={match} clubs={clubs} competition={competitionMap[match.competition_id]} latestEvent={eventsByMatch[match.id]?.[0]} /></div>)}
           {matches.length > displayedCount && <Link href="/direct" className="flex min-h-24 w-32 shrink-0 snap-start flex-col items-center justify-center rounded-2xl border border-dashed border-white/15 text-center text-xs font-bold text-white/65 hover:border-white/30 hover:text-white sm:w-auto"><b className="text-xl text-white">+{matches.length - displayedCount}</b>autres matchs</Link>}
         </div> : <div className="flex min-h-32 items-center justify-center text-sm text-white/45">Un seul match à suivre pour le moment.</div>}
       </div> : <div className="flex min-h-28 items-center justify-center gap-2 p-4 text-sm font-semibold text-white/60"><Radio size={16} />Aucun match programmé pour le moment.</div>}

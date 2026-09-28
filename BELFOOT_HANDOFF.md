@@ -1864,7 +1864,8 @@ tant que la migration n'est pas enregistrée.
 
 - L'accueil ne présente plus cinq grosses cartes identiques : le match de la Belgique est prioritaire
   dans une carte principale, les autres directs restent compacts et défilables sur mobile. Les équipes
-  sont affichées sur deux lignes afin de ne plus tronquer les noms autour du score.
+  sont affichées sur deux lignes afin de ne plus tronquer les noms autour du score. La carte principale
+  montre jusqu'à trois temps forts ; à défaut, elle affiche un état explicite plutôt qu'un grand vide.
 - `/direct` est limité à trois colonnes desktop, regroupe les matchs par compétition et met en évidence
   la Belgique. L'accueil et le Match Center lisent aussi le dernier `match_event` de chaque match et
   s'abonnent aux changements Realtime de `matches` **et** `match_events`.
