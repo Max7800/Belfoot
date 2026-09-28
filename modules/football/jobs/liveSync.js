@@ -18,15 +18,15 @@ export default {
     let remainingMatchBudget = Math.max(1, Math.min(Number(ctx.matchCap) || 3, 20));
     for (const competition of comps) {
       const season = await ensureSeason(db, competition.id, ctx.season || competition.ext?.season);
-      const { data: before, error: beforeError } = remainingMatchBudget > 0
-        ? await db.from("matches").select("id").eq("competition_id", competition.id).eq("season_id", season.id).eq("status", "live").limit(remainingMatchBudget)
-        : { data: [], error: null };
-      if (beforeError) throw beforeError;
       const scores = await syncCompetition(db, competition, { ...ctx, mode: "live" });
-      const events = before?.length
-        ? await syncEvents(db, competition, { ...ctx, matchCap: remainingMatchBudget, mode: "live", liveMatchIds: before.map((match) => match.id) })
+      const { data: currentLive, error: liveError } = remainingMatchBudget > 0
+        ? await db.from("matches").select("id").eq("competition_id", competition.id).eq("season_id", season.id).eq("status", "live").order("kickoff", { ascending: true }).limit(remainingMatchBudget)
+        : { data: [], error: null };
+      if (liveError) throw liveError;
+      const events = currentLive?.length
+        ? await syncEvents(db, competition, { ...ctx, matchCap: remainingMatchBudget, mode: "live", liveMatchIds: currentLive.map((match) => match.id) })
         : `${competition.name}: aucun événement live dans le plafond global`;
-      remainingMatchBudget -= before?.length || 0;
+      remainingMatchBudget -= currentLive?.length || 0;
       out.push(`${scores} · ${events}`);
     }
     return out.join(" | ");

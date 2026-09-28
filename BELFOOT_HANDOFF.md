@@ -1844,9 +1844,16 @@ tant que la migration n'est pas enregistrée.
   reste disponible dans son onglet dédié.
 - Prochaine validation conseillée pour la saison `2026-2027` : lancer uniquement `football.sync` avec un
   budget strict de 5 appels, contrôler matchs/sélections/groupes, puis tester manuellement `football.live-sync`
-  avec un `matchCap` de 3. Un second passage une à deux minutes plus tard permet de charger les événements
-  des matchs passés en direct lors du premier passage. Ne pas lancer encore `football.squads` sur les 54
-  sélections : charger d'abord la Belgique de façon ciblée, puis les compositions d'un match avec un cap réduit.
+  avec un `matchCap` de 3. Le tick met à jour les statuts avant de sélectionner les événements, donc un seul
+  passage suffit normalement. Ne pas lancer encore `football.squads` sur les 54 sélections : charger d'abord
+  la Belgique de façon ciblée, puis les compositions d'un match avec un cap réduit.
+- Correctif direct Nations League 2026-2027 : le mode live renseigne désormais aussi la compétition, les
+  équipes, l'horaire et le round lors de la création d'un match absent du calendrier. Avant ce correctif,
+  huit matchs du 28 septembre avaient été créés sans `competition_id` ni `kickoff` et restaient invisibles.
+  Une nouvelle exécution de `football.live-sync` après déploiement les répare par upsert, sans SQL. Le job
+  sélectionne ensuite les matchs live après la mise à jour et peut charger leurs événements dès le même tick.
+  Le préflight réserve volontairement `1 + matchCap` appels pour une compétition, puisque le nombre de matchs
+  réellement live n'est connu qu'après l'appel de journée.
 - Le portail `/competitions` mémorise son univers dans `?univers=national|international`. Un retour
   navigateur depuis la Champions League ou une compétition de sélections revient donc sur l'onglet
   International ; chaque fiche propose également un lien de retour explicite vers le bon univers.

@@ -121,9 +121,11 @@ export async function syncCompetition(db, competition, ctx = {}) {
     if (!fetchLive) return `${competition.name}: pas de live`;
     const live = await fetchLive.call(provider, competition, ctx);
     const map = await clubMap(db, competition.provider);
-    const n = await upsertExternal(db, "matches", competition.provider, resolveMatches(live, competition.id, season.id, map),
-      ["season_id", "home_score", "away_score", "status", "minute"]);   // n'écrase que le score en direct
-    return `${competition.name}: live ${n}`;
+    const resolved = resolveMatches(live, competition.id, season.id, map);
+    const n = await upsertExternal(db, "matches", competition.provider, resolved,
+      ["competition_id", "season_id", "home_club_id", "away_club_id", "home_score", "away_score", "status", "minute", "kickoff", "matchday", "round_raw", "phase", "round_number"]);
+    const liveCount = resolved.filter((match) => match.status === "live").length;
+    return `${competition.name}: ${n} match(s) du jour traité(s), ${liveCount} en direct`;
   }
 
   // ── Mode FULL : clubs (dérivés + enrichis) + tous les matchs + coverage ─────
