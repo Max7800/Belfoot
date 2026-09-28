@@ -1860,6 +1860,27 @@ tant que la migration n'est pas enregistrée.
 - Après déploiement, relancer une seule fois `football.sync` sur la Nations League 2024-2025 avec un
   budget strict de 5 pour récupérer les libellés officiels des groupes. Aucun SQL n'est nécessaire.
 
+### Chantier direct — présentation et automatisation bornée (28 septembre 2026, local non poussé)
+
+- L'accueil ne présente plus cinq grosses cartes identiques : le match de la Belgique est prioritaire
+  dans une carte principale, les autres directs restent compacts et défilables sur mobile. Les équipes
+  sont affichées sur deux lignes afin de ne plus tronquer les noms autour du score.
+- `/direct` est limité à trois colonnes desktop, regroupe les matchs par compétition et met en évidence
+  la Belgique. L'accueil et le Match Center lisent aussi le dernier `match_event` de chaque match et
+  s'abonnent aux changements Realtime de `matches` **et** `match_events`.
+- Le flux d'un tick reste : un appel fixtures/journée pour la compétition, upsert des scores/statuts,
+  relecture des matchs réellement live, puis un appel événements pour chacun dans le plafond global.
+  Les événements apparaissent donc au même cycle que le score, sans second lancement manuel.
+- Le nouveau endpoint protégé `GET /api/cron/live-window` prépare l'automatisation. Il regarde d'abord
+  les matchs `scheduled|live` déjà connus en base entre J-15 minutes et coup d'envoi +180 minutes
+  (valeurs administrables), limite le nombre de matchs simultanés et estime `compétitions + matchs`
+  avant de lancer `football.live-sync`. Hors fenêtre, il retourne immédiatement avec zéro appel API.
+  `?dryRun=1` expose le plan et son coût sans contacter le provider.
+- Le panneau admin « Stratégie du direct » affiche le coût estimé de la fenêtre courante, le plafond
+  par cycle et le plafond horaire. **Aucun cron Vercel n'est installé par ce commit** : l'endpoint est
+  prêt, mais son activation doit rester une décision explicite après un dernier contrôle en production.
+- Ce lot ne nécessite aucune migration SQL et ne modifie aucune donnée football.
+
 #### État à récupérer avant toute modification
 
 1. Faire `git status`, `git log -5 --oneline`, puis lire ce bloc et le dernier commit local. Ne pas

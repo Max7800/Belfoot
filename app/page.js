@@ -84,7 +84,7 @@ export default function Home() {
   useEffect(() => { (async () => {
     const [recentMatchResult, clubResult, competitionResult, seasonResult, playerResult, newsResult, votwResult, topicsResult] = await Promise.all([
       supabase.from("matches").select(PUBLIC_MATCH_FIELDS).order("kickoff", { ascending: false }).limit(250),
-      supabase.from("clubs").select("id,name,logo_url"),
+      supabase.from("clubs").select("id,name,logo_url,team_type,national_followed,national_category"),
       supabase.from("competitions").select("*"),
       supabase.from("seasons").select("*"),
       supabase.from("players").select(PUBLIC_PLAYER_FIELDS).eq("tracked", true).eq("active", true),
