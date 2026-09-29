@@ -2071,6 +2071,27 @@ tant que la migration n'est pas enregistrée.
   la compétition, la date et l'heure. Les notes suivent partout sur la fiche le code couleur demandé :
   vert à partir de 7,0, jaune de 6,0 à 6,9, rouge sous 6,0. Aucun SQL nécessaire.
 
+### 2026-09-29 — cohérence des effectifs et mercato saisonnier
+
+- L'onglet `Joueurs` d'une compétition ne se limite plus aux lignes statistiques avec apparition : il
+  charge les affectations actives de `player_team_seasons` pour la saison sélectionnée. La Pro League
+  affiche donc le même effectif saisonnier que la fiche club, y compris les joueurs à zéro minute.
+- Les drapeaux des nationalités utilisent désormais de petites images plutôt que les emoji système,
+  absents sur certaines versions de Windows. Plusieurs nationalités séparées par une virgule restent
+  affichées ensemble ; l'API-Football ne fournissant qu'une nationalité, la deuxième reste une donnée
+  éditoriale à saisir dans le champ admin protégé (ex. `Belgique, Maroc`).
+- Migration idempotente `football/0037_player_transfers` : table publique `player_transfers`, index par
+  saison/club, RLS lecture publique et écriture admin. Ne jamais modifier les migrations précédentes.
+- Nouveau pipeline indépendant `🔁 Mettre à jour le mercato` (`football.transfers`) : un appel par club,
+  lots reprenables de trois clubs, sans modifier les pipelines de mise en place déjà en cours. Il stocke
+  les mouvements de la saison, désactive l'affectation de départ non verrouillée, crée/réactive
+  l'affectation d'arrivée quand le club est connu et préserve tous les joueurs/transferts verrouillés.
+- La vue d'ensemble d'une compétition affiche les cinq mouvements les plus récents de la saison après
+  ce pipeline. L'administration expose aussi la table dans `Clubs & effectifs > Transferts`.
+- Ordre de déploiement : appliquer `0037_player_transfers.sql`, déployer le code, choisir la compétition
+  et la saison dans `Jobs et historique`, simuler puis lancer uniquement `Mettre à jour le mercato`.
+  Aucun appel API-Football n'a été effectué pendant le développement.
+
 ---
 
 ## SOCLE_CANDIDATES  (documenter seulement — NE PAS remonter au socle maintenant)

@@ -21,6 +21,7 @@ export const adminSections = [
     { key: "players", label: "Joueurs" },
     { key: "coaches", label: "Entraîneurs" },
     { key: "playerMemberships", label: "Affectations", secondary: true },
+    { key: "playerTransfers", label: "Transferts", secondary: true },
     { key: "playerCareerStats", label: "Carrières et statistiques", secondary: true },
   ] },
   { label: "Sélections belges", icon: "trophy", panels: [

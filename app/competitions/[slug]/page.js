@@ -23,6 +23,7 @@ import { isNationsLeagueCompetition, nationsLeagueGroups } from "@/lib/nationsLe
 import { PUBLIC_PLAYER_FIELDS, PUBLIC_PLAYER_STATS_FIELDS, loadClubsForMatches, loadMatchStatsForMatches, loadPlayersByIds, loadSeasonMatches } from "@/lib/publicFootballData";
 import { playerAge } from "@/lib/playerAge";
 import { preferAssignedPlayerStats } from "@/lib/playerStats";
+import { nationalityBadges } from "@/lib/nationalities";
 
 const POS = { Goalkeeper: 0, Defender: 1, Midfielder: 2, Attacker: 3 };
 const VARIANTS = {
@@ -74,7 +75,8 @@ export default function CompetitionPage() {
   const [seasons, setSeasons] = useState([]); const [seasonLabel, setSeasonLabel] = useState("");
   const [matches, setMatches] = useState([]);
   const [clubsMap, setClubsMap] = useState({});
-  const [players, setPlayers] = useState([]); const [playerStats, setPlayerStats] = useState([]);
+  const [players, setPlayers] = useState([]); const [playerStats, setPlayerStats] = useState([]); const [playerMemberships, setPlayerMemberships] = useState([]);
+  const [transfers, setTransfers] = useState([]);
   const [matchPlayerStats, setMatchPlayerStats] = useState([]);
   const [seasonLoading, setSeasonLoading] = useState(false); const [dataError, setDataError] = useState("");
   const [phase, setPhase] = useState(null); const [round, setRound] = useState("all");
@@ -119,7 +121,7 @@ export default function CompetitionPage() {
 
   const activeSeason = seasons.find((season) => season.label === seasonLabel) || null;
   useEffect(() => { if (!comp?.id || (seasons.length && !activeSeason)) return; let alive = true; (async () => {
-    setSeasonLoading(true); setDataError(""); setMatches([]); setClubsMap({}); setPlayers([]); setPlayerStats([]); setMatchPlayerStats([]); setPhase(null); setRound("all");
+    setSeasonLoading(true); setDataError(""); setMatches([]); setClubsMap({}); setPlayers([]); setPlayerStats([]); setPlayerMemberships([]); setTransfers([]); setMatchPlayerStats([]); setPhase(null); setRound("all");
     const seasonMatches = await loadSeasonMatches(supabase, comp.id, activeSeason?.id);
     const clubMap = await loadClubsForMatches(supabase, seasonMatches);
     let statsQuery = supabase.from("player_season_stats").select(PUBLIC_PLAYER_STATS_FIELDS).eq("competition_id", comp.id);
@@ -128,8 +130,21 @@ export default function CompetitionPage() {
     const statsResult = await statsQuery;
     if (statsResult.error) throw statsResult.error;
     const statsRows = preferAssignedPlayerStats(statsResult.data || []);
-    const playerIds = [...new Set(statsRows.map((row) => row.player_id).filter(Boolean))];
     const clubIds = Object.keys(clubMap);
+    let membershipRows = [];
+    if (activeYear && clubIds.length) {
+      const membershipResult = await supabase.from("player_team_seasons")
+        .select("player_id,club_id,position,shirt_number,squad_role,membership_type,is_primary,active,season_start_year")
+        .eq("season_start_year", Number(activeYear))
+        .eq("active", true)
+        .in("club_id", clubIds);
+      if (membershipResult.error) throw membershipResult.error;
+      membershipRows = membershipResult.data || [];
+    }
+    const playerIds = [...new Set([
+      ...statsRows.map((row) => row.player_id),
+      ...membershipRows.map((row) => row.player_id),
+    ].filter(Boolean))];
     let playerRows = playerIds.length ? await loadPlayersByIds(supabase, playerIds) : [];
     if (!playerRows.length && clubIds.length) {
       const fallback = await supabase.from("players").select(PUBLIC_PLAYER_FIELDS).in("club_id", clubIds).order("name");
@@ -137,8 +152,13 @@ export default function CompetitionPage() {
       playerRows = fallback.data || [];
     }
     const exactMatchStats = await loadMatchStatsForMatches(supabase, seasonMatches.map((match) => match.id));
+    const transferResult = activeYear
+      ? await supabase.from("player_transfers").select("id,player_id,player_name,from_club_id,to_club_id,from_club_name,to_club_name,transfer_date,transfer_type").eq("season_start_year", Number(activeYear)).order("transfer_date", { ascending: false }).limit(100)
+      : { data: [] };
+    const competitionClubIds = new Set(clubIds);
+    const transferRows = transferResult.error ? [] : (transferResult.data || []).filter((transfer) => competitionClubIds.has(transfer.from_club_id) || competitionClubIds.has(transfer.to_club_id)).slice(0, 5);
     if (!alive) return;
-    setMatches(seasonMatches); setClubsMap(clubMap); setPlayers(playerRows); setPlayerStats(statsRows); setMatchPlayerStats(exactMatchStats); setSeasonLoading(false);
+    setMatches(seasonMatches); setClubsMap(clubMap); setPlayers(playerRows); setPlayerStats(statsRows); setPlayerMemberships(membershipRows); setTransfers(transferRows); setMatchPlayerStats(exactMatchStats); setSeasonLoading(false);
   })().catch((loadError) => { if (alive) { setSeasonLoading(false); setDataError(loadError.message || String(loadError)); } }); return () => { alive = false; }; }, [comp?.id, activeSeason, seasons.length]);
 
   const pss = useMemo(() => {
@@ -169,6 +189,9 @@ export default function CompetitionPage() {
   const clubName = (id) => clubsMap[id]?.name || "—";
   const playerClubId = (player) => pss[player.id] ? (pss[player.id].club_id || null) : (player.club_id || null);
   const visiblePlayers = Object.keys(pss).length ? players.filter((player) => pss[player.id] && (Number(pss[player.id].appearances) || 0) > 0) : players;
+  const membershipByPlayer = useMemo(() => new Map(playerMemberships.map((row) => [row.player_id, row])), [playerMemberships]);
+  const rosterPlayers = playerMemberships.length ? players.filter((player) => membershipByPlayer.has(player.id)) : visiblePlayers;
+  const rosterClubId = (player) => membershipByPlayer.get(player.id)?.club_id || playerClubId(player);
   const withStats = visiblePlayers.map((p) => ({ p, st: pss[p.id] })).filter((x) => x.st);
   const topBy = (key) => withStats.filter((x) => x.st[key] != null).sort((a, b) => (b.st[key] || 0) - (a.st[key] || 0)).slice(0, 10);
   const maxApp = Math.max(0, ...withStats.map((x) => x.st.appearances || 0));
@@ -398,6 +421,17 @@ export default function CompetitionPage() {
             {!withStats.length && <p className="mt-2 rounded-xl border border-dashed border-line/15 bg-surface/30 px-3 py-2 text-xs text-muted">Les fonds personnalisés restent visibles. Les noms et chiffres apparaîtront après l’import des effectifs et des statistiques.</p>}
           </div>
 
+          {transfers.length > 0 && <div>
+            <div className="mb-2 flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-muted"><span className="h-3 w-1 rounded bg-accent" />Top 5 transferts · {seasonLabel}</div>
+            <div className="grid gap-2 lg:grid-cols-5">
+              {transfers.map((transfer) => <Link key={transfer.id} href={transfer.player_id ? `/players/${transfer.player_id}` : "#"} className="rounded-2xl border border-line/10 bg-gradient-to-b from-surface to-bg/40 p-3 transition hover:border-accent/40">
+                <div className="truncate text-sm font-black">{transfer.player_name}</div>
+                <div className="mt-2 flex items-center gap-1 text-[11px] text-muted"><span className="min-w-0 flex-1 truncate">{transfer.from_club_name || "Libre"}</span><span className="shrink-0 text-accent">→</span><span className="min-w-0 flex-1 truncate text-right text-content">{transfer.to_club_name || "Libre"}</span></div>
+                <div className="mt-2 flex items-center justify-between gap-2 border-t border-line/10 pt-2 text-[10px] text-muted"><span>{new Date(`${transfer.transfer_date}T12:00:00`).toLocaleDateString("fr-BE", { day: "numeric", month: "short" })}</span>{transfer.transfer_type && <span className="max-w-[60%] truncate rounded-full bg-white/[0.05] px-2 py-0.5">{transfer.transfer_type}</span>}</div>
+              </Link>)}
+            </div>
+          </div>}
+
           <div>
             <div className="mb-2 flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-muted"><span className="h-3 w-1 rounded bg-accent" />{L("comp.otherstats", "Autres statistiques")}</div>
             {phaseIsKnockout ? (
@@ -418,7 +452,7 @@ export default function CompetitionPage() {
           <div className="grid grid-cols-2 gap-2 border-t border-line/10 pt-4 text-center text-xs text-muted sm:grid-cols-4">
             <div><b className="block text-base text-content">{clubsList.length}</b>{isInternational ? "sélections" : L("nav.clubs", "clubs")}</div>
             <div><b className="block text-base text-content">{seasonMatches.length}</b>{L("nav.matchs", "matchs")}</div>
-            <div><b className="block text-base text-content">{visiblePlayers.length}</b>{L("nav.joueurs", "joueurs")}</div>
+            <div><b className="block text-base text-content">{rosterPlayers.length}</b>{L("nav.joueurs", "joueurs")}</div>
             <div><b className="block text-base text-content">{seasons.length}</b>saisons</div>
           </div>
         </div>
@@ -460,20 +494,20 @@ export default function CompetitionPage() {
         selClub === null ? (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             {[...clubsList].sort((a, b) => a.name.localeCompare(b.name)).map((c) => (
-              <button key={c.id} onClick={() => { setSelClub(c.id); setPosFilter("all"); }} className="rounded-2xl border border-line/10 bg-surface p-4 text-center transition hover:border-accent/40">{c.logo_url && <img src={c.logo_url} className="mx-auto h-14 w-14 object-contain" alt="" />}<div className="mt-2 font-bold">{c.name}</div><div className="text-xs text-muted">{visiblePlayers.filter((p) => playerClubId(p) === c.id).length} {L("nav.joueurs", "joueurs")}</div></button>
+              <button key={c.id} onClick={() => { setSelClub(c.id); setPosFilter("all"); }} className="rounded-2xl border border-line/10 bg-surface p-4 text-center transition hover:border-accent/40">{c.logo_url && <img src={c.logo_url} className="mx-auto h-14 w-14 object-contain" alt="" />}<div className="mt-2 font-bold">{c.name}</div><div className="text-xs text-muted">{rosterPlayers.filter((p) => rosterClubId(p) === c.id).length} {L("nav.joueurs", "joueurs")}</div></button>
             ))}
             {clubsList.length === 0 && <p className="text-muted">{L("empty.players", "Aucun joueur.")}</p>}
           </div>
         ) : (() => {
           const POS_LABEL = { all: L("pos.all", "Tous"), Goalkeeper: L("pos.gk", "Gardiens"), Defender: L("pos.def", "Défenseurs"), Midfielder: L("pos.mid", "Milieux"), Attacker: L("pos.fwd", "Attaquants") };
-          const roster = visiblePlayers.filter((p) => (selClub === "__none__" ? !playerClubId(p) : playerClubId(p) === selClub));
-          const shown = roster.filter((p) => posFilter === "all" || p.position === posFilter).sort((a, b) => (POS[a.position] ?? 9) - (POS[b.position] ?? 9) || (a.name || "").localeCompare(b.name || ""));
+          const roster = rosterPlayers.filter((p) => (selClub === "__none__" ? !rosterClubId(p) : rosterClubId(p) === selClub));
+          const shown = roster.filter((p) => posFilter === "all" || (membershipByPlayer.get(p.id)?.position || p.position) === posFilter).sort((a, b) => (POS[membershipByPlayer.get(a.id)?.position || a.position] ?? 9) - (POS[membershipByPlayer.get(b.id)?.position || b.position] ?? 9) || (a.name || "").localeCompare(b.name || ""));
           return (
             <div>
               <div className="mb-3 flex items-center gap-3"><button onClick={() => setSelClub(null)} className="text-sm text-muted hover:text-content">← {isInternational ? "Sélections" : L("nav.clubs", "Clubs")}</button><span className="flex items-center gap-2 font-bold">{clubsMap[selClub]?.logo_url && <img src={clubsMap[selClub].logo_url} className="h-6 w-6 object-contain" alt="" />}{clubName(selClub)}</span></div>
               <div className="mb-4 flex flex-wrap gap-1">{["all", "Goalkeeper", "Defender", "Midfielder", "Attacker"].map((pf) => <button key={pf} onClick={() => setPosFilter(pf)} className={`rounded-full border px-3 py-1 text-xs ${posFilter === pf ? "border-accent bg-accent/10 text-accent" : "border-line/20 text-muted"}`}>{POS_LABEL[pf]}</button>)}</div>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-                {shown.map((p) => { const age = playerAge(p); return <Link key={p.id} href={`/players/${p.id}`} className="rounded-2xl border border-line/10 bg-surface p-3 text-center transition hover:border-accent/40"><img src={p.photo_url || ""} className="mx-auto h-16 w-16 rounded-full object-cover" alt="" /><div className="mt-2 truncate text-sm font-bold">{p.name}</div><div className="text-xs text-muted">{[p.position, age ? `${age} ans` : null].filter(Boolean).join(" · ")}</div>{p.nationality && <div className="mt-1 text-[10px] uppercase tracking-wider text-muted/60">{p.nationality}</div>}</Link>; })}
+                {shown.map((p) => { const age = playerAge(p); const membership = membershipByPlayer.get(p.id); const nationalities = nationalityBadges(p.nationality); return <Link key={p.id} href={`/players/${p.id}`} className="rounded-2xl border border-line/10 bg-surface p-3 text-center transition hover:border-accent/40"><img src={p.photo_url || ""} className="mx-auto h-16 w-16 rounded-full object-cover" alt="" /><div className="mt-2 truncate text-sm font-bold">{p.name}</div><div className="text-xs text-muted">{[membership?.position || p.position, age ? `${age} ans` : null].filter(Boolean).join(" · ")}</div>{nationalities.length > 0 && <div className="mt-1 flex justify-center gap-1">{nationalities.map((nationality) => nationality.flagUrl ? <img key={`${nationality.code}-${nationality.label}`} src={nationality.flagUrl} title={nationality.label} alt={nationality.label} className="h-3 w-4 rounded-[2px] object-cover" /> : <span key={nationality.label} title={nationality.label}>🌍</span>)}</div>}</Link>; })}
                 {shown.length === 0 && <p className="text-muted">{L("empty.players", "Aucun joueur.")}</p>}
               </div>
             </div>

@@ -204,6 +204,21 @@ const provider = {
       ext: player,
     }));
   },
+  async fetchTeamTransfers(club, ctx = {}) {
+    const rows = await api(`/transfers?team=${club.external_id}`, ctx);
+    return rows.flatMap((row) => (row.transfers || []).map((transfer) => ({
+      player_external_id: String(row.player?.id || ""),
+      player_name: row.player?.name || "Joueur inconnu",
+      updated_at: row.update || null,
+      transfer_date: transfer.date || null,
+      transfer_type: transfer.type || null,
+      from_club_external_id: transfer.teams?.out?.id ? String(transfer.teams.out.id) : null,
+      from_club_name: transfer.teams?.out?.name || null,
+      to_club_external_id: transfer.teams?.in?.id ? String(transfer.teams.in.id) : null,
+      to_club_name: transfer.teams?.in?.name || null,
+      ext: transfer,
+    }))).filter((transfer) => transfer.player_external_id && transfer.transfer_date);
+  },
   // Club principal d'un international pour une saison. L'appel est séparé de
   // la synchronisation de sélection car il coûte une requête par joueur.
   async fetchPlayerClubSeason(player, ctx = {}) {

@@ -120,6 +120,20 @@ export const FOOTBALL_ENTITIES = {
       { key: "active", label: "Visible dans l'effectif de cette saison", type: "bool" },
     ],
   },
+  playerTransfers: {
+    table: "player_transfers", title: "Transferts joueurs", singular: "Transfert", orderBy: "transfer_date", orderAsc: false, hasSource: true, search: false, pageSize: 40,
+    fields: [
+      { key: "player_id", label: "Joueur Belfoot", type: "relation", table: "players", labelCol: "name" },
+      { key: "player_name", label: "Nom du joueur", type: "text" },
+      { key: "from_club_id", label: "Club de départ", type: "relation", table: "clubs", labelCol: "name" },
+      { key: "to_club_id", label: "Club d'arrivée", type: "relation", table: "clubs", labelCol: "name" },
+      { key: "from_club_name", label: "Départ provider", type: "text" },
+      { key: "to_club_name", label: "Arrivée provider", type: "text" },
+      { key: "transfer_date", label: "Date", type: "date" },
+      { key: "transfer_type", label: "Type / montant", type: "text" },
+      { key: "season_start_year", label: "Saison", type: "number" },
+    ],
+  },
   playerCareerStats: {
     table: "player_season_stats", title: "Statistiques de carrière", singular: "Ligne de statistiques", orderBy: "season", orderAsc: false, hasSource: true, pageSize: 40, scopeField: "player_id",
     fields: [
