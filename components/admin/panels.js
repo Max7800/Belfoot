@@ -183,6 +183,8 @@ export function JobsPanel() {
         setMsg(preflightText(preflight));
         if (!preflight.ok || !window.confirm(`${p.label}\n\n${preflightText(preflight)}\n\nLancer le pipeline ?`)) { setBusy(null); return; }
       } catch (e) { setMsg(`✗ Préflight impossible : ${e.message}`); setBusy(null); return; }
+    } else if (!window.confirm(`Reprendre « ${p.label} » ?\n\nLe pipeline garde son avancement. Le budget saisi (${requestLimit}) devient l'enveloppe encore disponible et n'efface pas les appels déjà consommés.`)) {
+      return;
     }
     setBusy(p.key); setMsg(`⏳ ${pipelineRunId ? "Reprise" : "Exécution"} de ${p.label}…`);
     try {
@@ -203,7 +205,7 @@ export function JobsPanel() {
       <input type="number" min="1" max="20" value={matchCap} onChange={(e) => setMatchCap(Math.max(1, Math.min(20, Number(e.target.value) || 1)))} className="w-16 rounded border border-line/10 bg-surface2 px-2 py-1 text-sm" />
       <label className="text-xs text-muted">Lot joueurs</label>
       <input type="number" min="1" max="25" value={batchSize} onChange={(e) => setBatchSize(Math.max(1, Math.min(25, Number(e.target.value) || 1)))} className="w-16 rounded border border-line/10 bg-surface2 px-2 py-1 text-sm" />
-      <label className="text-xs text-muted">Budget API</label>
+      <label className="text-xs text-muted">Budget API / reprise</label>
       <input type="number" min="1" max="100" value={requestLimit} onChange={(e) => setRequestLimit(Math.max(1, Math.min(100, Number(e.target.value) || 1)))} className="w-16 rounded border border-line/10 bg-surface2 px-2 py-1 text-sm" />
       {latestQuota != null && <span className="ml-auto rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-bold text-emerald-300" title="Quota restant lu lors de la dernière synchronisation">≈ {latestQuota} appels restants</span>}
     </div>
@@ -220,7 +222,7 @@ export function JobsPanel() {
         ))}
       </div>
       {pipelineRuns.filter((runItem) => ["error", "paused", "running"].includes(runItem.status)).map((runItem) => { const definition = jobPipelines().find((item) => item.key === runItem.pipeline_key); if (!definition) return null; const recentlyRunning = runItem.status === "running" && Date.now() - new Date(runItem.heartbeat_at || runItem.started_at).getTime() < 2 * 60 * 1000; return <div key={runItem.id} className="mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-amber-400/30 bg-amber-400/10 p-2 text-xs text-amber-200"><span className="flex-1">« {definition.label} » · étape {Math.min((runItem.next_step || 0) + 1, definition.jobs.length)}/{definition.jobs.length} · {runItem.request_count || 0}/{runItem.request_limit} appels{runItem.detail ? ` · ${runItem.detail}` : ""}</span><button disabled={!!busy || recentlyRunning} title={recentlyRunning ? "Exécution encore active ; reprise disponible après deux minutes sans battement." : "Reprendre à l’étape enregistrée"} onClick={() => runPipeline(definition, runItem.id)} className="rounded bg-amber-400/20 px-3 py-1 font-bold text-amber-200 disabled:opacity-50">{recentlyRunning ? "En cours" : "Reprendre"}</button></div>; })}
-      <p className="mt-2 text-[11px] leading-5 text-muted">Budget <b>global</b> (« Budget API » ci-dessus) partagé sur toute la séquence. L’étape suivante et la consommation sont enregistrées en base : une reprise reste disponible après rechargement ou interruption.</p>
+      <p className="mt-2 text-[11px] leading-5 text-muted">Pour un nouveau pipeline, le budget est partagé sur toute la séquence. Lors d'une reprise, la valeur saisie devient l'enveloppe <b>encore disponible</b> : les appels déjà consommés et l'avancement restent enregistrés.</p>
     </div>
 
     {Object.entries(JOB_GROUPS).sort((a, b) => a[1].order - b[1].order).map(([g, meta]) => {

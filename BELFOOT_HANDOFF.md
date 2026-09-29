@@ -1908,6 +1908,10 @@ tant que la migration n'est pas enregistrée.
 - Le préflight des étapes reprenables (`football.squads`, `football.coaches`) estime uniquement les
   clubs restant après le checkpoint. Sans cela, un pipeline partiellement consommé pouvait être bloqué
   parce que le coût complet de l'étape était comparé au budget restant.
+- Lors de la reprise d'un pipeline, le champ `Budget API / reprise` représente désormais l'enveloppe
+  encore autorisée. Le serveur conserve le compteur et les checkpoints, puis étend le plafond total au
+  minimum nécessaire pour rendre cette enveloppe disponible. Cela permet de finir un ancien pipeline
+  ayant consommé des appels avant l'arrivée des checkpoints, sans le recréer ni perdre son avancement.
 
 #### État à récupérer avant toute modification
 

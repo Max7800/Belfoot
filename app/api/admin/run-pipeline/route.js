@@ -49,10 +49,17 @@ export async function POST(request) {
         .sort((a, b) => new Date(b.started_at || 0) - new Date(a.started_at || 0))[0]?.quota_remaining;
       data.request_count = Math.max(Number(data.request_count) || 0, reconciledCount);
       if (latestQuota != null) data.quota_remaining = latestQuota;
+      // À la reprise, le budget saisi représente l'enveloppe que l'admin
+      // accepte encore de dépenser. On conserve le plafond existant s'il est
+      // déjà plus généreux, sinon on l'étend sans effacer la consommation.
+      data.request_limit = Math.max(
+        Number(data.request_limit) || 0,
+        data.request_count + budget,
+      );
       pipelineRun = data;
       pipeline = JOB_PIPELINES.find((item) => item.key === data.pipeline_key);
       if (!pipeline) throw new Error("Définition du pipeline introuvable");
-      const { error: resumeError } = await db.from("pipeline_runs").update({ status: "running", request_count: data.request_count, quota_remaining: data.quota_remaining, detail: "Reprise demandée depuis l’administration.", heartbeat_at: new Date().toISOString(), finished_at: null }).eq("id", data.id);
+      const { error: resumeError } = await db.from("pipeline_runs").update({ status: "running", request_count: data.request_count, request_limit: data.request_limit, quota_remaining: data.quota_remaining, detail: `Reprise demandée depuis l’administration avec ${budget} appel(s) encore autorisé(s).`, heartbeat_at: new Date().toISOString(), finished_at: null }).eq("id", data.id);
       if (resumeError) throw resumeError;
     } else {
       pipeline = JOB_PIPELINES.find((item) => item.key === input.pipelineKey);
