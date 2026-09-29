@@ -29,13 +29,15 @@ export async function syncLineups(db, competition, ctx = {}) {
     .select("id,external_id,competition_id,status,kickoff,home_club_id,away_club_id,lineups_synced_at,player_stats_synced_at,team_stats_synced_at")
     .eq("competition_id", competition.id)
     .eq("season_id", season.id)
-    .in("status", ["finished", "live"])
+    .in("status", ctx.drain ? ["finished"] : ["finished", "live"])
     .not("external_id", "is", null)
     .order("kickoff", { ascending: false })
-    .limit(300);
+    .limit(500);
   if (matchesError) throw matchesError;
 
-  if (!candidates?.length) return `${competition.name}: aucun match éligible`;
+  if (!candidates?.length) return ctx.drain
+    ? { detail: `${competition.name}: aucun match éligible`, complete: true, progress: { current: 0, total: 0, unit: "matchs détaillés" } }
+    : `${competition.name}: aucun match éligible`;
   const [clubRows, playerRows, unresolvedRows] = await Promise.all([
     db.from("clubs").select("id,external_id,team_type").eq("source", competition.provider),
     db.from("players").select("id,external_id").eq("source", competition.provider),
@@ -55,11 +57,15 @@ export async function syncLineups(db, competition, ctx = {}) {
     if (error) throw error;
     relinked++;
   }
-  const todo = (candidates || []).filter((match) => match.status === "live"
+  const eligible = (candidates || []).filter((match) => match.status === "live"
     || (canLineups && !match.lineups_synced_at)
     || (canStats && !match.player_stats_synced_at)
-    || (canTeamStats && !match.team_stats_synced_at)).slice(0, cap);
-  if (!todo.length) return `${competition.name}: compositions déjà à jour${relinked ? `, ${relinked} joueurs reliés` : ""}`;
+    || (canTeamStats && !match.team_stats_synced_at));
+  const todo = eligible.slice(0, cap);
+  if (!todo.length) {
+    const detail = `${competition.name}: compositions déjà à jour${relinked ? `, ${relinked} joueurs reliés` : ""}`;
+    return ctx.drain ? { detail, complete: true, progress: { current: 0, total: 0, unit: "matchs détaillés" } } : detail;
+  }
 
   let teams = 0;
   let players = 0;
@@ -183,5 +189,14 @@ export async function syncLineups(db, competition, ctx = {}) {
     const failed = results.find((result) => result.status === "rejected");
     if (failed) throw failed.reason;
   }
-  return `${competition.name}: ${todo.length} matchs, ${teams} formations, ${players} joueurs, ${collectiveStats} lignes collectives${relinked ? `, ${relinked} reliés` : ""}`;
+  const detail = `${competition.name}: ${todo.length} matchs, ${teams} formations, ${players} joueurs, ${collectiveStats} lignes collectives${relinked ? `, ${relinked} reliés` : ""}`;
+  if (!ctx.drain) return detail;
+  const total = Number(ctx.resumeState?.total) || eligible.length;
+  const remaining = Math.max(0, eligible.length - todo.length);
+  await ctx.saveCheckpoint?.({ total });
+  return {
+    detail: `${detail} · ${remaining} match(s) restant(s)`,
+    complete: remaining === 0,
+    progress: { current: Math.max(0, total - remaining), total, unit: "matchs détaillés" },
+  };
 }

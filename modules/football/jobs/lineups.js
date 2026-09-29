@@ -11,7 +11,12 @@ export default {
     if (error) throw error;
     if (!competitions?.length) return "aucune compétition avec provider";
     const output = [];
-    for (const competition of competitions) output.push(await syncLineups(db, competition, ctx));
-    return output.join(" | ");
+    for (const competition of competitions) {
+      const outcome = await syncLineups(db, competition, ctx);
+      const result = typeof outcome === "string" ? { detail: outcome, complete: true } : outcome;
+      output.push(result.detail);
+      if (!result.complete) return { ...result, detail: output.join(" | ") };
+    }
+    return { detail: output.join(" | "), complete: true };
   },
 };

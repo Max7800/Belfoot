@@ -1947,6 +1947,13 @@ tant que la migration n'est pas enregistrée.
 - Le contrôle de préparation compte les affectations via `season_start_year` : les effectifs enregistrés
   sous la valeur technique `2026` sont correctement rattachés au libellé public `2026-2027`, sans nouvel
   import.
+- Le pipeline admin `✅ Compléter la saison` draine uniquement les matchs terminés dont un marqueur manque :
+  événements par lots de 15, puis compositions, statistiques joueurs et statistiques collectives par lots
+  de 3. L'admin enchaîne les lots automatiquement ; progression, coût et étape survivent à un rechargement.
+  Un timeout laisse les marqueurs déjà écrits intacts, et une reprise repart des seuls endpoints manquants.
+  Si l'enveloppe explicite (maximum 500 appels par lancement/reprise) est atteinte, le pipeline se met en
+  pause sans erreur et demande une nouvelle enveloppe. Les pipelines hebdomadaires restent plafonnés et ne
+  drainent pas accidentellement tout l'historique. Aucun SQL supplémentaire n'est nécessaire.
 
 #### État à récupérer avant toute modification
 

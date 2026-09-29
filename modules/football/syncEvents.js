@@ -12,6 +12,7 @@ export async function syncEvents(db, competition, ctx = {}) {
 
   const cap = Math.max(1, Math.min(Number(ctx.eventsCap || ctx.matchCap) || 3, 40));
   let todo = [];
+  let pendingBefore = 0;
   if (ctx.mode === "live") {
     const { data: live, error: liveError } = await db.from("matches").select("id,external_id,status").eq("competition_id", competition.id).eq("season_id", season.id).eq("status", "live").not("external_id", "is", null).limit(cap);
     if (liveError) throw liveError;
@@ -27,10 +28,14 @@ export async function syncEvents(db, competition, ctx = {}) {
   } else {
     // Le marqueur couvre aussi une réponse provider vide : elle ne sera pas
     // refacturée au prochain passage.
-    const { data: finished, error: finishedError } = await db.from("matches").select("id,external_id,status,events_synced_at").eq("competition_id", competition.id).eq("season_id", season.id).eq("status", "finished").not("external_id", "is", null).order("kickoff", { ascending: false }).limit(300);
+    const { data: finished, error: finishedError } = await db.from("matches").select("id,external_id,status,events_synced_at").eq("competition_id", competition.id).eq("season_id", season.id).eq("status", "finished").not("external_id", "is", null).order("kickoff", { ascending: false }).limit(500);
     if (finishedError) throw finishedError;
-    todo = (finished || []).filter((match) => !match.events_synced_at).slice(0, cap);
-    if (!todo.length) return `${competition.name}: events déjà à jour`;
+    const eligible = (finished || []).filter((match) => !match.events_synced_at);
+    pendingBefore = eligible.length;
+    todo = eligible.slice(0, cap);
+    if (!todo.length) return ctx.drain
+      ? { detail: `${competition.name}: événements déjà à jour`, complete: true, progress: { current: 0, total: 0, unit: "matchs événements" } }
+      : `${competition.name}: événements déjà à jour`;
   }
 
   const clubMap = Object.fromEntries((await db.from("clubs").select("id,external_id").eq("source", competition.provider)).data?.map((c) => [c.external_id, c.id]) || []);
@@ -54,5 +59,14 @@ export async function syncEvents(db, competition, ctx = {}) {
     if (replaceError) throw replaceError;
     n += evs.length;
   }
-  return `${competition.name}: ${todo.length} match${todo.length > 1 ? "s" : ""}, ${n} événements${ctx.mode === "live" ? " live" : ""}`;
+  const detail = `${competition.name}: ${todo.length} match${todo.length > 1 ? "s" : ""}, ${n} événements${ctx.mode === "live" ? " live" : ""}`;
+  if (!ctx.drain || ctx.mode === "live") return detail;
+  const total = Number(ctx.resumeState?.total) || pendingBefore;
+  const remaining = Math.max(0, pendingBefore - todo.length);
+  await ctx.saveCheckpoint?.({ total });
+  return {
+    detail: `${detail} · ${remaining} match(s) restant(s)`,
+    complete: remaining === 0,
+    progress: { current: Math.max(0, total - remaining), total, unit: "matchs événements" },
+  };
 }

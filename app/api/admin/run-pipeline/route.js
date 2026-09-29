@@ -25,7 +25,7 @@ export async function POST(request) {
   const input = await request.json().catch(() => ({}));
   try {
     const { db, user } = auth;
-    const budget = Math.max(1, Math.min(Number(input.requestLimit) || 10, 100));
+    const budget = Math.max(1, Math.min(Number(input.requestLimit) || 10, 500));
     let pipelineRun;
     let pipeline;
     if (input.pipelineRunId) {
@@ -90,13 +90,47 @@ export async function POST(request) {
     let quotaRemaining = pipelineRun.quota_remaining ?? null;
     for (let index = Number(pipelineRun.next_step) || 0; index < pipeline.jobs.length; index++) {
       const remaining = Number(pipelineRun.request_limit) - used;
+      if (remaining <= 0 && pipeline.allowPartialBudget) {
+        const { data: paused, error: pauseError } = await db.from("pipeline_runs").update({
+          status: "paused",
+          next_step: index,
+          request_count: used,
+          quota_remaining: quotaRemaining,
+          detail: `Budget global atteint avant l’étape ${index + 1}. Reprends avec une nouvelle enveloppe pour continuer sans doublon.`,
+          heartbeat_at: new Date().toISOString(),
+          finished_at: null,
+        }).eq("id", pipelineRun.id).select().single();
+        if (pauseError) throw pauseError;
+        return Response.json({ ...paused, continuationRequired: false, budgetExhausted: true });
+      }
       if (remaining <= 0) throw new Error(`Budget global épuisé avant l’étape ${index + 1}.`);
       await db.from("pipeline_runs").update({ status: "running", next_step: index, detail: `Étape ${index + 1}/${pipeline.jobs.length} en cours : ${pipeline.jobs[index]}`, heartbeat_at: new Date().toISOString() }).eq("id", pipelineRun.id);
       try {
         const jobKey = pipeline.jobs[index];
+        const configuredCap = Number(pipeline.batchCaps?.[jobKey]) || Number(params.matchCap) || 3;
+        let stepMatchCap = Math.max(1, Math.min(Number(params.matchCap) || configuredCap, configuredCap));
+        if (pipeline.allowPartialBudget) {
+          if (jobKey === "football.events") stepMatchCap = Math.min(stepMatchCap, remaining);
+          if (jobKey === "football.lineups") stepMatchCap = Math.min(stepMatchCap, Math.floor(remaining / 3));
+          if (stepMatchCap < 1) {
+            const { data: paused, error: pauseError } = await db.from("pipeline_runs").update({
+              status: "paused",
+              next_step: index,
+              request_count: used,
+              quota_remaining: quotaRemaining,
+              detail: `Budget restant insuffisant pour le prochain lot de l’étape ${index + 1}. Reprends avec une nouvelle enveloppe.`,
+              heartbeat_at: new Date().toISOString(),
+              finished_at: null,
+            }).eq("id", pipelineRun.id).select().single();
+            if (pauseError) throw pauseError;
+            return Response.json({ ...paused, continuationRequired: false, budgetExhausted: true });
+          }
+        }
         const result = await runJob(jobKey, {
           db,
           ...params,
+          matchCap: stepMatchCap,
+          drain: pipeline.drainJobs?.includes(jobKey) || false,
           requestLimit: remaining,
           pipelineRunId: pipelineRun.id,
           pipelineStep: index,
@@ -134,6 +168,19 @@ export async function POST(request) {
           params = { ...params, _resume: nextResume };
         }
         await db.from("pipeline_runs").update({ params, next_step: index + 1, request_count: used, quota_remaining: quotaRemaining, detail: `Étape ${index + 1}/${pipeline.jobs.length} terminée.`, heartbeat_at: new Date().toISOString() }).eq("id", pipelineRun.id);
+        if (pipeline.drainJobs?.length && index + 1 < pipeline.jobs.length) {
+          const { data: paused, error: pauseError } = await db.from("pipeline_runs").update({
+            status: "paused",
+            next_step: index + 1,
+            request_count: used,
+            quota_remaining: quotaRemaining,
+            detail: `Étape ${index + 1}/${pipeline.jobs.length} terminée. L'étape suivante va démarrer dans un nouveau lot.`,
+            heartbeat_at: new Date().toISOString(),
+            finished_at: null,
+          }).eq("id", pipelineRun.id).select().single();
+          if (pauseError) throw pauseError;
+          return Response.json({ ...paused, continuationRequired: true });
+        }
       } catch (stepError) {
         await db.from("pipeline_runs").update({ status: "error", next_step: index, request_count: used, quota_remaining: quotaRemaining, detail: stepError.message || String(stepError), heartbeat_at: new Date().toISOString(), finished_at: new Date().toISOString() }).eq("id", pipelineRun.id);
         throw stepError;
