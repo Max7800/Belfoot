@@ -63,6 +63,14 @@ function statsByPlayer(rows) {
   }));
 }
 
+function matchStatsByPlayer(rows) {
+  return statsByPlayer(rows.filter((row) => row.player_id).map((row) => ({
+    ...row,
+    appearances: Number(row.minutes) > 0 || row.starter ? 1 : 0,
+    lineups: row.starter ? 1 : 0,
+  })));
+}
+
 export default function CompetitionPage() {
   const { slug } = useParams();
   const searchParams = useSearchParams();
@@ -164,8 +172,13 @@ export default function CompetitionPage() {
   const pss = useMemo(() => {
     const activeSeason = seasonKey(seasonLabel);
     const rows = activeSeason ? playerStats.filter((stat) => seasonKey(stat.season) === activeSeason) : playerStats;
-    return statsByPlayer(rows);
-  }, [playerStats, seasonLabel]);
+    const seasonTotals = statsByPlayer(rows);
+    const matchTotals = matchStatsByPlayer(matchPlayerStats);
+    // Les statistiques agrégées de l'endpoint joueurs restent prioritaires.
+    // En coupes européennes, le détail des matchs déjà complétés alimente
+    // néanmoins les leaders si l'agrégat d'un joueur manque encore.
+    return { ...matchTotals, ...seasonTotals };
+  }, [playerStats, matchPlayerStats, seasonLabel]);
   const seasonMatches = matches;
   const phases = useMemo(() => competitionPhases(seasonMatches, competitionType), [seasonMatches, competitionType]);
   const primaryPhase = (isCup ? phases[phases.length - 1] : phases[0]) || null;
@@ -338,7 +351,7 @@ export default function CompetitionPage() {
         <div className="absolute inset-0" style={{ background: "radial-gradient(1100px 520px at 50% -120px, rgba(36,92,180,0.16), transparent 70%)" }} />
         <div className="absolute inset-0" style={{ background: "radial-gradient(760px 420px at 100% 110%, rgba(18,48,110,0.14), transparent 70%)" }} />
       </div>
-      <Link href={`/competitions?univers=${tileScope === "national" ? "national" : "international"}`} className="mb-3 inline-flex items-center gap-1 text-xs font-bold text-muted transition hover:text-content">← {tileScope === "national" ? "Compétitions belges" : "Compétitions internationales"}</Link>
+      <Link href={`/competitions?univers=${tileScope}`} className="mb-3 inline-flex items-center gap-1 text-xs font-bold text-muted transition hover:text-content">← {tileScope === "national" ? "Compétitions belges" : tileScope === "europe" ? "Coupes d’Europe" : "Compétitions internationales"}</Link>
       <CompetitionHeader comp={comp} seasonLabel={seasonLabel} kicker={L("comp.kicker", "Compétitions")} />
       {competitions.length > 1 && (
         <div className="-mt-2 mb-5 flex justify-center">
@@ -385,10 +398,10 @@ export default function CompetitionPage() {
                 </div>
               </Card>
             ) : (
-              <Card title={L("comp.top5", "Classement — Top 5")} onSee={() => setTab("classement")}>
+              <Card title={europeanClubCompetition ? L("nav.classement", "Classement") : L("comp.top5", "Classement — Top 5")} onSee={() => setTab("classement")}>
                 <div className="flex h-full flex-col">
-                  <div className="flex flex-1 flex-col justify-between gap-1">
-                  {standings.slice(0, 5).map((r, i) => { const z = zoneFor(i + 1); return (
+                  <div className={`flex flex-1 flex-col gap-1 ${europeanClubCompetition ? "max-h-[32rem] overflow-y-auto pr-1" : "justify-between"}`}>
+                  {standings.slice(0, europeanClubCompetition ? standings.length : 5).map((r, i) => { const z = zoneFor(i + 1); return (
                     <div key={r.club} className="group flex items-center gap-2 rounded-xl border border-white/[0.035] bg-gradient-to-r from-white/[0.045] to-transparent px-2 py-1.5 transition hover:border-accent/20 hover:bg-white/[0.06]">
                       <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border text-xs font-black" style={z ? { borderColor: `${z.color}80`, background: `${z.color}22`, color: z.color } : { borderColor: "rgba(148,163,184,0.5)", background: "rgba(148,163,184,0.2)", color: "rgb(226,232,240)" }}>{i + 1}</span>
                       {clubsMap[r.club]?.logo_url && <img src={clubsMap[r.club].logo_url} className="h-6 w-6 shrink-0 object-contain" alt="" />}

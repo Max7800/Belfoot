@@ -232,12 +232,12 @@ export function JobsPanel() {
       <input
         type="number"
         min="1"
-        max="500"
+        max="5000"
         value={requestLimit}
         onFocus={(e) => e.target.select()}
-        onChange={(e) => setRequestLimit(e.target.value === "" ? "" : Math.max(1, Math.min(500, Number(e.target.value) || 1)))}
-        onBlur={() => setRequestLimit((value) => Math.max(1, Math.min(500, Number(value) || 1)))}
-        className="w-16 rounded border border-line/10 bg-surface2 px-2 py-1 text-sm"
+        onChange={(e) => setRequestLimit(e.target.value === "" ? "" : Math.max(1, Math.min(5000, Number(e.target.value) || 1)))}
+        onBlur={() => setRequestLimit((value) => Math.max(1, Math.min(5000, Number(value) || 1)))}
+        className="w-20 rounded border border-line/10 bg-surface2 px-2 py-1 text-sm"
       />
       {latestQuota != null && <span className="ml-auto rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-bold text-emerald-300" title="Quota restant lu lors de la dernière synchronisation">≈ {latestQuota} appels restants</span>}
     </div>
@@ -261,7 +261,7 @@ export function JobsPanel() {
         const available = Math.max(0, (Number(runItem.request_limit) || 0) - used);
         return <div key={runItem.id} className="mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-amber-400/30 bg-amber-400/10 p-2 text-xs text-amber-200"><span className="flex-1">« {definition.label} » · étape {Math.min((runItem.next_step || 0) + 1, definition.jobs.length)}/{definition.jobs.length} · {used} consommés · {available} disponibles{runItem.detail ? ` · ${runItem.detail}` : ""}</span><button disabled={!!busy || recentlyRunning} title={recentlyRunning ? "Exécution encore active ; reprise disponible après deux minutes sans battement." : "Reprendre à l’étape enregistrée"} onClick={() => runPipeline(definition, runItem.id)} className="rounded bg-amber-400/20 px-3 py-1 font-bold text-amber-200 disabled:opacity-50">{recentlyRunning ? "En cours" : "Reprendre"}</button></div>;
       })}
-      <p className="mt-2 text-[11px] leading-5 text-muted">Pour un nouveau pipeline, le budget est partagé sur toute la séquence. « Compléter la saison » enchaîne automatiquement les lots et ignore les matchs déjà traités. Lors d'une reprise, la valeur saisie devient l'enveloppe <b>encore disponible</b> : les appels déjà consommés et l'avancement restent enregistrés.</p>
+      <p className="mt-2 text-[11px] leading-5 text-muted">Pour un nouveau pipeline, le budget est partagé sur toute la séquence. Il n'existe plus de plafond caché à 100 appels : l'enveloppe saisie (jusqu'à 5 000) reste toutefois contrôlée par le préflight, le quota connu et la confirmation administrateur. « Compléter la saison » enchaîne automatiquement les lots et ignore les matchs déjà traités. Lors d'une reprise, la valeur saisie devient l'enveloppe <b>encore disponible</b> : les appels déjà consommés et l'avancement restent enregistrés.</p>
     </div>
 
     {Object.entries(JOB_GROUPS).sort((a, b) => a[1].order - b[1].order).map(([g, meta]) => {

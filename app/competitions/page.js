@@ -68,7 +68,7 @@ function CompetitionsContent() {
   const [comps, setComps] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const requestedPortal = searchParams.get("univers") === "international" ? "international" : "national";
+  const requestedPortal = ["national", "europe", "international"].includes(searchParams.get("univers")) ? searchParams.get("univers") : "national";
   const [portal, setPortal] = useState(requestedPortal);
   const rankings = useRankings();
 
@@ -93,12 +93,12 @@ function CompetitionsContent() {
     setComps(rows); setLoading(false);
   })().catch((e) => { setError(e.message || String(e)); setLoading(false); }); }, []);
 
-  const sections = portal === "national"
-    ? [{ key: "national", title: "Compétitions belges", subtitle: "Championnats et coupe nationale.", rows: comps.filter((competition) => competitionScope(competition) === "national") }]
-    : [
-        { key: "europe", title: "Coupes d’Europe", subtitle: "Toutes les équipes engagées, avec les clubs belges mis en évidence.", rows: comps.filter((competition) => competitionScope(competition) === "europe") },
-        { key: "international", title: "Compétitions de sélections", subtitle: "Qualifications, Nations League, Euro, Coupe du monde et amicaux.", rows: comps.filter((competition) => competitionScope(competition) === "international") },
-      ];
+  const sections = [{
+    key: portal,
+    title: portal === "national" ? "Compétitions belges" : portal === "europe" ? "Coupes d’Europe" : "Compétitions de sélections",
+    subtitle: portal === "national" ? "Championnats et coupe nationale." : portal === "europe" ? "Toutes les équipes engagées, avec les clubs belges mis en évidence." : "Qualifications, Nations League, Euro, Coupe du monde et amicaux.",
+    rows: comps.filter((competition) => competitionScope(competition) === portal),
+  }];
 
   return (
     <div className="relative">
@@ -115,9 +115,10 @@ function CompetitionsContent() {
         </div>
       </header>
 
-      <div className="mb-6 grid grid-cols-2 gap-2 rounded-2xl border border-line/10 bg-surface/60 p-1.5">
-        <button type="button" onClick={() => choosePortal("national")} className={`flex items-center justify-center gap-2 rounded-xl px-3 py-3 text-sm font-black transition ${portal === "national" ? "bg-white text-slate-950 shadow-lg" : "text-muted hover:bg-white/[0.04] hover:text-white"}`}><Flag className="h-4 w-4" />Belgique</button>
-        <button type="button" onClick={() => choosePortal("international")} className={`flex items-center justify-center gap-2 rounded-xl px-3 py-3 text-sm font-black transition ${portal === "international" ? "bg-white text-slate-950 shadow-lg" : "text-muted hover:bg-white/[0.04] hover:text-white"}`}><Globe2 className="h-4 w-4" />International</button>
+      <div className="mb-6 grid grid-cols-3 gap-2 rounded-2xl border border-line/10 bg-surface/60 p-1.5">
+        <button type="button" onClick={() => choosePortal("national")} className={`flex items-center justify-center gap-1 rounded-xl px-1 py-3 text-xs font-black transition sm:gap-2 sm:px-3 sm:text-sm ${portal === "national" ? "bg-white text-slate-950 shadow-lg" : "text-muted hover:bg-white/[0.04] hover:text-white"}`}><Flag className="h-4 w-4" />Belgique</button>
+        <button type="button" onClick={() => choosePortal("europe")} className={`flex items-center justify-center gap-1 rounded-xl px-1 py-3 text-xs font-black transition sm:gap-2 sm:px-3 sm:text-sm ${portal === "europe" ? "bg-white text-slate-950 shadow-lg" : "text-muted hover:bg-white/[0.04] hover:text-white"}`}><Trophy className="h-4 w-4" />Europe</button>
+        <button type="button" onClick={() => choosePortal("international")} className={`flex items-center justify-center gap-1 rounded-xl px-1 py-3 text-xs font-black transition sm:gap-2 sm:px-3 sm:text-sm ${portal === "international" ? "bg-white text-slate-950 shadow-lg" : "text-muted hover:bg-white/[0.04] hover:text-white"}`}><Globe2 className="h-4 w-4" />International</button>
       </div>
 
       {portal === "national" && (rankings.uefa.rank !== "" || rankings.uefa.points !== "") && (
@@ -140,7 +141,7 @@ function CompetitionsContent() {
 
       <div className="space-y-8">
         {sections.map((section) => section.rows.length > 0 && <section key={section.key}>
-          {portal === "international" && <div className="mb-3"><h2 className="text-lg font-black">{section.title}</h2><p className="mt-1 text-xs text-muted">{section.subtitle}</p></div>}
+          {portal !== "national" && <div className="mb-3"><h2 className="text-lg font-black">{section.title}</h2><p className="mt-1 text-xs text-muted">{section.subtitle}</p></div>}
           <div className="grid gap-4 lg:grid-cols-2">{section.rows.map((competition, index) => <CompetitionCard key={competition.id} competition={competition} index={index} L={L} />)}</div>
         </section>)}
         {!loading && !error && sections.every((section) => section.rows.length === 0) && <div className="rounded-3xl border border-dashed border-line/20 bg-surface/50 p-10 text-center"><Globe2 className="mx-auto h-8 w-8 text-muted" /><h2 className="mt-3 text-lg font-black">Aucune compétition dans cette catégorie</h2><p className="mt-1 text-sm text-muted">Crée-la dans l’administration puis choisis sa portée dans le champ « Portail ».</p></div>}

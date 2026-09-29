@@ -25,7 +25,7 @@ export async function POST(request) {
   const input = await request.json().catch(() => ({}));
   try {
     const { db, user } = auth;
-    const budget = Math.max(1, Math.min(Number(input.requestLimit) || 10, 500));
+    const budget = Math.max(1, Math.min(Number(input.requestLimit) || 10, 5000));
     let pipelineRun;
     let pipeline;
     if (input.pipelineRunId) {

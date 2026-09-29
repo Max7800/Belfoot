@@ -2173,3 +2173,20 @@ Fonctionnalités Belfoot qui seraient de bons candidats à généraliser dans le
 
 > Rappel : ne pas modifier le socle pour l'instant. Ceci est une **liste de candidats** à valider
 > une fois éprouvés par l'usage sur Belfoot.
+### 2026-09-29 — ChatGPT — compétitions européennes et enveloppes Pro
+
+- Le portail `/competitions` propose désormais trois entrées distinctes : `Belgique`, `Europe` et
+  `International`. Les retours depuis une compétition européenne conservent l'univers `europe` au
+  lieu de renvoyer vers le mélange Europe/sélections.
+- Sur la vue d'ensemble des compétitions européennes de clubs, la tuile de classement n'est plus
+  limitée à un Top 5. Elle affiche le classement complet dans une zone compacte défilable, sans les
+  grands espaces artificiels observés avec cinq lignes étirées.
+- Le plafond serveur historique de 100 appels pour un job isolé a été supprimé. Jobs et pipelines
+  acceptent maintenant une enveloppe explicite jusqu'à 5 000 appels. Les protections restent en
+  place : cible obligatoire, whitelist du plan d'import, estimation préalable, comparaison au quota
+  connu et confirmation administrateur. Aucun appel API-Football n'a été exécuté pendant ce travail.
+- Les leaders d'une compétition utilisent toujours en priorité `player_season_stats`. Si certains
+  agrégats ne sont pas encore disponibles, les statistiques par match déjà importées servent
+  maintenant de repli pour les buts, passes, minutes et notes. La mise en place de saison alimente
+  les effectifs et agrégats ; `Compléter la saison` enrichit progressivement le repli match par match.
+- Aucun SQL ni nouvelle migration n'est nécessaire pour ce lot.
