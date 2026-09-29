@@ -30,25 +30,55 @@ export async function POST(request) {
   const auth = await adminContext(request);
   if (auth.response) return auth.response;
   const input = await request.json().catch(() => ({}));
-  if (input.action !== "analyze") return Response.json({ error: "Seule l’analyse en lecture seule est disponible." }, { status: 400 });
   if (!input.seasonId) return Response.json({ error: "Choisis une saison à analyser." }, { status: 400 });
 
   try {
     const { db } = auth;
     const { data: season, error: seasonError } = await db.from("seasons")
-      .select("id,label,competition_id,import_status,public_active,competitions(id,name,competition_scope)")
+      .select("id,label,competition_id,import_status,public_active,competitions(id,name,competition_scope,competition_type)")
       .eq("id", input.seasonId)
       .maybeSingle();
     if (seasonError) throw seasonError;
     if (!season) return Response.json({ error: "Saison introuvable." }, { status: 404 });
 
+    if (["preview", "archive"].includes(input.action)) {
+      if (input.action === "archive" && input.confirmation !== season.competitions?.name) {
+        return Response.json({ error: `Recopie exactement « ${season.competitions?.name} » pour confirmer.` }, { status: 400 });
+      }
+      const { data, error } = await db.rpc("archive_secondary_club_data", { target_season: season.id, apply_changes: input.action === "archive" });
+      if (error) throw error;
+      return Response.json({ action: input.action, result: data });
+    }
+
+    if (input.action === "save-coverage") {
+      const allowed = new Set(["results", "match", "full"]);
+      const rows = Array.isArray(input.coverage) ? input.coverage.filter((row) => row.clubId && allowed.has(row.level)) : [];
+      if (!rows.length) return Response.json({ error: "Aucun niveau de couverture valide." }, { status: 400 });
+      const { error } = await db.from("club_season_coverage").upsert(rows.map((row) => ({
+        competition_id: season.competition_id,
+        season_id: season.id,
+        club_id: row.clubId,
+        coverage_level: row.level,
+        reason: row.reason || "Choix administrateur",
+        source: "manual",
+        locked: true,
+        updated_at: new Date().toISOString(),
+      })), { onConflict: "competition_id,season_id,club_id" });
+      if (error) throw error;
+    } else if (input.action !== "analyze") {
+      return Response.json({ error: "Action d’entretien inconnue." }, { status: 400 });
+    }
+
     const { data: matches, error: matchesError } = await db.from("matches")
-      .select("id,home_club_id,away_club_id")
+      .select("id,home_club_id,away_club_id,phase")
       .eq("season_id", season.id)
       .limit(1000);
     if (matchesError) throw matchesError;
     const matchIds = (matches || []).map((match) => match.id);
     const clubIds = [...new Set((matches || []).flatMap((match) => [match.home_club_id, match.away_club_id]).filter(Boolean))];
+    const mainStageClubIds = new Set((matches || [])
+      .filter((match) => /league|group|round of|knockout|quarter|semi|final/i.test(String(match.phase || "")) && !/qualif|prelim/i.test(String(match.phase || "")))
+      .flatMap((match) => [match.home_club_id, match.away_club_id]).filter(Boolean));
 
     const detailCounts = matchIds.length ? await Promise.all([
       countByMatchIds(db, "match_events", matchIds),
@@ -62,21 +92,52 @@ export async function POST(request) {
 
     let memberships = 0;
     let protectedMemberships = 0;
+    let membershipRows = [];
     if (clubIds.length) {
-      const [membershipResult, protectedResult] = await Promise.all([
+      const [membershipResult, protectedResult, membershipRowsResult] = await Promise.all([
         db.from("player_team_seasons").select("id", { count: "exact", head: true }).eq("season", season.label).in("club_id", clubIds),
         db.from("player_team_seasons").select("id", { count: "exact", head: true }).eq("season", season.label).in("club_id", clubIds).or("locked.eq.true,source.eq.manual"),
+        db.from("player_team_seasons").select("club_id,player_id").eq("season", season.label).in("club_id", clubIds),
       ]);
       if (membershipResult.error) throw membershipResult.error;
       if (protectedResult.error) throw protectedResult.error;
+      if (membershipRowsResult.error) throw membershipRowsResult.error;
       memberships = membershipResult.count || 0;
       protectedMemberships = protectedResult.count || 0;
+      membershipRows = membershipRowsResult.data || [];
     }
 
+    const playerIds = [...new Set(membershipRows.map((row) => row.player_id).filter(Boolean))];
+    const [clubsResult, trackedResult, coverageResult] = await Promise.all([
+      clubIds.length ? db.from("clubs").select("id,name,logo_url,team_type,ext,locked,source").in("id", clubIds).order("name") : Promise.resolve({ data: [], error: null }),
+      playerIds.length ? db.from("players").select("id,club_id").in("id", playerIds).eq("tracked", true) : Promise.resolve({ data: [], error: null }),
+      db.from("club_season_coverage").select("club_id,coverage_level,reason,locked,archived_at").eq("season_id", season.id),
+    ]);
+    if (clubsResult.error) throw clubsResult.error;
+    if (trackedResult.error) throw trackedResult.error;
+    if (coverageResult.error) throw coverageResult.error;
+    const trackedIds = new Set((trackedResult.data || []).map((player) => player.id));
+    const membershipByClub = membershipRows.reduce((map, row) => { const list = map.get(row.club_id) || []; list.push(row); map.set(row.club_id, list); return map; }, new Map());
+    const coverageByClub = Object.fromEntries((coverageResult.data || []).map((row) => [row.club_id, row]));
+    const scope = season.competitions?.competition_scope || "national";
+    const type = season.competitions?.competition_type || "league";
+    const clubs = (clubsResult.data || []).map((club) => {
+      const trackedPlayers = (membershipByClub.get(club.id) || []).filter((membership) => trackedIds.has(membership.player_id)).length;
+      const country = String(club.ext?.country || "").toLowerCase();
+      const belgian = /belg/.test(country) || /^belg(i(um|que)|ique)$/i.test(club.name || "");
+      const suggested = trackedPlayers ? "full"
+        : scope === "europe" ? (belgian || mainStageClubIds.has(club.id) ? "full" : "results")
+          : scope === "international" ? (belgian ? "full" : "match")
+            : type === "league" ? "full" : "match";
+      const stored = coverageByClub[club.id];
+      return { id: club.id, name: club.name, logoUrl: club.logo_url, teamType: club.team_type, trackedPlayers, suggested, level: stored?.coverage_level || suggested, reason: stored?.reason || (trackedPlayers ? "Joueur belge suivi" : suggested === "full" ? "Couverture prioritaire" : suggested === "match" ? "Matchs détaillés uniquement" : "Résultats et parcours uniquement"), saved: !!stored, archivedAt: stored?.archived_at || null };
+    });
+
     return Response.json({
-      mode: "read-only",
+      mode: input.action === "save-coverage" ? "configured" : "read-only",
       season: { id: season.id, label: season.label, importStatus: season.import_status, publicActive: season.public_active },
       competition: season.competitions,
+      clubs,
       counts: {
         matches: matchIds.length,
         clubs: clubIds.length,
@@ -92,7 +153,7 @@ export async function POST(request) {
         "Les données manuelles ou verrouillées ne seront jamais archivées par une automatisation.",
         "Les joueurs belges suivis et les joueurs reliés à une sélection resteront protégés.",
       ],
-      nextStep: "Attribuer un niveau de couverture aux clubs avant d’autoriser l’archivage des détails secondaires.",
+      nextStep: clubs.every((club) => club.saved) ? "Les niveaux sont enregistrés. Lance une simulation de purge avant toute confirmation." : "Vérifie puis enregistre les niveaux de couverture proposés pour chaque club.",
     });
   } catch (error) {
     return Response.json({ error: error.message || String(error) }, { status: 500 });

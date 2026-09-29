@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic";
 
 const EXPECTED_MIGRATIONS = {
   core: ["0002_profile_role_hardening", "0003_media_storage_hardening", "0004_job_execution_guardrails", "0005_persistent_pipeline_runs"],
-  football: ["0023_season_safe_sync", "0024_player_team_seasons", "0025_membership_backfill_repair", "0026_match_center_live", "0027_national_teams", "0028_followed_national_teams", "0029_national_fifa_ranking", "0030_backfill_seasons", "0031_diable_ratings", "0032_season_rollout", "0033_history_foundations", "0034_match_sync_state", "0035_match_team_stats", "0036_competition_scope", "0037_player_transfers", "0038_player_national_team"],
+  football: ["0023_season_safe_sync", "0024_player_team_seasons", "0025_membership_backfill_repair", "0026_match_center_live", "0027_national_teams", "0028_followed_national_teams", "0029_national_fifa_ranking", "0030_backfill_seasons", "0031_diable_ratings", "0032_season_rollout", "0033_history_foundations", "0034_match_sync_state", "0035_match_team_stats", "0036_competition_scope", "0037_player_transfers", "0038_player_national_team", "0039_data_retention"],
   votw: ["0001_init", "0002_session_competition", "0003_vote_integrity", "0004_pre_match_lineups"],
 };
 
@@ -54,6 +54,7 @@ export async function GET(request) {
       probe("Carrières importées par lots", db.from("players").select("career_sync_status,career_synced_at").limit(1)),
       probe("Convocations historisées par match", db.from("national_match_callups").select("match_id,national_team_id,status,locked").limit(1)),
       probe("États de synchronisation par match", db.from("matches").select("events_synced_at,lineups_synced_at,player_stats_synced_at,team_stats_synced_at").limit(1)),
+      probe("Niveaux de conservation", db.from("club_season_coverage").select("season_id,club_id,coverage_level,archived_at").limit(1)),
       probe("Onze des Diables avant-match", db.from("votw_sessions").select("match_id,national_team_id").limit(1)),
       probe("Tactiques des compositions", db.from("votw_votes").select("formation").limit(1)),
     ]);

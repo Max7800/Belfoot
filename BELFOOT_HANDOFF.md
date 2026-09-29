@@ -1,5 +1,16 @@
 # BELFOOT — Passation technique
 
+## Chantier local en attente de push — conservation et purge contrôlée (29/09/2026)
+
+- Nouvelle migration idempotente `football/0039_data_retention.sql` : table `club_season_coverage` et fonction admin `archive_secondary_club_data`.
+- Trois niveaux sont configurables par club et par saison depuis `Plan d'import > Entretien des données` : `Suivi complet`, `Matchs détaillés`, `Résultats uniquement`.
+- L'analyse propose un niveau selon le contexte : clubs avec Belge suivi toujours complets ; clubs belges en Europe complets ; adversaires internationaux en matchs détaillés ; petits participants européens en résultats uniquement. Toute suggestion doit être enregistrée par l'admin.
+- Une purge exige successivement : analyse, enregistrement des niveaux, simulation chiffrée, recopie exacte du nom de la compétition et confirmation finale.
+- La purge ne supprime jamais les clubs, joueurs, matchs, scores, événements, classements ou palmarès. Elle archive les affectations provider et retire seulement compositions, performances et statistiques provider des clubs en `Résultats uniquement`.
+- Les joueurs suivis ainsi que toutes les lignes manuelles ou verrouillées sont exclus de la purge, même si leur club a été classé par erreur en `Résultats uniquement`.
+- Le statut système contrôle maintenant la migration `0039_data_retention` et la disponibilité des niveaux de conservation.
+- SQL à appliquer avant d'utiliser cette zone : contenu complet de `modules/football/migrations/0039_data_retention.sql`.
+
 ## Ajustements locaux en attente de push — joueurs et classement européen (29/09/2026)
 
 - La vue d'ensemble des Coupes d'Europe affiche désormais uniquement les 24 qualifiés, en trois colonnes de huit : positions 1–8 en vert (qualification directe), 9–24 en jaune (barrages), 25–36 accessibles dans l'onglet Classement. Les clubs belges restent mis en évidence.
