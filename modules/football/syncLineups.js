@@ -49,7 +49,7 @@ export async function syncLineups(db, competition, ctx = {}) {
   const [clubRows, playerRows, unresolvedRows] = await Promise.all([
     db.from("clubs").select("id,external_id,team_type").eq("source", competition.provider),
     db.from("players").select("id,external_id").eq("source", competition.provider),
-    db.from("match_player_stats").select("id,player_external_id").eq("competition_id", competition.id).is("player_id", null),
+    db.from("match_player_stats").select("id,match_id,club_id,player_external_id,player_name,number,position,starter,minutes,ext,locked").eq("competition_id", competition.id).is("player_id", null),
   ]);
   if (clubRows.error) throw clubRows.error;
   if (playerRows.error) throw playerRows.error;
@@ -58,11 +58,59 @@ export async function syncLineups(db, competition, ctx = {}) {
   const nationalTeamIds = new Set((clubRows.data || []).filter((club) => club.team_type === "national").map((club) => club.id));
   const playerMap = Object.fromEntries((playerRows.data || []).map((player) => [player.external_id, player.id]));
   let relinked = 0;
+  let materialized = 0;
   for (const row of unresolvedRows.data || []) {
-    const playerId = playerMap[row.player_external_id];
+    if (row.locked) continue;
+    let playerId = playerMap[row.player_external_id];
+    // Les endpoints de composition connaissent parfois un international avant
+    // qu'il n'existe dans `players`. On crée alors une fiche minimale à partir
+    // du payload déjà stocké : aucun appel provider supplémentaire et aucune
+    // sélection actuelle copiée sur un ancien match.
+    if (!playerId && row.player_external_id && row.club_id && nationalTeamIds.has(row.club_id)) {
+      const photoUrl = row.ext?.player?.photo || row.ext?.photo || null;
+      const insertPayload = {
+        source: competition.provider,
+        external_id: row.player_external_id,
+        name: row.player_name || `Joueur ${row.player_external_id}`,
+        position: row.position || null,
+        photo_url: photoUrl,
+        active: true,
+        tracked: false,
+        synced_at: new Date().toISOString(),
+        ext: { created_from: "national_match_callup", match_id: row.match_id },
+      };
+      const { data: inserted, error: insertError } = await db.from("players").insert(insertPayload).select("id").single();
+      if (insertError?.code === "23505") {
+        const { data: existing, error: existingError } = await db.from("players").select("id").eq("source", competition.provider).eq("external_id", row.player_external_id).maybeSingle();
+        if (existingError) throw existingError;
+        playerId = existing?.id || null;
+      } else if (insertError) throw insertError;
+      else {
+        playerId = inserted?.id || null;
+        materialized++;
+      }
+      if (playerId) playerMap[row.player_external_id] = playerId;
+    }
     if (!playerId) continue;
     const { error } = await db.from("match_player_stats").update({ player_id: playerId }).eq("id", row.id).eq("locked", false);
     if (error) throw error;
+    if (row.club_id && nationalTeamIds.has(row.club_id)) {
+      const callupStatus = row.starter ? "started" : (Number(row.minutes) > 0 ? "played" : "bench");
+      const { error: callupError } = await db.from("national_match_callups").upsert({
+        match_id: row.match_id,
+        national_team_id: row.club_id,
+        player_id: playerId,
+        status: callupStatus,
+        shirt_number: row.number,
+        position: row.position,
+        source: competition.provider,
+        external_id: row.player_external_id,
+        ext: row.ext || {},
+        synced_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "match_id,player_id", ignoreDuplicates: true });
+      if (callupError) throw callupError;
+    }
     relinked++;
   }
   const eligible = (candidates || []).filter((match) => match.status === "live"
@@ -71,7 +119,7 @@ export async function syncLineups(db, competition, ctx = {}) {
     || (canTeamStats && !match.team_stats_synced_at));
   const todo = eligible.slice(0, cap);
   if (!todo.length) {
-    const detail = `${competition.name}: compositions déjà à jour${relinked ? `, ${relinked} joueurs reliés` : ""}`;
+    const detail = `${competition.name}: compositions déjà à jour${relinked ? `, ${relinked} joueurs reliés` : ""}${materialized ? `, ${materialized} fiches historiques créées` : ""}`;
     return ctx.drain ? { detail, complete: true, progress: { current: 0, total: 0, unit: "matchs détaillés" } } : detail;
   }
 
@@ -197,7 +245,7 @@ export async function syncLineups(db, competition, ctx = {}) {
     const failed = results.find((result) => result.status === "rejected");
     if (failed) throw failed.reason;
   }
-  const detail = `${competition.name}: ${todo.length} matchs, ${teams} formations, ${players} joueurs, ${collectiveStats} lignes collectives${relinked ? `, ${relinked} reliés` : ""}`;
+  const detail = `${competition.name}: ${todo.length} matchs, ${teams} formations, ${players} joueurs, ${collectiveStats} lignes collectives${relinked ? `, ${relinked} reliés` : ""}${materialized ? `, ${materialized} fiches historiques créées` : ""}`;
   if (!ctx.drain) return detail;
   const total = Number(ctx.resumeState?.total) || eligible.length;
   const remaining = Math.max(0, eligible.length - todo.length);

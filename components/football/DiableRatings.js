@@ -55,7 +55,8 @@ export default function DiableRatings({ match, squad, title = "Notez les Diables
     return best;
   }, [motmAgg]);
   const leaderPlayer = motmLeader && squad.find((s) => s.player.id === motmLeader.pid)?.player;
-  const shownSquad = compact && !expanded ? squad.slice(0, 10) : squad;
+  const compactLimit = 6;
+  const shownSquad = compact && !expanded ? squad.slice(0, compactLimit) : squad;
 
   return (
     <div className="rounded-2xl border border-line/10 bg-surface/60 p-4">
@@ -91,7 +92,7 @@ export default function DiableRatings({ match, squad, title = "Notez les Diables
         })}
         {squad.length === 0 && <p className="py-3 text-sm text-muted">L'effectif de cette sélection apparaîtra ici après synchronisation.</p>}
       </div>
-      {compact && squad.length > 10 && <button type="button" onClick={() => setExpanded((value) => !value)} className="mt-3 w-full rounded-xl border border-line/10 px-3 py-2 text-xs font-bold text-muted transition hover:border-red-400/30 hover:text-white">{expanded ? showLessLabel : `${showAllLabel} (${squad.length})`}</button>}
+      {compact && squad.length > compactLimit && <button type="button" onClick={() => setExpanded((value) => !value)} className="mt-3 w-full rounded-xl border border-line/10 px-3 py-2 text-xs font-bold text-muted transition hover:border-red-400/30 hover:text-white">{expanded ? showLessLabel : `${showAllLabel} (${squad.length})`}</button>}
     </div>
   );
 }

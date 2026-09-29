@@ -2202,3 +2202,20 @@ Fonctionnalités Belfoot qui seraient de bons candidats à généraliser dans le
   complet ne publie donc pas automatiquement tous ses joueurs sur la page cœur produit.
 - Le libellé de l'annuaire explicite désormais qu'il contient uniquement les joueurs évoluant hors
   de Belgique. Aucun SQL ni appel API n'est nécessaire.
+
+### 2026-09-29 — ChatGPT — notation et prochains rendez-vous des Diables
+
+- La colonne « Prochains rendez-vous » utilise maintenant une carte compacte propre à la sidebar,
+  sans largeur minimale héritée des cartes de résultats. Les noms, logos, date et heure restent
+  lisibles sans débordement ni fragments de bordure.
+- Le bloc de notation montre six joueurs avant le bouton « Voir tous les joueurs », puis permet bien
+  d'ouvrir toute la liste historique du match.
+- La cause des listes historiques incomplètes était plus profonde : API-Football pouvait fournir une
+  composition avant que certains internationaux n'existent dans `players`. `syncLineups` matérialise
+  désormais une fiche minimale depuis les données de match déjà stockées, relie
+  `match_player_stats`, puis crée la ligne `national_match_callups` du match concerné. Cette réparation
+  ne remplace jamais une sélection historique par l'effectif actuel et ignore les lignes verrouillées.
+- Après déploiement, relancer `Compositions & statistiques` sur la compétition internationale et la
+  saison concernées suffit à réparer les joueurs déjà stockés, même si le match est marqué complet ;
+  aucun appel API supplémentaire n'est nécessaire pour cette phase de réparation.
+- Aucun SQL ni nouvelle migration n'est nécessaire.

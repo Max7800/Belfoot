@@ -64,9 +64,17 @@ function FeaturedMatch({ match, clubs, competitions }) {
   </Link>;
 }
 
-function SmallMatch({ match, clubs, competitions, className = "" }) {
+function SmallMatch({ match, clubs, competitions, className = "", compact = false }) {
   const home = clubs[match.home_club_id] || {}, away = clubs[match.away_club_id] || {};
   const status = matchStatusMeta(match);
+  if (compact) return <Link href={`/matchs/${match.id}`} className={`block min-w-0 overflow-hidden rounded-xl border border-white/10 bg-black/10 p-3 transition hover:border-red-400/35 ${className}`}>
+    <div className="flex min-w-0 items-center justify-between gap-2 text-[9px] uppercase tracking-wider text-muted"><span className="min-w-0 truncate">{competitions[match.competition_id]?.name || "International"}</span><time className="shrink-0">{dateLabel(match.kickoff)}</time></div>
+    <div className="mt-3 grid min-w-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
+      <span className="flex min-w-0 items-center gap-2">{home.logo_url && <img src={home.logo_url} className="h-6 w-6 shrink-0 object-contain" alt="" />}<b className="truncate text-xs">{home.short_name || home.name || "—"}</b></span>
+      <span className="rounded-lg border border-line/10 bg-surface2 px-2 py-1 text-[11px] font-black tabular-nums">{status.key === "scheduled" ? new Date(match.kickoff).toLocaleTimeString("fr-BE", { hour: "2-digit", minute: "2-digit" }) : `${match.home_score ?? "-"}:${match.away_score ?? "-"}`}</span>
+      <span className="flex min-w-0 items-center justify-end gap-2"><b className="truncate text-right text-xs">{away.short_name || away.name || "—"}</b>{away.logo_url && <img src={away.logo_url} className="h-6 w-6 shrink-0 object-contain" alt="" />}</span>
+    </div>
+  </Link>;
   return <Link href={`/matchs/${match.id}`} className={`min-w-[270px] rounded-2xl border border-white/10 bg-surface/75 p-4 transition hover:-translate-y-0.5 hover:border-red-400/35 sm:min-w-0 ${className}`}>
     <div className="flex items-center justify-between gap-2 text-[10px] text-muted"><span className="truncate">{competitions[match.competition_id]?.name || "International"}</span><time className="shrink-0">{dateLabel(match.kickoff)}</time></div>
     <div className="mt-4 flex items-center gap-2"><TeamVisual club={home} /><div className="shrink-0 rounded-xl border border-line/10 bg-surface2 px-3 py-2 text-center text-sm font-black tabular-nums">{status.key === "scheduled" ? "VS" : `${match.home_score ?? "-"} : ${match.away_score ?? "-"}`}</div><TeamVisual club={away} /></div>
@@ -266,7 +274,7 @@ export default function NationalTeamsPage() {
         {selectedTeam?.national_category === "senior" && (selectedTeam?.national_gender || "men") === "men" && results[0] && ratingSquad.length > 0 && <DiableRatings match={results[0]} squad={ratingSquad} title={config.labels.ratings} showAllLabel={config.labels.show_all_players} showLessLabel={config.labels.show_less_players} compact />}
         {sectionConfig.schedule?.enabled && otherUpcoming.length > 0 && <ModuleCard>
           <PanelHeader icon={CalendarDays} title={sectionConfig.schedule.label} subtitle={sectionConfig.schedule.subtitle} accent={sectionConfig.schedule.accent} />
-          <div className="space-y-3">{otherUpcoming.map((match) => <SmallMatch key={match.id} match={match} clubs={clubs} competitions={competitions} />)}</div>
+          <div className="space-y-3">{otherUpcoming.map((match) => <SmallMatch key={match.id} match={match} clubs={clubs} competitions={competitions} compact />)}</div>
         </ModuleCard>}
       </aside>
     </div>}
