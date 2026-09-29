@@ -2031,7 +2031,19 @@ tant que la migration n'est pas enregistrée.
   l’objet de commits séparés, mais ne doivent ni déclencher un import ni masquer un défaut de données.
 - Le prochain chantier produit naturel après le contrôle est le résultat communautaire multi-tactiques
   et une carte de partage plus visuelle pour le 11 des Diables. Aucun SQL supplémentaire n’est nécessaire
-  tant que la règle éditoriale d’agrégation n’est pas décidée.
+  tant que la règle éditoriale d'agrégation n'est pas décidée.
+
+#### Correctif en cours — contexte saison des fiches club
+
+- Les liens depuis une compétition transmettent désormais `?season=YYYY-YYYY` vers la fiche club.
+- La fiche club utilise ce contexte pour sélectionner les matchs, l'effectif et les statistiques de la
+  saison choisie, au lieu de retomber implicitement sur la saison dominante (souvent 2024-2025).
+- Les affectations `player_team_seasons` restent la source de vérité par saison ; aucune donnée 2024-2025
+  n'est supprimée ni remplacée. Les entraîneurs restent séparés et les entrées manuelles verrouillées
+  restent prioritaires.
+- Vérifications locales passées : `git diff --check`, lint (0 erreur, avertissements existants) et build
+  de production avec variables Supabase factices. Le correctif reste à committer puis pousser après
+  déblocage de l'autorisation réseau.
 
 ---
 

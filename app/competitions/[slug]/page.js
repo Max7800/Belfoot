@@ -219,7 +219,8 @@ export default function CompetitionPage() {
   const upcoming = Number.isFinite(nextRound) ? phaseMatches.filter((m) => m.round_number === nextRound) : [...seasonMatches].filter((m) => m.status !== "finished").sort((a, b) => new Date(a.kickoff || 0) - new Date(b.kickoff || 0)).slice(0, 10);
   const allFinished = seasonMatches.length > 0 && seasonMatches.every((m) => m.status === "finished");
 
-  const ClubChip = ({ id }) => <Link href={`/clubs/${id}`} className="inline-flex min-w-0 items-center gap-2 hover:text-accent">{clubsMap[id]?.logo_url && <img src={clubsMap[id].logo_url} className="h-5 w-5 shrink-0 object-contain" alt="" />}<span className="truncate">{clubName(id)}</span></Link>;
+  const clubHref = (id) => `/clubs/${id}?season=${encodeURIComponent(seasonLabel)}`;
+  const ClubChip = ({ id }) => <Link href={clubHref(id)} className="inline-flex min-w-0 items-center gap-2 hover:text-accent">{clubsMap[id]?.logo_url && <img src={clubsMap[id].logo_url} className="h-5 w-5 shrink-0 object-contain" alt="" />}<span className="truncate">{clubName(id)}</span></Link>;
 
   const Card = ({ title, onSee, children, bgKey }) => {
     const t = bgKey ? tiles(bgKey) : null;
@@ -368,7 +369,7 @@ export default function CompetitionPage() {
                     <div key={r.club} className="group flex items-center gap-2 rounded-xl border border-white/[0.035] bg-gradient-to-r from-white/[0.045] to-transparent px-2 py-1.5 transition hover:border-accent/20 hover:bg-white/[0.06]">
                       <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border text-xs font-black" style={z ? { borderColor: `${z.color}80`, background: `${z.color}22`, color: z.color } : { borderColor: "rgba(148,163,184,0.5)", background: "rgba(148,163,184,0.2)", color: "rgb(226,232,240)" }}>{i + 1}</span>
                       {clubsMap[r.club]?.logo_url && <img src={clubsMap[r.club].logo_url} className="h-6 w-6 shrink-0 object-contain" alt="" />}
-                      <Link href={`/clubs/${r.club}`} className="min-w-0 flex-1 truncate font-semibold hover:text-accent">{clubName(r.club)}</Link>
+                      <Link href={clubHref(r.club)} className="min-w-0 flex-1 truncate font-semibold hover:text-accent">{clubName(r.club)}</Link>
                       <FormDots res={clubForm(phaseFinished, r.club)} />
                       <b className="min-w-9 rounded-lg bg-white/[0.06] px-1.5 py-1 text-center tabular-nums">{r.pts}</b>
                     </div>); })}
@@ -407,7 +408,7 @@ export default function CompetitionPage() {
               </div>
             ) : (
               <div className="grid gap-3 sm:grid-cols-3">
-                <Link href={inForm ? `/clubs/${inForm.club}` : "#"} className="block rounded-2xl border border-line/10 bg-gradient-to-b from-surface to-bg/40 p-4 transition hover:border-accent/40"><div className="text-xs font-bold uppercase tracking-wider text-muted">🔥 {isInternational ? "Sélection en forme" : L("comp.inform", "Club en forme")}</div>{inForm ? <div className="mt-2"><ClubChip id={inForm.club} /><div className="mt-1 flex gap-1 text-xs">{inForm.res.map((r, i) => <span key={i} className={`rounded px-1 ${r === "V" ? "bg-green-500/20 text-green-400" : r === "N" ? "bg-white/10 text-muted" : "bg-red-500/20 text-red-400"}`}>{r}</span>)}</div></div> : <p className="mt-2 text-sm text-muted">—</p>}</Link>
+                <Link href={inForm ? clubHref(inForm.club) : "#"} className="block rounded-2xl border border-line/10 bg-gradient-to-b from-surface to-bg/40 p-4 transition hover:border-accent/40"><div className="text-xs font-bold uppercase tracking-wider text-muted">🔥 {isInternational ? "Sélection en forme" : L("comp.inform", "Club en forme")}</div>{inForm ? <div className="mt-2"><ClubChip id={inForm.club} /><div className="mt-1 flex gap-1 text-xs">{inForm.res.map((r, i) => <span key={i} className={`rounded px-1 ${r === "V" ? "bg-green-500/20 text-green-400" : r === "N" ? "bg-white/10 text-muted" : "bg-red-500/20 text-red-400"}`}>{r}</span>)}</div></div> : <p className="mt-2 text-sm text-muted">—</p>}</Link>
                 <button onClick={() => setTab("classement")} className="rounded-2xl border border-line/10 bg-gradient-to-b from-surface to-bg/40 p-4 text-left transition hover:border-accent/40"><div className="text-xs font-bold uppercase tracking-wider text-muted">{L("stat.bestatk", "Meilleure attaque")}</div>{bestAtk ? <div className="mt-2 flex items-center justify-between"><ClubChip id={bestAtk.club} /><b className="text-xl">{bestAtk.gf}</b></div> : <p className="mt-2 text-sm text-muted">—</p>}</button>
                 <button onClick={() => setTab("classement")} className="rounded-2xl border border-line/10 bg-gradient-to-b from-surface to-bg/40 p-4 text-left transition hover:border-accent/40"><div className="text-xs font-bold uppercase tracking-wider text-muted">{L("stat.bestdef", "Meilleure défense")}</div>{bestDef ? <div className="mt-2 flex items-center justify-between"><ClubChip id={bestDef.club} /><b className="text-xl">{bestDef.ga}</b></div> : <p className="mt-2 text-sm text-muted">—</p>}</button>
               </div>
@@ -450,7 +451,7 @@ export default function CompetitionPage() {
 
       {!seasonLoading && tab === "clubs" && (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {clubsList.map((c) => { const belgian = europeanClubCompetition && String(c.ext?.country || "").toLowerCase() === "belgium"; return <Link key={c.id} href={`/clubs/${c.id}`} className={`flex items-center gap-3 rounded-xl border bg-surface p-3 transition hover:border-accent/40 ${belgian ? "border-amber-300/35 ring-1 ring-amber-300/10" : "border-line/10"}`}>{c.logo_url && <img src={c.logo_url} className="h-8 w-8 object-contain" alt="" />}<span className="min-w-0 flex-1 truncate font-semibold">{c.name}</span>{belgian && <span className="shrink-0 rounded-full bg-amber-300/10 px-2 py-1 text-[9px] font-black uppercase tracking-wider text-amber-200">🇧🇪 Belge</span>}</Link>; })}
+          {clubsList.map((c) => { const belgian = europeanClubCompetition && String(c.ext?.country || "").toLowerCase() === "belgium"; return <Link key={c.id} href={clubHref(c.id)} className={`flex items-center gap-3 rounded-xl border bg-surface p-3 transition hover:border-accent/40 ${belgian ? "border-amber-300/35 ring-1 ring-amber-300/10" : "border-line/10"}`}>{c.logo_url && <img src={c.logo_url} className="h-8 w-8 object-contain" alt="" />}<span className="min-w-0 flex-1 truncate font-semibold">{c.name}</span>{belgian && <span className="shrink-0 rounded-full bg-amber-300/10 px-2 py-1 text-[9px] font-black uppercase tracking-wider text-amber-200">🇧🇪 Belge</span>}</Link>; })}
           {clubsList.length === 0 && <p className="text-muted">{isInternational ? "Aucune sélection." : L("empty.clubs", "Aucun club.")}</p>}
         </div>
       )}

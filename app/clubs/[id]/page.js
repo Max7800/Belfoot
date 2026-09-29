@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { ArrowLeft, Building2, ExternalLink, MapPin, Shield, Trophy } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import MatchRow from "@/components/football/MatchRow";
@@ -21,6 +21,8 @@ const seasonYear = (value) => Number((String(value || "").match(/\d{4}/) || [0])
 
 export default function ClubPage() {
   const { id } = useParams();
+  const searchParams = useSearchParams();
+  const requestedSeason = searchParams.get("season") || "";
   const sections = useClubSections();
   const [club, setClub] = useState(undefined);
   const [matches, setMatches] = useState([]);
@@ -42,7 +44,7 @@ export default function ClubPage() {
     const { data: c } = await supabase.from("clubs").select("*").eq("id", id).maybeSingle();
     if (!c) { setClub(null); return; }
     setClub(c);
-    const { data: m } = await supabase.from("matches").select("*").or(`home_club_id.eq.${id},away_club_id.eq.${id}`).order("kickoff", { ascending: false }).limit(100);
+    const { data: m } = await supabase.from("matches").select("*").or(`home_club_id.eq.${id},away_club_id.eq.${id}`).order("kickoff", { ascending: false }).limit(250);
     const clubMatches = m || []; setMatches(clubMatches);
     const ids = [...new Set(clubMatches.flatMap((match) => [match.home_club_id, match.away_club_id]).filter(Boolean))];
     const contexts = new Map();
@@ -50,7 +52,16 @@ export default function ClubPage() {
       const key = `${match.competition_id}:${match.season_id}`; const current = contexts.get(key) || { count: 0, latest: 0, match };
       current.count += 1; current.latest = Math.max(current.latest, new Date(match.kickoff || 0).getTime() || 0); current.match = match; contexts.set(key, current);
     });
-    const contextMatch = [...contexts.values()].sort((a, b) => b.count - a.count || b.latest - a.latest)[0]?.match;
+    const competitionIds = [...new Set(clubMatches.map((match) => match.competition_id).filter(Boolean))];
+    const { data: seasonRows } = competitionIds.length
+      ? await supabase.from("seasons").select("id,competition_id,label").in("competition_id", competitionIds)
+      : { data: [] };
+    const seasonById = new Map((seasonRows || []).map((row) => [row.id, row]));
+    const requestedYear = seasonYear(requestedSeason);
+    const requestedContext = requestedYear
+      ? [...contexts.values()].find((entry) => seasonYear(seasonById.get(entry.match.season_id)?.label) === requestedYear)
+      : null;
+    const contextMatch = requestedContext?.match || [...contexts.values()].sort((a, b) => b.count - a.count || b.latest - a.latest)[0]?.match;
     const [clubResult, playerResult, membershipResult, statsResult, coachResult, linkedResult] = await Promise.all([
       ids.length ? supabase.from("clubs").select("id,name,logo_url").in("id", ids) : Promise.resolve({ data: [] }),
       supabase.from("players").select("*").eq("club_id", id).order("name"),
@@ -87,13 +98,15 @@ export default function ClubPage() {
       const standings = type === "cup" ? [] : computeStandings(finishedPhase);
       setSport({ competition, season: seasonResult.data, phase, standings, row: standings.find((row) => row.club === id), teamMatches: finishedPhase.filter((match) => match.home_club_id === id || match.away_club_id === id) });
     }
-  })().catch(() => setClub(null)); }, [id]);
+  })().catch(() => setClub(null)); }, [id, requestedSeason]);
 
   if (club === undefined) return <p className="text-muted">Chargement…</p>;
   if (club === null) return <p className="text-muted">Club introuvable.</p>;
 
-  const finished = matches.filter((match) => match.status === "finished");
-  const upcoming = matches.filter((match) => match.status !== "finished").sort((a, b) => new Date(a.kickoff || 0) - new Date(b.kickoff || 0));
+  const selectedSeasonId = sport?.season?.id;
+  const seasonMatches = selectedSeasonId ? matches.filter((match) => match.season_id === selectedSeasonId) : matches;
+  const finished = seasonMatches.filter((match) => match.status === "finished");
+  const upcoming = seasonMatches.filter((match) => match.status !== "finished").sort((a, b) => new Date(a.kickoff || 0) - new Date(b.kickoff || 0));
   const contextYear = seasonYear(sport?.season?.label);
   const availableYears = memberships.map((row) => row.season_start_year || seasonYear(row.season)).filter(Boolean);
   const rosterYear = contextYear && availableYears.includes(contextYear) ? contextYear : Math.max(0, ...availableYears);
