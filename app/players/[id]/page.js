@@ -7,6 +7,7 @@ import { useParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { useLabels } from "@/lib/labels";
 import DiscussButton from "@/components/forum/DiscussButton";
+import { playerAge } from "@/lib/playerAge";
 
 const POSITION_LABELS = { Goalkeeper: "Gardien", GK: "Gardien", Defender: "Défenseur", DEF: "Défenseur", Midfielder: "Milieu", MID: "Milieu", Attacker: "Attaquant", FWD: "Attaquant" };
 const FINISHED = new Set(["finished"]);
@@ -120,6 +121,7 @@ export default function PlayerPage() {
   if (state.player === null) return <div><Link href="/belges-a-l-etranger" className="mb-5 inline-flex items-center gap-2 text-sm text-muted hover:text-content"><ArrowLeft className="h-4 w-4" />Retour aux Belges</Link><p className="rounded-2xl border border-red-500/25 bg-red-500/10 p-4 text-sm text-red-300">{state.error || "Joueur introuvable."}</p></div>;
   const p = state.player;
   const position = POSITION_LABELS[p.position] || p.position;
+  const currentAge = playerAge(p);
 
   return (
     <div className="mx-auto max-w-5xl">
@@ -129,7 +131,7 @@ export default function PlayerPage() {
         <div className="pointer-events-none absolute right-0 top-0 h-48 w-48 rounded-full bg-accent/10 blur-3xl" />
         <div className="relative flex flex-col gap-5 sm:flex-row sm:items-center">
           {p.photo_url ? <img src={p.photo_url} className="h-28 w-28 rounded-3xl object-cover ring-1 ring-white/10" alt="" /> : <div className="flex h-28 w-28 items-center justify-center rounded-3xl bg-white/[0.06] text-3xl font-black">{p.name?.slice(0, 2).toUpperCase()}</div>}
-          <div className="min-w-0 flex-1"><div className="text-[11px] font-black uppercase tracking-[0.2em] text-accent">{position || "Joueur belge"}</div><h1 className="mt-1 text-3xl font-black sm:text-5xl">{p.name}</h1><div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-sm text-muted"><span>🇧🇪 {p.nationality || "Belgique"}</span>{p.age && <span>{p.age} ans</span>}{p.country && <span className="inline-flex items-center gap-1"><MapPin className="h-3.5 w-3.5" />{p.country}</span>}</div>{state.club && <Link href={`/clubs/${state.club.id}`} className="mt-4 inline-flex items-center gap-2 rounded-xl border border-line/10 bg-black/15 px-3 py-2 text-sm font-bold transition hover:border-accent/40"><ClubMark club={state.club} />{state.club.name}</Link>}</div>
+          <div className="min-w-0 flex-1"><div className="text-[11px] font-black uppercase tracking-[0.2em] text-accent">{position || "Joueur belge"}</div><h1 className="mt-1 text-3xl font-black sm:text-5xl">{p.name}</h1><div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-sm text-muted"><span>🇧🇪 {p.nationality || "Belgique"}</span>{currentAge && <span>{currentAge} ans</span>}{p.country && <span className="inline-flex items-center gap-1"><MapPin className="h-3.5 w-3.5" />{p.country}</span>}</div>{state.club && <Link href={`/clubs/${state.club.id}`} className="mt-4 inline-flex items-center gap-2 rounded-xl border border-line/10 bg-black/15 px-3 py-2 text-sm font-bold transition hover:border-accent/40"><ClubMark club={state.club} />{state.club.name}</Link>}</div>
           <div className="grid grid-cols-2 gap-2 sm:w-64"><div className="rounded-2xl border border-line/10 bg-black/15 p-3"><b className="block text-2xl">{view.totals.goals}</b><span className="text-[10px] uppercase tracking-wider text-muted">Buts</span></div><div className="rounded-2xl border border-line/10 bg-black/15 p-3"><b className="block text-2xl">{view.totals.assists}</b><span className="text-[10px] uppercase tracking-wider text-muted">Passes</span></div><div className="rounded-2xl border border-line/10 bg-black/15 p-3"><b className="block text-2xl">{view.totals.appearances}</b><span className="text-[10px] uppercase tracking-wider text-muted">Matchs</span></div><div className="rounded-2xl border border-line/10 bg-black/15 p-3"><b className="block text-2xl">{view.totals.rating?.toFixed(1) || "—"}</b><span className="text-[10px] uppercase tracking-wider text-muted">Note</span></div></div>
         </div>
       </section>

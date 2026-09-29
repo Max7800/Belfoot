@@ -1902,6 +1902,12 @@ tant que la migration n'est pas enregistrée.
 - Les entraîneurs sont maintenant limités à la saison demandée, comme les effectifs. Les entrées
   manuelles verrouillées restent ignorées. Après déploiement, reprendre le pipeline existant depuis
   l'admin ; ne pas en créer un second et ne pas relancer l'import de base.
+- L'âge affiché publiquement est recalculé depuis `players.birth_date` avec repli sur le champ `age`.
+  Le champ numérique du provider peut rester figé sur l'âge observé lors d'un ancien import et ne doit
+  plus être utilisé directement dans les fiches joueur, club ou compétition.
+- Le préflight des étapes reprenables (`football.squads`, `football.coaches`) estime uniquement les
+  clubs restant après le checkpoint. Sans cela, un pipeline partiellement consommé pouvait être bloqué
+  parce que le coût complet de l'étape était comparé au budget restant.
 
 #### État à récupérer avant toute modification
 
