@@ -1,5 +1,6 @@
 import { getProvider } from "./providers";
 import { clearUnassignedPlayerStats, upsertPlayerMembership } from "./playerMemberships";
+import { loadCompetitionSeasonClubIds } from "./seasonClubs";
 
 async function mapWithConcurrency(items, limit, worker) {
   const queue = [...items];
@@ -25,7 +26,8 @@ export async function syncSquads(db, competition, ctx = {}) {
   if (seasonRow?.id) matchesQuery = matchesQuery.eq("season_id", seasonRow.id);
   const { data: ms, error: matchesError } = await matchesQuery;
   if (matchesError) throw matchesError;
-  const clubIds = [...new Set((ms || []).flatMap((m) => [m.home_club_id, m.away_club_id]).filter(Boolean))];
+  const matchClubIds = [...new Set((ms || []).flatMap((m) => [m.home_club_id, m.away_club_id]).filter(Boolean))];
+  const clubIds = await loadCompetitionSeasonClubIds(db, competition, ctx.season, matchClubIds);
   if (!clubIds.length) return `${competition.name}: aucun club (fais d'abord l'import)`;
   const { data: clubs, error: clubsError } = await db.from("clubs").select("id,name,external_id,team_type,parent_club_id").in("id", clubIds).order("id");
   if (clubsError) throw clubsError;

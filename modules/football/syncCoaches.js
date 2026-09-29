@@ -1,5 +1,6 @@
 import { getProvider } from "./providers";
 import { upsertExternal } from "./sync";
+import { loadCompetitionSeasonClubIds } from "./seasonClubs";
 
 export async function syncCoaches(db, competition, ctx = {}) {
   const provider = getProvider(competition.provider);
@@ -13,7 +14,8 @@ export async function syncCoaches(db, competition, ctx = {}) {
   if (seasonRow?.id) matchesQuery = matchesQuery.eq("season_id", seasonRow.id);
   const { data: matches, error: matchesError } = await matchesQuery;
   if (matchesError) throw matchesError;
-  const clubIds = [...new Set((matches || []).flatMap((match) => [match.home_club_id, match.away_club_id]).filter(Boolean))];
+  const matchClubIds = [...new Set((matches || []).flatMap((match) => [match.home_club_id, match.away_club_id]).filter(Boolean))];
+  const clubIds = await loadCompetitionSeasonClubIds(db, competition, ctx.season, matchClubIds);
   if (!clubIds.length) return `${competition.name}: aucun club (fais d'abord l'import)`;
   const { data: clubs } = await db.from("clubs").select("id,name,external_id").in("id", clubIds).order("id");
 

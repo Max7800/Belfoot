@@ -136,12 +136,14 @@ export async function syncCompetition(db, competition, ctx = {}) {
     if (m.home_ext) derived.set(m.home_ext, { external_id: m.home_ext, name: m.home_name || m.home_ext });
     if (m.away_ext) derived.set(m.away_ext, { external_id: m.away_ext, name: m.away_name || m.away_ext });
   }
+  const seasonClubExternalIds = new Set(derived.keys());
   let clubsN = await upsertExternal(db, "clubs", competition.provider, [...derived.values()], ["name"]);
   if (provider.fetchClubs) {
     let clubs = null;
     try { clubs = await provider.fetchClubs(competition, ctx); }
     catch (error) { warnings.push(`clubs: ${error.message}`); }
     if (clubs) {
+      for (const club of clubs) if (club.external_id) seasonClubExternalIds.add(String(club.external_id));
       await upsertExternal(db, "clubs", competition.provider, clubs, ["name", "short_name", "logo_url", "city"]);
       await fillMissingClubProfile(db, competition.provider, clubs);
       clubsN = Math.max(clubsN, clubs.length);
@@ -153,14 +155,20 @@ export async function syncCompetition(db, competition, ctx = {}) {
     ["competition_id", "season_id", "home_club_id", "away_club_id", "home_score", "away_score", "status", "minute", "kickoff", "matchday", "round_raw", "phase", "round_number"]);
 
   let leagueName = competition.name;
-  let finalExt = technicalExt;
+  let finalExt = {
+    ...technicalExt,
+    club_external_ids_by_season: {
+      ...(technicalExt.club_external_ids_by_season || {}),
+      [selectedSeason]: [...seasonClubExternalIds],
+    },
+  };
   if (provider.fetchLeagueInfo) {
     let info = null;
     try { info = await provider.fetchLeagueInfo(competition, ctx); }
     catch (error) { warnings.push(`infos ligue: ${error.message}`); }
     if (info) {
       leagueName = info.name || leagueName;
-      finalExt = { ...technicalExt, coverage: info.coverage, providerName: info.name, providerType: info.type, country: info.country, country_flag: info.flag };
+      finalExt = { ...finalExt, coverage: info.coverage, providerName: info.name, providerType: info.type, country: info.country, country_flag: info.flag };
       const patch = { ext: finalExt };
       if (!competition.locked && info.logo && !competition.logo_url) patch.logo_url = info.logo;   // logo auto SEULEMENT si vide -> le logo manuel est prioritaire
       const { error } = await db.from("competitions").update(patch).eq("id", competition.id);

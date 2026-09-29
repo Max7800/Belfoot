@@ -1934,6 +1934,11 @@ tant que la migration n'est pas enregistrée.
   ligne attribuée existe pour le même joueur, la même compétition et la même saison. Cela empêche les
   doubles additions comme le `39` affiché pour Bertaccini tout en conservant l'addition de deux clubs
   réellement représentés lors d'un transfert.
+- La liste des clubs renvoyée par le provider est désormais mémorisée par saison dans `competitions.ext`.
+  Les effectifs et entraîneurs utilisent cette référence en plus des clubs dérivés des matchs : une
+  simulation Pro League 2026/2027 estime donc bien 18 clubs même si seulement 17 sont encore visibles
+  avant l'étape de base. Si la synchronisation ne ramène toujours pas les 18 clubs, les étapes suivantes
+  sont bloquées afin d'éviter de valider silencieusement une saison incomplète.
 
 #### État à récupérer avant toute modification
 
