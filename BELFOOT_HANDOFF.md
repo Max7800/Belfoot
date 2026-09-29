@@ -2042,8 +2042,18 @@ tant que la migration n'est pas enregistrée.
   n'est supprimée ni remplacée. Les entraîneurs restent séparés et les entrées manuelles verrouillées
   restent prioritaires.
 - Vérifications locales passées : `git diff --check`, lint (0 erreur, avertissements existants) et build
-  de production avec variables Supabase factices. Le correctif reste à committer puis pousser après
-  déblocage de l'autorisation réseau.
+  de production avec variables Supabase factices. Correctif poussé dans `6b3b03c`.
+
+#### Effectifs de la saison courante
+
+- Cause du roster incomplet identifiée : `/players?team=...&season=...` fournit surtout les joueurs ayant
+  déjà une ligne statistique dans la compétition. Un nouvel arrivant sans apparition pouvait donc manquer.
+- Pour la saison courante uniquement, `football.squads` prend désormais `/players/squads` comme liste
+  officielle, puis l'enrichit avec les statistiques de la saison. Les archives continuent à utiliser les
+  données saisonnières afin de ne jamais leur injecter l'effectif actuel.
+- Les affectations provider absentes de l'effectif actuel sont désactivées pour ce club et cette saison ;
+  les lignes verrouillées restent protégées. La fiche club affiche tout l'effectif actif, y compris les
+  joueurs à zéro apparition. Le préflight compte l'appel supplémentaire par club. Aucun SQL nécessaire.
 
 ---
 

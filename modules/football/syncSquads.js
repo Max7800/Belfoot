@@ -32,7 +32,10 @@ export async function syncSquads(db, competition, ctx = {}) {
   const { data: clubs, error: clubsError } = await db.from("clubs").select("id,name,external_id,team_type,parent_club_id").in("id", clubIds).order("id");
   if (clubsError) throw clubsError;
 
-  const now = new Date().toISOString();
+  const nowDate = new Date();
+  const now = nowDate.toISOString();
+  const currentSeasonStart = nowDate.getUTCMonth() >= 6 ? nowDate.getUTCFullYear() : nowDate.getUTCFullYear() - 1;
+  const currentSeason = Number(season) === currentSeasonStart;
   let n = 0;
   const orderedClubs = clubs || [];
   const startClubIndex = Math.max(0, Number(ctx.startClubIndex) || 0);
@@ -42,14 +45,49 @@ export async function syncSquads(db, competition, ctx = {}) {
   const endClubIndex = Math.min(orderedClubs.length, startClubIndex + clubBatchSize);
   for (let clubIndex = startClubIndex; clubIndex < endClubIndex; clubIndex++) {
     const club = orderedClubs[clubIndex];
-    const fetchedPlayers = await provider.fetchSquadPlayers({ external_id: club.external_id }, { ...ctx, season, leagueId: competition.external_id });
-    const players = [...new Map((fetchedPlayers || []).filter((player) => player.external_id).map((player) => [String(player.external_id), player])).values()];
+    const [seasonPlayers, currentPlayers] = await Promise.all([
+      provider.fetchSquadPlayers({ external_id: club.external_id }, { ...ctx, season, leagueId: competition.external_id }),
+      currentSeason && provider.fetchCurrentSquad
+        ? provider.fetchCurrentSquad({ external_id: club.external_id }, { ...ctx, season })
+        : Promise.resolve([]),
+    ]);
+    const seasonByExternalId = new Map((seasonPlayers || []).filter((player) => player.external_id).map((player) => [String(player.external_id), player]));
+    const authoritativeCurrentSquad = currentSeason && (currentPlayers || []).length > 0;
+    const rosterSource = authoritativeCurrentSquad ? currentPlayers : seasonPlayers;
+    const players = [...new Map((rosterSource || []).filter((player) => player.external_id).map((player) => {
+      const seasonPlayer = seasonByExternalId.get(String(player.external_id));
+      return [String(player.external_id), {
+        ...(seasonPlayer || {}),
+        ...player,
+        stats: seasonPlayer?.stats || null,
+        nationality: seasonPlayer?.nationality || player.nationality || null,
+        birth_date: seasonPlayer?.birth_date || player.birth_date || null,
+      }];
+    })).values()];
     const externalIds = players.map((player) => player.external_id);
     const { data: existingRows, error: existingRowsError } = externalIds.length
       ? await db.from("players").select("id,locked,club_id,external_id").eq("source", competition.provider).in("external_id", externalIds)
       : { data: [], error: null };
     if (existingRowsError) throw existingRowsError;
     const existingByExternalId = new Map((existingRows || []).map((player) => [String(player.external_id), player]));
+
+    if (authoritativeCurrentSquad) {
+      const currentExternalIds = new Set(externalIds.map(String));
+      const { data: currentMemberships, error: membershipsError } = await db.from("player_team_seasons")
+        .select("id,external_id,locked")
+        .eq("club_id", club.id)
+        .eq("season_start_year", Number(season))
+        .eq("source", competition.provider)
+        .eq("active", true);
+      if (membershipsError) throw membershipsError;
+      const staleMembershipIds = (currentMemberships || [])
+        .filter((membership) => !membership.locked && membership.external_id && !currentExternalIds.has(String(membership.external_id)))
+        .map((membership) => membership.id);
+      if (staleMembershipIds.length) {
+        const { error } = await db.from("player_team_seasons").update({ active: false, synced_at: now, updated_at: now }).in("id", staleMembershipIds);
+        if (error) throw error;
+      }
+    }
 
     await mapWithConcurrency(players, 8, async (p) => {
       const existing = existingByExternalId.get(String(p.external_id));
