@@ -85,7 +85,7 @@ function ModuleCard({ children, className = "" }) {
 }
 
 function SquadPreview({ rows, accent, className = "" }) {
-  return <div className={`grid gap-3 sm:grid-cols-2 xl:grid-cols-4 ${className}`}>{groupByPosition(rows, (row) => row.position || row.player?.position).map((group) => <section key={group.key} className="overflow-hidden rounded-2xl border border-line/10 bg-gradient-to-b from-surface to-bg/50">
+  return <div className={`grid gap-3 sm:grid-cols-2 ${className}`}>{groupByPosition(rows, (row) => row.position || row.player?.position).map((group) => <section key={group.key} className="overflow-hidden rounded-2xl border border-line/10 bg-gradient-to-b from-surface to-bg/50">
     <header className="flex items-center justify-between border-b border-line/10 bg-white/[0.025] px-3 py-2.5"><span className="flex items-center gap-2"><span className="h-4 w-1 rounded-full" style={{ backgroundColor: accent }} /><b className="text-[10px] uppercase tracking-wider text-slate-300">{group.label}</b></span><span className="text-[10px] font-bold text-muted">{group.rows.length}</span></header>
     <div className="divide-y divide-line/10">{group.rows.slice(0, 3).map((row) => <Link key={row.id} href={`/players/${row.player.id}`} className="group flex min-w-0 items-center gap-2.5 px-3 py-2.5 transition hover:bg-white/[0.025]">
       <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full border border-white/10 bg-surface2">{row.player.photo_url ? <img src={row.player.photo_url} alt="" className="h-full w-full object-cover object-top" /> : <Users className="m-2.5 h-5 w-5 text-muted" />}</div>
@@ -238,6 +238,24 @@ export default function NationalTeamsPage() {
         <div className="grid grid-cols-4 gap-2">
           {[[results.length, config.labels.stats_matches, "text-white"], [record.wins, config.labels.stats_wins, "text-emerald-400"], [record.goals, config.labels.stats_goals, "text-white"], [fifaRank, config.labels.stats_fifa, "text-amber-300"]].map(([value, label, color]) => <div key={label} className="rounded-2xl border border-line/10 bg-surface/60 px-2 py-4 text-center sm:py-5"><b className={`block text-xl sm:text-2xl ${color}`}>{value}</b><span className="mt-1 block text-[8px] font-bold uppercase tracking-wider text-muted sm:text-[9px]">{label}</span></div>)}
         </div>
+      {preMatchSession && <Link href={`/onze?match=${featured.id}`} className="group flex flex-col gap-4 overflow-hidden rounded-2xl border border-red-400/25 bg-gradient-to-r from-red-950/60 via-surface to-amber-950/25 p-5 transition hover:border-red-400/55 sm:flex-row sm:items-center">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-amber-300/25 bg-amber-300/10"><Star className="h-5 w-5 text-amber-300" /></div>
+        <div className="min-w-0 flex-1"><div className="text-[10px] font-black uppercase tracking-[.18em] text-amber-300">Avant-match communautaire</div><h2 className="mt-1 text-lg font-black text-white">Compose ton 11 des Diables</h2><p className="mt-1 text-xs leading-5 text-muted">Choisis ta tactique et tes titulaires, puis partage ta composition avant le coup d’envoi.</p></div>
+        <span className="inline-flex shrink-0 items-center gap-1 text-sm font-black text-white">Faire mon 11 <ChevronRight className="h-4 w-4 transition group-hover:translate-x-1" /></span>
+      </Link>}
+
+      {sectionConfig.results?.enabled && <ModuleCard>
+        <PanelHeader icon={Trophy} title={sectionConfig.results.label} subtitle={sectionConfig.results.subtitle} accent={sectionConfig.results.accent} action={results.length > 4 ? config.labels.show_all_results : null} actionHref={`/diables-rouges/matchs?equipe=${selectedId}`} />
+        {results.length ? <div className="grid gap-3 sm:grid-cols-2">{displayedResults.map((match, index) => <SmallMatch key={match.id} match={match} clubs={clubs} competitions={competitions} className={index >= 4 ? "hidden sm:block" : "block"} />)}</div> : <p className="text-sm text-muted">Aucun résultat importé.</p>}
+      </ModuleCard>}
+
+      {sectionConfig.squad?.enabled && <ModuleCard>
+        <PanelHeader icon={Users} title={sectionConfig.squad.label} subtitle={sectionConfig.squad.subtitle} accent={sectionConfig.squad.accent} action={squad.length > 4 ? `${config.labels.show_all_players} (${squad.length})` : null} actionHref={`/diables-rouges/selection?equipe=${selectedId}`} />
+        {squad.length ? <>
+          <div className="sm:hidden"><SquadNamesPreview rows={squad} accent={sectionConfig.squad.accent} /></div>
+          <SquadPreview rows={squad} accent={sectionConfig.squad.accent} className="hidden sm:grid" />
+        </> : <p className="text-sm text-muted">La sélection apparaîtra après sa synchronisation.</p>}
+      </ModuleCard>}
       </div>
 
       <aside className="order-5 space-y-4 lg:order-2 lg:col-span-4">
@@ -251,25 +269,6 @@ export default function NationalTeamsPage() {
           <div className="space-y-3">{otherUpcoming.map((match) => <SmallMatch key={match.id} match={match} clubs={clubs} competitions={competitions} />)}</div>
         </ModuleCard>}
       </aside>
-
-      {preMatchSession && <Link href={`/onze?match=${featured.id}`} className="group order-2 flex flex-col gap-4 overflow-hidden rounded-2xl border border-red-400/25 bg-gradient-to-r from-red-950/60 via-surface to-amber-950/25 p-5 transition hover:border-red-400/55 sm:flex-row sm:items-center lg:order-3 lg:col-span-12">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-amber-300/25 bg-amber-300/10"><Star className="h-5 w-5 text-amber-300" /></div>
-        <div className="min-w-0 flex-1"><div className="text-[10px] font-black uppercase tracking-[.18em] text-amber-300">Avant-match communautaire</div><h2 className="mt-1 text-lg font-black text-white">Compose ton 11 des Diables</h2><p className="mt-1 text-xs leading-5 text-muted">Choisis ta tactique et tes titulaires, puis partage ta composition avant le coup d’envoi.</p></div>
-        <span className="inline-flex shrink-0 items-center gap-1 text-sm font-black text-white">Faire mon 11 <ChevronRight className="h-4 w-4 transition group-hover:translate-x-1" /></span>
-      </Link>}
-
-      {sectionConfig.results?.enabled && <ModuleCard className="order-3 lg:order-4 lg:col-span-12">
-        <PanelHeader icon={Trophy} title={sectionConfig.results.label} subtitle={sectionConfig.results.subtitle} accent={sectionConfig.results.accent} action={results.length > 4 ? config.labels.show_all_results : null} actionHref={`/diables-rouges/matchs?equipe=${selectedId}`} />
-        {results.length ? <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{displayedResults.map((match, index) => <SmallMatch key={match.id} match={match} clubs={clubs} competitions={competitions} className={index >= 4 ? "hidden sm:block" : "block"} />)}</div> : <p className="text-sm text-muted">Aucun résultat importé.</p>}
-      </ModuleCard>}
-
-      {sectionConfig.squad?.enabled && <ModuleCard className="order-4 lg:order-5 lg:col-span-12">
-        <PanelHeader icon={Users} title={sectionConfig.squad.label} subtitle={sectionConfig.squad.subtitle} accent={sectionConfig.squad.accent} action={squad.length > 4 ? `${config.labels.show_all_players} (${squad.length})` : null} actionHref={`/diables-rouges/selection?equipe=${selectedId}`} />
-        {squad.length ? <>
-          <div className="sm:hidden"><SquadNamesPreview rows={squad} accent={sectionConfig.squad.accent} /></div>
-          <SquadPreview rows={squad} accent={sectionConfig.squad.accent} className="hidden sm:grid" />
-        </> : <p className="text-sm text-muted">La sélection apparaîtra après sa synchronisation.</p>}
-      </ModuleCard>}
     </div>}
   </div>;
 }

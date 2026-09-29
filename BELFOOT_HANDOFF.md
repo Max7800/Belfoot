@@ -2097,6 +2097,16 @@ tant que la migration n'est pas enregistrée.
   et la saison dans `Jobs et historique`, simuler puis lancer uniquement `Mettre à jour le mercato`.
   Aucun appel API-Football n'a été effectué pendant le développement.
 
+### 2026-09-29 — grille desktop des Diables Rouges
+
+- Le grand vide visible sous le match principal venait de la grille CSS : les résultats et la sélection
+  démarraient sur une nouvelle ligne pleine largeur seulement après la fin de la colonne FIFA, plus haute.
+- Le contenu éditorial est désormais empilé dans la colonne principale (match, statistiques, avant-match,
+  résultats, sélection), tandis que le classement FIFA, les notes et les prochains matchs restent dans une
+  colonne latérale indépendante. Les modules de gauche ne sont donc plus repoussés vers le bas sur desktop.
+- Les résultats et les groupes de joueurs utilisent deux colonnes dans cette largeur utile. Le rendu mobile
+  conserve ses cartes compactes et sa liste de sélection par poste. Aucun SQL nécessaire.
+
 ---
 
 ## SOCLE_CANDIDATES  (documenter seulement — NE PAS remonter au socle maintenant)
