@@ -1263,41 +1263,36 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
 
 ## CURRENT_GIT_STATE
 
-- **Branche** : `main`
-- **Dernier commit distant avant le lot courant** : `632766e` — « Preparation mois Pro - sous-lot A
-  (runner) ». Pipelines : budget global, reprise après erreur, simulation et garde-fous migrations.
-- **Lot courant (non poussé au moment de cette note)** : réorganisation responsive de
-  `/diables-rouges` d'après la maquette validée : grille éditoriale 8/4 sur desktop, ordre linéaire
-  mobile, match principal, FIFA, quatre KPI, résultats, notation compacte, sélection limitée à dix
-  joueurs et prochains rendez-vous. Résultats/sélection/notation sont dépliables. Les nouveaux
-  intitulés sont administrables dans le panneau Sélections via `site_settings.data.national_teams.labels`.
-  Aucun SQL ni appel API requis. Fichiers : `app/diables-rouges/page.js`,
-  `components/football/DiableRatings.js`, `lib/nationalTeams.js`, `components/admin/panels.js`.
-  **Reste sous-lot B** : (5) bascule 2026 par compétition — **déjà possible** via le sélecteur de saison +
-  sync par compétition (à formaliser/sécuriser) ; (6) **plan d'import** (whitelist + ordre Pro League →
-  Challenger → Croky → sélections → compétitions étrangères avec Belges) pour ne pas aspirer tous les
-  championnats.
-- **À CONCEVOIR (note utilisateur)** : les **appelés en Belgique A changent à chaque rassemblement** →
-  garder une **trace de la sélection par match** (et de qui n'est plus rappelé). Aujourd'hui les notes
-  portent sur l'effectif COURANT (callups actifs), donc un match passé afficherait la sélection actuelle.
-  À traiter quand les compos réelles arrivent (mois Pro) : archiver le « qui a joué / était convoqué »
-  par match. Lié au sous-lot 2 des Notes & Diable du match.
-- **Lot précédent poussé** (`dce3dcc`) : Notes & Diable du match sous-lot 1 (migration `football/0031`
-  fonction `diable_ratings_open(match)` (fenêtre = match terminé + < 4 j après le coup d'envoi, imposée
-  en RLS), vues d'agrégat `player_match_ratings` + `match_motm` (moyennes publiques, votes individuels
-  privés). Composant `components/football/DiableRatings.js` : noter l'effectif /10 + élire le Diable du
-  match + moyennes + « Diable du match des lecteurs ». Branché sur `/diables-rouges` (Belgique A senior
-  uniquement, dernier match terminé). NB : on note l'**effectif** (callups) car les compos réelles =
-  lineups API absentes sur 2024 — quand elles seront alimentées (mois Pro), on pourra restreindre aux
-  joueurs ayant joué. **Reste sous-lot 2** : archive consultable (revoir d'anciens matchs) + **bilan de
-  décembre** (moyenne annuelle avec seuil, buteur, plus souvent élu). Aucun appel API.
-- **Lot précédent poussé** : **consolidation sécurité communauté & votes** (nouvelles migrations,
-  sans toucher aux appliquées). `votw/0003_vote_integrity.sql` : RLS votes (membre gère SES votes +
-  session votable → **corrige aussi l'absence d'update/delete**), unique(session,member,player) (1 joueur
-  une place), trigger candidat + poste compatible. `forum/0003_community_guardrails.sql` : réponse
-  interdite en sujet verrouillé (base), unique(ref_type,ref_id) (1 sujet lié par entité), limites de
-  longueur, anti-flood 10 s. Code : `ReportsPanel` exploitable (aperçu du message + lien vers le sujet +
-  suppression). **À appliquer après forum 0001/0002.** Manifests votw/forum mis à jour.
+- **Branche** : `main` · **HEAD** : `fcbff48` (« Fiabilise mercato et details internationaux »).
+- **État** : gros travail Codex/ChatGPT mergé depuis `632766e` (~60 commits). Détail = CHANGELOG ci-dessous
+  (entrées 2026-09-28 / 2026-09-29). Résumé :
+  - **Diables Rouges** : grille desktop 8/4 + mobile, classement FIFA (drapeaux images), **binationaux /
+    sélection représentée** (`players.national_team_id`), **onze des Diables avant-match** (votw étendu).
+  - **Saisons / bascule 2026** : plan d'import **v4 par saison**, activation progressive, choix rapide des
+    saisons, complétion auto, `competition_scope` (belges vs internationales).
+  - **Pipelines / Pro** : **runs persistants** (`pipeline_runs`), preflight, reprise réelle (Vercel Hobby),
+    lineups robustes (timeout 20 s, lots de 2, relance partielle par endpoint).
+  - **Match Center / direct** : refonte + **cron live** (Supabase Cron, opérationnel).
+  - **Mercato** : `player_transfers` + pipeline `football.transfers` (1 appel/club, lots de 3).
+  - **Europe** (coupes) + **Nations League** (groupes/classements) + **accueil « temps forts »**.
+
+- **MIGRATIONS : TOUTES APPLIQUÉES** (confirmé par l'utilisateur le 2026-09-29 via requête de vérification —
+  football jusqu'à `0038`, `votw/0004`, `pipeline_runs`, `player_transfers`, `players.national_team_id`,
+  `votw_sessions.match_id` tous présents). Rien à appliquer côté base. Pour mémoire, le set post-`0031` :
+  - football : `0032_season_rollout`, `0033_history_foundations`, `0034_match_sync_state`,
+    `0035_match_team_stats`, `0036_competition_scope`, `0037_player_transfers`, `0038_player_national_team`
+  - votw : `0004_pre_match_lineups` · supabase : `0005_persistent_pipeline_runs`
+  - **opérationnel (pas une migration data)** : `supabase/live_cron_setup.sql` → active le direct
+    (nécessite `CRON_SECRET` dans Vercel + Supabase Cron).
+
+- **À CONCEVOIR (note utilisateur)** : les appelés Belgique A changent à chaque rassemblement → garder une
+  trace de la sélection **par match** (et des non-rappelés). Les notes portent aujourd'hui sur l'effectif
+  courant. À traiter avec les compos réelles (mois Pro) + le sous-lot 2 des Notes.
+
+- **Où on en est** : **préparation du mois Pro en place** (plan d'import + pipelines durables + bascule
+  2026 + Diables/Europe/Nations League prêts). Prochaine grande étape = **le mois Pro** (alimenter les
+  données réelles dans l'ordre Pro League → Challenger → Croky → sélections → étrangères avec Belges).
+  Avant ouverture publique : sécurité P0 (rôles RLS), CGU/vie privée, SEO minimal.
 
 ### RÉCAP SESSION 2026-09-24 (pour revue roadmap)
 **Livré côté Belfoot (poussé sur `main`)** :
