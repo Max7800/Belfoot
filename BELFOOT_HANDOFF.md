@@ -2219,3 +2219,13 @@ Fonctionnalités Belfoot qui seraient de bons candidats à généraliser dans le
   saison concernées suffit à réparer les joueurs déjà stockés, même si le match est marqué complet ;
   aucun appel API supplémentaire n'est nécessaire pour cette phase de réparation.
 - Aucun SQL ni nouvelle migration n'est nécessaire.
+
+### 2026-09-29 — ChatGPT — classement européen lisible
+
+- La première version du classement européen complet restait enfermée dans l'ancienne colonne du
+  Top 5 et laissait un grand vide sous sa zone scrollable. Sur la vue d'ensemble, le classement
+  occupe maintenant toute la largeur et répartit toutes les équipes sur une, deux ou trois colonnes
+  selon l'écran. Les cartes Résultats et Prochaine journée passent en dessous sur desktop.
+- Les clubs dont `clubs.ext.country = Belgium` sont mis en évidence par une ligne rouge/ambre, un
+  liseré et un drapeau belge. Cette distinction est strictement visuelle et n'altère pas le calcul du
+  classement. Aucun SQL ni appel API n'est nécessaire.

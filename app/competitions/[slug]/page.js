@@ -31,6 +31,7 @@ const VARIANTS = {
   topassist: { border: "border-red-500/50", glow: "shadow-[0_0_34px_-12px_rgba(239,68,68,0.45)]", grad: "from-red-500/10", accent: "#ef4444", wm: "boot", icon: "👟" },
   cleansheet: { border: "border-sky-400/50", glow: "shadow-[0_0_34px_-12px_rgba(56,189,248,0.45)]", grad: "from-sky-400/10", accent: "#38bdf8", wm: "glove", icon: "🧤" },
 };
+const isBelgianClubCountry = (value) => ["belgium", "belgique"].includes(String(value || "").trim().toLowerCase());
 function seasonKey(value) { return (String(value || "").match(/\d{4}/) || [String(value || "")])[0]; }
 function clubForm(ms, clubId) {
   const rel = ms.filter((m) => m.home_score != null && (m.home_club_id === clubId || m.away_club_id === clubId)).sort((a, b) => new Date(b.kickoff) - new Date(a.kickoff)).slice(0, 5).reverse();
@@ -258,11 +259,11 @@ export default function CompetitionPage() {
   const clubHref = (id) => `/clubs/${id}?season=${encodeURIComponent(seasonLabel)}`;
   const ClubChip = ({ id }) => <Link href={clubHref(id)} className="inline-flex min-w-0 items-center gap-2 hover:text-accent">{clubsMap[id]?.logo_url && <img src={clubsMap[id].logo_url} className="h-5 w-5 shrink-0 object-contain" alt="" />}<span className="truncate">{clubName(id)}</span></Link>;
 
-  const Card = ({ title, onSee, children, bgKey }) => {
+  const Card = ({ title, onSee, children, bgKey, className = "" }) => {
     const t = bgKey ? tiles(bgKey) : null;
     const style = { ...(t?.background_url ? { backgroundImage: `url(${t.background_url})`, backgroundSize: "cover", backgroundPosition: "center" } : {}), ...(t?.border_color ? { borderColor: t.border_color } : {}) };
     return (
-      <div className={`relative flex h-full flex-col overflow-hidden rounded-2xl border border-line/10 p-4 shadow-[0_18px_40px_-24px_rgba(0,0,0,0.8)] ${t?.background_url ? "" : "bg-gradient-to-b from-surface to-bg/40"}`} style={style}>
+      <div className={`relative flex h-full flex-col overflow-hidden rounded-2xl border border-line/10 p-4 shadow-[0_18px_40px_-24px_rgba(0,0,0,0.8)] ${t?.background_url ? "" : "bg-gradient-to-b from-surface to-bg/40"} ${className}`} style={style}>
         {t?.background_url && <span className="absolute inset-0" style={{ background: `rgba(0,0,0,${t.overlay ?? 0.5})` }} />}
         {t?.wm && !t?.background_url && <span className="pointer-events-none absolute -bottom-4 -right-2 select-none text-7xl opacity-[0.06]">{t.wm}</span>}
         <div className="relative mb-3 flex shrink-0 items-center justify-between">
@@ -377,7 +378,7 @@ export default function CompetitionPage() {
 
       {!seasonLoading && tab === "overview" && (
         <div className="space-y-6">
-          <div className="grid gap-4 lg:grid-cols-3">
+          <div className={`grid gap-4 ${europeanClubCompetition ? "lg:grid-cols-2" : "lg:grid-cols-3"}`}>
             {partialCompetition ? (
               <Card title="Import en préparation">
                 <div className="flex h-full flex-col justify-center rounded-xl border border-amber-400/20 bg-amber-400/5 p-4">
@@ -398,14 +399,15 @@ export default function CompetitionPage() {
                 </div>
               </Card>
             ) : (
-              <Card title={europeanClubCompetition ? L("nav.classement", "Classement") : L("comp.top5", "Classement — Top 5")} onSee={() => setTab("classement")}>
+              <Card title={europeanClubCompetition ? L("nav.classement", "Classement") : L("comp.top5", "Classement — Top 5")} onSee={() => setTab("classement")} className={europeanClubCompetition ? "lg:col-span-2" : ""}>
                 <div className="flex h-full flex-col">
-                  <div className={`flex flex-1 flex-col gap-1 ${europeanClubCompetition ? "max-h-[32rem] overflow-y-auto pr-1" : "justify-between"}`}>
+                  <div className={europeanClubCompetition ? "grid flex-1 gap-1.5 md:grid-cols-2 xl:grid-cols-3" : "flex flex-1 flex-col justify-between gap-1"}>
                   {standings.slice(0, europeanClubCompetition ? standings.length : 5).map((r, i) => { const z = zoneFor(i + 1); return (
-                    <div key={r.club} className="group flex items-center gap-2 rounded-xl border border-white/[0.035] bg-gradient-to-r from-white/[0.045] to-transparent px-2 py-1.5 transition hover:border-accent/20 hover:bg-white/[0.06]">
+                    <div key={r.club} className={`group flex min-w-0 items-center gap-2 rounded-xl border px-2 py-1.5 transition ${europeanClubCompetition && isBelgianClubCountry(clubsMap[r.club]?.ext?.country) ? "border-amber-300/45 bg-gradient-to-r from-red-500/15 via-amber-300/[0.08] to-transparent shadow-[inset_3px_0_0_rgba(252,211,77,.8)]" : "border-white/[0.035] bg-gradient-to-r from-white/[0.045] to-transparent hover:border-accent/20 hover:bg-white/[0.06]"}`}>
                       <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border text-xs font-black" style={z ? { borderColor: `${z.color}80`, background: `${z.color}22`, color: z.color } : { borderColor: "rgba(148,163,184,0.5)", background: "rgba(148,163,184,0.2)", color: "rgb(226,232,240)" }}>{i + 1}</span>
                       {clubsMap[r.club]?.logo_url && <img src={clubsMap[r.club].logo_url} className="h-6 w-6 shrink-0 object-contain" alt="" />}
                       <Link href={clubHref(r.club)} className="min-w-0 flex-1 truncate font-semibold hover:text-accent">{clubName(r.club)}</Link>
+                      {europeanClubCompetition && isBelgianClubCountry(clubsMap[r.club]?.ext?.country) && <span className="shrink-0 text-xs" title="Club belge">🇧🇪</span>}
                       <FormDots res={clubForm(phaseFinished, r.club)} />
                       <b className="min-w-9 rounded-lg bg-white/[0.06] px-1.5 py-1 text-center tabular-nums">{r.pts}</b>
                     </div>); })}
