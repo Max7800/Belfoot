@@ -96,6 +96,8 @@ export const FOOTBALL_ENTITIES = {
       { key: "number", label: "N°", type: "number" },
       { key: "age", label: "Âge", type: "number" },
       { key: "nationality", label: "Nationalité(s) — séparer par une virgule", type: "text" },
+      { key: "national_team_id", label: "Sélection représentée", type: "relation", table: "clubs", labelCol: "name" },
+      { key: "national_team_locked", label: "Verrouiller la sélection représentée", type: "bool" },
       { key: "country", label: "Pays du championnat", type: "text" },
       { key: "competition", label: "Championnat", type: "text" },
       { key: "photo_url", label: "Photo", type: "image" },

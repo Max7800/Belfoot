@@ -2107,6 +2107,23 @@ tant que la migration n'est pas enregistrée.
 - Les résultats et les groupes de joueurs utilisent deux colonnes dans cette largeur utile. Le rendu mobile
   conserve ses cartes compactes et sa liste de sélection par poste. Aucun SQL nécessaire.
 
+### 2026-09-29 — binationaux et sélection représentée
+
+- La nationalité civile et la sélection sportive sont désormais deux informations distinctes. La migration
+  idempotente `football/0038_player_national_team` ajoute `players.national_team_id`, relié à une sélection
+  dans `clubs`, et reprend seulement les convocations seniors déjà connues lorsque le champ est vide.
+- Dans l'administration d'un joueur, `Nationalité(s)` peut donc rester `Belgique, Grèce`, tandis que
+  `Sélection représentée` pointe vers `Greece`. Le verrou dédié `national_team_locked` protège ce choix
+  éditorial. Les synchronisations seniors alimentent uniquement un lien non verrouillé, sans écraser la
+  nationalité existante ; les catégories de jeunes ne fixent pas ce choix.
+- La fiche joueur sépare visuellement les nationalités de la sélection représentée et ajoute les prochains
+  matchs de cette sélection à ceux de son club.
+- Sur `Belges à l'étranger`, les matchs internationaux utilisent `national_team_id`. Les cartes montrent au
+  maximum trois visages, deux noms et un compteur, au lieu d'empiler tout l'effectif dans un texte jaune.
+- Ordre de déploiement : appliquer `0038_player_national_team.sql`, puis déployer le code. Pour un binational
+  absent des convocations déjà synchronisées, choisir sa sélection manuellement dans la fiche joueur admin.
+  Aucun appel API-Football n'a été effectué.
+
 ---
 
 ## SOCLE_CANDIDATES  (documenter seulement — NE PAS remonter au socle maintenant)

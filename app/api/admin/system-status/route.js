@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic";
 
 const EXPECTED_MIGRATIONS = {
   core: ["0002_profile_role_hardening", "0003_media_storage_hardening", "0004_job_execution_guardrails", "0005_persistent_pipeline_runs"],
-  football: ["0023_season_safe_sync", "0024_player_team_seasons", "0025_membership_backfill_repair", "0026_match_center_live", "0027_national_teams", "0028_followed_national_teams", "0029_national_fifa_ranking", "0030_backfill_seasons", "0031_diable_ratings", "0032_season_rollout", "0033_history_foundations", "0034_match_sync_state", "0035_match_team_stats", "0036_competition_scope"],
+  football: ["0023_season_safe_sync", "0024_player_team_seasons", "0025_membership_backfill_repair", "0026_match_center_live", "0027_national_teams", "0028_followed_national_teams", "0029_national_fifa_ranking", "0030_backfill_seasons", "0031_diable_ratings", "0032_season_rollout", "0033_history_foundations", "0034_match_sync_state", "0035_match_team_stats", "0036_competition_scope", "0037_player_transfers", "0038_player_national_team"],
   votw: ["0001_init", "0002_session_competition", "0003_vote_integrity", "0004_pre_match_lineups"],
 };
 
@@ -48,6 +48,7 @@ export async function GET(request) {
       probe("Performances individuelles", db.from("match_player_stats").select("id").limit(1)),
       probe("Statistiques collectives", db.from("match_team_stats").select("id").limit(1)),
       probe("Sélections et convocations", db.from("clubs").select("national_followed,national_category").eq("team_type", "national").limit(1)),
+      probe("Sélection représentée par joueur", db.from("players").select("national_team_id,national_team_locked").limit(1)),
       probe("Bascule progressive des saisons", db.from("seasons").select("import_status,public_active,activated_at").limit(1)),
       probe("Pipelines persistants", db.from("pipeline_runs").select("next_step,request_count,heartbeat_at").limit(1)),
       probe("Carrières importées par lots", db.from("players").select("career_sync_status,career_synced_at").limit(1)),
