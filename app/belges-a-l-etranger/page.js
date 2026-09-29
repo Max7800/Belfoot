@@ -13,6 +13,7 @@ const SECTION_ICONS = { today: CalendarDays, form: Flame, leagues: Globe2, recap
 const SECTION_LINKS = { today: "/matchs", form: "#all-players", recap: "/matchs" };
 const normal = (value) => String(value || "").trim().toLocaleLowerCase("fr");
 const isBelgian = (value) => normal(value).startsWith("belg");
+const isBelgianClub = (club) => isBelgian(club?.ext?.country) || isBelgian(club?.ext?.team?.country);
 const year = (value) => Number((String(value || "").match(/\d{4}/) || [0])[0]);
 const safeColor = (value, fallback = "#e30613") => /^#[0-9a-f]{6}$/i.test(value || "") ? value : fallback;
 const safeOverlay = (value, fallback = 0.42) => Number.isFinite(Number(value)) ? Math.min(1, Math.max(0, Number(value))) : fallback;
@@ -65,7 +66,7 @@ export default function BelgiansAbroadPage() {
     const players = (playerResult.data || []).filter((player) => isBelgian(player.nationality));
     const playerIds = players.map((player) => player.id);
     const [clubResult, statsRows, performanceResult] = await Promise.all([
-      supabase.from("clubs").select("id,name,logo_url,team_type"),
+      supabase.from("clubs").select("id,name,logo_url,team_type,ext"),
       loadPlayerStatsForPlayers(supabase, playerIds),
       playerIds.length ? supabase.from("match_player_stats").select(PUBLIC_MATCH_PLAYER_STATS_FIELDS).in("player_id", playerIds).order("synced_at", { ascending: false }).limit(500) : Promise.resolve({ data: [] }),
     ]);
@@ -92,12 +93,15 @@ export default function BelgiansAbroadPage() {
 
   const view = useMemo(() => {
     const enriched = data.players.map((player) => {
+      const club = data.clubs[player.club_id];
       const playerStats = data.stats[player.id] || [];
       const statsCompetition = playerStats.map((row) => data.competitions[row.competition_id]).find((item) => item?.ext?.country);
-      const resolvedCountry = player.country || statsCompetition?.ext?.country || "À renseigner";
+      const domesticBelgianClub = playerStats.some((row) => row.club_id === player.club_id && isBelgian(data.competitions[row.competition_id]?.ext?.country));
+      const clubCountry = club?.ext?.country || club?.ext?.team?.country || "";
+      const resolvedCountry = clubCountry || player.country || statsCompetition?.ext?.country || "À renseigner";
       const resolvedCompetition = player.competition || statsCompetition?.name || "Championnat à renseigner";
-      return { player, club: data.clubs[player.club_id], nationalTeam: data.clubs[player.national_team_id], country: resolvedCountry, competition: resolvedCompetition, competitionData: statsCompetition, totals: latestTotals(playerStats) };
-    }).filter((item) => !isBelgian(item.country) && !["jupiler pro league", "croky cup", "pro league", "challenger pro league"].includes(normal(item.competition)));
+      return { player, club, nationalTeam: data.clubs[player.national_team_id], country: resolvedCountry, competition: resolvedCompetition, competitionData: statsCompetition, totals: latestTotals(playerStats), domesticBelgianClub };
+    }).filter((item) => item.club && item.club.team_type !== "national" && !item.domesticBelgianClub && !isBelgianClub(item.club) && !isBelgian(item.country));
 
     const playerMap = Object.fromEntries(enriched.map((item) => [item.player.id, item]));
     const matchMap = Object.fromEntries(data.matches.map((match) => [match.id, match]));

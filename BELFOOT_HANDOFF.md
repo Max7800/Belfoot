@@ -2190,3 +2190,15 @@ Fonctionnalités Belfoot qui seraient de bons candidats à généraliser dans le
   maintenant de repli pour les buts, passes, minutes et notes. La mise en place de saison alimente
   les effectifs et agrégats ; `Compléter la saison` enrichit progressivement le repli match par match.
 - Aucun SQL ni nouvelle migration n'est nécessaire pour ce lot.
+
+### 2026-09-29 — ChatGPT — recentrage du suivi des Belges
+
+- `/belges-a-l-etranger` et les blocs Belges de l'accueil se basent maintenant en priorité sur le
+  pays réel du club courant (`clubs.ext.country`), et non sur la dernière compétition synchronisée.
+  Un Belge de Pro League engagé en Champions League ne peut donc plus être pris pour un expatrié
+  simplement parce que sa dernière synchronisation provenait d'une compétition européenne.
+- Les clubs belges et les sélections nationales sont exclus de cet annuaire. La nationalité belge
+  du joueur reste requise, ainsi que le choix éditorial `tracked=true` : l'import d'un championnat
+  complet ne publie donc pas automatiquement tous ses joueurs sur la page cœur produit.
+- Le libellé de l'annuaire explicite désormais qu'il contient uniquement les joueurs évoluant hors
+  de Belgique. Aucun SQL ni appel API n'est nécessaire.

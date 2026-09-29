@@ -89,7 +89,7 @@ export default function Home() {
   useEffect(() => { (async () => {
     const [recentMatchResult, clubResult, competitionResult, seasonResult, playerResult, newsResult, votwResult, topicsResult] = await Promise.all([
       supabase.from("matches").select(PUBLIC_MATCH_FIELDS).order("kickoff", { ascending: false }).limit(250),
-      supabase.from("clubs").select("id,name,logo_url,team_type,national_followed,national_category"),
+      supabase.from("clubs").select("id,name,logo_url,team_type,national_followed,national_category,ext"),
       supabase.from("competitions").select("*"),
       supabase.from("seasons").select("*"),
       supabase.from("players").select(PUBLIC_PLAYER_FIELDS).eq("tracked", true).eq("active", true),
@@ -137,10 +137,12 @@ export default function Home() {
     const players = data.players.filter((player) => isBelgian(player.nationality)).map((player) => {
       const rows = statMap[player.id] || [];
       const statsCompetition = rows.map((row) => competitionMap[row.competition_id]).find(Boolean);
-      const country = player.country || statsCompetition?.ext?.country || "";
+      const club = data.clubs[player.club_id];
+      const domesticBelgianClub = rows.some((row) => row.club_id === player.club_id && isBelgian(competitionMap[row.competition_id]?.ext?.country));
+      const country = club?.ext?.country || club?.ext?.team?.country || player.country || statsCompetition?.ext?.country || "";
       const competition = player.competition || statsCompetition?.name || "Autres championnats";
-      return { player, club: data.clubs[player.club_id], totals: latestPlayerTotals(rows), country, competition, competitionData: statsCompetition };
-    }).filter((item) => item.club && !isBelgian(item.country) && !["jupiler pro league", "croky cup", "pro league"].includes(normal(item.competition))).sort((a, b) => (b.totals.goals + b.totals.assists) - (a.totals.goals + a.totals.assists) || (b.totals.rating || 0) - (a.totals.rating || 0));
+      return { player, club, totals: latestPlayerTotals(rows), country, competition, competitionData: statsCompetition, domesticBelgianClub };
+    }).filter((item) => item.club && item.club.team_type !== "national" && !item.domesticBelgianClub && !isBelgian(item.club?.ext?.country || item.club?.ext?.team?.country) && !isBelgian(item.country)).sort((a, b) => (b.totals.goals + b.totals.assists) - (a.totals.goals + a.totals.assists) || (b.totals.rating || 0) - (a.totals.rating || 0));
 
     const byClub = new Map(players.map((item) => [item.player.club_id, item]));
     const watched = chronological.filter((match) => match.status !== "finished" && new Date(match.kickoff) >= now && (byClub.has(match.home_club_id) || byClub.has(match.away_club_id))).map((match) => ({ match, item: byClub.get(match.home_club_id) || byClub.get(match.away_club_id) })).slice(0, 5);
