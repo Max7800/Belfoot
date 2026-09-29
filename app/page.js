@@ -17,6 +17,7 @@ import {
 import { Fragment, useEffect, useMemo, useState } from "react";
 import MatchRow from "@/components/football/MatchRow";
 import LiveScoreRibbon from "@/components/football/LiveScoreRibbon";
+import NationsLeagueStandings from "@/components/football/NationsLeagueStandings";
 import { competitionPath } from "@/lib/competitionRoutes";
 import { useHomeConfig } from "@/lib/homeSections";
 import { computeStandings } from "@/lib/standings";
@@ -24,6 +25,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { sortPublicSeasons } from "@/lib/publicSeasons";
 import { PUBLIC_MATCH_FIELDS, PUBLIC_PLAYER_FIELDS, loadPlayerStatsForPlayers } from "@/lib/publicFootballData";
 import { preferAssignedPlayerStats } from "@/lib/playerStats";
+import { isNationsLeagueCompetition, nationsLeagueGroups } from "@/lib/nationsLeague";
 
 const normal = (value) => String(value || "").trim().toLocaleLowerCase("fr");
 const year = (value) => Number((String(value || "").match(/\d{4}/) || [0])[0]);
@@ -82,6 +84,7 @@ export default function Home() {
   const featuredCompetitionId = config.competition_carousel?.featured_competition_id || "";
   const [data, setData] = useState({ loading: true, matches: [], clubs: {}, competitions: [], seasons: [], players: [], stats: [], news: [], votwSessions: [], topics: [] });
   const [activeCompetitionId, setActiveCompetitionId] = useState("");
+  const [homeNationsDivision, setHomeNationsDivision] = useState("A");
 
   useEffect(() => { (async () => {
     const [recentMatchResult, clubResult, competitionResult, seasonResult, playerResult, newsResult, votwResult, topicsResult] = await Promise.all([
@@ -189,12 +192,15 @@ export default function Home() {
       matches.forEach((match) => phaseCounts.set(match.phase || "—", (phaseCounts.get(match.phase || "—") || 0) + 1));
       const primaryPhase = [...phaseCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
       const knockout = isKnockoutCompetition(competition);
-      const displayMatches = knockout ? matches : (primaryPhase ? matches.filter((match) => (match.phase || "—") === primaryPhase) : matches);
+      const nationsLeague = isNationsLeagueCompetition(competition);
+      const displayMatches = knockout || nationsLeague ? matches : (primaryPhase ? matches.filter((match) => (match.phase || "—") === primaryPhase) : matches);
       const finished = displayMatches.filter((match) => match.status === "finished" && match.home_score != null && match.away_score != null);
       return {
         competition,
         href: competitionPath(competition),
         knockout,
+        nationsLeague,
+        nationsGroups: nationsLeague ? nationsLeagueGroups(competition, activeSeason?.label, matches, data.clubs) : [],
         activeSeason,
         standings: knockout ? [] : computeStandings(finished),
         recent: finished.sort((a, b) => new Date(b.kickoff || 0) - new Date(a.kickoff || 0)).slice(0, 5),
@@ -221,6 +227,7 @@ export default function Home() {
     const preferred = config.competition_carousel?.featured_competition_id;
     setActiveCompetitionId((current) => competitionSlides.some((slide) => slide.competition.id === current) ? current : (competitionSlides.find((slide) => slide.competition.id === preferred)?.competition.id || competitionSlides[0]?.competition.id || ""));
   }, [competitionSlides, config.competition_carousel?.featured_competition_id]);
+  useEffect(() => { setHomeNationsDivision("A"); }, [activeCompetitionId]);
   const activeCompetitionIndex = Math.max(0, competitionSlides.findIndex((slide) => slide.competition.id === activeCompetitionId));
   const activeCompetitionSlide = competitionSlides[activeCompetitionIndex];
   const moveCompetition = (direction) => {
@@ -246,7 +253,7 @@ export default function Home() {
           <Link href={activeCompetitionSlide.href} className="mt-2 inline-flex items-center gap-1 rounded-lg border border-sky-300/30 bg-sky-300/[0.07] px-2.5 py-1.5 text-[11px] font-bold text-sky-100 transition hover:border-sky-300/60 sm:hidden">{activeCompetitionSlide.kind === "belgians" ? "Voir les matchs" : (sectionMap.jpl?.action || "Voir la compétition")}<ArrowRight className="h-3 w-3" /></Link>
         </div>
         <div className="grid lg:grid-cols-3">
-          {activeCompetitionSlide.kind === "belgians" ? <div className="p-4"><div className="mb-3 text-sm font-black">À suivre cette semaine</div><p className="text-xs leading-5 text-muted">Une vue rapide des rencontres des clubs où évoluent les Belges suivis par Belfoot.</p><Link href="/belges-a-l-etranger" className="mt-3 inline-flex items-center gap-1 text-xs font-bold text-amber-300">Voir les joueurs<ArrowRight className="h-3.5 w-3.5" /></Link></div> : activeCompetitionSlide.knockout ? <div className="p-4"><div className="mb-3 flex items-center gap-2 text-sm font-black"><Trophy className="h-4 w-4 text-amber-300" />Élimination directe</div><p className="text-xs leading-5 text-muted">Les rencontres sont présentées tour par tour : aucun faux classement n'est calculé pour cette coupe.</p><Link href={activeCompetitionSlide.href} className="mt-3 inline-flex items-center gap-1 text-xs font-bold text-amber-300">Voir tous les tours<ArrowRight className="h-3.5 w-3.5" /></Link></div> : <Link href={`${activeCompetitionSlide.href}?tab=classement`} className="p-4 transition hover:bg-white/[0.025]"><div className="mb-3 text-sm font-black">Classement <span className="text-muted">(Top 5)</span></div><div className="divide-y divide-line/10">{activeCompetitionSlide.standings.slice(0, 5).map((row, index) => <div key={row.club} className="flex items-center gap-2 py-2"><span className="w-5 text-center text-xs text-muted">{index + 1}</span>{data.clubs[row.club]?.logo_url && <img src={data.clubs[row.club].logo_url} className="h-5 w-5 object-contain" alt="" />}<span className="min-w-0 flex-1 truncate text-xs font-semibold">{data.clubs[row.club]?.name || "—"}</span><b className="text-xs">{row.pts}</b></div>)}{!activeCompetitionSlide.standings.length && <p className="py-2 text-xs text-muted">Classement non disponible pour ce format.</p>}</div></Link>}
+          {activeCompetitionSlide.kind === "belgians" ? <div className="p-4"><div className="mb-3 text-sm font-black">À suivre cette semaine</div><p className="text-xs leading-5 text-muted">Une vue rapide des rencontres des clubs où évoluent les Belges suivis par Belfoot.</p><Link href="/belges-a-l-etranger" className="mt-3 inline-flex items-center gap-1 text-xs font-bold text-amber-300">Voir les joueurs<ArrowRight className="h-3.5 w-3.5" /></Link></div> : activeCompetitionSlide.knockout ? <div className="p-4"><div className="mb-3 flex items-center gap-2 text-sm font-black"><Trophy className="h-4 w-4 text-amber-300" />Élimination directe</div><p className="text-xs leading-5 text-muted">Les rencontres sont présentées tour par tour : aucun faux classement n'est calculé pour cette coupe.</p><Link href={activeCompetitionSlide.href} className="mt-3 inline-flex items-center gap-1 text-xs font-bold text-amber-300">Voir tous les tours<ArrowRight className="h-3.5 w-3.5" /></Link></div> : activeCompetitionSlide.nationsLeague ? <div className="p-4"><div className="mb-3 text-sm font-black">Classement par groupe</div><NationsLeagueStandings groups={activeCompetitionSlide.nationsGroups} clubs={data.clubs} division={homeNationsDivision} onDivisionChange={setHomeNationsDivision} compact /></div> : <Link href={`${activeCompetitionSlide.href}?tab=classement`} className="p-4 transition hover:bg-white/[0.025]"><div className="mb-3 text-sm font-black">Classement <span className="text-muted">(Top 5)</span></div><div className="divide-y divide-line/10">{activeCompetitionSlide.standings.slice(0, 5).map((row, index) => <div key={row.club} className="flex items-center gap-2 py-2"><span className="w-5 text-center text-xs text-muted">{index + 1}</span>{data.clubs[row.club]?.logo_url && <img src={data.clubs[row.club].logo_url} className="h-5 w-5 object-contain" alt="" />}<span className="min-w-0 flex-1 truncate text-xs font-semibold">{data.clubs[row.club]?.name || "—"}</span><b className="text-xs">{row.pts}</b></div>)}{!activeCompetitionSlide.standings.length && <p className="py-2 text-xs text-muted">Classement non disponible pour ce format.</p>}</div></Link>}
           <div className="border-t border-line/10 p-4 lg:border-l lg:border-t-0">{activeCompetitionSlide.kind === "belgians" ? <><div className="mb-3 text-sm font-black">Belges concernés</div><div className="space-y-2">{activeCompetitionSlide.players.map((item) => <Link key={item.player.id} href={`/players/${item.player.id}`} className="flex items-center gap-2 rounded-lg p-1 transition hover:bg-white/[0.03]"><PlayerPhoto player={item.player} className="h-8 w-8 rounded-lg" /><span className="min-w-0"><span className="block truncate text-xs font-bold">{item.player.name}</span><span className="block truncate text-[10px] text-muted">{item.club?.name}</span></span></Link>)}{!activeCompetitionSlide.players.length && <p className="text-xs text-muted">Aucun joueur concerné pour le moment.</p>}</div></> : <><div className="mb-3 text-sm font-black">Derniers résultats</div><div className="space-y-1.5">{activeCompetitionSlide.recent.map((match) => <MatchRow key={match.id} m={match} clubs={data.clubs} href={`/matchs/${match.id}`} compact />)}{!activeCompetitionSlide.recent.length && <p className="text-xs text-muted">Aucun résultat disponible.</p>}</div></>}</div>
           <div className="border-t border-line/10 p-4 lg:border-l lg:border-t-0"><div className="mb-3 text-sm font-black">Prochains matchs</div><div className="space-y-1.5">{activeCompetitionSlide.upcoming.map((match) => <MatchRow key={match.id} m={match} clubs={data.clubs} href={`/matchs/${match.id}`} compact />)}{!activeCompetitionSlide.upcoming.length && <p className="text-xs text-muted">Aucun match programmé.</p>}</div></div>
         </div>

@@ -95,7 +95,7 @@ export const FOOTBALL_ENTITIES = {
       { key: "position", label: "Poste", type: "select", options: ["Goalkeeper", "Defender", "Midfielder", "Attacker", "GK", "DEF", "MID", "FWD"] },
       { key: "number", label: "N°", type: "number" },
       { key: "age", label: "Âge", type: "number" },
-      { key: "nationality", label: "Nationalité", type: "text" },
+      { key: "nationality", label: "Nationalité(s) — séparer par une virgule", type: "text" },
       { key: "country", label: "Pays du championnat", type: "text" },
       { key: "competition", label: "Championnat", type: "text" },
       { key: "photo_url", label: "Photo", type: "image" },

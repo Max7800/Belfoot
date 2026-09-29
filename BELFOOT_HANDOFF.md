@@ -2055,6 +2055,17 @@ tant que la migration n'est pas enregistrée.
   les lignes verrouillées restent protégées. La fiche club affiche tout l'effectif actif, y compris les
   joueurs à zéro apparition. Le préflight compte l'appel supplémentaire par club. Aucun SQL nécessaire.
 
+#### Accueil Nations League et fiches joueurs
+
+- L'accueil ne calcule plus un faux Top 5 en mélangeant les groupes de Nations League. Il réutilise le
+  composant officiel compact avec sélecteur Ligue A/B/C/D et tourniquet entre les groupes.
+- Les fiches joueurs acceptent plusieurs nationalités dans le champ existant (`Belgique, Maroc` ou
+  `Belgo-marocain`) et affichent un badge/drapeau par nationalité. Une valeur binationale saisie
+  manuellement est préservée par la synchronisation des effectifs.
+- Les prochains matchs des joueurs utilisent une vraie carte domicile/extérieur avec les deux équipes,
+  la compétition, la date et l'heure. Les notes suivent partout sur la fiche le code couleur demandé :
+  vert à partir de 7,0, jaune de 6,0 à 6,9, rouge sous 6,0. Aucun SQL nécessaire.
+
 ---
 
 ## SOCLE_CANDIDATES  (documenter seulement — NE PAS remonter au socle maintenant)
