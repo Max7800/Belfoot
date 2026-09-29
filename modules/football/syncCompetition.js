@@ -58,18 +58,27 @@ function normalizeStandings(groups, map) {
 
 async function fillMissingClubProfile(db, source, rows) {
   const fields = ["founded_year", "stadium_name", "stadium_capacity", "stadium_address", "stadium_image_url"];
-  for (const row of rows) {
-    if (!row.external_id) continue;
-    const { data: current, error: selectError } = await db.from("clubs").select(`id,locked,${fields.join(",")}`).eq("source", source).eq("external_id", row.external_id).maybeSingle();
-    if (selectError) throw selectError;
+  const externalIds = [...new Set((rows || []).map((row) => row.external_id).filter(Boolean).map(String))];
+  if (!externalIds.length) return;
+  const { data: currentRows, error: selectError } = await db.from("clubs").select(`id,locked,external_id,${fields.join(",")}`).eq("source", source).in("external_id", externalIds);
+  if (selectError) throw selectError;
+  const currentByExternalId = new Map((currentRows || []).map((row) => [String(row.external_id), row]));
+  const updates = [];
+  for (const row of rows || []) {
+    const current = currentByExternalId.get(String(row.external_id));
     if (!current || current.locked) continue;
     const patch = {};
     for (const field of fields) if ((current[field] === null || current[field] === "") && row[field] !== null && row[field] !== undefined && row[field] !== "") patch[field] = row[field];
-    if (Object.keys(patch).length) {
-      const { error } = await db.from("clubs").update(patch).eq("id", current.id);
+    if (Object.keys(patch).length) updates.push({ id: current.id, patch });
+  }
+  const queue = [...updates];
+  await Promise.all(Array.from({ length: Math.min(8, queue.length) }, async () => {
+    while (queue.length) {
+      const update = queue.shift();
+      const { error } = await db.from("clubs").update(update.patch).eq("id", update.id);
       if (error) throw error;
     }
-  }
+  }));
 }
 
 const RESERVE_LINKS = [

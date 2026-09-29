@@ -1939,6 +1939,11 @@ tant que la migration n'est pas enregistrée.
   simulation Pro League 2026/2027 estime donc bien 18 clubs même si seulement 17 sont encore visibles
   avant l'étape de base. Si la synchronisation ne ramène toujours pas les 18 clubs, les étapes suivantes
   sont bloquées afin d'éviter de valider silencieusement une saison incomplète.
+- L'import de base ne fait plus une lecture puis une écriture Supabase séquentielle pour chacun des
+  quelque 306 matchs : les existants sont chargés par groupes, les nouvelles lignes sont insérées par
+  lots et les mises à jour utilisent une concurrence bornée. L'enrichissement des stades est également
+  groupé. Cela vise directement les `FUNCTION_INVOCATION_TIMEOUT` de `football.sync` sur Vercel Hobby ;
+  une coupure brutale ne peut pas déclencher la continuation automatique côté navigateur.
 
 #### État à récupérer avant toute modification
 
