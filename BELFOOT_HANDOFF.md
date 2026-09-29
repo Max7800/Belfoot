@@ -1,6 +1,14 @@
 # BELFOOT — Passation technique
 
-## Lot local en attente de push — rangement du Plan d'import et entretien (29/09/2026)
+## Ajustements locaux en attente de push — joueurs et classement européen (29/09/2026)
+
+- La vue d'ensemble des Coupes d'Europe affiche désormais uniquement les 24 qualifiés, en trois colonnes de huit : positions 1–8 en vert (qualification directe), 9–24 en jaune (barrages), 25–36 accessibles dans l'onglet Classement. Les clubs belges restent mis en évidence.
+- Une fiche joueur affiche des outils supplémentaires aux administrateurs : édition de la nationalité principale, de la deuxième nationalité et de la sélection représentée.
+- Une identité sportive corrigée depuis la fiche est marquée dans `players.ext.editorial_nationality`; les synchronisations d'effectifs et de découverte ne peuvent plus écraser cette nationalité. La sélection représentée utilise le verrou existant `national_team_locked`.
+- Le bouton `Rafraîchir sa carrière` effectue un préflight, annonce le coût (un appel), demande confirmation puis lance `football.player-careers` uniquement pour le joueur affiché. Le job collectif continue de fonctionner comme avant.
+- Aucun SQL n'est nécessaire pour ces ajustements.
+
+## Lot poussé — rangement du Plan d'import et entretien (29/09/2026)
 
 - Le Plan d'import est maintenant rangé en trois catégories repliables basées sur `competition_scope` : Belgique, Europe et International. Les sélections belges suivies apparaissent dans le bloc International.
 - L'ordre et les groupes techniques existants sont conservés : ce rangement ne modifie pas les règles de whitelist ni l'ordre réel des pipelines.

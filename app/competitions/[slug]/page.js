@@ -399,10 +399,10 @@ export default function CompetitionPage() {
                 </div>
               </Card>
             ) : (
-              <Card title={europeanClubCompetition ? L("nav.classement", "Classement") : L("comp.top5", "Classement — Top 5")} onSee={() => setTab("classement")} className={europeanClubCompetition ? "lg:col-span-2" : ""}>
+              <Card title={europeanClubCompetition ? "Qualifiés — Top 24" : L("comp.top5", "Classement — Top 5")} onSee={() => setTab("classement")} className={europeanClubCompetition ? "lg:col-span-2" : ""}>
                 <div className="flex h-full flex-col">
                   <div className={europeanClubCompetition ? "grid flex-1 gap-1.5 md:grid-cols-2 xl:grid-cols-3" : "flex flex-1 flex-col justify-between gap-1"}>
-                  {standings.slice(0, europeanClubCompetition ? standings.length : 5).map((r, i) => { const z = zoneFor(i + 1); return (
+                  {standings.slice(0, europeanClubCompetition ? 24 : 5).map((r, i) => { const z = europeanClubCompetition ? { color: i < 8 ? "#34d399" : "#fcd34d" } : zoneFor(i + 1); return (
                     <div key={r.club} className={`group flex min-w-0 items-center gap-2 rounded-xl border px-2 py-1.5 transition ${europeanClubCompetition && isBelgianClubCountry(clubsMap[r.club]?.ext?.country) ? "border-amber-300/45 bg-gradient-to-r from-red-500/15 via-amber-300/[0.08] to-transparent shadow-[inset_3px_0_0_rgba(252,211,77,.8)]" : "border-white/[0.035] bg-gradient-to-r from-white/[0.045] to-transparent hover:border-accent/20 hover:bg-white/[0.06]"}`}>
                       <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border text-xs font-black" style={z ? { borderColor: `${z.color}80`, background: `${z.color}22`, color: z.color } : { borderColor: "rgba(148,163,184,0.5)", background: "rgba(148,163,184,0.2)", color: "rgb(226,232,240)" }}>{i + 1}</span>
                       {clubsMap[r.club]?.logo_url && <img src={clubsMap[r.club].logo_url} className="h-6 w-6 shrink-0 object-contain" alt="" />}
@@ -413,7 +413,7 @@ export default function CompetitionPage() {
                     </div>); })}
                   {standings.length === 0 && <p className="text-muted">—</p>}
                   </div>
-                  {zones.length > 0 && <div className="mt-3 flex flex-wrap gap-x-2 gap-y-1 border-t border-line/10 pt-2 text-[10px] text-muted">{zones.map((z, i) => <span key={i} className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full" style={{ background: z.color }} />{z.label}</span>)}</div>}
+                  {europeanClubCompetition ? <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 border-t border-line/10 pt-2 text-[10px] text-muted"><span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-emerald-400" />1–8 · qualification directe</span><span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-amber-300" />9–24 · barrages</span><span>25–36 dans le classement complet</span></div> : zones.length > 0 && <div className="mt-3 flex flex-wrap gap-x-2 gap-y-1 border-t border-line/10 pt-2 text-[10px] text-muted">{zones.map((z, i) => <span key={i} className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full" style={{ background: z.color }} />{z.label}</span>)}</div>}
                 </div>
               </Card>
             )}

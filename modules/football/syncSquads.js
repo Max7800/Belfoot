@@ -66,7 +66,7 @@ export async function syncSquads(db, competition, ctx = {}) {
     })).values()];
     const externalIds = players.map((player) => player.external_id);
     const { data: existingRows, error: existingRowsError } = externalIds.length
-      ? await db.from("players").select("id,locked,club_id,external_id,nationality").eq("source", competition.provider).in("external_id", externalIds)
+      ? await db.from("players").select("id,locked,club_id,external_id,nationality,ext").eq("source", competition.provider).in("external_id", externalIds)
       : { data: [], error: null };
     if (existingRowsError) throw existingRowsError;
     const existingByExternalId = new Map((existingRows || []).map((player) => [String(player.external_id), player]));
@@ -92,8 +92,8 @@ export async function syncSquads(db, competition, ctx = {}) {
     await mapWithConcurrency(players, 8, async (p) => {
       const existing = existingByExternalId.get(String(p.external_id));
       const primaryClub = !["reserve", "u23", "youth", "women"].includes(club.team_type);
-      const manualDualNationality = /[,;/|]|\bbelgo\b/i.test(existing?.nationality || "");
-      const patch = { source: competition.provider, external_id: p.external_id, name: p.name, nationality: manualDualNationality ? existing.nationality : p.nationality, position: p.position, photo_url: p.photo_url, age: p.age, birth_date: p.birth_date, club_id: primaryClub || !existing?.club_id ? club.id : existing.club_id, country: competition.ext?.country || null, competition: competition.name, synced_at: now };
+      const manualNationality = existing?.ext?.editorial_nationality || /[,;/|]|\bbelgo\b/i.test(existing?.nationality || "");
+      const patch = { source: competition.provider, external_id: p.external_id, name: p.name, nationality: manualNationality ? existing.nationality : p.nationality, position: p.position, photo_url: p.photo_url, age: p.age, birth_date: p.birth_date, club_id: primaryClub || !existing?.club_id ? club.id : existing.club_id, country: competition.ext?.country || null, competition: competition.name, synced_at: now };
       let pid = existing?.id;
       if (existing && !existing.locked) {
         const { error } = await db.from("players").update(patch).eq("id", existing.id);

@@ -13,20 +13,27 @@ function inferredTeamType(name) {
 export async function syncPlayerCareers(db, competition, ctx = {}) {
   const provider = getProvider(competition.provider);
   if (!provider?.fetchPlayerCareer) throw new Error(`${competition.name}: historiques de carrière non supportés`);
-  const batchSize = Math.max(1, Math.min(Number(ctx.batchSize) || 5, 25));
-  const { data: matches, error: matchesError } = await db.from("matches").select("home_club_id,away_club_id").eq("competition_id", competition.id);
-  if (matchesError) throw matchesError;
-  const clubIds = [...new Set((matches || []).flatMap((match) => [match.home_club_id, match.away_club_id]).filter(Boolean))];
-  if (!clubIds.length) return `${competition.name}: aucun club rattaché`;
-  const { data: players, error: playersError } = await db.from("players")
+  const targeted = !!ctx.playerId;
+  const batchSize = targeted ? 1 : Math.max(1, Math.min(Number(ctx.batchSize) || 5, 25));
+  let playersQuery = db.from("players")
     .select("id,name,external_id,source,career_sync_status,career_synced_at")
-    .eq("tracked", true).eq("active", true).eq("source", competition.provider)
-    .in("club_id", clubIds)
+    .eq("source", competition.provider)
+    .not("external_id", "is", null);
+  if (targeted) {
+    playersQuery = playersQuery.eq("id", ctx.playerId);
+  } else {
+    const { data: matches, error: matchesError } = await db.from("matches").select("home_club_id,away_club_id").eq("competition_id", competition.id);
+    if (matchesError) throw matchesError;
+    const clubIds = [...new Set((matches || []).flatMap((match) => [match.home_club_id, match.away_club_id]).filter(Boolean))];
+    if (!clubIds.length) return `${competition.name}: aucun club rattaché`;
+    playersQuery = playersQuery.eq("tracked", true).eq("active", true).in("club_id", clubIds);
+  }
+  const { data: players, error: playersError } = await playersQuery
     .order("career_synced_at", { ascending: true, nullsFirst: true })
     .order("id", { ascending: true })
     .limit(batchSize);
   if (playersError) throw playersError;
-  if (!players?.length) return `${competition.name}: aucun joueur suivi à traiter`;
+  if (!players?.length) return targeted ? `${competition.name}: joueur introuvable ou sans identifiant provider` : `${competition.name}: aucun joueur suivi à traiter`;
 
   let memberships = 0;
   const errors = [];

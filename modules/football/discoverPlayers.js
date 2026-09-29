@@ -24,10 +24,10 @@ export async function discoverBelgians(db, competition, ctx = {}) {
     const players = await provider.fetchSquadPlayers({ external_id: club.external_id }, { ...ctx, leagueId: competition.external_id });
     const belgians = players.filter((p) => (p.nationality || "").toLowerCase() === nationality.toLowerCase());
     for (const p of belgians) {
-      const { data: existing, error: existingError } = await db.from("players").select("id,locked,club_id").eq("source", competition.provider).eq("external_id", p.external_id).maybeSingle();
+      const { data: existing, error: existingError } = await db.from("players").select("id,locked,club_id,nationality,ext").eq("source", competition.provider).eq("external_id", p.external_id).maybeSingle();
       if (existingError) throw existingError;
       const primaryClub = !["reserve", "u23", "youth", "women"].includes(club.team_type);
-      const patch = { source: competition.provider, external_id: p.external_id, name: p.name, nationality: p.nationality, position: p.position, photo_url: p.photo_url, club_id: primaryClub || !existing?.club_id ? club.id : existing.club_id, country: competition.ext?.country || null, competition: competition.name, synced_at: new Date().toISOString() };
+      const patch = { source: competition.provider, external_id: p.external_id, name: p.name, nationality: existing?.ext?.editorial_nationality ? existing.nationality : p.nationality, position: p.position, photo_url: p.photo_url, club_id: primaryClub || !existing?.club_id ? club.id : existing.club_id, country: competition.ext?.country || null, competition: competition.name, synced_at: new Date().toISOString() };
       let playerId = existing?.id;
       if (existing && !existing.locked) {
         const { error } = await db.from("players").update(patch).eq("id", existing.id);

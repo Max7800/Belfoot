@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, CalendarDays, Clock3, MapPin, Shield, Sparkles } from "lucide-react";
+import { ArrowLeft, CalendarDays, Clock3, MapPin, Pencil, RefreshCw, Save, Shield, Sparkles, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
@@ -10,6 +10,7 @@ import DiscussButton from "@/components/forum/DiscussButton";
 import { playerAge } from "@/lib/playerAge";
 import { preferAssignedPlayerStats } from "@/lib/playerStats";
 import { nationalityBadges, ratingTone } from "@/lib/nationalities";
+import { useAuth } from "@/lib/auth";
 
 const POSITION_LABELS = { Goalkeeper: "Gardien", GK: "Gardien", Defender: "Défenseur", DEF: "Défenseur", Midfielder: "Milieu", MID: "Milieu", Attacker: "Attaquant", FWD: "Attaquant" };
 const FINISHED = new Set(["finished"]);
@@ -56,7 +57,14 @@ function MatchCard({ match, clubs, competitions, playerTeamIds = [] }) {
 export default function PlayerPage() {
   const { id } = useParams();
   const L = useLabels();
+  const { isAdmin } = useAuth();
   const [state, setState] = useState({ player: undefined, club: null, nationalTeam: null, currentClubId: null, memberships: [], stats: [], performances: [], matches: [], competitions: {}, clubs: {}, error: "" });
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [editing, setEditing] = useState(false);
+  const [editor, setEditor] = useState({ primaryNationality: "", secondNationality: "", nationalTeamId: "" });
+  const [nationalTeams, setNationalTeams] = useState([]);
+  const [adminStatus, setAdminStatus] = useState("");
+  const [adminBusy, setAdminBusy] = useState(false);
 
   useEffect(() => { let alive = true; (async () => {
     const { data: player, error: playerError } = await supabase.from("players").select("*").eq("id", id).maybeSingle();
@@ -95,7 +103,7 @@ export default function PlayerPage() {
     const competitionIds = [...new Set([...statsRows.map((row) => row.competition_id), ...matches.map((row) => row.competition_id)].filter(Boolean))];
     const [clubsResult, competitionsResult] = await Promise.all([
       clubIds.length ? supabase.from("clubs").select("id,name,logo_url").in("id", clubIds) : Promise.resolve({ data: [] }),
-      competitionIds.length ? supabase.from("competitions").select("id,name,logo_url").in("id", competitionIds) : Promise.resolve({ data: [] }),
+      competitionIds.length ? supabase.from("competitions").select("id,name,logo_url,provider").in("id", competitionIds) : Promise.resolve({ data: [] }),
     ]);
     if (!alive) return;
     setState({
@@ -111,7 +119,7 @@ export default function PlayerPage() {
       competitions: Object.fromEntries((competitionsResult.data || []).map((row) => [row.id, row])),
       error: "",
     });
-  })().catch((error) => alive && setState((current) => ({ ...current, player: null, error: error.message || String(error) }))); return () => { alive = false; }; }, [id]);
+  })().catch((error) => alive && setState((current) => ({ ...current, player: null, error: error.message || String(error) }))); return () => { alive = false; }; }, [id, refreshKey]);
 
   const view = useMemo(() => {
     const latestSeason = Math.max(0, ...state.stats.map((row) => year(row.season)), ...state.memberships.map((row) => Number(row.season_start_year) || year(row.season)));
@@ -150,8 +158,59 @@ export default function PlayerPage() {
     const now = Date.now();
     const upcoming = state.matches.filter((match) => match.kickoff && !FINISHED.has(match.status) && matchTime(match) >= now).sort((a, b) => matchTime(a) - matchTime(b)).slice(0, 3);
     const performanceRows = state.performances.map((performance) => ({ performance, match: matchMap[performance.match_id] })).filter((row) => row.match).sort((a, b) => matchTime(b.match) - matchTime(a.match)).slice(0, 8);
-    return { latestSeason, totals, upcoming, performanceRows, ratingCompetition: state.competitions[primaryCompetitionId]?.name || "Compétition principale" };
+    return { latestSeason, totals, upcoming, performanceRows, primaryCompetitionId, primarySeason: primaryStat?.season || (latestSeason ? `${latestSeason}-${latestSeason + 1}` : "2026-2027"), ratingCompetition: state.competitions[primaryCompetitionId]?.name || "Compétition principale" };
   }, [state]);
+
+  const openEditor = async () => {
+    const values = String(state.player?.nationality || "").split(/[,;/|]/).map((value) => value.trim()).filter(Boolean);
+    setEditor({ primaryNationality: values[0] || "", secondNationality: values[1] || "", nationalTeamId: state.player?.national_team_id || "" });
+    setAdminStatus(""); setEditing(true);
+    if (!nationalTeams.length) {
+      const { data } = await supabase.from("clubs").select("id,name,logo_url,national_category").eq("team_type", "national").order("name");
+      setNationalTeams(data || []);
+    }
+  };
+
+  const saveEditorialIdentity = async () => {
+    setAdminBusy(true); setAdminStatus("");
+    const nationality = [editor.primaryNationality.trim(), editor.secondNationality.trim()].filter(Boolean).join(", ");
+    const ext = { ...(state.player?.ext || {}), editorial_nationality: true };
+    const { error } = await supabase.from("players").update({
+      nationality: nationality || null,
+      national_team_id: editor.nationalTeamId || null,
+      national_team_locked: true,
+      ext,
+    }).eq("id", id);
+    setAdminBusy(false);
+    if (error) { setAdminStatus(`Erreur : ${error.message}`); return; }
+    setEditing(false); setAdminStatus("Identité sportive enregistrée et protégée des synchronisations.");
+    setRefreshKey((value) => value + 1);
+  };
+
+  const refreshCareer = async () => {
+    if (!view.primaryCompetitionId) { setAdminStatus("Impossible de déterminer la compétition de référence de ce joueur."); return; }
+    setAdminBusy(true); setAdminStatus("Calcul du coût de la synchronisation…");
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const payload = { key: "football.player-careers", competitionId: view.primaryCompetitionId, playerId: id, season: view.primarySeason, batchSize: 1, requestLimit: 1 };
+      const preflightResponse = await fetch("/api/admin/job-preflight", { method: "POST", headers: { Authorization: `Bearer ${session?.access_token || ""}`, "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      const preflight = await preflightResponse.json().catch(() => ({}));
+      if (!preflightResponse.ok) throw new Error(preflight.error || "Préflight impossible");
+      if (!preflight.ok) throw new Error((preflight.blockers || []).join(" · ") || "Synchronisation bloquée");
+      if (!window.confirm(`Rafraîchir uniquement la carrière de ${state.player.name} ?\n\nCoût maximal estimé : ${preflight.total?.max ?? 1} appel API.`)) { setAdminBusy(false); setAdminStatus(""); return; }
+      setAdminStatus("Synchronisation ciblée en cours…");
+      const response = await fetch("/api/admin/run-job", { method: "POST", headers: { Authorization: `Bearer ${session?.access_token || ""}`, "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      const responseText = await response.text();
+      let result; try { result = JSON.parse(responseText); } catch { result = { detail: responseText }; }
+      if (!response.ok) throw new Error(result.detail || result.error || "La synchronisation a échoué");
+      setAdminStatus(result.detail || "Carrière actualisée.");
+      setRefreshKey((value) => value + 1);
+    } catch (error) {
+      setAdminStatus(`Erreur : ${error.message}`);
+    } finally {
+      setAdminBusy(false);
+    }
+  };
 
   if (state.player === undefined) return <div className="space-y-4"><div className="h-7 w-40 animate-pulse rounded bg-surface" /><div className="h-52 animate-pulse rounded-3xl bg-surface" /></div>;
   if (state.player === null) return <div><Link href="/belges-a-l-etranger" className="mb-5 inline-flex items-center gap-2 text-sm text-muted hover:text-content"><ArrowLeft className="h-4 w-4" />Retour aux Belges</Link><p className="rounded-2xl border border-red-500/25 bg-red-500/10 p-4 text-sm text-red-300">{state.error || "Joueur introuvable."}</p></div>;
@@ -172,6 +231,12 @@ export default function PlayerPage() {
           <div className="grid grid-cols-2 gap-2 sm:w-64"><div className="rounded-2xl border border-line/10 bg-black/15 p-3"><b className="block text-2xl">{view.totals.goals}</b><span className="text-[10px] uppercase tracking-wider text-muted">Buts</span></div><div className="rounded-2xl border border-line/10 bg-black/15 p-3"><b className="block text-2xl">{view.totals.assists}</b><span className="text-[10px] uppercase tracking-wider text-muted">Passes</span></div><div className="rounded-2xl border border-line/10 bg-black/15 p-3"><b className="block text-2xl">{view.totals.appearances}</b><span className="text-[10px] uppercase tracking-wider text-muted">Matchs</span></div><div className="rounded-2xl border border-line/10 bg-black/15 p-3"><b className={`inline-flex min-w-12 justify-center rounded-lg px-2 py-1 text-xl ${view.totals.rating != null ? ratingTone(view.totals.rating) : "text-muted"}`}>{view.totals.rating?.toFixed(1) || "—"}</b><span className="mt-1 block truncate text-[9px] uppercase tracking-wider text-muted" title={view.ratingCompetition}>Note · {view.ratingCompetition}</span></div></div>
         </div>
       </section>
+
+      {isAdmin && <section className="mt-4 rounded-2xl border border-amber-300/20 bg-amber-300/[0.05] p-4">
+        <div className="flex flex-wrap items-center gap-2"><div className="mr-auto"><div className="text-[10px] font-black uppercase tracking-[.18em] text-amber-200">Outils administrateur</div><p className="mt-1 text-xs text-muted">Corrige l’identité sportive ou actualise uniquement l’histoire de ce joueur.</p></div><button type="button" onClick={openEditor} disabled={adminBusy} className="inline-flex items-center gap-2 rounded-xl border border-line/15 bg-surface px-3 py-2 text-xs font-bold disabled:opacity-50"><Pencil className="h-3.5 w-3.5" />Modifier la fiche</button><button type="button" onClick={refreshCareer} disabled={adminBusy || !view.primaryCompetitionId} className="inline-flex items-center gap-2 rounded-xl border border-amber-300/25 bg-amber-300/10 px-3 py-2 text-xs font-bold text-amber-100 disabled:opacity-50"><RefreshCw className={`h-3.5 w-3.5 ${adminBusy ? "animate-spin" : ""}`} />Rafraîchir sa carrière</button></div>
+        {editing && <div className="mt-4 grid gap-3 border-t border-line/10 pt-4 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1.4fr_auto]"><label className="text-[10px] font-bold uppercase tracking-wider text-muted">Nationalité principale<input value={editor.primaryNationality} onChange={(event) => setEditor((current) => ({ ...current, primaryNationality: event.target.value }))} placeholder="Belgique" className="mt-1 block w-full rounded-lg border border-line/10 bg-surface2 px-3 py-2 text-sm normal-case tracking-normal text-content" /></label><label className="text-[10px] font-bold uppercase tracking-wider text-muted">Deuxième nationalité<input value={editor.secondNationality} onChange={(event) => setEditor((current) => ({ ...current, secondNationality: event.target.value }))} placeholder="Maroc, Grèce…" className="mt-1 block w-full rounded-lg border border-line/10 bg-surface2 px-3 py-2 text-sm normal-case tracking-normal text-content" /></label><label className="text-[10px] font-bold uppercase tracking-wider text-muted">Sélection représentée<select value={editor.nationalTeamId} onChange={(event) => setEditor((current) => ({ ...current, nationalTeamId: event.target.value }))} className="mt-1 block w-full rounded-lg border border-line/10 bg-surface2 px-3 py-2 text-sm normal-case tracking-normal text-content"><option value="">Aucune / à préciser</option>{nationalTeams.map((team) => <option key={team.id} value={team.id}>{team.name}{team.national_category ? ` · ${team.national_category}` : ""}</option>)}</select></label><div className="flex items-end gap-2"><button type="button" onClick={saveEditorialIdentity} disabled={adminBusy || !editor.primaryNationality.trim()} className="inline-flex h-10 items-center gap-2 rounded-lg bg-accent px-3 text-xs font-bold text-white disabled:opacity-50"><Save className="h-3.5 w-3.5" />Enregistrer</button><button type="button" onClick={() => setEditing(false)} disabled={adminBusy} className="inline-flex h-10 items-center rounded-lg border border-line/10 px-3 text-muted"><X className="h-4 w-4" /></button></div></div>}
+        {adminStatus && <p className={`mt-3 rounded-lg border px-3 py-2 text-xs ${adminStatus.startsWith("Erreur") ? "border-red-400/25 bg-red-500/10 text-red-200" : "border-emerald-400/20 bg-emerald-500/10 text-emerald-200"}`}>{adminStatus}</p>}
+      </section>}
 
       <div className="mt-4"><DiscussButton refType="player" refId={p.id} title={`Discussion : ${p.name}`} label="Discuter de ce joueur" categorySlug="belges-etranger" /></div>
 
