@@ -1,6 +1,17 @@
 import { getProvider } from "./providers";
 import { clearUnassignedPlayerStats, upsertPlayerMembership } from "./playerMemberships";
 
+async function mapWithConcurrency(items, limit, worker) {
+  const queue = [...items];
+  const workers = Array.from({ length: Math.min(limit, queue.length) }, async () => {
+    while (queue.length) {
+      const item = queue.shift();
+      await worker(item);
+    }
+  });
+  await Promise.all(workers);
+}
+
 export async function syncSquads(db, competition, ctx = {}) {
   const provider = getProvider(competition.provider);
   if (!provider?.fetchSquadPlayers) return `${competition.name}: squad non supporté`;
@@ -23,16 +34,23 @@ export async function syncSquads(db, competition, ctx = {}) {
   let n = 0;
   const orderedClubs = clubs || [];
   const startClubIndex = Math.max(0, Number(ctx.startClubIndex) || 0);
-  const defaultBatchSize = ctx.pipelineRunId ? 2 : Math.max(1, orderedClubs.length);
+  const defaultBatchSize = ctx.pipelineRunId ? 1 : Math.max(1, orderedClubs.length);
   const maxBatchSize = ctx.pipelineRunId ? 5 : Math.max(1, orderedClubs.length);
   const clubBatchSize = Math.max(1, Math.min(Number(ctx.clubBatchSize) || defaultBatchSize, maxBatchSize));
   const endClubIndex = Math.min(orderedClubs.length, startClubIndex + clubBatchSize);
   for (let clubIndex = startClubIndex; clubIndex < endClubIndex; clubIndex++) {
     const club = orderedClubs[clubIndex];
-    const players = await provider.fetchSquadPlayers({ external_id: club.external_id }, { ...ctx, season, leagueId: competition.external_id });
-    for (const p of players) {
-      const { data: existing, error: existingError } = await db.from("players").select("id,locked,club_id").eq("source", competition.provider).eq("external_id", p.external_id).maybeSingle();
-      if (existingError) throw existingError;
+    const fetchedPlayers = await provider.fetchSquadPlayers({ external_id: club.external_id }, { ...ctx, season, leagueId: competition.external_id });
+    const players = [...new Map((fetchedPlayers || []).filter((player) => player.external_id).map((player) => [String(player.external_id), player])).values()];
+    const externalIds = players.map((player) => player.external_id);
+    const { data: existingRows, error: existingRowsError } = externalIds.length
+      ? await db.from("players").select("id,locked,club_id,external_id").eq("source", competition.provider).in("external_id", externalIds)
+      : { data: [], error: null };
+    if (existingRowsError) throw existingRowsError;
+    const existingByExternalId = new Map((existingRows || []).map((player) => [String(player.external_id), player]));
+
+    await mapWithConcurrency(players, 8, async (p) => {
+      const existing = existingByExternalId.get(String(p.external_id));
       const primaryClub = !["reserve", "u23", "youth", "women"].includes(club.team_type);
       const patch = { source: competition.provider, external_id: p.external_id, name: p.name, nationality: p.nationality, position: p.position, photo_url: p.photo_url, age: p.age, birth_date: p.birth_date, club_id: primaryClub || !existing?.club_id ? club.id : existing.club_id, country: competition.ext?.country || null, competition: competition.name, synced_at: now };
       let pid = existing?.id;
@@ -44,25 +62,27 @@ export async function syncSquads(db, competition, ctx = {}) {
         if (error) throw error;
         pid = ins?.id;
       }
-      if (pid && p.stats) {
-        await clearUnassignedPlayerStats(db, { playerId: pid, competitionId: competition.id, season });
-        const { error } = await db.from("player_season_stats").upsert({ player_id: pid, club_id: club.id, season_id: seasonRow?.id || null, competition_id: competition.id, season, ...p.stats, source: competition.provider, external_id: p.external_id, synced_at: now }, { onConflict: "player_id,club_id,competition_id,season" });
-        if (error) throw new Error(`${competition.name}: stats ${p.name}: ${error.message}`);
-      }
-      if (pid) await upsertPlayerMembership(db, {
-        playerId: pid,
-        club,
-        season,
-        source: competition.provider,
-        externalId: p.external_id,
-        position: p.position,
-        shirtNumber: p.number ?? null,
-        isPrimary: primaryClub,
-        ext: p.ext || {},
-        syncedAt: now,
-      });
+      if (pid) await Promise.all([
+        p.stats ? (async () => {
+          await clearUnassignedPlayerStats(db, { playerId: pid, competitionId: competition.id, season });
+          const { error } = await db.from("player_season_stats").upsert({ player_id: pid, club_id: club.id, season_id: seasonRow?.id || null, competition_id: competition.id, season, ...p.stats, source: competition.provider, external_id: p.external_id, synced_at: now }, { onConflict: "player_id,club_id,competition_id,season" });
+          if (error) throw new Error(`${competition.name}: stats ${p.name}: ${error.message}`);
+        })() : Promise.resolve(),
+        upsertPlayerMembership(db, {
+          playerId: pid,
+          club,
+          season,
+          source: competition.provider,
+          externalId: p.external_id,
+          position: p.position,
+          shirtNumber: p.number ?? null,
+          isPrimary: primaryClub,
+          ext: p.ext || {},
+          syncedAt: now,
+        }),
+      ]);
       n++;
-    }
+    });
     await ctx.saveClubCheckpoint?.(clubIndex + 1);
   }
   return {

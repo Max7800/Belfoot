@@ -20,7 +20,7 @@ export async function syncCoaches(db, competition, ctx = {}) {
   let updated = 0; let protectedCount = 0; let missing = 0;
   const orderedClubs = clubs || [];
   const startClubIndex = Math.max(0, Number(ctx.startClubIndex) || 0);
-  const defaultBatchSize = ctx.pipelineRunId ? 5 : Math.max(1, orderedClubs.length);
+  const defaultBatchSize = ctx.pipelineRunId ? 3 : Math.max(1, orderedClubs.length);
   const maxBatchSize = ctx.pipelineRunId ? 10 : Math.max(1, orderedClubs.length);
   const clubBatchSize = Math.max(1, Math.min(Number(ctx.clubBatchSize) || defaultBatchSize, maxBatchSize));
   const endClubIndex = Math.min(orderedClubs.length, startClubIndex + clubBatchSize);
