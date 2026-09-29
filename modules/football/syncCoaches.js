@@ -20,7 +20,11 @@ export async function syncCoaches(db, competition, ctx = {}) {
   let updated = 0; let protectedCount = 0; let missing = 0;
   const orderedClubs = clubs || [];
   const startClubIndex = Math.max(0, Number(ctx.startClubIndex) || 0);
-  for (let clubIndex = startClubIndex; clubIndex < orderedClubs.length; clubIndex++) {
+  const defaultBatchSize = ctx.pipelineRunId ? 5 : Math.max(1, orderedClubs.length);
+  const maxBatchSize = ctx.pipelineRunId ? 10 : Math.max(1, orderedClubs.length);
+  const clubBatchSize = Math.max(1, Math.min(Number(ctx.clubBatchSize) || defaultBatchSize, maxBatchSize));
+  const endClubIndex = Math.min(orderedClubs.length, startClubIndex + clubBatchSize);
+  for (let clubIndex = startClubIndex; clubIndex < endClubIndex; clubIndex++) {
     const club = orderedClubs[clubIndex];
     if (!club.external_id) { missing++; await ctx.saveClubCheckpoint?.(clubIndex + 1); continue; }
     const { data: manual } = await db.from("coaches").select("id").eq("club_id", club.id).eq("locked", true).limit(1);
@@ -33,5 +37,9 @@ export async function syncCoaches(db, competition, ctx = {}) {
     updated++;
     await ctx.saveClubCheckpoint?.(clubIndex + 1);
   }
-  return `${competition.name}: ${updated} entraîneurs, ${protectedCount} protégés, ${missing} introuvables`;
+  return {
+    detail: `${competition.name}: ${updated} entraîneurs, ${protectedCount} protégés, ${missing} introuvables · clubs ${endClubIndex}/${orderedClubs.length}`,
+    complete: endClubIndex >= orderedClubs.length,
+    progress: { current: endClubIndex, total: orderedClubs.length, unit: "clubs" },
+  };
 }

@@ -14,13 +14,16 @@ export default {
     const output = [];
     for (let index = startCompetition; index < ordered.length; index++) {
       const competition = ordered[index];
-      output.push(await syncCoaches(db, competition, {
+      const outcome = await syncCoaches(db, competition, {
         ...ctx,
         startClubIndex: index === startCompetition ? Number(ctx.resumeState?.clubIndex) || 0 : 0,
         saveClubCheckpoint: async (clubIndex) => ctx.saveCheckpoint?.({ competitionIndex: index, clubIndex }),
-      }));
+      });
+      const result = typeof outcome === "string" ? { detail: outcome, complete: true } : outcome;
+      output.push(result.detail);
+      if (!result.complete) return { ...result, detail: output.join(" | ") };
       await ctx.saveCheckpoint?.({ competitionIndex: index + 1, clubIndex: 0 });
     }
-    return output.join(" | ");
+    return { detail: output.join(" | "), complete: true };
   },
 };

@@ -188,7 +188,16 @@ export function JobsPanel() {
     }
     setBusy(p.key); setMsg(`⏳ ${pipelineRunId ? "Reprise" : "Exécution"} de ${p.label}…`);
     try {
-      const result = await callPipeline(pipelineRunId ? { pipelineRunId } : { pipelineKey: p.key });
+      let result = await callPipeline(pipelineRunId ? { pipelineRunId } : { pipelineKey: p.key });
+      let continuations = 0;
+      while (result?.continuationRequired && result?.status === "paused") {
+        continuations++;
+        if (continuations > 50) throw new Error("Trop de lots successifs : recharge la page avant de reprendre");
+        const progress = result.progress?.total ? `${result.progress.current}/${result.progress.total} ${result.progress.unit || "éléments"}` : "checkpoint enregistré";
+        setMsg(`⏳ ${p.label} — ${progress}. Lancement automatique du lot suivant…`);
+        await load();
+        result = await callPipeline({ pipelineRunId: result.id, continuation: true });
+      }
       setMsg(`✓ ${p.label} — terminé (${result.request_count || 0}/${result.request_limit} appels consommés).`);
     } catch (e) { setMsg(`✗ ${p.label} interrompu : ${e.message}. L’étape reste enregistrée et peut être reprise.`); }
     setBusy(null); load();
@@ -230,7 +239,14 @@ export function JobsPanel() {
           </div>
         ))}
       </div>
-      {pipelineRuns.filter((runItem) => ["error", "paused", "running"].includes(runItem.status)).map((runItem) => { const definition = jobPipelines().find((item) => item.key === runItem.pipeline_key); if (!definition) return null; const recentlyRunning = runItem.status === "running" && Date.now() - new Date(runItem.heartbeat_at || runItem.started_at).getTime() < 2 * 60 * 1000; return <div key={runItem.id} className="mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-amber-400/30 bg-amber-400/10 p-2 text-xs text-amber-200"><span className="flex-1">« {definition.label} » · étape {Math.min((runItem.next_step || 0) + 1, definition.jobs.length)}/{definition.jobs.length} · {runItem.request_count || 0}/{runItem.request_limit} appels{runItem.detail ? ` · ${runItem.detail}` : ""}</span><button disabled={!!busy || recentlyRunning} title={recentlyRunning ? "Exécution encore active ; reprise disponible après deux minutes sans battement." : "Reprendre à l’étape enregistrée"} onClick={() => runPipeline(definition, runItem.id)} className="rounded bg-amber-400/20 px-3 py-1 font-bold text-amber-200 disabled:opacity-50">{recentlyRunning ? "En cours" : "Reprendre"}</button></div>; })}
+      {pipelineRuns.filter((runItem) => ["error", "paused", "running"].includes(runItem.status)).map((runItem) => {
+        const definition = jobPipelines().find((item) => item.key === runItem.pipeline_key);
+        if (!definition) return null;
+        const recentlyRunning = runItem.status === "running" && Date.now() - new Date(runItem.heartbeat_at || runItem.started_at).getTime() < 2 * 60 * 1000;
+        const used = Number(runItem.request_count) || 0;
+        const available = Math.max(0, (Number(runItem.request_limit) || 0) - used);
+        return <div key={runItem.id} className="mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-amber-400/30 bg-amber-400/10 p-2 text-xs text-amber-200"><span className="flex-1">« {definition.label} » · étape {Math.min((runItem.next_step || 0) + 1, definition.jobs.length)}/{definition.jobs.length} · {used} consommés · {available} disponibles{runItem.detail ? ` · ${runItem.detail}` : ""}</span><button disabled={!!busy || recentlyRunning} title={recentlyRunning ? "Exécution encore active ; reprise disponible après deux minutes sans battement." : "Reprendre à l’étape enregistrée"} onClick={() => runPipeline(definition, runItem.id)} className="rounded bg-amber-400/20 px-3 py-1 font-bold text-amber-200 disabled:opacity-50">{recentlyRunning ? "En cours" : "Reprendre"}</button></div>;
+      })}
       <p className="mt-2 text-[11px] leading-5 text-muted">Pour un nouveau pipeline, le budget est partagé sur toute la séquence. Lors d'une reprise, la valeur saisie devient l'enveloppe <b>encore disponible</b> : les appels déjà consommés et l'avancement restent enregistrés.</p>
     </div>
 

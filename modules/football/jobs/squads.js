@@ -10,13 +10,16 @@ export default {
     const out = [];
     for (let index = startCompetition; index < ordered.length; index++) {
       const c = ordered[index];
-      out.push(await syncSquads(db, c, {
+      const outcome = await syncSquads(db, c, {
         ...ctx,
         startClubIndex: index === startCompetition ? Number(ctx.resumeState?.clubIndex) || 0 : 0,
         saveClubCheckpoint: async (clubIndex) => ctx.saveCheckpoint?.({ competitionIndex: index, clubIndex }),
-      }));
+      });
+      const result = typeof outcome === "string" ? { detail: outcome, complete: true } : outcome;
+      out.push(result.detail);
+      if (!result.complete) return { ...result, detail: out.join(" | ") };
       await ctx.saveCheckpoint?.({ competitionIndex: index + 1, clubIndex: 0 });
     }
-    return out.join(" | ");
+    return { detail: out.join(" | "), complete: true };
   },
 };

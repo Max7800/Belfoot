@@ -1914,6 +1914,14 @@ tant que la migration n'est pas enregistrée.
   ayant consommé des appels avant l'arrivée des checkpoints, sans le recréer ni perdre son avancement.
 - Le champ de budget accepte une valeur vide pendant la saisie et sélectionne sa valeur au focus. Sur
   mobile, effacer `1` ne le réinsère donc plus avant que l'admin puisse saisir `50`.
+- Les étapes longues de mise en place sont maintenant fractionnées sans migration : deux clubs par lot
+  pour les effectifs et cinq pour les entraîneurs. Chaque lot écrit son checkpoint, passe brièvement le
+  pipeline en `paused`, puis l'administration lance automatiquement le lot suivant tant que la page
+  reste ouverte. Fermer la page est sans danger : le bouton `Reprendre` repart du dernier club validé.
+- Une continuation automatique ne rallonge jamais le budget. Seule une reprise manuelle confirmée peut
+  garantir une nouvelle enveloppe disponible, ce qui conserve le garde-fou de coût global.
+- La carte d'un pipeline actif distingue désormais les appels `consommés` des appels `disponibles`, au
+  lieu d'afficher un ratio ambigu lorsque le plafond total a été étendu lors d'une reprise.
 
 #### État à récupérer avant toute modification
 

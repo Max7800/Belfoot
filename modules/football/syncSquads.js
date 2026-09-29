@@ -23,7 +23,11 @@ export async function syncSquads(db, competition, ctx = {}) {
   let n = 0;
   const orderedClubs = clubs || [];
   const startClubIndex = Math.max(0, Number(ctx.startClubIndex) || 0);
-  for (let clubIndex = startClubIndex; clubIndex < orderedClubs.length; clubIndex++) {
+  const defaultBatchSize = ctx.pipelineRunId ? 2 : Math.max(1, orderedClubs.length);
+  const maxBatchSize = ctx.pipelineRunId ? 5 : Math.max(1, orderedClubs.length);
+  const clubBatchSize = Math.max(1, Math.min(Number(ctx.clubBatchSize) || defaultBatchSize, maxBatchSize));
+  const endClubIndex = Math.min(orderedClubs.length, startClubIndex + clubBatchSize);
+  for (let clubIndex = startClubIndex; clubIndex < endClubIndex; clubIndex++) {
     const club = orderedClubs[clubIndex];
     const players = await provider.fetchSquadPlayers({ external_id: club.external_id }, { ...ctx, season, leagueId: competition.external_id });
     for (const p of players) {
@@ -61,5 +65,9 @@ export async function syncSquads(db, competition, ctx = {}) {
     }
     await ctx.saveClubCheckpoint?.(clubIndex + 1);
   }
-  return `${competition.name}: ${n} joueurs (+ stats saison), ${orderedClubs.length} club(s) parcouru(s)`;
+  return {
+    detail: `${competition.name}: ${n} joueurs (+ stats saison) · clubs ${endClubIndex}/${orderedClubs.length}`,
+    complete: endClubIndex >= orderedClubs.length,
+    progress: { current: endClubIndex, total: orderedClubs.length, unit: "clubs" },
+  };
 }
