@@ -1,6 +1,7 @@
 import { runJob } from "@/lib/jobs";
 import { getAdmin } from "@/lib/supabaseAdmin";
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 // Déclenche un job depuis l'admin. Sécurité : on valide le JETON de session de
 // l'utilisateur et on exige role='admin'. Aucun secret ne transite par le client

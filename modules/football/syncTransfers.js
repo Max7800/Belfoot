@@ -44,7 +44,8 @@ export async function syncTransfers(db, competition, ctx = {}) {
 
   for (let clubIndex = startClubIndex; clubIndex < endClubIndex; clubIndex++) {
     const transfers = (await provider.fetchTeamTransfers(clubs[clubIndex], ctx))
-      .filter((transfer) => transferSeason(transfer.transfer_date) === season);
+      .filter((transfer) => transferSeason(transfer.transfer_date) === season)
+      .sort((a, b) => String(a.transfer_date || "").localeCompare(String(b.transfer_date || "")));
     const playerExternalIds = [...new Set(transfers.map((transfer) => transfer.player_external_id))];
     const { data: existingPlayers, error: playersError } = playerExternalIds.length
       ? await db.from("players").select("id,external_id,locked,club_id").eq("source", competition.provider).in("external_id", playerExternalIds)
@@ -107,7 +108,8 @@ export async function syncTransfers(db, competition, ctx = {}) {
       if (!player || player.locked) continue;
       if (fromClub && fromClub.id !== toClub?.id) {
         const { error } = await db.from("player_team_seasons").update({ active: false, left_at: transfer.transfer_date, synced_at: now, updated_at: now })
-          .eq("player_id", player.id).eq("club_id", fromClub.id).eq("season_start_year", season).eq("locked", false);
+          .eq("player_id", player.id).eq("club_id", fromClub.id).eq("season_start_year", season).eq("locked", false)
+          .or(`joined_at.is.null,joined_at.lte.${transfer.transfer_date}`);
         if (error) throw error;
         rosterChanges++;
       }
@@ -121,6 +123,7 @@ export async function syncTransfers(db, competition, ctx = {}) {
           isPrimary: !["reserve", "u23", "youth", "women"].includes(toClub.team_type),
           membershipType: /loan|prêt/i.test(transfer.transfer_type || "") ? "loan" : "permanent",
           joinedAt: transfer.transfer_date,
+          leftAt: null,
           active: true,
           ext: { transfer_type: transfer.transfer_type },
           syncedAt: now,

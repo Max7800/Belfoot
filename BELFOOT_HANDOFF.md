@@ -2124,6 +2124,19 @@ tant que la migration n'est pas enregistrée.
   absent des convocations déjà synchronisées, choisir sa sélection manuellement dans la fiche joueur admin.
   Aucun appel API-Football n'a été effectué.
 
+### 2026-09-29 — correctifs mercato et détails Nations League
+
+- `football.transfers` trie désormais les mouvements chronologiquement. Une arrivée/réactivation remet
+  explicitement `left_at` à `null`, et une sortie ne modifie que l'affectation dont `joined_at` est antérieur
+  ou égal au transfert. Cela évite `player_team_seasons_dates_check` lors de plusieurs passages dans le
+  même club pendant une saison, sans relâcher la contrainte SQL.
+- `football.lineups` utilise pour ses endpoints lourds un délai de 20 secondes et une seule tentative par
+  lot, au lieu de deux tentatives coupées à 12 secondes. Le lot est plafonné à deux matchs et le pipeline
+  `Compléter la saison` enchaîne automatiquement les suivants. La route de job déclare 60 secondes, limite
+  compatible avec Vercel Hobby.
+- Les succès partiels restent enregistrés endpoint par endpoint : une relance ne redemande que les données
+  encore incomplètes. Aucun SQL supplémentaire et aucun appel API-Football pendant ce correctif.
+
 ---
 
 ## SOCLE_CANDIDATES  (documenter seulement — NE PAS remonter au socle maintenant)

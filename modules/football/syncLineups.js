@@ -24,7 +24,15 @@ export async function syncLineups(db, competition, ctx = {}) {
   if (seasonError) throw seasonError;
   if (!season) return `${competition.name}: saison ${selectedSeason} introuvable`;
 
-  const cap = Math.max(1, Math.min(Number(ctx.matchCap) || 3, 20));
+  // Les trois endpoints de détail partent en parallèle, mais certains matchs
+  // internationaux répondent plus lentement. Deux matchs par fonction gardent
+  // une marge sous les 60 s de Vercel Hobby ; le pipeline reprend ensuite le lot suivant.
+  const cap = Math.max(1, Math.min(Number(ctx.matchCap) || 2, 2));
+  const providerCtx = {
+    ...ctx,
+    providerTimeoutMs: Number(ctx.providerTimeoutMs) || 20000,
+    providerAttempts: Number(ctx.providerAttempts) || 1,
+  };
   const { data: candidates, error: matchesError } = await db.from("matches")
     .select("id,external_id,competition_id,status,kickoff,home_club_id,away_club_id,lineups_synced_at,player_stats_synced_at,team_stats_synced_at")
     .eq("competition_id", competition.id)
@@ -75,9 +83,9 @@ export async function syncLineups(db, competition, ctx = {}) {
     const fetchStats = canStats && (match.status === "live" || !match.player_stats_synced_at);
     const fetchTeamStats = canTeamStats && (match.status === "live" || !match.team_stats_synced_at);
     const results = await Promise.allSettled([
-      fetchLineups ? provider.fetchMatchLineups({ external_id: match.external_id }, ctx) : Promise.resolve([]),
-      fetchStats ? provider.fetchMatchPlayerStats({ external_id: match.external_id }, ctx) : Promise.resolve([]),
-      fetchTeamStats ? provider.fetchMatchTeamStats({ external_id: match.external_id }, ctx) : Promise.resolve([]),
+      fetchLineups ? provider.fetchMatchLineups({ external_id: match.external_id }, providerCtx) : Promise.resolve([]),
+      fetchStats ? provider.fetchMatchPlayerStats({ external_id: match.external_id }, providerCtx) : Promise.resolve([]),
+      fetchTeamStats ? provider.fetchMatchTeamStats({ external_id: match.external_id }, providerCtx) : Promise.resolve([]),
     ]);
     const [lineupResult, playerResult, teamResult] = results;
     const lineups = lineupResult.status === "fulfilled" ? lineupResult.value : [];
