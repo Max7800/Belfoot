@@ -88,6 +88,7 @@ export function JobsPanel() {
   const [busy, setBusy] = useState(null);
   const [msg, setMsg] = useState("");
   const [comps, setComps] = useState([]);
+  const [availableSeasons, setAvailableSeasons] = useState([]);
   const [compId, setCompId] = useState("");
   const [matchCap, setMatchCap] = useState(3);
   const [batchSize, setBatchSize] = useState(5);
@@ -104,7 +105,11 @@ export function JobsPanel() {
     setRows(jobResult.data || []);
     setPipelineRuns(pipelineResult.data || []);
   };
-  useEffect(() => { load(); supabase.from("competitions").select("*").order("name").then(({ data }) => setComps(data || [])); }, []);
+  useEffect(() => {
+    load();
+    supabase.from("competitions").select("*").order("name").then(({ data }) => setComps(data || []));
+    supabase.from("seasons").select("competition_id,label").order("label", { ascending: false }).then(({ data }) => setAvailableSeasons(data || []));
+  }, []);
   const callJob = async (key, budget) => {
     const { data: { session } } = await supabase.auth.getSession();
     const r = await fetch("/api/admin/run-job", {
@@ -204,13 +209,18 @@ export function JobsPanel() {
     setBusy(null); load();
   };
   const latestQuota = rows.find((r) => r.quota_remaining != null)?.quota_remaining;
+  const seasonOptions = [...new Set([
+    "2024-2025", "2025-2026", "2026-2027",
+    ...availableSeasons.filter((item) => !compId || String(item.competition_id) === String(compId)).map((item) => item.label),
+    season,
+  ].filter(Boolean))].sort((a, b) => String(b).localeCompare(String(a)));
   return (<div>
     <h2 className="mb-4 text-lg font-bold">Jobs & synchronisation</h2>
     <p className="mb-3 text-xs leading-5 text-muted">Chaque lancement affiche maintenant son coût estimé et respecte un budget strict. Une relance identique est bloquée tant que le premier job travaille. La base 2024/2025 reste la référence de développement ; le passage à 2026/2027 se fera ici, compétition par compétition, lorsque l'abonnement API sera actif.</p>
     <div className="mb-3 flex flex-wrap items-center gap-2">
       <select value={compId} onChange={(e) => setCompId(e.target.value)} className="rounded border border-line/10 bg-surface2 px-2 py-1 text-sm"><option value="">Choisir une compétition…</option>{comps.map((c) => <option key={c.id} value={c.id}>{c.live_enabled ? "🔴 " : ""}{c.name}</option>)}</select>
       <label className="text-xs text-muted">Saison</label>
-      <input value={season} onChange={(e) => setSeason(e.target.value)} className="w-28 rounded border border-line/10 bg-surface2 px-2 py-1 text-sm" />
+      <select value={season} onChange={(e) => setSeason(e.target.value)} className="w-32 rounded border border-line/10 bg-surface2 px-2 py-1 text-sm">{seasonOptions.map((label) => <option key={label} value={label}>{label}</option>)}</select>
       <label className="text-xs text-muted">Max matchs</label>
       <input type="number" min="1" max="20" value={matchCap} onChange={(e) => setMatchCap(Math.max(1, Math.min(20, Number(e.target.value) || 1)))} className="w-16 rounded border border-line/10 bg-surface2 px-2 py-1 text-sm" />
       <label className="text-xs text-muted">Lot joueurs</label>

@@ -1954,6 +1954,8 @@ tant que la migration n'est pas enregistrée.
   Si l'enveloppe explicite (maximum 500 appels par lancement/reprise) est atteinte, le pipeline se met en
   pause sans erreur et demande une nouvelle enveloppe. Les pipelines hebdomadaires restent plafonnés et ne
   drainent pas accidentellement tout l'historique. Aucun SQL supplémentaire n'est nécessaire.
+- Le choix de saison dans `Jobs & historique` est une liste déroulante : elle propose les saisons déjà
+  présentes pour la compétition et conserve toujours les trois cibles 2024-2025, 2025-2026 et 2026-2027.
 
 #### État à récupérer avant toute modification
 
