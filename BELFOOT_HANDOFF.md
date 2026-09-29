@@ -1,6 +1,15 @@
 # BELFOOT — Passation technique
 
-## Correctif local en attente de push — timeout des compositions Nations League (29/09/2026)
+## Lot local en attente de push — rangement du Plan d'import et entretien (29/09/2026)
+
+- Le Plan d'import est maintenant rangé en trois catégories repliables basées sur `competition_scope` : Belgique, Europe et International. Les sélections belges suivies apparaissent dans le bloc International.
+- L'ordre et les groupes techniques existants sont conservés : ce rangement ne modifie pas les règles de whitelist ni l'ordre réel des pipelines.
+- Une section `Entretien des données` permet de choisir une compétition/saison et de lancer un inventaire en lecture seule : matchs, clubs, affectations d'effectif, événements, compositions, statistiques individuelles et lignes protégées.
+- Nouvelle route admin `POST /api/admin/data-maintenance`, authentifiée et limitée à l'action `analyze`. Elle ne lance aucun appel API-Football et ne modifie aucune donnée.
+- L'archivage/purge reste volontairement verrouillé jusqu'à l'ajout des niveaux de couverture par club (`résultats`, `match détaillé`, `suivi complet`). Les clubs, résultats, historiques et données manuelles/verrouillées devront rester protégés.
+- Aucun SQL n'est nécessaire pour ce premier lot.
+
+## Correctif poussé — timeout des compositions Nations League (29/09/2026)
 
 - Le job `football.lineups` traite désormais un seul match par invocation. Les trois endpoints restent parallèles, mais ce lot conserve une marge fiable sous la limite de 60 secondes de Vercel Hobby ; le pipeline `Compléter la saison` continue ensuite automatiquement avec le match suivant.
 - La réparation des convocations historiques ne rescannne plus toutes les statistiques non reliées avant chaque lot. Elle est limitée à 20 lignes de sélections nationales par invocation, puis reprend au passage suivant.

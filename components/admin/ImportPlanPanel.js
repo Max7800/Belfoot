@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, CheckCircle2, LockKeyhole, RefreshCw } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Database, LockKeyhole, RefreshCw, Search } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import {
   DEFAULT_IMPORT_PLAN,
@@ -16,6 +16,11 @@ import {
 
 const groupLabel = Object.fromEntries(IMPORT_GROUPS.map((group) => [group.key, group.label]));
 const scopeOptions = Object.entries(IMPORT_SCOPES);
+const PLAN_CATEGORIES = [
+  { key: "national", label: "Belgique", icon: "🇧🇪", description: "Pro League, Challenger Pro League, Croky Cup et autres compétitions belges." },
+  { key: "europe", label: "Europe", icon: "🌍", description: "Champions League, Europa League et Conference League." },
+  { key: "international", label: "International", icon: "🌐", description: "Nations League, Euro, Coupe du monde et sélections." },
+];
 
 async function requestReadiness(payload) {
   const { data: { session } } = await supabase.auth.getSession();
@@ -31,6 +36,19 @@ async function requestReadiness(payload) {
     error.report = result.report;
     throw error;
   }
+  return result;
+}
+
+async function requestMaintenance(payload) {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.access_token) throw new Error("Session administrateur expirée.");
+  const response = await fetch("/api/admin/data-maintenance", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(result.error || "L’analyse des données a échoué.");
   return result;
 }
 
@@ -53,6 +71,9 @@ export default function ImportPlanPanel() {
   const [plan, setPlan] = useState(DEFAULT_IMPORT_PLAN);
   const [status, setStatus] = useState("loading");
   const [message, setMessage] = useState("");
+  const [maintenanceSeasonId, setMaintenanceSeasonId] = useState("");
+  const [maintenanceReport, setMaintenanceReport] = useState(null);
+  const [maintenanceStatus, setMaintenanceStatus] = useState("idle");
 
   const load = useCallback(async () => {
     setStatus("loading"); setMessage("");
@@ -73,6 +94,7 @@ export default function ImportPlanPanel() {
     setNationalTeams(nationalRows);
     const seasonRows = seasonResult.data || [];
     setSeasons(seasonRows);
+    setMaintenanceSeasonId((current) => current && seasonRows.some((season) => season.id === current) ? current : seasonRows[0]?.id || "");
     setPlan({
       ...stored,
       version: 4,
@@ -137,6 +159,20 @@ export default function ImportPlanPanel() {
   const estimate = useMemo(() => importPlanEstimate(plan), [plan]);
   const schedule = useMemo(() => importPlanSchedule(plan, competitions, nationalTeams), [plan, competitions, nationalTeams]);
   const competitionName = Object.fromEntries(competitions.map((competition) => [competition.id, competition.name]));
+  const competitionsByCategory = useMemo(() => Object.fromEntries(PLAN_CATEGORIES.map((category) => [category.key, competitions
+    .filter((competition) => (competition.competition_scope || "national") === category.key)
+    .sort((a, b) => (Number(plan.competitions[a.id]?.order) || 999) - (Number(plan.competitions[b.id]?.order) || 999) || a.name.localeCompare(b.name))])), [competitions, plan.competitions]);
+  const analyzeMaintenance = async () => {
+    if (!maintenanceSeasonId) return;
+    setMaintenanceStatus("loading"); setMaintenanceReport(null);
+    try {
+      setMaintenanceReport(await requestMaintenance({ seasonId: maintenanceSeasonId, action: "analyze" }));
+      setMaintenanceStatus("ready");
+    } catch (error) {
+      setMaintenanceReport({ error: error.message });
+      setMaintenanceStatus("error");
+    }
+  };
 
   return <div>
     <div className="mb-5 flex items-start justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-[.18em] text-accent">Mois API-Football Pro</p><h1 className="mt-1 text-2xl font-black">Plan historique 2024 → 2027</h1><p className="mt-1 max-w-3xl text-sm text-muted">Trois saisons séparées, une whitelist par compétition et un quota quotidien. Enregistrer ne lance aucun import et n’active jamais 2026 automatiquement.</p></div><button type="button" onClick={load} disabled={["loading", "saving"].includes(status)} className="rounded-xl border border-line/15 bg-surface p-2 text-muted hover:text-white disabled:opacity-50" title="Actualiser"><RefreshCw className={`h-4 w-4 ${status === "loading" ? "animate-spin" : ""}`} /></button></div>
@@ -151,13 +187,31 @@ export default function ImportPlanPanel() {
       <p className="mt-3 text-[11px] leading-5 text-muted">Capacité quotidienne réservée aux imports historiques : {estimate.usableDaily} appels après {estimate.reserved} appels gardés pour les carrières et le direct. Projection haute : calendrier = 3 appels par compétition ; effectifs = jusqu’à 3 pages par club + entraîneur ; complet = jusqu’à 3 appels par match. Le préflight recalculera le coût réel avant chaque lancement.</p>
     </section>
 
-    <section className="mb-6 rounded-2xl border border-line/10 bg-surface p-4"><div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-black">Compétitions</h2><p className="text-xs text-muted">Les estimations clubs/matchs sont modifiables avant l’abonnement.</p></div><button type="button" onClick={save} disabled={status === "saving" || schedule.capacity <= 0 || schedule.oversized.length > 0} className="rounded-xl bg-accent px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{status === "saving" ? "Enregistrement…" : "Enregistrer le plan"}</button></div>
-      <div className="space-y-3">{competitions.map((competition) => { const config = plan.competitions[competition.id]; if (!config) return null; return <article key={competition.id} className="rounded-xl border border-line/10 bg-bg/30 p-3"><div className="grid gap-3 lg:grid-cols-[auto_minmax(180px,1fr)_180px_80px] lg:items-center"><label className="flex items-center gap-2 text-xs font-bold"><input type="checkbox" checked={config.enabled} onChange={(event) => updateCompetition(competition.id, { enabled: event.target.checked })} />Autoriser</label><div><b className="block text-sm">{competition.name}</b><span className="text-[10px] text-muted">{competition.provider} · ID {competition.external_id}</span></div><select value={config.group} onChange={(event) => updateCompetition(competition.id, { group: event.target.value })} className="rounded-lg border border-line/10 bg-surface2 px-2 py-2 text-xs">{IMPORT_GROUPS.filter((group) => group.key !== "national").map((group) => <option key={group.key} value={group.key}>{group.label}</option>)}</select><label className="text-[10px] uppercase text-muted">Ordre<input type="number" min="1" value={config.order} onChange={(event) => updateCompetition(competition.id, { order: Number(event.target.value) || 999 })} className="mt-1 w-full rounded border border-line/10 bg-surface2 px-2 py-1 text-sm text-content" /></label></div><div className="mt-3 grid gap-2 sm:grid-cols-3">{plan.seasons.map((season) => <div key={season.label}><div className="mb-1 text-[10px] font-black text-muted">{season.label}</div><SeasonTarget value={config.seasons[season.label]} disabled={!config.enabled || !season.enabled} onChange={(patch) => updateCompetitionSeason(competition.id, season.label, patch)} /></div>)}</div></article>; })}</div>
+    <section className="mb-6 rounded-2xl border border-line/10 bg-surface p-4">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-black">Compétitions par territoire</h2><p className="text-xs text-muted">Belgique, Europe et international sont séparés sans modifier l’ordre réel des imports.</p></div><button type="button" onClick={save} disabled={status === "saving" || schedule.capacity <= 0 || schedule.oversized.length > 0} className="rounded-xl bg-accent px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{status === "saving" ? "Enregistrement…" : "Enregistrer le plan"}</button></div>
+      <div className="space-y-4">{PLAN_CATEGORIES.map((category) => {
+        const rows = competitionsByCategory[category.key] || [];
+        const includesSelections = category.key === "international" && nationalTeams.length > 0;
+        return <details key={category.key} open className="overflow-hidden rounded-2xl border border-line/10 bg-bg/25">
+          <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 marker:hidden"><span className="text-xl">{category.icon}</span><span className="min-w-0 flex-1"><b className="block">{category.label}</b><span className="block truncate text-[11px] text-muted">{category.description}</span></span><span className="rounded-full border border-line/10 bg-surface px-2.5 py-1 text-[10px] font-bold text-muted">{rows.length + (includesSelections ? nationalTeams.length : 0)} cible(s)</span></summary>
+          <div className="space-y-3 border-t border-line/10 p-3">{rows.map((competition) => { const config = plan.competitions[competition.id]; if (!config) return null; return <article key={competition.id} className="rounded-xl border border-line/10 bg-surface/70 p-3"><div className="grid gap-3 lg:grid-cols-[auto_minmax(180px,1fr)_180px_80px] lg:items-center"><label className="flex items-center gap-2 text-xs font-bold"><input type="checkbox" checked={config.enabled} onChange={(event) => updateCompetition(competition.id, { enabled: event.target.checked })} />Autoriser</label><div><b className="block text-sm">{competition.name}</b><span className="text-[10px] text-muted">{competition.provider} · ID {competition.external_id}</span></div><select value={config.group} onChange={(event) => updateCompetition(competition.id, { group: event.target.value })} className="rounded-lg border border-line/10 bg-surface2 px-2 py-2 text-xs">{IMPORT_GROUPS.filter((group) => group.key !== "national").map((group) => <option key={group.key} value={group.key}>{group.label}</option>)}</select><label className="text-[10px] uppercase text-muted">Ordre<input type="number" min="1" value={config.order} onChange={(event) => updateCompetition(competition.id, { order: Number(event.target.value) || 999 })} className="mt-1 w-full rounded border border-line/10 bg-surface2 px-2 py-1 text-sm text-content" /></label></div><div className="mt-3 grid gap-2 sm:grid-cols-3">{plan.seasons.map((season) => <div key={season.label}><div className="mb-1 text-[10px] font-black text-muted">{season.label}</div><SeasonTarget value={config.seasons[season.label]} disabled={!config.enabled || !season.enabled} onChange={(patch) => updateCompetitionSeason(competition.id, season.label, patch)} /></div>)}</div></article>; })}
+            {includesSelections && <div className="space-y-3"><div className="px-1 pt-1 text-[10px] font-black uppercase tracking-[.16em] text-muted">Sélections belges suivies</div>{nationalTeams.map((team, index) => { const externalId = String(team.external_id || ""); const config = plan.nationalTeams[externalId] || hydrateNationalConfig({}, index); return <article key={team.id} className="rounded-xl border border-line/10 bg-surface/70 p-3"><div className="flex flex-wrap items-center gap-3"><label className="flex items-center gap-2 text-xs font-bold"><input type="checkbox" checked={config.enabled} disabled={!externalId} onChange={(event) => updateNational(externalId, { enabled: event.target.checked })} />Autoriser</label><div className="min-w-[180px] flex-1"><b className="block text-sm">{team.name}</b><span className="text-[10px] text-muted">ID équipe {externalId || "manquant"}</span></div><label className="text-[10px] uppercase text-muted">Ordre<input type="number" min="1" value={config.order} onChange={(event) => updateNational(externalId, { order: Number(event.target.value) || 999 })} className="mt-1 w-20 rounded border border-line/10 bg-surface2 px-2 py-1 text-sm text-content" /></label></div><div className="mt-3 grid gap-2 sm:grid-cols-3">{plan.seasons.map((season) => <div key={season.label}><div className="mb-1 text-[10px] font-black text-muted">{season.label}</div><SeasonTarget national value={config.seasons[season.label]} disabled={!config.enabled || !season.enabled} onChange={(patch) => updateNationalSeason(externalId, season.label, patch)} /></div>)}</div></article>; })}</div>}
+            {!rows.length && !includesSelections && <p className="rounded-xl border border-dashed border-line/15 p-4 text-sm text-muted">Aucune compétition dans cette catégorie.</p>}
+          </div>
+        </details>;
+      })}</div>
     </section>
 
-    {nationalTeams.length > 0 && <section className="mb-6 rounded-2xl border border-line/10 bg-surface p-4"><h2 className="mb-3 font-black">Sélections belges</h2><div className="space-y-3">{nationalTeams.map((team, index) => { const externalId = String(team.external_id || ""); const config = plan.nationalTeams[externalId] || hydrateNationalConfig({}, index); return <article key={team.id} className="rounded-xl border border-line/10 bg-bg/30 p-3"><div className="flex flex-wrap items-center gap-3"><label className="flex items-center gap-2 text-xs font-bold"><input type="checkbox" checked={config.enabled} disabled={!externalId} onChange={(event) => updateNational(externalId, { enabled: event.target.checked })} />Autoriser</label><div className="min-w-[180px] flex-1"><b className="block text-sm">{team.name}</b><span className="text-[10px] text-muted">ID équipe {externalId || "manquant"}</span></div><label className="text-[10px] uppercase text-muted">Ordre<input type="number" min="1" value={config.order} onChange={(event) => updateNational(externalId, { order: Number(event.target.value) || 999 })} className="mt-1 w-20 rounded border border-line/10 bg-surface2 px-2 py-1 text-sm text-content" /></label></div><div className="mt-3 grid gap-2 sm:grid-cols-3">{plan.seasons.map((season) => <div key={season.label}><div className="mb-1 text-[10px] font-black text-muted">{season.label}</div><SeasonTarget national value={config.seasons[season.label]} disabled={!config.enabled || !season.enabled} onChange={(patch) => updateNationalSeason(externalId, season.label, patch)} /></div>)}</div></article>; })}</div></section>}
-
     <section className="mb-6 rounded-2xl border border-accent/20 bg-accent/5 p-4"><h2 className="mb-3 flex items-center gap-2 text-sm font-black uppercase tracking-wider text-accent"><LockKeyhole className="h-4 w-4" />Ordre quotidien autorisé</h2>{schedule.days.length ? <div className="space-y-4">{schedule.days.map((day) => <div key={day.day}><h3 className="mb-2 text-xs font-black">Jour {day.day} · ≈ {day.cost} / {schedule.capacity} appels d’import</h3><ol className="space-y-1.5">{day.targets.map((target, index) => <li key={`${target.type}-${target.id}-${target.season}`} className="flex items-center gap-3 rounded-lg border border-line/10 bg-surface px-3 py-2 text-sm"><span className="flex h-6 w-6 items-center justify-center rounded-full bg-accent/15 text-xs font-black text-accent">{index + 1}</span><span className="flex-1 font-bold">{target.season} · {target.label}</span><span className="text-[10px] uppercase text-muted">≈ {target.cost} · {IMPORT_SCOPES[target.scope]?.label} · {groupLabel[target.group] || target.group}</span></li>)}</ol></div>)}</div> : <p className="text-sm text-muted">Aucune cible autorisée. Tous les imports seront bloqués après enregistrement.</p>}{schedule.capacity <= 0 && <div className="mt-3 rounded-lg border border-red-400/25 bg-red-500/10 p-3 text-xs text-red-200">Les réserves carrières et direct utilisent tout le quota quotidien. Réduis-les avant d’enregistrer.</div>}{schedule.oversized.length > 0 && <div className="mt-3 rounded-lg border border-red-400/25 bg-red-500/10 p-3 text-xs text-red-200">Une cible dépasse à elle seule la capacité quotidienne : {schedule.oversized.map((target) => `${target.season} · ${target.label} (≈ ${target.cost})`).join(", ")}. Réduis son périmètre ou augmente le quota avant d’enregistrer.</div>}</section>
+
+    <section className="mb-6 rounded-2xl border border-cyan-400/20 bg-cyan-400/5 p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="flex items-center gap-2 font-black"><Database className="h-4 w-4 text-cyan-300" />Entretien des données</h2><p className="mt-1 max-w-2xl text-xs leading-5 text-muted">Inventorie une saison avant d’archiver les effectifs et détails devenus secondaires. Cette première étape est strictement en lecture seule.</p></div><span className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-cyan-200">Simulation obligatoire</span></div>
+      <div className="mt-4 flex flex-col gap-2 sm:flex-row"><select value={maintenanceSeasonId} onChange={(event) => { setMaintenanceSeasonId(event.target.value); setMaintenanceReport(null); setMaintenanceStatus("idle"); }} className="min-w-0 flex-1 rounded-xl border border-line/10 bg-surface2 px-3 py-2 text-sm">{seasons.map((season) => <option key={season.id} value={season.id}>{competitionName[season.competition_id] || "Compétition"} · {season.label}</option>)}</select><button type="button" onClick={analyzeMaintenance} disabled={!maintenanceSeasonId || maintenanceStatus === "loading"} className="inline-flex items-center justify-center gap-2 rounded-xl border border-cyan-300/25 bg-cyan-300/10 px-4 py-2 text-sm font-bold text-cyan-100 disabled:opacity-50"><Search className={`h-4 w-4 ${maintenanceStatus === "loading" ? "animate-pulse" : ""}`} />{maintenanceStatus === "loading" ? "Analyse…" : "Analyser la saison"}</button></div>
+      {maintenanceReport?.error && <div className="mt-3 rounded-xl border border-red-400/25 bg-red-500/10 p-3 text-sm text-red-200">{maintenanceReport.error}</div>}
+      {maintenanceReport?.counts && <div className="mt-4"><div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">{[
+        ["Matchs conservés", maintenanceReport.counts.matches], ["Clubs conservés", maintenanceReport.counts.clubs], ["Affectations", maintenanceReport.counts.memberships], ["Événements", maintenanceReport.counts.events], ["Compositions", maintenanceReport.counts.lineups], ["Stats joueurs", maintenanceReport.counts.playerStats], ["Lignes protégées", maintenanceReport.counts.protectedRows],
+      ].map(([label, value]) => <div key={label} className="rounded-xl border border-line/10 bg-surface/70 p-3"><b className="block text-lg">{value}</b><span className="text-[10px] text-muted">{label}</span></div>)}</div><div className="mt-3 rounded-xl border border-amber-400/20 bg-amber-400/5 p-3 text-xs leading-5 text-amber-100"><b>Archivage encore verrouillé.</b> {maintenanceReport.nextStep}<ul className="mt-2 list-disc space-y-1 pl-4 text-muted">{maintenanceReport.safeguards.map((item) => <li key={item}>{item}</li>)}</ul></div></div>}
+    </section>
 
     <section><div className="mb-3"><h2 className="text-lg font-black">Activation publique des saisons</h2><p className="mt-1 text-xs text-muted">Chaque saison est contrôlée côté serveur. Une archive prête reste consultable et une seule saison est proposée par défaut pour chaque compétition.</p></div><div className="divide-y divide-line/10 overflow-hidden rounded-2xl border border-line/10 bg-surface">{seasons.map((season) => { const report = readiness[season.id]; const failedChecks = report?.checks?.filter((item) => item.blocking && !item.ok) || []; return <div key={season.id} className="p-3 text-sm"><div className="flex flex-wrap items-center gap-3"><div className="min-w-[190px] flex-1"><b>{competitionName[season.competition_id] || "Compétition"} · {season.label}</b><div className="mt-0.5 text-[10px] uppercase tracking-wider text-muted">{season.import_status || "inconnu"}{report?.scopeLabel ? ` · ${report.scopeLabel}` : ""}</div></div><div className="min-w-[150px] sm:w-52"><div className="mb-1 flex justify-between text-[10px] font-bold uppercase tracking-wider text-muted"><span>Contrôles</span><span>{report ? `${report.progress}%` : "…"}</span></div><div className="h-1.5 overflow-hidden rounded-full bg-bg"><div className={`h-full rounded-full ${report?.ok ? "bg-emerald-400" : "bg-amber-400"}`} style={{ width: `${report?.progress || 0}%` }} /></div></div>{season.public_active ? <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-bold text-emerald-300"><CheckCircle2 className="h-3.5 w-3.5" />Par défaut</span> : <>{["draft", "error", "importing"].includes(season.import_status) && <button type="button" onClick={() => markReady(season)} disabled={status === "saving" || !report?.ok} className="rounded-lg border border-amber-400/25 bg-amber-400/10 px-3 py-1.5 text-xs font-bold text-amber-200 disabled:cursor-not-allowed disabled:opacity-40">{report?.ok ? "Marquer prête" : "Contrôles incomplets"}</button>}{season.import_status === "ready" && <button type="button" onClick={() => activate(season)} disabled={status === "saving" || !report?.ok} className="rounded-lg border border-emerald-400/25 bg-emerald-400/10 px-3 py-1.5 text-xs font-bold text-emerald-200 disabled:cursor-not-allowed disabled:opacity-40">{report?.ok ? "Utiliser par défaut" : "Revalidation requise"}</button>}</>}</div>{report && <div className="mt-3 grid gap-2 lg:grid-cols-[minmax(0,1fr)_auto]"><div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted"><span>{report.counts.matches}{report.counts.expectedMatches ? ` / ${report.counts.expectedMatches}` : ""} matchs</span><span>{report.counts.clubs}{report.counts.expectedClubs ? ` / ${report.counts.expectedClubs}` : ""} clubs</span>{report.scope !== "base" && <span>{report.counts.memberships} affectations d’effectif</span>}{report.scope === "complete" && <span>{report.counts.pendingEvents + report.counts.pendingLineups + report.counts.pendingPlayerStats} traitements de match restants</span>}</div>{failedChecks.length > 0 && <div className="text-[11px] text-amber-200">{failedChecks.map((item) => `${item.label} : ${item.detail}`).join(" · ")}</div>}</div>}</div>; })}</div></section>
     <div className="mt-5 flex items-start gap-2 rounded-xl border border-amber-400/20 bg-amber-400/5 p-3 text-xs text-amber-100"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /><p>Les projections sont volontairement hautes et réparties sur plusieurs journées si nécessaire. Le préflight basé sur les données déjà importées donnera le coût précis avant chaque pipeline.</p></div>
