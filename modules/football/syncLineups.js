@@ -24,10 +24,11 @@ export async function syncLineups(db, competition, ctx = {}) {
   if (seasonError) throw seasonError;
   if (!season) return `${competition.name}: saison ${selectedSeason} introuvable`;
 
-  // Les trois endpoints de détail partent en parallèle, mais certains matchs
-  // internationaux répondent plus lentement. Deux matchs par fonction gardent
-  // une marge sous les 60 s de Vercel Hobby ; le pipeline reprend ensuite le lot suivant.
-  const cap = Math.max(1, Math.min(Number(ctx.matchCap) || 2, 2));
+  // Les trois endpoints de détail partent en parallèle. Un seul match par
+  // fonction laisse une marge réelle sous les 60 s de Vercel Hobby, y compris
+  // pour les compétitions internationales plus lentes. Le pipeline enchaîne
+  // ensuite automatiquement le lot suivant sans retraiter les marqueurs acquis.
+  const cap = 1;
   const providerCtx = {
     ...ctx,
     providerTimeoutMs: Number(ctx.providerTimeoutMs) || 20000,
@@ -46,20 +47,31 @@ export async function syncLineups(db, competition, ctx = {}) {
   if (!candidates?.length) return ctx.drain
     ? { detail: `${competition.name}: aucun match éligible`, complete: true, progress: { current: 0, total: 0, unit: "matchs détaillés" } }
     : `${competition.name}: aucun match éligible`;
-  const [clubRows, playerRows, unresolvedRows] = await Promise.all([
+  const [clubRows, playerRows] = await Promise.all([
     db.from("clubs").select("id,external_id,team_type").eq("source", competition.provider),
     db.from("players").select("id,external_id").eq("source", competition.provider),
-    db.from("match_player_stats").select("id,match_id,club_id,player_external_id,player_name,number,position,starter,minutes,ext,locked").eq("competition_id", competition.id).is("player_id", null),
   ]);
   if (clubRows.error) throw clubRows.error;
   if (playerRows.error) throw playerRows.error;
-  if (unresolvedRows.error) throw unresolvedRows.error;
   const clubMap = Object.fromEntries((clubRows.data || []).map((club) => [club.external_id, club.id]));
   const nationalTeamIds = new Set((clubRows.data || []).filter((club) => club.team_type === "national").map((club) => club.id));
   const playerMap = Object.fromEntries((playerRows.data || []).map((player) => [player.external_id, player.id]));
+  // La réparation des convocations ne doit jamais rescanner toute l'histoire
+  // avant chaque appel provider. Un petit lot borné suffit : les exécutions
+  // suivantes reprennent les lignes restantes et restent compatibles Hobby.
+  const { data: unresolvedRows, error: unresolvedError } = nationalTeamIds.size
+    ? await db.from("match_player_stats")
+      .select("id,match_id,club_id,player_external_id,player_name,number,position,starter,minutes,ext,locked")
+      .eq("competition_id", competition.id)
+      .in("club_id", [...nationalTeamIds])
+      .is("player_id", null)
+      .not("player_external_id", "is", null)
+      .limit(20)
+    : { data: [], error: null };
+  if (unresolvedError) throw unresolvedError;
   let relinked = 0;
   let materialized = 0;
-  for (const row of unresolvedRows.data || []) {
+  for (const row of unresolvedRows || []) {
     if (row.locked) continue;
     let playerId = playerMap[row.player_external_id];
     // Les endpoints de composition connaissent parfois un international avant

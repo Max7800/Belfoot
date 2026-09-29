@@ -1,5 +1,12 @@
 # BELFOOT — Passation technique
 
+## Correctif local en attente de push — timeout des compositions Nations League (29/09/2026)
+
+- Le job `football.lineups` traite désormais un seul match par invocation. Les trois endpoints restent parallèles, mais ce lot conserve une marge fiable sous la limite de 60 secondes de Vercel Hobby ; le pipeline `Compléter la saison` continue ensuite automatiquement avec le match suivant.
+- La réparation des convocations historiques ne rescannne plus toutes les statistiques non reliées avant chaque lot. Elle est limitée à 20 lignes de sélections nationales par invocation, puis reprend au passage suivant.
+- Aucun SQL ni appel API n'est nécessaire pour ce correctif.
+- Après déploiement : reprendre le pipeline Nations League existant ou relancer `Compositions & statistiques`. Les marqueurs déjà acquis empêchent le retraitement des matchs terminés.
+
 > But de ce fichier : permettre à un autre modèle (ou dev) de **reprendre immédiatement** Belfoot
 > à partir du repo, sans perte de contexte. À lire en entier avant de coder.
 >
