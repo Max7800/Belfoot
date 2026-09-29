@@ -1922,6 +1922,11 @@ tant que la migration n'est pas enregistrée.
   garantir une nouvelle enveloppe disponible, ce qui conserve le garde-fou de coût global.
 - La carte d'un pipeline actif distingue désormais les appels `consommés` des appels `disponibles`, au
   lieu d'afficher un ratio ambigu lorsque le plafond total a été étendu lors d'une reprise.
+- Correctif du 29/09/2026 : les étapes internes rattachées à un `pipelineRunId` héritent réellement du
+  budget restant du pipeline, jusqu'au plafond global de 500. Auparavant, le préflight et le compteur
+  du job replafonnaient silencieusement chaque étape à 100 : l'admin pouvait donc afficher 250 appels
+  disponibles tout en bloquant une Nations League estimée à 162. Les jobs lancés isolément restent
+  volontairement plafonnés à 100. Aucun SQL nécessaire.
 - L'écriture d'un effectif charge les joueurs existants du club en une seule lecture, dédoublonne le
   payload provider et traite les écritures avec une concurrence bornée à huit joueurs. Les statistiques
   et l'affectation saisonnière d'un même joueur avancent ensuite en parallèle. Le but est de rester sous
