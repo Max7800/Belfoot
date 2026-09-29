@@ -1944,6 +1944,9 @@ tant que la migration n'est pas enregistrée.
   lots et les mises à jour utilisent une concurrence bornée. L'enrichissement des stades est également
   groupé. Cela vise directement les `FUNCTION_INVOCATION_TIMEOUT` de `football.sync` sur Vercel Hobby ;
   une coupure brutale ne peut pas déclencher la continuation automatique côté navigateur.
+- Le contrôle de préparation compte les affectations via `season_start_year` : les effectifs enregistrés
+  sous la valeur technique `2026` sont correctement rattachés au libellé public `2026-2027`, sans nouvel
+  import.
 
 #### État à récupérer avant toute modification
 
