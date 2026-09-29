@@ -206,7 +206,16 @@ export function JobsPanel() {
       <label className="text-xs text-muted">Lot joueurs</label>
       <input type="number" min="1" max="25" value={batchSize} onChange={(e) => setBatchSize(Math.max(1, Math.min(25, Number(e.target.value) || 1)))} className="w-16 rounded border border-line/10 bg-surface2 px-2 py-1 text-sm" />
       <label className="text-xs text-muted">Budget API / reprise</label>
-      <input type="number" min="1" max="100" value={requestLimit} onChange={(e) => setRequestLimit(Math.max(1, Math.min(100, Number(e.target.value) || 1)))} className="w-16 rounded border border-line/10 bg-surface2 px-2 py-1 text-sm" />
+      <input
+        type="number"
+        min="1"
+        max="100"
+        value={requestLimit}
+        onFocus={(e) => e.target.select()}
+        onChange={(e) => setRequestLimit(e.target.value === "" ? "" : Math.max(1, Math.min(100, Number(e.target.value) || 1)))}
+        onBlur={() => setRequestLimit((value) => Math.max(1, Math.min(100, Number(value) || 1)))}
+        className="w-16 rounded border border-line/10 bg-surface2 px-2 py-1 text-sm"
+      />
       {latestQuota != null && <span className="ml-auto rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-bold text-emerald-300" title="Quota restant lu lors de la dernière synchronisation">≈ {latestQuota} appels restants</span>}
     </div>
 

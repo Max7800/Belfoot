@@ -1912,6 +1912,8 @@ tant que la migration n'est pas enregistrée.
   encore autorisée. Le serveur conserve le compteur et les checkpoints, puis étend le plafond total au
   minimum nécessaire pour rendre cette enveloppe disponible. Cela permet de finir un ancien pipeline
   ayant consommé des appels avant l'arrivée des checkpoints, sans le recréer ni perdre son avancement.
+- Le champ de budget accepte une valeur vide pendant la saisie et sélectionne sa valeur au focus. Sur
+  mobile, effacer `1` ne le réinsère donc plus avant que l'admin puisse saisir `50`.
 
 #### État à récupérer avant toute modification
 
