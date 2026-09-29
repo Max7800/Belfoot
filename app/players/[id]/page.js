@@ -15,6 +15,11 @@ const POSITION_LABELS = { Goalkeeper: "Gardien", GK: "Gardien", Defender: "Défe
 const FINISHED = new Set(["finished"]);
 const year = (value) => Number((String(value || "").match(/\d{4}/) || [0])[0]);
 const matchTime = (match) => match?.kickoff ? new Date(match.kickoff).getTime() : 0;
+const matchSeasonYear = (match) => {
+  const date = match?.kickoff ? new Date(match.kickoff) : null;
+  if (!date || Number.isNaN(date.getTime())) return 0;
+  return date.getUTCMonth() >= 6 ? date.getUTCFullYear() : date.getUTCFullYear() - 1;
+};
 
 function total(rows, key) {
   return rows.reduce((sum, row) => sum + (Number(row[key]) || 0), 0);
@@ -106,18 +111,43 @@ export default function PlayerPage() {
   })().catch((error) => alive && setState((current) => ({ ...current, player: null, error: error.message || String(error) }))); return () => { alive = false; }; }, [id]);
 
   const view = useMemo(() => {
-    const latestSeason = Math.max(0, ...state.stats.map((row) => year(row.season)));
+    const latestSeason = Math.max(0, ...state.stats.map((row) => year(row.season)), ...state.memberships.map((row) => Number(row.season_start_year) || year(row.season)));
     const latestStats = latestSeason ? state.stats.filter((row) => year(row.season) === latestSeason) : state.stats;
-    const ratings = latestStats.map((row) => Number(row.rating)).filter((value) => value > 0);
+    const matchMap = Object.fromEntries(state.matches.map((match) => [match.id, match]));
+    const primaryStat = [...latestStats]
+      .filter((row) => row.competition_id)
+      .sort((a, b) => (Number(b.appearances) || 0) - (Number(a.appearances) || 0))[0];
+    const performanceCompetitionCounts = state.performances.reduce((counts, performance) => {
+      const competitionId = matchMap[performance.match_id]?.competition_id;
+      if (competitionId) counts[competitionId] = (counts[competitionId] || 0) + 1;
+      return counts;
+    }, {});
+    const primaryCompetitionId = primaryStat?.competition_id
+      || Object.entries(performanceCompetitionCounts).sort((a, b) => b[1] - a[1])[0]?.[0]
+      || null;
+    const seasonPerformances = state.performances.filter((performance) => {
+      const match = matchMap[performance.match_id];
+      return match
+        && (!latestSeason || matchSeasonYear(match) === latestSeason)
+        && (!primaryCompetitionId || String(match.competition_id) === String(primaryCompetitionId));
+    });
+    const performanceRatings = seasonPerformances.map((row) => Number(row.rating)).filter((value) => value > 0);
+    const ratedStats = latestStats
+      .filter((row) => !primaryCompetitionId || String(row.competition_id) === String(primaryCompetitionId))
+      .map((row) => ({ rating: Number(row.rating), weight: Math.max(1, Number(row.appearances) || 0) }))
+      .filter((row) => row.rating > 0);
+    const fallbackRatingWeight = ratedStats.reduce((sum, row) => sum + row.weight, 0);
+    const fallbackRating = fallbackRatingWeight
+      ? ratedStats.reduce((sum, row) => sum + row.rating * row.weight, 0) / fallbackRatingWeight
+      : null;
     const totals = {
       appearances: total(latestStats, "appearances"), minutes: total(latestStats, "minutes"), goals: total(latestStats, "goals"), assists: total(latestStats, "assists"),
-      rating: ratings.length ? ratings.reduce((sum, value) => sum + value, 0) / ratings.length : null,
+      rating: performanceRatings.length ? performanceRatings.reduce((sum, value) => sum + value, 0) / performanceRatings.length : fallbackRating,
     };
     const now = Date.now();
     const upcoming = state.matches.filter((match) => match.kickoff && !FINISHED.has(match.status) && matchTime(match) >= now).sort((a, b) => matchTime(a) - matchTime(b)).slice(0, 3);
-    const matchMap = Object.fromEntries(state.matches.map((match) => [match.id, match]));
     const performanceRows = state.performances.map((performance) => ({ performance, match: matchMap[performance.match_id] })).filter((row) => row.match).sort((a, b) => matchTime(b.match) - matchTime(a.match)).slice(0, 8);
-    return { latestSeason, totals, upcoming, performanceRows };
+    return { latestSeason, totals, upcoming, performanceRows, ratingCompetition: state.competitions[primaryCompetitionId]?.name || "Compétition principale" };
   }, [state]);
 
   if (state.player === undefined) return <div className="space-y-4"><div className="h-7 w-40 animate-pulse rounded bg-surface" /><div className="h-52 animate-pulse rounded-3xl bg-surface" /></div>;
@@ -136,7 +166,7 @@ export default function PlayerPage() {
         <div className="relative flex flex-col gap-5 sm:flex-row sm:items-center">
           {p.photo_url ? <img src={p.photo_url} className="h-28 w-28 rounded-3xl object-cover ring-1 ring-white/10" alt="" /> : <div className="flex h-28 w-28 items-center justify-center rounded-3xl bg-white/[0.06] text-3xl font-black">{p.name?.slice(0, 2).toUpperCase()}</div>}
           <div className="min-w-0 flex-1"><div className="text-[11px] font-black uppercase tracking-[0.2em] text-accent">{position || "Joueur belge"}</div><h1 className="mt-1 text-3xl font-black sm:text-5xl">{p.name}</h1><div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted">{nationalities.length ? <span className="inline-flex flex-wrap items-center gap-1.5">{nationalities.map((nationality) => <span key={`${nationality.code}-${nationality.label}`} className="inline-flex items-center gap-1 rounded-full border border-line/10 bg-black/15 px-2 py-1">{nationality.flagUrl ? <img src={nationality.flagUrl} alt="" className="h-[14px] w-[19px] rounded-[2px] object-cover" /> : <span className="text-base leading-none">{nationality.flag}</span>}{nationality.label}</span>)}</span> : <span>🌍 Nationalité à préciser</span>}{currentAge && <span>{currentAge} ans</span>}{p.country && <span className="inline-flex items-center gap-1"><MapPin className="h-3.5 w-3.5" />{p.country}</span>}</div>{state.club && <Link href={`/clubs/${state.club.id}`} className="mt-4 inline-flex items-center gap-2 rounded-xl border border-line/10 bg-black/15 px-3 py-2 text-sm font-bold transition hover:border-accent/40"><ClubMark club={state.club} />{state.club.name}</Link>}</div>
-          <div className="grid grid-cols-2 gap-2 sm:w-64"><div className="rounded-2xl border border-line/10 bg-black/15 p-3"><b className="block text-2xl">{view.totals.goals}</b><span className="text-[10px] uppercase tracking-wider text-muted">Buts</span></div><div className="rounded-2xl border border-line/10 bg-black/15 p-3"><b className="block text-2xl">{view.totals.assists}</b><span className="text-[10px] uppercase tracking-wider text-muted">Passes</span></div><div className="rounded-2xl border border-line/10 bg-black/15 p-3"><b className="block text-2xl">{view.totals.appearances}</b><span className="text-[10px] uppercase tracking-wider text-muted">Matchs</span></div><div className="rounded-2xl border border-line/10 bg-black/15 p-3"><b className={`inline-flex min-w-12 justify-center rounded-lg px-2 py-1 text-xl ${view.totals.rating != null ? ratingTone(view.totals.rating) : "text-muted"}`}>{view.totals.rating?.toFixed(1) || "—"}</b><span className="mt-1 block text-[10px] uppercase tracking-wider text-muted">Note</span></div></div>
+          <div className="grid grid-cols-2 gap-2 sm:w-64"><div className="rounded-2xl border border-line/10 bg-black/15 p-3"><b className="block text-2xl">{view.totals.goals}</b><span className="text-[10px] uppercase tracking-wider text-muted">Buts</span></div><div className="rounded-2xl border border-line/10 bg-black/15 p-3"><b className="block text-2xl">{view.totals.assists}</b><span className="text-[10px] uppercase tracking-wider text-muted">Passes</span></div><div className="rounded-2xl border border-line/10 bg-black/15 p-3"><b className="block text-2xl">{view.totals.appearances}</b><span className="text-[10px] uppercase tracking-wider text-muted">Matchs</span></div><div className="rounded-2xl border border-line/10 bg-black/15 p-3"><b className={`inline-flex min-w-12 justify-center rounded-lg px-2 py-1 text-xl ${view.totals.rating != null ? ratingTone(view.totals.rating) : "text-muted"}`}>{view.totals.rating?.toFixed(1) || "—"}</b><span className="mt-1 block truncate text-[9px] uppercase tracking-wider text-muted" title={view.ratingCompetition}>Note · {view.ratingCompetition}</span></div></div>
         </div>
       </section>
 

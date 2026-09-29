@@ -2070,6 +2070,11 @@ tant que la migration n'est pas enregistrée.
 - Les prochains matchs des joueurs utilisent une vraie carte domicile/extérieur avec les deux équipes,
   la compétition, la date et l'heure. Les notes suivent partout sur la fiche le code couleur demandé :
   vert à partir de 7,0, jaune de 6,0 à 6,9, rouge sous 6,0. Aucun SQL nécessaire.
+- La note du bandeau joueur est celle de sa compétition principale de la saison (celle où il compte le
+  plus d'apparitions), avec le nom de la compétition affiché. Elle utilise en priorité la moyenne des
+  performances match par match de cette seule compétition ; le repli est sa note de saison pondérée.
+  Pro League, coupe, Europe et sélection ne sont donc plus mélangées. L'ancien calcul pouvait afficher
+  `5,3` malgré des notes de championnat récentes autour de `7,3`.
 
 ### 2026-09-29 — cohérence des effectifs et mercato saisonnier
 
