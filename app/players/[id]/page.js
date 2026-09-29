@@ -8,6 +8,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { useLabels } from "@/lib/labels";
 import DiscussButton from "@/components/forum/DiscussButton";
 import { playerAge } from "@/lib/playerAge";
+import { preferAssignedPlayerStats } from "@/lib/playerStats";
 
 const POSITION_LABELS = { Goalkeeper: "Gardien", GK: "Gardien", Defender: "Défenseur", DEF: "Défenseur", Midfielder: "Milieu", MID: "Milieu", Attacker: "Attaquant", FWD: "Attaquant" };
 const FINISHED = new Set(["finished"]);
@@ -73,6 +74,7 @@ export default function PlayerPage() {
     if (performancesResult.error) throw performancesResult.error;
     if (clubMatchesResult.error) throw clubMatchesResult.error;
 
+    const statsRows = preferAssignedPlayerStats(statsResult.data || []);
     const matchesById = new Map((clubMatchesResult.data || []).map((match) => [match.id, match]));
     const missingMatchIds = [...new Set((performancesResult.data || []).map((row) => row.match_id).filter((matchId) => matchId && !matchesById.has(matchId)))];
     if (missingMatchIds.length) {
@@ -81,8 +83,8 @@ export default function PlayerPage() {
       for (const match of oldMatches || []) matchesById.set(match.id, match);
     }
     const matches = [...matchesById.values()];
-    const clubIds = [...new Set([...matches.flatMap((match) => [match.home_club_id, match.away_club_id]), ...memberships.map((row) => row.club_id), ...(statsResult.data || []).map((row) => row.club_id)].filter(Boolean))];
-    const competitionIds = [...new Set([...(statsResult.data || []).map((row) => row.competition_id), ...matches.map((row) => row.competition_id)].filter(Boolean))];
+    const clubIds = [...new Set([...matches.flatMap((match) => [match.home_club_id, match.away_club_id]), ...memberships.map((row) => row.club_id), ...statsRows.map((row) => row.club_id)].filter(Boolean))];
+    const competitionIds = [...new Set([...statsRows.map((row) => row.competition_id), ...matches.map((row) => row.competition_id)].filter(Boolean))];
     const [clubsResult, competitionsResult] = await Promise.all([
       clubIds.length ? supabase.from("clubs").select("id,name,logo_url").in("id", clubIds) : Promise.resolve({ data: [] }),
       competitionIds.length ? supabase.from("competitions").select("id,name,logo_url").in("id", competitionIds) : Promise.resolve({ data: [] }),
@@ -93,7 +95,7 @@ export default function PlayerPage() {
       club: clubResult.data || null,
       currentClubId,
       memberships,
-      stats: statsResult.data || [],
+      stats: statsRows,
       performances: performancesResult.data || [],
       matches,
       clubs: Object.fromEntries((clubsResult.data || []).map((row) => [row.id, row])),

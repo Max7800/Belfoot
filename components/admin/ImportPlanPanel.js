@@ -63,16 +63,18 @@ export default function ImportPlanPanel() {
     const competitionRows = competitionResult.data || [];
     const nationalRows = nationalResult.data || [];
     const stored = normalizeImportPlan(settingsResult.data?.data?.football_import_plan);
+    const resetArchiveScopes = stored.version < 3;
     setCompetitions(competitionRows);
     setNationalTeams(nationalRows);
     const seasonRows = seasonResult.data || [];
     setSeasons(seasonRows);
     setPlan({
       ...stored,
-      version: 2,
-      competitions: Object.fromEntries(competitionRows.map((competition, index) => [competition.id, hydrateCompetitionConfig(competition, stored.competitions[competition.id], index)])),
-      nationalTeams: Object.fromEntries(nationalRows.filter((team) => team.external_id).map((team, index) => [String(team.external_id), hydrateNationalConfig(stored.nationalTeams[String(team.external_id)], index)])),
+      version: 3,
+      competitions: Object.fromEntries(competitionRows.map((competition, index) => [competition.id, hydrateCompetitionConfig(competition, stored.competitions[competition.id], index, { resetArchiveScopes })])),
+      nationalTeams: Object.fromEntries(nationalRows.filter((team) => team.external_id).map((team, index) => [String(team.external_id), hydrateNationalConfig(stored.nationalTeams[String(team.external_id)], index, { resetArchiveScopes })])),
     });
+    if (resetArchiveScopes) setMessage("Plan adapté : 2024/2025 et 2025/2026 passent en archive enrichie ; 2026/2027 reste en saison complète. Enregistre pour confirmer.");
     try {
       const result = seasonRows.length ? await requestReadiness({ seasonIds: seasonRows.map((season) => season.id) }) : { reports: [] };
       setReadiness(Object.fromEntries((result.reports || []).map((report) => [report.season.id, report])));
@@ -95,7 +97,7 @@ export default function ImportPlanPanel() {
   const save = async () => {
     setStatus("saving"); setMessage("");
     const { data } = await supabase.from("site_settings").select("data").eq("id", 1).maybeSingle();
-    const storedPlan = { ...plan, version: 2 };
+    const storedPlan = { ...plan, version: 3 };
     delete storedPlan.legacySeason;
     const { error } = await supabase.from("site_settings").update({ data: { ...(data?.data || {}), football_import_plan: storedPlan } }).eq("id", 1);
     setStatus(error ? "error" : "saved");

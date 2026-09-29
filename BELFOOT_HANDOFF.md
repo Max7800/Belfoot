@@ -1926,6 +1926,14 @@ tant que la migration n'est pas enregistrée.
   payload provider et traite les écritures avec une concurrence bornée à huit joueurs. Les statistiques
   et l'affectation saisonnière d'un même joueur avancent ensuite en parallèle. Le but est de rester sous
   les 60 secondes de Vercel Hobby sans ajouter de migration ni relâcher les verrous éditoriaux.
+- Stratégie validée : `2026-2027` est la saison complète (direct, événements, compositions et stats de
+  match). `2024-2025` et `2025-2026` deviennent des archives enrichies (résultats, classements, effectifs,
+  entraîneurs et stats de saison), sans obligation d'importer les événements historiques. Le plan
+  d'import passe en version 3 et propose automatiquement ces périmètres au premier enregistrement.
+- Les totaux publics ignorent désormais une ligne legacy de `player_season_stats` sans club lorsqu'une
+  ligne attribuée existe pour le même joueur, la même compétition et la même saison. Cela empêche les
+  doubles additions comme le `39` affiché pour Bertaccini tout en conservant l'addition de deux clubs
+  réellement représentés lors d'un transfert.
 
 #### État à récupérer avant toute modification
 

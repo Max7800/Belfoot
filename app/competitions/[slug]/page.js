@@ -22,6 +22,7 @@ import { sortPublicSeasons } from "@/lib/publicSeasons";
 import { isNationsLeagueCompetition, nationsLeagueGroups } from "@/lib/nationsLeague";
 import { PUBLIC_PLAYER_FIELDS, PUBLIC_PLAYER_STATS_FIELDS, loadClubsForMatches, loadMatchStatsForMatches, loadPlayersByIds, loadSeasonMatches } from "@/lib/publicFootballData";
 import { playerAge } from "@/lib/playerAge";
+import { preferAssignedPlayerStats } from "@/lib/playerStats";
 
 const POS = { Goalkeeper: 0, Defender: 1, Midfielder: 2, Attacker: 3 };
 const VARIANTS = {
@@ -126,7 +127,7 @@ export default function CompetitionPage() {
     if (activeYear) statsQuery = statsQuery.ilike("season", `${activeYear}%`);
     const statsResult = await statsQuery;
     if (statsResult.error) throw statsResult.error;
-    const statsRows = statsResult.data || [];
+    const statsRows = preferAssignedPlayerStats(statsResult.data || []);
     const playerIds = [...new Set(statsRows.map((row) => row.player_id).filter(Boolean))];
     const clubIds = Object.keys(clubMap);
     let playerRows = playerIds.length ? await loadPlayersByIds(supabase, playerIds) : [];

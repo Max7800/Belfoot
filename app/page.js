@@ -23,6 +23,7 @@ import { computeStandings } from "@/lib/standings";
 import { supabase } from "@/lib/supabaseClient";
 import { sortPublicSeasons } from "@/lib/publicSeasons";
 import { PUBLIC_MATCH_FIELDS, PUBLIC_PLAYER_FIELDS, loadPlayerStatsForPlayers } from "@/lib/publicFootballData";
+import { preferAssignedPlayerStats } from "@/lib/playerStats";
 
 const normal = (value) => String(value || "").trim().toLocaleLowerCase("fr");
 const year = (value) => Number((String(value || "").match(/\d{4}/) || [0])[0]);
@@ -32,8 +33,9 @@ const isKnockoutCompetition = (competition) => /(cup|coupe|beker|pokal)/i.test(`
 const FOLLOWED_BELGIANS_SLIDE_ID = "followed-belgians";
 
 function latestPlayerTotals(rows = []) {
-  const latest = Math.max(0, ...rows.map((row) => year(row.season)));
-  const selected = latest ? rows.filter((row) => year(row.season) === latest) : rows;
+  const preferred = preferAssignedPlayerStats(rows);
+  const latest = Math.max(0, ...preferred.map((row) => year(row.season)));
+  const selected = latest ? preferred.filter((row) => year(row.season) === latest) : preferred;
   const sum = (key) => selected.reduce((total, row) => total + (Number(row[key]) || 0), 0);
   const ratings = selected.map((row) => Number(row.rating)).filter((value) => value > 0);
   return {
