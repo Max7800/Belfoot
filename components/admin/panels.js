@@ -214,6 +214,9 @@ export function JobsPanel() {
     ...availableSeasons.filter((item) => !compId || String(item.competition_id) === String(compId)).map((item) => item.label),
     season,
   ].filter(Boolean))].sort((a, b) => String(b).localeCompare(String(a)));
+  const resumablePipelineRuns = pipelineRuns
+    .filter((runItem) => ["error", "paused", "running"].includes(runItem.status))
+    .filter((runItem, index, items) => items.findIndex((candidate) => candidate.pipeline_key === runItem.pipeline_key && candidate.target_key === runItem.target_key) === index);
   return (<div>
     <h2 className="mb-4 text-lg font-bold">Jobs & synchronisation</h2>
     <p className="mb-3 text-xs leading-5 text-muted">Chaque lancement affiche maintenant son coût estimé et respecte un budget strict. Une relance identique est bloquée tant que le premier job travaille. La base 2024/2025 reste la référence de développement ; le passage à 2026/2027 se fera ici, compétition par compétition, lorsque l'abonnement API sera actif.</p>
@@ -250,7 +253,7 @@ export function JobsPanel() {
           </div>
         ))}
       </div>
-      {pipelineRuns.filter((runItem) => ["error", "paused", "running"].includes(runItem.status)).map((runItem) => {
+      {resumablePipelineRuns.map((runItem) => {
         const definition = jobPipelines().find((item) => item.key === runItem.pipeline_key);
         if (!definition) return null;
         const recentlyRunning = runItem.status === "running" && Date.now() - new Date(runItem.heartbeat_at || runItem.started_at).getTime() < 2 * 60 * 1000;

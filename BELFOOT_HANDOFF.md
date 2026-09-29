@@ -1956,6 +1956,14 @@ tant que la migration n'est pas enregistrée.
   drainent pas accidentellement tout l'historique. Aucun SQL supplémentaire n'est nécessaire.
 - Le choix de saison dans `Jobs & historique` est une liste déroulante : elle propose les saisons déjà
   présentes pour la compétition et conserve toujours les trois cibles 2024-2025, 2025-2026 et 2026-2027.
+- Les attentes clubs/matchs du plan d'import sont désormais définies **par saison** (plan version 4),
+  car les formats changent réellement. Valeurs Challenger intégrées : 16/240 en 2024-2025, 17/272 en
+  2025-2026 et 15/210 en 2026-2027. Le vieux plan version 3 est interprété correctement côté serveur
+  avant même son réenregistrement ; l'admin propose ensuite d'enregistrer les nouvelles valeurs. Les
+  15 clubs Challenger déjà importés en 2026-2027 sont donc valides et ne doivent pas être resynchronisés.
+- Lorsqu'un nombre de participants est réellement inférieur à l'attente, le préflight liste désormais
+  les clubs détectés. Dans `Jobs & historique`, une seule reprise est affichée par pipeline/cible afin
+  de ne plus présenter plusieurs anciennes tentatives identiques. Aucun SQL n'est nécessaire.
 
 #### État à récupérer avant toute modification
 
