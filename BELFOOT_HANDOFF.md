@@ -2264,3 +2264,19 @@ Fonctionnalités Belfoot qui seraient de bons candidats à généraliser dans le
 - Les clubs dont `clubs.ext.country = Belgium` sont mis en évidence par une ligne rouge/ambre, un
   liseré et un drapeau belge. Cette distinction est strictement visuelle et n'altère pas le calcul du
   classement. Aucun SQL ni appel API n'est nécessaire.
+
+### 2026-09-30 — ChatGPT — carrière complète et catalogue des sélections
+
+- Le rafraîchissement ciblé depuis une fiche joueur conserve l'historique des clubs et récupère
+  désormais, avec un second appel explicitement estimé, toutes les lignes statistiques de la saison :
+  championnat, coupes nationales et compétitions continentales, même lorsque Belfoot ne synchronise
+  pas ces compétitions comme portails complets.
+- Les clubs, compétitions et saisons nécessaires à l'affichage sont créés comme références techniques.
+  Les compétitions découvertes par ce biais restent `public_visible=false` : aucun calendrier, effectif
+  global ou championnat étranger complet n'est aspiré. Les statistiques verrouillées restent prioritaires.
+- L'éditeur de la fiche joueur ne dépend plus uniquement des sélections déjà importées. Il propose un
+  catalogue de plus de 120 nations couvrant largement le top 75 FIFA et les doubles nationalités les
+  plus courantes en Belgique, dont RD Congo et Congo. Une sélection absente est créée comme référence
+  éditoriale minimale seulement au moment où elle est choisie.
+- Le préflight du bouton annonce deux appels et son budget strict est fixé à deux. Aucun appel
+  API-Football n'a été effectué et aucune migration SQL supplémentaire n'est nécessaire.

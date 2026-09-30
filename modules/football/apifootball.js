@@ -261,6 +261,49 @@ const provider = {
       ext: row,
     }))).filter((row) => row.team.external_id && row.team.name);
   },
+  // Statistiques d'une saison sans filtre de championnat. La fiche du joueur
+  // peut ainsi montrer ses coupes et ligues sans importer leur calendrier.
+  async fetchPlayerCareerSeason(player, ctx = {}) {
+    if (!player?.external_id) return [];
+    const y = seasonYear(ctx.season);
+    const row = (await api(`/players?id=${player.external_id}&season=${y}`, ctx))[0];
+    if (!row) return [];
+    return (row.statistics || []).map((stat) => ({
+      season: String(y),
+      player: {
+        nationality: row.player?.nationality || null,
+        position: stat.games?.position || null,
+        photo_url: row.player?.photo || null,
+        age: row.player?.age ?? null,
+        birth_date: row.player?.birth?.date || null,
+      },
+      team: {
+        external_id: stat.team?.id ? String(stat.team.id) : null,
+        name: stat.team?.name || null,
+        logo_url: stat.team?.logo || null,
+        country: stat.league?.country || null,
+      },
+      competition: {
+        external_id: stat.league?.id ? String(stat.league.id) : null,
+        name: stat.league?.name || null,
+        logo_url: stat.league?.logo || null,
+        country: stat.league?.country || null,
+        flag_url: stat.league?.flag || null,
+        type: String(stat.league?.type || "League").toLowerCase() === "cup" ? "cup" : "league",
+      },
+      stats: {
+        appearances: stat.games?.appearences || 0,
+        lineups: stat.games?.lineups || 0,
+        minutes: stat.games?.minutes || 0,
+        goals: stat.goals?.total || 0,
+        assists: stat.goals?.assists || 0,
+        yellow: stat.cards?.yellow || 0,
+        red: stat.cards?.red || 0,
+        rating: stat.games?.rating ? Number(stat.games.rating) : null,
+      },
+      ext: stat,
+    })).filter((stat) => stat.team.external_id && stat.team.name && stat.competition.external_id && stat.competition.name);
+  },
   // TRACKING : stats agrégées de saison d'un joueur (1 requête).
   async fetchPlayerSeason(player, ctx = {}) {
     const y = seasonYear(ctx.season);

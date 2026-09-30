@@ -9,7 +9,7 @@ import { useLabels } from "@/lib/labels";
 import DiscussButton from "@/components/forum/DiscussButton";
 import { playerAge } from "@/lib/playerAge";
 import { preferAssignedPlayerStats } from "@/lib/playerStats";
-import { nationalityBadges, ratingTone } from "@/lib/nationalities";
+import { NATIONAL_TEAM_CATALOG, nationalityBadges, ratingTone } from "@/lib/nationalities";
 import { useAuth } from "@/lib/auth";
 
 const POSITION_LABELS = { Goalkeeper: "Gardien", GK: "Gardien", Defender: "Défenseur", DEF: "Défenseur", Midfielder: "Milieu", MID: "Milieu", Attacker: "Attaquant", FWD: "Attaquant" };
@@ -167,7 +167,12 @@ export default function PlayerPage() {
     setAdminStatus(""); setEditing(true);
     if (!nationalTeams.length) {
       const { data } = await supabase.from("clubs").select("id,name,logo_url,national_category").eq("team_type", "national").order("name");
-      setNationalTeams(data || []);
+      const stored = data || [];
+      const storedNames = new Set(stored.map((team) => String(team.name || "").toLocaleLowerCase("fr")));
+      setNationalTeams([
+        ...stored.map((team) => ({ ...team, value: team.id, stored: true })),
+        ...NATIONAL_TEAM_CATALOG.filter((team) => !storedNames.has(team.name.toLocaleLowerCase("fr"))).map((team) => ({ ...team, id: `catalog:${team.code}`, value: `catalog:${team.code}`, national_category: "senior", stored: false })),
+      ].sort((a, b) => a.name.localeCompare(b.name, "fr")));
     }
   };
 
@@ -175,9 +180,33 @@ export default function PlayerPage() {
     setAdminBusy(true); setAdminStatus("");
     const nationality = [editor.primaryNationality.trim(), editor.secondNationality.trim()].filter(Boolean).join(", ");
     const ext = { ...(state.player?.ext || {}), editorial_nationality: true };
+    let nationalTeamId = editor.nationalTeamId || null;
+    if (nationalTeamId?.startsWith("catalog:")) {
+      const code = nationalTeamId.slice("catalog:".length);
+      const catalogTeam = NATIONAL_TEAM_CATALOG.find((team) => team.code === code);
+      if (!catalogTeam) { setAdminBusy(false); setAdminStatus("Erreur : sélection inconnue."); return; }
+      const { data: existingTeam, error: lookupError } = await supabase.from("clubs").select("id").eq("team_type", "national").ilike("name", catalogTeam.name).limit(1).maybeSingle();
+      if (lookupError) { setAdminBusy(false); setAdminStatus(`Erreur : ${lookupError.message}`); return; }
+      if (existingTeam?.id) nationalTeamId = existingTeam.id;
+      else {
+        const { data: createdTeam, error: createError } = await supabase.from("clubs").insert({
+          name: catalogTeam.name,
+          short_name: catalogTeam.name,
+          logo_url: catalogTeam.flagUrl,
+          team_type: "national",
+          national_category: "senior",
+          national_gender: "men",
+          source: "manual",
+          locked: true,
+          ext: { country_code: catalogTeam.code, catalog_only: true },
+        }).select("id").single();
+        if (createError) { setAdminBusy(false); setAdminStatus(`Erreur : ${createError.message}`); return; }
+        nationalTeamId = createdTeam.id;
+      }
+    }
     const { error } = await supabase.from("players").update({
       nationality: nationality || null,
-      national_team_id: editor.nationalTeamId || null,
+      national_team_id: nationalTeamId,
       national_team_locked: true,
       ext,
     }).eq("id", id);
@@ -192,12 +221,12 @@ export default function PlayerPage() {
     setAdminBusy(true); setAdminStatus("Calcul du coût de la synchronisation…");
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const payload = { key: "football.player-careers", competitionId: view.primaryCompetitionId, playerId: id, season: view.primarySeason, batchSize: 1, requestLimit: 1 };
+      const payload = { key: "football.player-careers", competitionId: view.primaryCompetitionId, playerId: id, season: view.primarySeason, includeCareerStats: true, batchSize: 1, requestLimit: 2 };
       const preflightResponse = await fetch("/api/admin/job-preflight", { method: "POST", headers: { Authorization: `Bearer ${session?.access_token || ""}`, "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       const preflight = await preflightResponse.json().catch(() => ({}));
       if (!preflightResponse.ok) throw new Error(preflight.error || "Préflight impossible");
       if (!preflight.ok) throw new Error((preflight.blockers || []).join(" · ") || "Synchronisation bloquée");
-      if (!window.confirm(`Rafraîchir uniquement la carrière de ${state.player.name} ?\n\nCoût maximal estimé : ${preflight.total?.max ?? 1} appel API.`)) { setAdminBusy(false); setAdminStatus(""); return; }
+      if (!window.confirm(`Rafraîchir la carrière et toutes les compétitions jouées par ${state.player.name} en ${view.primarySeason} ?\n\nCoût maximal estimé : ${preflight.total?.max ?? 2} appels API.`)) { setAdminBusy(false); setAdminStatus(""); return; }
       setAdminStatus("Synchronisation ciblée en cours…");
       const response = await fetch("/api/admin/run-job", { method: "POST", headers: { Authorization: `Bearer ${session?.access_token || ""}`, "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       const responseText = await response.text();
@@ -233,8 +262,8 @@ export default function PlayerPage() {
       </section>
 
       {isAdmin && <section className="mt-4 rounded-2xl border border-amber-300/20 bg-amber-300/[0.05] p-4">
-        <div className="flex flex-wrap items-center gap-2"><div className="mr-auto"><div className="text-[10px] font-black uppercase tracking-[.18em] text-amber-200">Outils administrateur</div><p className="mt-1 text-xs text-muted">Corrige l’identité sportive ou actualise uniquement l’histoire de ce joueur.</p></div><button type="button" onClick={openEditor} disabled={adminBusy} className="inline-flex items-center gap-2 rounded-xl border border-line/15 bg-surface px-3 py-2 text-xs font-bold disabled:opacity-50"><Pencil className="h-3.5 w-3.5" />Modifier la fiche</button><button type="button" onClick={refreshCareer} disabled={adminBusy || !view.primaryCompetitionId} className="inline-flex items-center gap-2 rounded-xl border border-amber-300/25 bg-amber-300/10 px-3 py-2 text-xs font-bold text-amber-100 disabled:opacity-50"><RefreshCw className={`h-3.5 w-3.5 ${adminBusy ? "animate-spin" : ""}`} />Rafraîchir sa carrière</button></div>
-        {editing && <div className="mt-4 grid gap-3 border-t border-line/10 pt-4 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1.4fr_auto]"><label className="text-[10px] font-bold uppercase tracking-wider text-muted">Nationalité principale<input value={editor.primaryNationality} onChange={(event) => setEditor((current) => ({ ...current, primaryNationality: event.target.value }))} placeholder="Belgique" className="mt-1 block w-full rounded-lg border border-line/10 bg-surface2 px-3 py-2 text-sm normal-case tracking-normal text-content" /></label><label className="text-[10px] font-bold uppercase tracking-wider text-muted">Deuxième nationalité<input value={editor.secondNationality} onChange={(event) => setEditor((current) => ({ ...current, secondNationality: event.target.value }))} placeholder="Maroc, Grèce…" className="mt-1 block w-full rounded-lg border border-line/10 bg-surface2 px-3 py-2 text-sm normal-case tracking-normal text-content" /></label><label className="text-[10px] font-bold uppercase tracking-wider text-muted">Sélection représentée<select value={editor.nationalTeamId} onChange={(event) => setEditor((current) => ({ ...current, nationalTeamId: event.target.value }))} className="mt-1 block w-full rounded-lg border border-line/10 bg-surface2 px-3 py-2 text-sm normal-case tracking-normal text-content"><option value="">Aucune / à préciser</option>{nationalTeams.map((team) => <option key={team.id} value={team.id}>{team.name}{team.national_category ? ` · ${team.national_category}` : ""}</option>)}</select></label><div className="flex items-end gap-2"><button type="button" onClick={saveEditorialIdentity} disabled={adminBusy || !editor.primaryNationality.trim()} className="inline-flex h-10 items-center gap-2 rounded-lg bg-accent px-3 text-xs font-bold text-white disabled:opacity-50"><Save className="h-3.5 w-3.5" />Enregistrer</button><button type="button" onClick={() => setEditing(false)} disabled={adminBusy} className="inline-flex h-10 items-center rounded-lg border border-line/10 px-3 text-muted"><X className="h-4 w-4" /></button></div></div>}
+        <div className="flex flex-wrap items-center gap-2"><div className="mr-auto"><div className="text-[10px] font-black uppercase tracking-[.18em] text-amber-200">Outils administrateur</div><p className="mt-1 text-xs text-muted">Corrige l’identité sportive ou actualise uniquement l’histoire de ce joueur.</p></div><button type="button" onClick={openEditor} disabled={adminBusy} className="inline-flex items-center gap-2 rounded-xl border border-line/15 bg-surface px-3 py-2 text-xs font-bold disabled:opacity-50"><Pencil className="h-3.5 w-3.5" />Modifier la fiche</button><button type="button" onClick={refreshCareer} disabled={adminBusy || !view.primaryCompetitionId} className="inline-flex items-center gap-2 rounded-xl border border-amber-300/25 bg-amber-300/10 px-3 py-2 text-xs font-bold text-amber-100 disabled:opacity-50"><RefreshCw className={`h-3.5 w-3.5 ${adminBusy ? "animate-spin" : ""}`} />Carrière + stats</button></div>
+        {editing && <div className="mt-4 grid gap-3 border-t border-line/10 pt-4 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1.4fr_auto]"><label className="text-[10px] font-bold uppercase tracking-wider text-muted">Nationalité principale<input value={editor.primaryNationality} onChange={(event) => setEditor((current) => ({ ...current, primaryNationality: event.target.value }))} placeholder="Belgique" className="mt-1 block w-full rounded-lg border border-line/10 bg-surface2 px-3 py-2 text-sm normal-case tracking-normal text-content" /></label><label className="text-[10px] font-bold uppercase tracking-wider text-muted">Deuxième nationalité<input value={editor.secondNationality} onChange={(event) => setEditor((current) => ({ ...current, secondNationality: event.target.value }))} placeholder="Maroc, RD Congo, Grèce…" className="mt-1 block w-full rounded-lg border border-line/10 bg-surface2 px-3 py-2 text-sm normal-case tracking-normal text-content" /></label><label className="text-[10px] font-bold uppercase tracking-wider text-muted">Sélection représentée<select value={editor.nationalTeamId} onChange={(event) => setEditor((current) => ({ ...current, nationalTeamId: event.target.value }))} className="mt-1 block w-full rounded-lg border border-line/10 bg-surface2 px-3 py-2 text-sm normal-case tracking-normal text-content"><option value="">Aucune / à préciser</option>{nationalTeams.map((team) => <option key={team.id} value={team.value || team.id}>{team.flag || "🌍"} {team.name}{team.stored && team.national_category ? ` · ${team.national_category}` : ""}</option>)}</select></label><div className="flex items-end gap-2"><button type="button" onClick={saveEditorialIdentity} disabled={adminBusy || !editor.primaryNationality.trim()} className="inline-flex h-10 items-center gap-2 rounded-lg bg-accent px-3 text-xs font-bold text-white disabled:opacity-50"><Save className="h-3.5 w-3.5" />Enregistrer</button><button type="button" onClick={() => setEditing(false)} disabled={adminBusy} className="inline-flex h-10 items-center rounded-lg border border-line/10 px-3 text-muted"><X className="h-4 w-4" /></button></div></div>}
         {adminStatus && <p className={`mt-3 rounded-lg border px-3 py-2 text-xs ${adminStatus.startsWith("Erreur") ? "border-red-400/25 bg-red-500/10 text-red-200" : "border-emerald-400/20 bg-emerald-500/10 text-emerald-200"}`}>{adminStatus}</p>}
       </section>}
 
