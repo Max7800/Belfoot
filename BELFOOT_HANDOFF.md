@@ -1298,6 +1298,24 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
 
 ## CURRENT_GIT_STATE
 
+> **Lot Claude #4** : (1) **lisibilité cartes « Les leaders »** (page compétition) — texte blanc +
+> ombre + voile dégradé quand fond image (`LeaderCard`). (2) **Noms des sélections en français** :
+> `lib/frenchNations.js` (map anglais→fr + `frenchNationName`) branché dans `syncNationalTeam.js`
+> (sélection suivie + adverses nommées FR à la sync → durable, **sans verrou**). Pour les clubs DÉJÀ
+> importés : un UPDATE one-shot (sans lock) renomme l'existant ; la sync les garde en FR ensuite.
+> Mains libres confirmées par Max (Codex ne bossait pas dessus).
+>
+
+> **Lot Claude #3 (fichiers neufs, zéro collision)** : **Transferts par championnat**.
+> `components/football/CompetitionTransfers.js` (composant autonome : arrivées/départs des clubs du
+> championnat, filtre Tous/Arrivées/Départs, sélecteur de saison, badge Prêt/Définitif) + route dédiée
+> `app/competitions/[slug]/transferts/page.js`. Data = `player_transfers` (aucun appel API). **Codex peut
+> glisser `<CompetitionTransfers competition={comp} />` dans un onglet de la page compétition** quand
+> l'habillage est posé (ou laisser la route dédiée telle quelle). Rappel du brief EXILÉS en attente :
+> discover scopé `competition_scope ≠ Belgique` + exclure Pro League de la page Belges + suivi individuel
+> des Belges connus (API-Football n'a PAS de recherche par nationalité → scan ligue par ligue).
+>
+
 > **Lot Claude #2 (avant-lancement, fichiers neufs)** : pages légales **`/cgu`**, **`/confidentialite`**
 > (RGPD/APD belge), **`/mentions-legales`** (avec `[À COMPLÉTER]` pour éditeur/contact/juridiction) ;
 > **`app/sitemap.js`** dynamique (routes + articles publiés + compétitions + clubs + joueurs + sujets forum,

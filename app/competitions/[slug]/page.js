@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabaseClient";
 import MatchRow from "@/components/football/MatchRow";
 import SeasonCalendar from "@/components/football/SeasonCalendar";
 import StandingsTable from "@/components/football/StandingsTable";
+import CompetitionTransfers from "@/components/football/CompetitionTransfers";
 import CupRounds from "@/components/football/CupRounds";
 import NationsLeagueStandings from "@/components/football/NationsLeagueStandings";
 import CompetitionHeader from "@/components/football/CompetitionHeader";
@@ -105,11 +106,11 @@ export default function CompetitionPage() {
   useEffect(() => { if (tab === "stats" && anchor) { const el = document.getElementById(anchor); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); setAnchor(null); } }, [tab, anchor]);
   const goStats = (sec) => { setTab("stats"); setAnchor(sec); };
 
-  const TABS = [["overview", L("comp.tab.overview", "Vue d'ensemble")], ["matchs", L("nav.matchs", "Matchs")], ["classement", isHybrid ? "Classement & tableau" : isCup ? L("cup.bracket", "Tableau") : L("nav.classement", "Classement")], ["clubs", isInternational ? "Sélections" : L("nav.clubs", "Clubs")], ["joueurs", L("nav.joueurs", "Joueurs")], ["stats", L("comp.tab.stats", "Stats")]];
+  const TABS = [["overview", L("comp.tab.overview", "Vue d'ensemble")], ["matchs", L("nav.matchs", "Matchs")], ["classement", isHybrid ? "Classement & tableau" : isCup ? L("cup.bracket", "Tableau") : L("nav.classement", "Classement")], ["clubs", isInternational ? "Sélections" : L("nav.clubs", "Clubs")], ["joueurs", L("nav.joueurs", "Joueurs")], ["stats", L("comp.tab.stats", "Stats")], ...(isInternational ? [] : [["transferts", "Transferts"]])];
 
   useEffect(() => {
     const requestedTab = searchParams.get("tab");
-    if (["overview", "matchs", "classement", "clubs", "joueurs", "stats"].includes(requestedTab)) setTab(requestedTab);
+    if (["overview", "matchs", "classement", "clubs", "joueurs", "stats", "transferts"].includes(requestedTab)) setTab(requestedTab);
   }, [searchParams]);
 
   useEffect(() => { (async () => {
@@ -282,19 +283,23 @@ export default function CompetitionPage() {
     const accent = (on && t.accent) || v.accent;
     const bg = on ? t.background_url : null;
     const style = { ...(bg ? { backgroundImage: `url(${bg})`, backgroundSize: "cover", backgroundPosition: "center" } : {}), ...(on ? { borderColor: t.border_color || accent } : {}) };
+    // Sur fond image : texte blanc + ombre pour rester lisible. Sinon, tons habituels.
+    const overName = bg ? "text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.75)]" : "text-content";
+    const overSub = bg ? "text-white/90 [text-shadow:0_1px_2px_rgba(0,0,0,0.7)]" : "text-muted";
+    const overSub2 = bg ? "text-white/70" : "text-muted/70";
     return (
       <button onClick={onClick} className={`relative w-full overflow-hidden rounded-2xl border p-4 text-left transition hover:brightness-110 ${on ? v.glow : "border-line/10"} ${on && !bg ? `bg-gradient-to-br ${v.grad} to-transparent` : (bg ? "" : "bg-surface")}`} style={style}>
-        {bg && <span className="absolute inset-0" style={{ background: `rgba(0,0,0,${t.overlay ?? 0.55})` }} />}
+        {bg && <span className="absolute inset-0" style={{ background: `linear-gradient(105deg, rgba(0,0,0,${Math.min(0.85, (t.overlay ?? 0.55) + 0.2)}) 0%, rgba(0,0,0,${t.overlay ?? 0.55}) 55%, rgba(0,0,0,${Math.max(0.3, (t.overlay ?? 0.55) - 0.15)}) 100%)` }} />}
         {on && <span className="pointer-events-none absolute -bottom-3 -right-2"><Watermark kind={v.wm} color={accent} /></span>}
         <div className="relative">
-          <div className="text-xs font-bold uppercase tracking-wider text-muted">{v.icon} {title}</div>
+          <div className={`text-xs font-bold uppercase tracking-wider ${overSub}`}>{v.icon} {title}</div>
           {x ? (
             <div className="mt-2 flex items-center gap-3">
               <img src={x.p.photo_url || ""} className="h-14 w-14 rounded-full object-cover ring-2" style={{ "--tw-ring-color": accent }} alt="" />
-              <span className="min-w-0"><b className="block truncate">{x.p.name}</b><span className="flex items-center gap-1 text-xs text-muted">{clubsMap[playerClubId(x.p)]?.logo_url && <img src={clubsMap[playerClubId(x.p)].logo_url} className="h-3.5 w-3.5 object-contain" alt="" />}{clubName(playerClubId(x.p))}</span>{meta && <span className="block text-[11px] text-muted/70">{meta(x.st)}</span>}</span>
-              <b className="ml-auto text-2xl" style={{ color: accent }}>{unit}</b>
+              <span className="min-w-0"><b className={`block truncate ${overName}`}>{x.p.name}</b><span className={`flex items-center gap-1 text-xs ${overSub}`}>{clubsMap[playerClubId(x.p)]?.logo_url && <img src={clubsMap[playerClubId(x.p)].logo_url} className="h-3.5 w-3.5 object-contain" alt="" />}{clubName(playerClubId(x.p))}</span>{meta && <span className={`block text-[11px] ${overSub2}`}>{meta(x.st)}</span>}</span>
+              <b className="ml-auto text-2xl" style={{ color: bg ? "#fff" : accent, textShadow: bg ? `0 1px 6px ${accent}, 0 1px 3px rgba(0,0,0,0.8)` : "none" }}>{unit}</b>
             </div>
-          ) : <p className="mt-2 text-sm text-muted">—</p>}
+          ) : <p className={`mt-2 text-sm ${overSub}`}>—</p>}
         </div>
       </button>
     );
@@ -544,6 +549,8 @@ export default function CompetitionPage() {
           </div>
         </div>
       )}
+
+      {!seasonLoading && tab === "transferts" && <CompetitionTransfers competition={comp} />}
     </div>
   );
 }
