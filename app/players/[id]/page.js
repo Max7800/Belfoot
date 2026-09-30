@@ -9,7 +9,7 @@ import { useLabels } from "@/lib/labels";
 import DiscussButton from "@/components/forum/DiscussButton";
 import { playerAge } from "@/lib/playerAge";
 import { preferAssignedPlayerStats } from "@/lib/playerStats";
-import { NATIONAL_TEAM_CATALOG, nationalityBadges, ratingTone } from "@/lib/nationalities";
+import { NATIONAL_TEAM_CATALOG, isNationalSelectionClub, nationalityBadges, ratingTone } from "@/lib/nationalities";
 import { useAuth } from "@/lib/auth";
 
 const POSITION_LABELS = { Goalkeeper: "Gardien", GK: "Gardien", Defender: "Défenseur", DEF: "Défenseur", Midfielder: "Milieu", MID: "Milieu", Attacker: "Attaquant", FWD: "Attaquant" };
@@ -80,7 +80,7 @@ export default function PlayerPage() {
     const relevantTeamIds = [...new Set([currentClubId, player.national_team_id].filter(Boolean))];
 
     const [clubResult, nationalTeamResult, statsResult, performancesResult, clubMatchesResult] = await Promise.all([
-      currentClubId ? supabase.from("clubs").select("id,name,logo_url,city,team_type,parent_club_id").eq("id", currentClubId).maybeSingle() : Promise.resolve({ data: null }),
+      currentClubId ? supabase.from("clubs").select("id,name,logo_url,city,team_type,parent_club_id,national_category,ext").eq("id", currentClubId).maybeSingle() : Promise.resolve({ data: null }),
       player.national_team_id ? supabase.from("clubs").select("id,name,short_name,logo_url,team_type,national_category").eq("id", player.national_team_id).maybeSingle() : Promise.resolve({ data: null }),
       supabase.from("player_season_stats").select("*").eq("player_id", id).order("season", { ascending: false }),
       supabase.from("match_player_stats").select("*").eq("player_id", id).limit(60),
@@ -102,7 +102,7 @@ export default function PlayerPage() {
     const clubIds = [...new Set([...matches.flatMap((match) => [match.home_club_id, match.away_club_id]), ...memberships.map((row) => row.club_id), ...statsRows.map((row) => row.club_id), player.national_team_id].filter(Boolean))];
     const competitionIds = [...new Set([...statsRows.map((row) => row.competition_id), ...matches.map((row) => row.competition_id)].filter(Boolean))];
     const [clubsResult, competitionsResult] = await Promise.all([
-      clubIds.length ? supabase.from("clubs").select("id,name,logo_url").in("id", clubIds) : Promise.resolve({ data: [] }),
+      clubIds.length ? supabase.from("clubs").select("id,name,logo_url,team_type,national_category,ext").in("id", clubIds) : Promise.resolve({ data: [] }),
       competitionIds.length ? supabase.from("competitions").select("id,name,logo_url,provider").in("id", competitionIds) : Promise.resolve({ data: [] }),
     ]);
     if (!alive) return;
@@ -124,8 +124,9 @@ export default function PlayerPage() {
   const view = useMemo(() => {
     const latestSeason = Math.max(0, ...state.stats.map((row) => year(row.season)), ...state.memberships.map((row) => Number(row.season_start_year) || year(row.season)));
     const latestStats = latestSeason ? state.stats.filter((row) => year(row.season) === latestSeason) : state.stats;
+    const clubLatestStats = latestStats.filter((row) => !isNationalSelectionClub(state.clubs[row.club_id], state.player?.nationality));
     const matchMap = Object.fromEntries(state.matches.map((match) => [match.id, match]));
-    const primaryStat = [...latestStats]
+    const primaryStat = [...clubLatestStats]
       .filter((row) => row.competition_id)
       .sort((a, b) => (Number(b.appearances) || 0) - (Number(a.appearances) || 0))[0];
     const performanceCompetitionCounts = state.performances.reduce((counts, performance) => {
@@ -143,7 +144,7 @@ export default function PlayerPage() {
         && (!primaryCompetitionId || String(match.competition_id) === String(primaryCompetitionId));
     });
     const performanceRatings = seasonPerformances.map((row) => Number(row.rating)).filter((value) => value > 0);
-    const ratedStats = latestStats
+    const ratedStats = clubLatestStats
       .filter((row) => !primaryCompetitionId || String(row.competition_id) === String(primaryCompetitionId))
       .map((row) => ({ rating: Number(row.rating), weight: Math.max(1, Number(row.appearances) || 0) }))
       .filter((row) => row.rating > 0);
@@ -152,13 +153,24 @@ export default function PlayerPage() {
       ? ratedStats.reduce((sum, row) => sum + row.rating * row.weight, 0) / fallbackRatingWeight
       : null;
     const totals = {
-      appearances: total(latestStats, "appearances"), minutes: total(latestStats, "minutes"), goals: total(latestStats, "goals"), assists: total(latestStats, "assists"),
+      appearances: total(clubLatestStats, "appearances"), minutes: total(clubLatestStats, "minutes"), goals: total(clubLatestStats, "goals"), assists: total(clubLatestStats, "assists"),
       rating: performanceRatings.length ? performanceRatings.reduce((sum, value) => sum + value, 0) / performanceRatings.length : fallbackRating,
     };
     const now = Date.now();
     const upcoming = state.matches.filter((match) => match.kickoff && !FINISHED.has(match.status) && matchTime(match) >= now).sort((a, b) => matchTime(a) - matchTime(b)).slice(0, 3);
     const performanceRows = state.performances.map((performance) => ({ performance, match: matchMap[performance.match_id] })).filter((row) => row.match).sort((a, b) => matchTime(b.match) - matchTime(a.match)).slice(0, 8);
-    return { latestSeason, totals, upcoming, performanceRows, primaryCompetitionId, primarySeason: primaryStat?.season || (latestSeason ? `${latestSeason}-${latestSeason + 1}` : "2026-2027"), ratingCompetition: state.competitions[primaryCompetitionId]?.name || "Compétition principale" };
+    const clubMemberships = state.memberships.filter((membership) => !isNationalSelectionClub(state.clubs[membership.club_id], state.player?.nationality));
+    const international = state.stats.reduce((summary, row) => {
+      const club = state.clubs[row.club_id];
+      if (!isNationalSelectionClub(club, state.player?.nationality)) return summary;
+      const marker = `${club?.national_category || ""} ${club?.name || ""}`.toLowerCase();
+      const appearances = Number(row.appearances) || 0;
+      if (/\bu[ -]?21\b/.test(marker)) summary.u21 += appearances;
+      else if (/\bu[ -]?(?:17|18|19|20|22|23)\b|youth|jeune/.test(marker)) summary.youth += appearances;
+      else summary.senior += appearances;
+      return summary;
+    }, { senior: 0, u21: 0, youth: 0 });
+    return { latestSeason, totals, upcoming, performanceRows, clubMemberships, international, primaryCompetitionId, primarySeason: primaryStat?.season || (latestSeason ? `${latestSeason}-${latestSeason + 1}` : "2026-2027"), ratingCompetition: state.competitions[primaryCompetitionId]?.name || "Compétition principale" };
   }, [state]);
 
   const openEditor = async () => {
@@ -272,7 +284,8 @@ export default function PlayerPage() {
       <div className="mt-8 grid gap-8 lg:grid-cols-[1.05fr_1.95fr]">
         <div className="space-y-8">
           <section><div className="mb-3 flex items-center gap-2"><CalendarDays className="h-5 w-5 text-accent" /><h2 className="text-lg font-black">Prochains matchs</h2></div>{view.upcoming.length ? <div className="space-y-3">{view.upcoming.map((match) => <MatchCard key={match.id} match={match} clubs={state.clubs} competitions={state.competitions} playerTeamIds={[state.currentClubId, p.national_team_id].filter(Boolean)} />)}</div> : <div className="rounded-2xl border border-dashed border-line/15 bg-surface/40 p-5 text-sm leading-6 text-muted">Aucun prochain match importé pour son club ou sa sélection.</div>}</section>
-          <section><div className="mb-3 flex items-center gap-2"><Shield className="h-5 w-5 text-accent" /><h2 className="text-lg font-black">Parcours en club</h2></div>{state.memberships.length ? <div className="space-y-2">{state.memberships.map((membership) => { const club = state.clubs[membership.club_id] || (state.club?.id === membership.club_id ? state.club : null); return <Link key={membership.id} href={`/clubs/${membership.club_id}`} className="flex items-center gap-3 rounded-2xl border border-line/10 bg-surface/60 p-3 transition hover:border-accent/40"><ClubMark club={club} size="h-9 w-9" /><div className="min-w-0 flex-1"><div className="truncate text-sm font-black">{club?.name || "Club à préciser"}</div><div className="text-[11px] text-muted">{membership.season}{membership.squad_role && membership.squad_role !== "first_team" ? ` · ${membership.squad_role.toUpperCase()}` : ""}{membership.membership_type === "loan" ? " · Prêt" : ""}</div></div>{membership.is_primary && <span className="rounded-full bg-accent/10 px-2 py-1 text-[9px] font-bold uppercase text-accent">principal</span>}</Link>; })}</div> : <div className="rounded-2xl border border-dashed border-line/15 bg-surface/40 p-5 text-sm text-muted">L’historique des clubs sera complété par les imports de carrière ou manuellement dans l’administration.</div>}</section>
+          <section><div className="mb-3 flex items-center gap-2"><Shield className="h-5 w-5 text-accent" /><h2 className="text-lg font-black">Parcours en club</h2></div>{view.clubMemberships.length ? <div className="space-y-2">{view.clubMemberships.map((membership) => { const club = state.clubs[membership.club_id] || (state.club?.id === membership.club_id ? state.club : null); return <Link key={membership.id} href={`/clubs/${membership.club_id}`} className="flex items-center gap-3 rounded-2xl border border-line/10 bg-surface/60 p-3 transition hover:border-accent/40"><ClubMark club={club} size="h-9 w-9" /><div className="min-w-0 flex-1"><div className="truncate text-sm font-black">{club?.name || "Club à préciser"}</div><div className="text-[11px] text-muted">{membership.season}{membership.squad_role && membership.squad_role !== "first_team" ? ` · ${membership.squad_role.toUpperCase()}` : ""}{membership.membership_type === "loan" ? " · Prêt" : ""}</div></div>{membership.is_primary && <span className="rounded-full bg-accent/10 px-2 py-1 text-[9px] font-bold uppercase text-accent">principal</span>}</Link>; })}</div> : <div className="rounded-2xl border border-dashed border-line/15 bg-surface/40 p-5 text-sm text-muted">L’historique des clubs sera complété par les imports de carrière ou manuellement dans l’administration.</div>}</section>
+          <section><div className="mb-3 flex items-center gap-2"><Sparkles className="h-5 w-5 text-sky-300" /><h2 className="text-lg font-black">Parcours international</h2></div><div className="grid grid-cols-2 gap-2 sm:grid-cols-3"><div className="rounded-2xl border border-sky-400/20 bg-sky-400/[0.06] p-4 text-center"><b className="block text-2xl">{view.international.senior}</b><span className="text-[10px] font-bold uppercase tracking-wider text-muted">Sélection A</span></div><div className="rounded-2xl border border-line/10 bg-surface/60 p-4 text-center"><b className="block text-2xl">{view.international.u21}</b><span className="text-[10px] font-bold uppercase tracking-wider text-muted">U21</span></div>{view.international.youth > 0 && <div className="rounded-2xl border border-line/10 bg-surface/60 p-4 text-center"><b className="block text-2xl">{view.international.youth}</b><span className="text-[10px] font-bold uppercase tracking-wider text-muted">Autres jeunes</span></div>}</div><p className="mt-2 text-[10px] leading-4 text-muted">Apparitions enregistrées dans les saisons déjà synchronisées.</p></section>
           <section><div className="mb-3 flex items-center gap-2"><Sparkles className="h-5 w-5 text-accent" /><h2 className="text-lg font-black">Saison {view.latestSeason || "en cours"}</h2></div><div className="rounded-2xl border border-line/10 bg-surface/60 p-4"><div className="grid grid-cols-2 gap-4 text-center"><div><b className="block text-2xl">{view.totals.minutes}</b><span className="text-[10px] uppercase tracking-wider text-muted">Minutes</span></div><div><b className="block text-2xl">{view.totals.appearances ? Math.round(view.totals.minutes / view.totals.appearances) : 0}</b><span className="text-[10px] uppercase tracking-wider text-muted">Min./match</span></div></div>{p.synced_at && <div className="mt-4 border-t border-line/10 pt-3 text-[10px] text-muted">Données actualisées le {new Date(p.synced_at).toLocaleDateString("fr-BE", { day: "numeric", month: "long", year: "numeric" })}</div>}</div></section>
         </div>
 

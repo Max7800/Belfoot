@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
-import { ArrowLeft, Building2, ExternalLink, MapPin, Shield, Trophy } from "lucide-react";
+import { ArrowLeft, Building2, ExternalLink, MapPin, RefreshCw, Shield, Trophy } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import MatchRow from "@/components/football/MatchRow";
 import CollapsibleSection from "@/components/CollapsibleSection";
@@ -12,6 +12,7 @@ import { competitionPhases, getCompetitionType } from "@/lib/competitionType";
 import { competitionPath } from "@/lib/competitionRoutes";
 import DiscussButton from "@/components/forum/DiscussButton";
 import { playerAge } from "@/lib/playerAge";
+import { useAuth } from "@/lib/auth";
 
 const POS = { Goalkeeper: 0, Defender: 1, Midfielder: 2, Attacker: 3 };
 const ROLE_LABELS = { first_team: "Équipe première", reserve: "Réserve", u23: "U23", youth: "Jeunes", women: "Équipe féminine", unknown: "Groupe à préciser" };
@@ -24,6 +25,7 @@ export default function ClubPage() {
   const searchParams = useSearchParams();
   const requestedSeason = searchParams.get("season") || "";
   const sections = useClubSections();
+  const { isAdmin } = useAuth();
   const [club, setClub] = useState(undefined);
   const [matches, setMatches] = useState([]);
   const [clubsMap, setClubsMap] = useState({});
@@ -33,6 +35,9 @@ export default function ClubPage() {
   const [linked, setLinked] = useState([]);
   const [sport, setSport] = useState(null);
   const [mobileSection, setMobileSection] = useState(null);
+  const [careerBusy, setCareerBusy] = useState(false);
+  const [careerStatus, setCareerStatus] = useState("");
+  const [careerCompleted, setCareerCompleted] = useState(() => new Set());
 
   useEffect(() => {
     const available = sections.filter((section) => section.key !== "linked" || linked.length > 0);
@@ -138,6 +143,43 @@ export default function ClubPage() {
   const activeMobileSection = visibleSections.find((section) => section.key === mobileSection) || visibleSections[0];
   const clubsHref = sport?.competition ? `${competitionPath(sport.competition)}?tab=clubs` : "/competitions";
 
+  const refreshClubCareers = async () => {
+    const provider = sport?.competition?.provider;
+    const season = sport?.season?.label;
+    const year = String(season || "").match(/\d{4}/)?.[0];
+    if (!provider || !season || !year) { setCareerStatus("Impossible de déterminer la compétition et la saison de référence."); return; }
+    const eligible = squad.filter((player) => player.external_id && player.source === provider && !careerCompleted.has(player.id) && !player.ext?.career_stats_seasons?.[year]);
+    if (!eligible.length) { setCareerStatus(`Tous les joueurs compatibles sont déjà actualisés pour ${season}.`); return; }
+    const estimatedCalls = eligible.length * 2;
+    if (!window.confirm(`Actualiser la carrière et les statistiques de ${eligible.length} joueur(s) de ${club.name} pour ${season} ?\n\nCoût maximal estimé : ${estimatedCalls} appels API.\nLe traitement se fera joueur par joueur pour respecter Vercel Hobby.`)) return;
+    setCareerBusy(true); setCareerStatus(`0/${eligible.length} joueur actualisé · 0/${estimatedCalls} appel estimé`);
+    const completedNow = new Set(careerCompleted);
+    const failures = [];
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      for (let index = 0; index < eligible.length; index++) {
+        const player = eligible[index];
+        const payload = { key: "football.player-careers", competitionId: sport.competition.id, playerId: player.id, season, includeCareerStats: true, batchSize: 1, requestLimit: 2 };
+        try {
+          const preflightResponse = await fetch("/api/admin/job-preflight", { method: "POST", headers: { Authorization: `Bearer ${session?.access_token || ""}`, "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+          const preflight = await preflightResponse.json().catch(() => ({}));
+          if (!preflightResponse.ok || !preflight.ok) throw new Error(preflight.error || (preflight.blockers || []).join(" · ") || "Préflight bloqué");
+          const response = await fetch("/api/admin/run-job", { method: "POST", headers: { Authorization: `Bearer ${session?.access_token || ""}`, "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+          const result = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error(result.detail || result.error || "Synchronisation échouée");
+          completedNow.add(player.id);
+          setCareerCompleted(new Set(completedNow));
+        } catch (error) {
+          failures.push(`${player.name}: ${error.message || String(error)}`);
+        }
+        setCareerStatus(`${index + 1}/${eligible.length} joueur(s) traité(s) · jusqu’à ${(index + 1) * 2}/${estimatedCalls} appels${failures.length ? ` · ${failures.length} erreur(s)` : ""}`);
+      }
+      setCareerStatus(`${completedNow.size - careerCompleted.size}/${eligible.length} joueur(s) actualisé(s) pour ${season}${failures.length ? ` · ${failures.length} à reprendre` : " · terminé"}.`);
+    } finally {
+      setCareerBusy(false);
+    }
+  };
+
   return (
     <div>
       <Link href={clubsHref} className="mb-3 inline-flex items-center gap-1.5 text-sm font-semibold text-muted transition hover:text-content"><ArrowLeft className="h-4 w-4" /> Clubs{sport?.competition?.name ? ` · ${sport.competition.name}` : ""}</Link>
@@ -146,6 +188,7 @@ export default function ClubPage() {
         <div className="relative flex items-center gap-3 sm:gap-4">{club.logo_url && <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-black/15 p-2 sm:h-20 sm:w-20"><img src={club.logo_url} className="h-full w-full object-contain" alt="" /></div>}<div className="min-w-0"><div className="text-[10px] font-bold uppercase tracking-[0.22em] text-muted">{club.nickname || club.city || "Club"}</div><h1 className="truncate text-2xl font-black sm:text-4xl">{club.name}</h1>{coach && <div className="mt-1.5 flex items-center gap-2 text-xs text-muted sm:mt-2 sm:text-sm">{coach.photo_url && <img src={coach.photo_url} className="h-6 w-6 rounded-full object-cover" alt="" />}<span className="truncate">Entraîneur : <b className="text-content">{coach.name}</b></span></div>}</div></div>
       </div>
       <div className="mb-5"><DiscussButton refType="club" refId={club.id} title={`Discussion : ${club.name}`} label="Discuter de ce club" categorySlug="football-belge" /></div>
+      {isAdmin && <div className="mb-5 rounded-2xl border border-amber-300/20 bg-amber-300/[0.05] p-4"><div className="flex flex-wrap items-center gap-3"><div className="min-w-0 flex-1"><div className="text-[10px] font-black uppercase tracking-[.18em] text-amber-200">Outil administrateur</div><p className="mt-1 text-xs leading-5 text-muted">Actualise par lots la carrière et toutes les statistiques de la saison pour les joueurs de cet effectif.</p></div><button type="button" onClick={refreshClubCareers} disabled={careerBusy || !sport?.competition?.provider} className="inline-flex items-center gap-2 rounded-xl border border-amber-300/25 bg-amber-300/10 px-3 py-2 text-xs font-bold text-amber-100 disabled:opacity-50"><RefreshCw className={`h-4 w-4 ${careerBusy ? "animate-spin" : ""}`} />Actualiser les joueurs du club</button></div>{careerStatus && <p className="mt-3 rounded-lg border border-line/10 bg-bg/35 px-3 py-2 text-xs text-muted">{careerStatus}</p>}</div>}
       <div className="sm:hidden">
         <div className="-mx-4 mb-3 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {visibleSections.map((section) => <button key={section.key} onClick={() => setMobileSection(section.key)} className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-bold transition ${activeMobileSection?.key === section.key ? "border-accent bg-accent/15 text-accent" : "border-line/15 bg-surface text-muted"}`}>{section.label}{counts[section.key] != null ? ` · ${counts[section.key]}` : ""}</button>)}

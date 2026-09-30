@@ -256,6 +256,7 @@ const provider = {
         external_id: row.team?.id ? String(row.team.id) : null,
         name: row.team?.name || null,
         logo_url: row.team?.logo || null,
+        national: row.team?.national === true,
       },
       season: `${year}-${Number(year) + 1}`,
       ext: row,
@@ -282,6 +283,7 @@ const provider = {
         name: stat.team?.name || null,
         logo_url: stat.team?.logo || null,
         country: stat.league?.country || null,
+        national: stat.team?.national === true,
       },
       competition: {
         external_id: stat.league?.id ? String(stat.league.id) : null,

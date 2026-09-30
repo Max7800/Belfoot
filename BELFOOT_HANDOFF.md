@@ -2280,3 +2280,19 @@ Fonctionnalités Belfoot qui seraient de bons candidats à généraliser dans le
   éditoriale minimale seulement au moment où elle est choisie.
 - Le préflight du bouton annonce deux appels et son budget strict est fixé à deux. Aucun appel
   API-Football n'a été effectué et aucune migration SQL supplémentaire n'est nécessaire.
+
+### 2026-09-30 — ChatGPT — parcours international et rafraîchissement par club
+
+- Les sélections nationales déjà présentes dans `player_team_seasons` restent conservées pour ne pas
+  supprimer de données, mais elles sont exclues du bloc public « Parcours en club ». Les futurs imports
+  de carrière ne créent plus d'affectation de club pour une équipe détectée comme sélection.
+- La fiche joueur possède un bloc « Parcours international » séparé. Il additionne les apparitions
+  effectivement enregistrées dans `player_season_stats` pour la sélection A, les U21 et, si nécessaire,
+  les autres catégories de jeunes. Le libellé précise qu'il ne s'agit que des saisons synchronisées.
+- Les totaux principaux de la fiche (matchs, buts, passes et note) excluent désormais les lignes de
+  sélection afin de ne pas mélanger performances en club et internationales.
+- La fiche club propose aux administrateurs « Actualiser les joueurs du club ». Le navigateur traite
+  l'effectif joueur par joueur, avec préflight et enveloppe stricte de deux appels par joueur, afin de ne
+  pas dépasser la durée Vercel Hobby. Chaque succès marque la saison dans `players.ext.career_stats_seasons` :
+  une relance ignore les joueurs déjà terminés et reprend uniquement les autres.
+- Aucun nouvel SQL et aucun appel API-Football n'ont été nécessaires pour développer ce lot.

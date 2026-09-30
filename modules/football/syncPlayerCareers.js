@@ -1,8 +1,10 @@
 import { getProvider } from "./providers";
 import { upsertExternal } from "./sync";
 import { squadRoleForClub, upsertPlayerMembership } from "./playerMemberships";
+import { isNationalSelectionClub } from "@/lib/nationalities";
 
-function inferredTeamType(name) {
+function inferredTeamType(name, national = false) {
+  if (national) return "national";
   const value = String(name || "").toLowerCase();
   if (/\b(u23|jong|futures|nxt|reserve|réserve)\b/.test(value)) return "u23";
   if (/\b(u\d{2}|youth|academy|jeunes?)\b/.test(value)) return "youth";
@@ -29,7 +31,7 @@ export async function syncPlayerCareers(db, competition, ctx = {}) {
   const targeted = !!ctx.playerId;
   const batchSize = targeted ? 1 : Math.max(1, Math.min(Number(ctx.batchSize) || 5, 25));
   let playersQuery = db.from("players")
-    .select("id,name,external_id,source,career_sync_status,career_synced_at,ext")
+    .select("id,name,external_id,source,nationality,career_sync_status,career_synced_at,ext")
     .eq("source", competition.provider)
     .not("external_id", "is", null);
   if (targeted) {
@@ -59,18 +61,18 @@ export async function syncPlayerCareers(db, competition, ctx = {}) {
         external_id: row.team.external_id,
         name: row.team.name,
         logo_url: row.team.logo_url,
-        team_type: inferredTeamType(row.team.name),
+        team_type: inferredTeamType(row.team.name, row.team.national),
         ext: row.ext || {},
       })));
       const externalIds = [...new Set(history.map((row) => row.team.external_id))];
       const { data: clubs, error: clubsError } = externalIds.length
-        ? await db.from("clubs").select("id,external_id,team_type").eq("source", competition.provider).in("external_id", externalIds)
+        ? await db.from("clubs").select("id,name,external_id,team_type,national_category,ext").eq("source", competition.provider).in("external_id", externalIds)
         : { data: [], error: null };
       if (clubsError) throw clubsError;
       const clubMap = Object.fromEntries((clubs || []).map((club) => [club.external_id, club]));
       for (const row of history) {
         const club = clubMap[row.team.external_id];
-        if (!club) continue;
+        if (!club || isNationalSelectionClub(club, player.nationality)) continue;
         await upsertPlayerMembership(db, {
           playerId: player.id,
           club,
@@ -90,8 +92,9 @@ export async function syncPlayerCareers(db, competition, ctx = {}) {
           external_id: row.team.external_id,
           name: row.team.name,
           logo_url: row.team.logo_url,
-          team_type: inferredTeamType(row.team.name),
-          ext: { country: row.team.country, imported_for: "player-career" },
+          team_type: inferredTeamType(row.team.name, row.team.national),
+          national_category: row.team.national ? (/\bU\s?(\d{2})\b/i.exec(row.team.name)?.[1] ? `u${/\bU\s?(\d{2})\b/i.exec(row.team.name)[1]}` : "senior") : null,
+          ext: { country: row.team.country, national: row.team.national, imported_for: "player-career" },
         })));
         await ensureExternalReferences(db, "competitions", competition.provider, seasonStats.map((row) => ({
           external_id: row.competition.external_id,
@@ -106,7 +109,7 @@ export async function syncPlayerCareers(db, competition, ctx = {}) {
         const teamExternalIds = [...new Set(seasonStats.map((row) => row.team.external_id))];
         const competitionExternalIds = [...new Set(seasonStats.map((row) => row.competition.external_id))];
         const [{ data: statClubs, error: statClubsError }, { data: statCompetitions, error: statCompetitionsError }] = await Promise.all([
-          teamExternalIds.length ? db.from("clubs").select("id,external_id,team_type").eq("source", competition.provider).in("external_id", teamExternalIds) : Promise.resolve({ data: [] }),
+          teamExternalIds.length ? db.from("clubs").select("id,name,external_id,team_type,national_category,ext").eq("source", competition.provider).in("external_id", teamExternalIds) : Promise.resolve({ data: [] }),
           competitionExternalIds.length ? db.from("competitions").select("id,external_id").eq("source", competition.provider).in("external_id", competitionExternalIds) : Promise.resolve({ data: [] }),
         ]);
         if (statClubsError) throw statClubsError;
@@ -143,18 +146,20 @@ export async function syncPlayerCareers(db, competition, ctx = {}) {
           const club = statClubMap[row.team.external_id];
           const statCompetition = statCompetitionMap[row.competition.external_id];
           if (!club || !statCompetition) continue;
-          await upsertPlayerMembership(db, {
-            playerId: player.id,
-            club,
-            season: seasonLabel,
-            source: competition.provider,
-            externalId: player.external_id,
-            position: row.player.position,
-            squadRole: squadRoleForClub(club),
-            isPrimary: club.team_type === "first_team",
-            active: false,
-            ext: { imported_for: "player-career-stats" },
-          });
+          if (!isNationalSelectionClub(club, row.player.nationality || player.nationality)) {
+            await upsertPlayerMembership(db, {
+              playerId: player.id,
+              club,
+              season: seasonLabel,
+              source: competition.provider,
+              externalId: player.external_id,
+              position: row.player.position,
+              squadRole: squadRoleForClub(club),
+              isPrimary: club.team_type === "first_team",
+              active: false,
+              ext: { imported_for: "player-career-stats" },
+            });
+          }
           const existingStat = existingStatsMap.get(`${club.id}:${statCompetition.id}`);
           if (existingStat?.locked) continue;
           const statsPatch = {
@@ -176,11 +181,17 @@ export async function syncPlayerCareers(db, competition, ctx = {}) {
           statLines++;
         }
       }
-      await db.from("players").update({ career_sync_status: "ok", career_synced_at: new Date().toISOString() }).eq("id", player.id);
+      const completedAt = new Date().toISOString();
+      const seasonKey = String(ctx.season || "").match(/\d{4}/)?.[0];
+      const completedExt = ctx.includeCareerStats && seasonKey
+        ? { ...(player.ext || {}), career_stats_seasons: { ...(player.ext?.career_stats_seasons || {}), [seasonKey]: completedAt } }
+        : player.ext;
+      await db.from("players").update({ career_sync_status: "ok", career_synced_at: completedAt, ...(completedExt ? { ext: completedExt } : {}) }).eq("id", player.id);
     } catch (error) {
       await db.from("players").update({ career_sync_status: "error", career_synced_at: new Date().toISOString() }).eq("id", player.id);
       errors.push(`${player.name}: ${error.message || String(error)}`);
     }
   }
+  if (targeted && errors.length) throw new Error(errors.join("; "));
   return `${competition.name}: ${players.length} carrière(s), ${memberships} affectation(s) historiques${ctx.includeCareerStats ? ` · ${statLines} ligne(s) statistique(s) toutes compétitions` : ""}${errors.length ? ` · ${errors.length} erreur(s): ${errors.join("; ")}` : ""}`;
 }
