@@ -22,6 +22,22 @@ const PLAN_CATEGORIES = [
   { key: "international", label: "International", icon: "🌐", description: "Nations League, Euro, Coupe du monde et sélections." },
 ];
 
+// Certains anciens imports ont créé une ligne éditoriale puis une ligne API
+// pour le même provider/id. Elles doivent être consolidées en base plus tard,
+// mais le plan ne peut jamais les proposer deux fois entre-temps.
+function distinctProviderCompetitions(rows, seasons = []) {
+  const grouped = new Map();
+  for (const competition of rows) {
+    const key = competition.provider && competition.external_id ? `${competition.provider}:${competition.external_id}` : competition.id;
+    const current = grouped.get(key);
+    const score = seasons.filter((season) => season.competition_id === competition.id).length * 100
+      + (competition.public_visible !== false ? 10 : 0)
+      + (/^(jupiler|uefa)/i.test(competition.name || "") ? 1 : 0);
+    if (!current || score > current.score) grouped.set(key, { competition, score });
+  }
+  return [...grouped.values()].map((entry) => entry.competition);
+}
+
 async function requestReadiness(payload) {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session?.access_token) throw new Error("Session administrateur expirée.");
@@ -88,11 +104,12 @@ export default function ImportPlanPanel() {
     ]);
     const error = competitionResult.error || nationalResult.error || settingsResult.error || seasonResult.error;
     if (error) { setStatus("error"); setMessage(error.message); return; }
-    const competitionRows = competitionResult.data || [];
+    const rawCompetitionRows = competitionResult.data || [];
     const nationalRows = nationalResult.data || [];
     const stored = normalizeImportPlan(settingsResult.data?.data?.football_import_plan);
     const resetArchiveScopes = stored.version < 3;
     const resetSeasonEstimates = stored.version < 4;
+    const competitionRows = distinctProviderCompetitions(rawCompetitionRows, seasonResult.data || []);
     setCompetitions(competitionRows);
     setNationalTeams(nationalRows);
     const seasonRows = seasonResult.data || [];
@@ -104,7 +121,8 @@ export default function ImportPlanPanel() {
       competitions: Object.fromEntries(competitionRows.map((competition, index) => [competition.id, hydrateCompetitionConfig(competition, stored.competitions[competition.id], index, { resetArchiveScopes, resetSeasonEstimates })])),
       nationalTeams: Object.fromEntries(nationalRows.filter((team) => team.external_id).map((team, index) => [String(team.external_id), hydrateNationalConfig(stored.nationalTeams[String(team.external_id)], index, { resetArchiveScopes })])),
     });
-    if (resetArchiveScopes || resetSeasonEstimates) setMessage("Plan adapté : périmètre et nombres de clubs/matchs sont maintenant définis saison par saison. Enregistre pour confirmer.");
+    const hiddenDuplicates = rawCompetitionRows.length - competitionRows.length;
+    if (resetArchiveScopes || resetSeasonEstimates || hiddenDuplicates) setMessage(`${resetArchiveScopes || resetSeasonEstimates ? "Plan adapté : périmètre et nombres de clubs/matchs sont maintenant définis saison par saison." : ""}${hiddenDuplicates ? `${resetArchiveScopes || resetSeasonEstimates ? " " : ""}${hiddenDuplicates} doublon(s) provider sont masqués du plan ; aucune donnée ni saison n’est supprimée.` : ""} Enregistre pour confirmer.`);
     try {
       const result = seasonRows.length ? await requestReadiness({ seasonIds: seasonRows.map((season) => season.id) }) : { reports: [] };
       setReadiness(Object.fromEntries((result.reports || []).map((report) => [report.season.id, report])));

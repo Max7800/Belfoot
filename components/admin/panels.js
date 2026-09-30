@@ -14,6 +14,17 @@ import { normalizeProposeConfig } from "@/lib/propose";
 import { normalizeRankings } from "@/lib/rankings";
 import { invalidateTilesCache, TILE_SCOPES } from "@/lib/tiles";
 
+function distinctProviderCompetitions(rows = []) {
+  const grouped = new Map();
+  for (const competition of rows) {
+    const key = competition.provider && competition.external_id ? `${competition.provider}:${competition.external_id}` : competition.id;
+    const current = grouped.get(key);
+    const score = (competition.public_visible !== false ? 10 : 0) + (/^(jupiler|uefa)/i.test(competition.name || "") ? 1 : 0);
+    if (!current || score > current.score) grouped.set(key, { competition, score });
+  }
+  return [...grouped.values()].map((entry) => entry.competition).sort((a, b) => (a.name || "").localeCompare(b.name || "", "fr"));
+}
+
 export function ProfilesPanel() {
   const [rows, setRows] = useState([]);
   const [error, setError] = useState("");
@@ -107,7 +118,7 @@ export function JobsPanel() {
   };
   useEffect(() => {
     load();
-    supabase.from("competitions").select("*").order("name").then(({ data }) => setComps(data || []));
+    supabase.from("competitions").select("*").order("name").then(({ data }) => setComps(distinctProviderCompetitions(data || [])));
     supabase.from("seasons").select("competition_id,label").order("label", { ascending: false }).then(({ data }) => setAvailableSeasons(data || []));
   }, []);
   const callJob = async (key, budget) => {

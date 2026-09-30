@@ -310,7 +310,9 @@ export default function Home() {
   const meta = {
     jpl: { href: view.league ? competitionPath(view.league) : "/competitions", icon: Trophy },
     noyau: { href: "/forum", icon: Star },
-    watch: { href: "/matchs", icon: CalendarDays },
+    // Les matchs des Belges suivis sont une vue transversale : le calendrier
+    // classique impose une compétition et ne peut pas les afficher ensemble.
+    watch: { href: "/direct", icon: CalendarDays },
     form: { href: "/belges-a-l-etranger", icon: Flame },
     leagues: { href: "/belges-a-l-etranger", icon: Globe2 },
     news: { href: "/actus", icon: Newspaper },

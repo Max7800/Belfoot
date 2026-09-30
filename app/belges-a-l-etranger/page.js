@@ -11,7 +11,7 @@ import { supabase } from "@/lib/supabaseClient";
 const FLAGS = { England: "🏴", France: "🇫🇷", Germany: "🇩🇪", Italy: "🇮🇹", Spain: "🇪🇸", Netherlands: "🇳🇱", Portugal: "🇵🇹", Scotland: "🏴", Turkey: "🇹🇷", Austria: "🇦🇹", Switzerland: "🇨🇭", Greece: "🇬🇷", USA: "🇺🇸", Belgium: "🇧🇪" };
 const POSITIONS = { Goalkeeper: "Gardien", GK: "Gardien", Defender: "Défenseur", DEF: "Défenseur", Midfielder: "Milieu", MID: "Milieu", Attacker: "Attaquant", FWD: "Attaquant" };
 const SECTION_ICONS = { today: CalendarDays, form: Flame, leagues: Globe2, recap: Clock3, players: Users };
-const SECTION_LINKS = { today: "/matchs", form: "#all-players", recap: "/matchs" };
+const SECTION_LINKS = { today: "/direct", form: "#all-players", recap: "/matchs" };
 const normal = (value) => String(value || "").trim().toLocaleLowerCase("fr");
 const isBelgian = (value) => normal(value).startsWith("belg");
 const isBelgianClub = (club) => isBelgian(club?.ext?.country) || isBelgian(club?.ext?.team?.country);

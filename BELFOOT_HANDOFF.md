@@ -2313,3 +2313,18 @@ Fonctionnalités Belfoot qui seraient de bons candidats à généraliser dans le
   la fiche joueur.
 - Aucun SQL, aucune migration et aucun appel API-Football ne sont nécessaires. La page exploite
   uniquement les données déjà présentes dans Supabase.
+
+### 2026-09-30 — ChatGPT — correctifs navigation et sélections
+
+- Le lien « Voir tous les matchs » du bloc d’accueil *Les Belges à suivre aujourd’hui* ouvre
+  désormais `/direct` au lieu du calendrier nécessitant une compétition. Le même raccourci de la
+  page Belges à l'étranger est aligné.
+- `/diables-rouges` ne dépend plus uniquement de `national_followed=true` pour afficher les équipes
+  belges. Toute sélection belge déjà importée est proposée ; l'équipe A repasse avant les Red Flames
+  grâce à l'ordre explicite des catégories. Ceci répare le cas où seule l'équipe féminine apparaissait
+  après un changement de drapeau dans les données.
+- Le Plan d'import et la liste de synchronisation masquent les doublons partageant le même couple
+  `provider + external_id` (ex. « Europa League » / « UEFA Europa League », « Pro League » /
+  « Jupiler Pro League »). Les données, saisons et historiques ne sont ni fusionnés ni supprimés :
+  c'est une protection d'interface en attendant une consolidation contrôlée ultérieure.
+- Aucun SQL, aucune migration et aucun appel API-Football ne sont nécessaires pour ces correctifs.

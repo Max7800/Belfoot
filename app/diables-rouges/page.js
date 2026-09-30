@@ -22,6 +22,7 @@ const normalizeNationName = (value) => String(value || "")
   .trim()
   .toLowerCase();
 const NORMALIZED_COUNTRY_CODES = Object.fromEntries(Object.entries(COUNTRY_CODES).map(([name, code]) => [normalizeNationName(name), code]));
+const isBelgianNationalTeam = (team) => /^(belgium|belgique)(\s|$)/i.test(team?.name || "") || /^(belgium|belgique)$/i.test(team?.ext?.country || team?.ext?.team?.country || "");
 
 function countryCodeFor(name = "") {
   const clean = name.replace(/\s+(U\d+|W|Women)$/i, "").trim();
@@ -125,9 +126,16 @@ export default function NationalTeamsPage() {
   const [schemaMissing, setSchemaMissing] = useState(false);
 
   useEffect(() => {
-    supabase.from("clubs").select("id,name,short_name,logo_url,national_category,national_gender,fifa_ranking").eq("team_type", "national").eq("national_followed", true).then(({ data, error }) => {
+    // Une équipe A peut être importée avant que son drapeau « suivie » soit
+    // renseigné. On garde ce drapeau pour les sélections ajoutées à la main,
+    // mais toute sélection belge déjà présente doit rester visible ici.
+    supabase.from("clubs").select("id,name,short_name,logo_url,national_category,national_gender,fifa_ranking,national_followed,ext").eq("team_type", "national").then(({ data, error }) => {
       if (error) { setSchemaMissing(true); setLoading(false); return; }
-      const sorted = (data || []).sort((a, b) => CATEGORY_ORDER.indexOf(a.national_category) - CATEGORY_ORDER.indexOf(b.national_category));
+      const sorted = (data || []).filter((team) => team.national_followed || isBelgianNationalTeam(team)).sort((a, b) => {
+        const categoryA = CATEGORY_ORDER.indexOf(a.national_category);
+        const categoryB = CATEGORY_ORDER.indexOf(b.national_category);
+        return (categoryA < 0 ? 99 : categoryA) - (categoryB < 0 ? 99 : categoryB) || (a.name || "").localeCompare(b.name || "", "fr");
+      });
       setTeams(sorted);
       setSelectedGender((current) => current || sorted[0]?.national_gender || "men");
       setSelectedId((current) => current || sorted[0]?.id || "");
