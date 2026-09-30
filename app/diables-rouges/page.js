@@ -8,6 +8,7 @@ import { useRankings } from "@/lib/rankings";
 import DiableRatings from "@/components/football/DiableRatings";
 import { groupByPosition } from "@/lib/positions";
 import { matchStatusMeta } from "@/lib/matchStatus";
+import { nationalityBadges } from "@/lib/nationalities";
 
 const CATEGORY_LABELS = { senior: "Diables Rouges", u23: "U23", u21: "Espoirs U21", u20: "U20", u19: "U19", u18: "U18", u17: "U17", women: "Red Flames" };
 const CATEGORY_ORDER = ["senior", "u21", "u19", "u17", "u23", "u20", "u18", "women"];
@@ -36,6 +37,12 @@ const inferredCategory = (team) => {
   const match = name.match(/\bu(\d{2})\b/);
   return match && CATEGORY_LABELS[`u${match[1]}`] ? `u${match[1]}` : (name.includes("flames") || /\bwomen\b/.test(name) ? "women" : "senior");
 };
+const frenchTeamName = (value) => {
+  const raw = String(value || "");
+  const label = nationalityBadges(raw)[0]?.label || raw || "À confirmer";
+  const youth = raw.match(/\bU(\d{2})\b/i)?.[0];
+  return youth && !new RegExp(`\\b${youth}\\b`, "i").test(label) ? `${label} ${youth.toUpperCase()}` : label;
+};
 
 function countryCodeFor(name = "") {
   const clean = name.replace(/\s+(U\d+|W|Women)$/i, "").trim();
@@ -55,12 +62,13 @@ function dateLabel(value, full = false) {
 }
 
 function TeamVisual({ club, large = false }) {
+  const label = frenchTeamName(club?.name);
   return <div className="flex min-w-0 flex-1 flex-col items-center gap-2 text-center">
     <div className={`relative flex items-center justify-center rounded-2xl border border-white/10 bg-black/20 ${large ? "h-24 w-24 sm:h-28 sm:w-28" : "h-14 w-14"}`}>
       <CountryFlag nation={club?.name} className={`absolute opacity-25 ${large ? "h-14 w-20" : "h-8 w-11"}`} />
       {club?.logo_url && <img src={club.logo_url} alt="" className={`relative object-contain drop-shadow-xl ${large ? "h-16 w-16 sm:h-20 sm:w-20" : "h-9 w-9"}`} />}
     </div>
-    <strong className={`${large ? "text-lg sm:text-2xl" : "text-xs"} max-w-full truncate`}>{club?.name || "À confirmer"}</strong>
+    <strong className={`${large ? "text-lg sm:text-2xl" : "text-xs"} max-w-full truncate`}>{label}</strong>
     {large && club?.fifa_ranking != null && <span className="rounded-full border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-amber-300">FIFA #{club.fifa_ranking}</span>}
   </div>;
 }
@@ -84,9 +92,9 @@ function SmallMatch({ match, clubs, competitions, className = "", compact = fals
   if (compact) return <Link href={`/matchs/${match.id}`} className={`block min-w-0 overflow-hidden rounded-xl border border-white/10 bg-black/10 p-3 transition hover:border-red-400/35 ${className}`}>
     <div className="flex min-w-0 items-center justify-between gap-2 text-[9px] uppercase tracking-wider text-muted"><span className="min-w-0 truncate">{competitions[match.competition_id]?.name || "International"}</span><time className="shrink-0">{dateLabel(match.kickoff)}</time></div>
     <div className="mt-3 grid min-w-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
-      <span className="flex min-w-0 items-center gap-2">{home.logo_url && <img src={home.logo_url} className="h-6 w-6 shrink-0 object-contain" alt="" />}<b className="truncate text-xs">{home.short_name || home.name || "—"}</b></span>
+      <span className="flex min-w-0 items-center gap-2">{home.logo_url && <img src={home.logo_url} className="h-6 w-6 shrink-0 object-contain" alt="" />}<b className="truncate text-xs">{frenchTeamName(home.short_name || home.name)}</b></span>
       <span className="rounded-lg border border-line/10 bg-surface2 px-2 py-1 text-[11px] font-black tabular-nums">{status.key === "scheduled" ? new Date(match.kickoff).toLocaleTimeString("fr-BE", { hour: "2-digit", minute: "2-digit" }) : `${match.home_score ?? "-"}:${match.away_score ?? "-"}`}</span>
-      <span className="flex min-w-0 items-center justify-end gap-2"><b className="truncate text-right text-xs">{away.short_name || away.name || "—"}</b>{away.logo_url && <img src={away.logo_url} className="h-6 w-6 shrink-0 object-contain" alt="" />}</span>
+      <span className="flex min-w-0 items-center justify-end gap-2"><b className="truncate text-right text-xs">{frenchTeamName(away.short_name || away.name)}</b>{away.logo_url && <img src={away.logo_url} className="h-6 w-6 shrink-0 object-contain" alt="" />}</span>
     </div>
   </Link>;
   return <Link href={`/matchs/${match.id}`} className={`min-w-[270px] rounded-2xl border border-white/10 bg-surface/75 p-4 transition hover:-translate-y-0.5 hover:border-red-400/35 sm:min-w-0 ${className}`}>

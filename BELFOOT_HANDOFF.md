@@ -2347,6 +2347,13 @@ Fonctionnalités Belfoot qui seraient de bons candidats à généraliser dans le
   international restent séparés.
 - Aucun SQL, aucune migration et aucun appel API-Football ne sont nécessaires pour ce lot.
 
+### 2026-09-30 — ChatGPT — liens de recherche football
+
+- Les résultats de recherche football n’ouvraient pas leur fiche et redirigeaient tous vers le
+  calendrier `/matchs`. Un joueur (ex. Mokio) ouvre désormais `/players/:id` et un club ouvre
+  `/clubs/:id`.
+- Aucun SQL, aucune migration et aucun appel API-Football ne sont nécessaires.
+
 ### 2026-09-30 — ChatGPT — réparation du chaînage sélections et plan
 
 - Diagnostic de production : la page Diables affichait une fiche « Diables Rouges » sans matchs,
@@ -2363,3 +2370,18 @@ Fonctionnalités Belfoot qui seraient de bons candidats à généraliser dans le
   elles passent en cartes compactes (matchs, titularisations, minutes, buts, passes, note) sans tableau
   horizontal à faire défiler ; le tableau détaillé reste réservé au desktop.
 - Aucun SQL, aucune migration et aucun appel API-Football ne sont nécessaires pour ce correctif.
+
+### 2026-09-30 — ChatGPT — lecture rapide des joueurs et coupes d’Europe
+
+- La fiche joueur affiche désormais la saison en cours immédiatement avant les statistiques : minutes,
+  moyenne de minutes et date d’actualisation ne sont plus enfouies après l’historique.
+- Le parcours club est condensé par club (plage de saisons et nombre de saisons), avec les quatre
+  dernières étapes visibles et un bouton pour déplier le reste. Cela évite de répéter Club Brugge
+  plusieurs fois en hauteur tout en conservant les données d’origine accessibles.
+- Dans les coupes européennes, le résumé « Course au Top 8 » garde huit lignes au lieu d’un classement
+  massif, mais ajoute un repère dédié aux clubs belges engagés : rang, points et couleur de zone
+  (Top 8, barrage 9–24, hors course). Le classement complet reste dans son onglet.
+- Pour le problème de compétitions en double : après déploiement, lancer uniquement l’**Audit des
+  doublons provider** du Plan d’import. Il est en lecture seule ; aucun import, appel API ou fusion
+  ne doit être lancé avant lecture de son rapport.
+- Aucun SQL, aucune migration et aucun appel API-Football ne sont nécessaires pour ce lot.

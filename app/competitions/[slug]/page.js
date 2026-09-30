@@ -217,6 +217,7 @@ export default function CompetitionPage() {
   const seasonClubIds = new Set(seasonMatches.flatMap((match) => [match.home_club_id, match.away_club_id]).filter(Boolean));
   const clubsList = Object.values(clubsMap).filter((club) => seasonClubIds.has(club.id));
   const europeanClubCompetition = isEuropeanClubCompetition(comp);
+  const belgianEuropeanRows = europeanClubCompetition ? standings.map((row, index) => ({ ...row, position: index + 1 })).filter((row) => isBelgianClubCountry(clubsMap[row.club]?.ext?.country)) : [];
   const partialCompetition = comp.ext?.imported_for === "national-teams" && !comp.ext?.full_competition_seasons?.[seasonLabel];
   const zoneFor = (pos) => zoneAt(zones, pos);
 
@@ -378,7 +379,7 @@ export default function CompetitionPage() {
 
       {!seasonLoading && tab === "overview" && (
         <div className="space-y-6">
-          <div className={`grid gap-4 ${europeanClubCompetition ? "lg:grid-cols-2" : "lg:grid-cols-3"}`}>
+          <div className="grid gap-4 lg:grid-cols-3">
             {partialCompetition ? (
               <Card title="Import en préparation">
                 <div className="flex h-full flex-col justify-center rounded-xl border border-amber-400/20 bg-amber-400/5 p-4">
@@ -399,10 +400,11 @@ export default function CompetitionPage() {
                 </div>
               </Card>
             ) : (
-              <Card title={europeanClubCompetition ? "Qualifiés — Top 24" : L("comp.top5", "Classement — Top 5")} onSee={() => setTab("classement")} className={europeanClubCompetition ? "lg:col-span-2" : ""}>
+              <Card title={europeanClubCompetition ? "Course au Top 8" : L("comp.top5", "Classement — Top 5")} onSee={() => setTab("classement")}>
                 <div className="flex h-full flex-col">
-                  <div className={europeanClubCompetition ? "grid flex-1 gap-1.5 md:grid-cols-2 xl:grid-cols-3" : "flex flex-1 flex-col justify-between gap-1"}>
-                  {standings.slice(0, europeanClubCompetition ? 24 : 5).map((r, i) => { const z = europeanClubCompetition ? { color: i < 8 ? "#34d399" : "#fcd34d" } : zoneFor(i + 1); return (
+                  {europeanClubCompetition && belgianEuropeanRows.length > 0 && <div className="mb-3 rounded-xl border border-amber-300/30 bg-gradient-to-r from-red-500/[0.16] via-amber-300/[0.09] to-transparent p-2.5"><div className="mb-2 flex items-center justify-between text-[10px] font-black uppercase tracking-[.14em] text-amber-100"><span>🇧🇪 Clubs belges</span><span className="normal-case font-semibold tracking-normal text-amber-100/70">repère rapide</span></div><div className="flex flex-wrap gap-2">{belgianEuropeanRows.map((row) => { const top8 = row.position <= 8; const playoffs = row.position <= 24; return <Link key={row.club} href={clubHref(row.club)} className="flex min-w-[138px] flex-1 items-center gap-2 rounded-lg border border-white/10 bg-black/15 px-2 py-1.5 transition hover:border-amber-200/50"><span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[11px] font-black ${top8 ? "bg-emerald-400/20 text-emerald-200" : playoffs ? "bg-amber-300/20 text-amber-100" : "bg-red-400/20 text-red-200"}`}>{row.position}</span>{clubsMap[row.club]?.logo_url && <img src={clubsMap[row.club].logo_url} className="h-5 w-5 shrink-0 object-contain" alt="" />}<span className="min-w-0 flex-1 truncate text-xs font-bold">{clubName(row.club)}</span><b className="text-xs tabular-nums text-amber-100">{row.pts} pts</b></Link>; })}</div></div>}
+                  <div className="flex flex-1 flex-col justify-between gap-1">
+                  {standings.slice(0, europeanClubCompetition ? 8 : 5).map((r, i) => { const z = europeanClubCompetition ? { color: "#34d399" } : zoneFor(i + 1); return (
                     <div key={r.club} className={`group flex min-w-0 items-center gap-2 rounded-xl border px-2 py-1.5 transition ${europeanClubCompetition && isBelgianClubCountry(clubsMap[r.club]?.ext?.country) ? "border-amber-300/45 bg-gradient-to-r from-red-500/15 via-amber-300/[0.08] to-transparent shadow-[inset_3px_0_0_rgba(252,211,77,.8)]" : "border-white/[0.035] bg-gradient-to-r from-white/[0.045] to-transparent hover:border-accent/20 hover:bg-white/[0.06]"}`}>
                       <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border text-xs font-black" style={z ? { borderColor: `${z.color}80`, background: `${z.color}22`, color: z.color } : { borderColor: "rgba(148,163,184,0.5)", background: "rgba(148,163,184,0.2)", color: "rgb(226,232,240)" }}>{i + 1}</span>
                       {clubsMap[r.club]?.logo_url && <img src={clubsMap[r.club].logo_url} className="h-6 w-6 shrink-0 object-contain" alt="" />}
@@ -413,7 +415,7 @@ export default function CompetitionPage() {
                     </div>); })}
                   {standings.length === 0 && <p className="text-muted">—</p>}
                   </div>
-                  {europeanClubCompetition ? <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 border-t border-line/10 pt-2 text-[10px] text-muted"><span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-emerald-400" />1–8 · qualification directe</span><span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-amber-300" />9–24 · barrages</span><span>25–36 dans le classement complet</span></div> : zones.length > 0 && <div className="mt-3 flex flex-wrap gap-x-2 gap-y-1 border-t border-line/10 pt-2 text-[10px] text-muted">{zones.map((z, i) => <span key={i} className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full" style={{ background: z.color }} />{z.label}</span>)}</div>}
+                  {europeanClubCompetition ? <div className="mt-3 rounded-lg border border-amber-300/15 bg-amber-300/[0.05] px-2.5 py-2 text-[10px] text-muted"><b className="text-amber-200">9–24</b> disputent les barrages. Le classement complet reste disponible dans l’onglet dédié.</div> : zones.length > 0 && <div className="mt-3 flex flex-wrap gap-x-2 gap-y-1 border-t border-line/10 pt-2 text-[10px] text-muted">{zones.map((z, i) => <span key={i} className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full" style={{ background: z.color }} />{z.label}</span>)}</div>}
                 </div>
               </Card>
             )}
