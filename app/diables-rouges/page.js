@@ -30,6 +30,12 @@ const isBelgianNationalTeam = (team) => {
   // renseignent uniquement le pays dans ext. Les deux doivent rester visibles.
   return /^(belgium|belgique)(\s|$)/i.test(name) || country === "belgium" || country === "belgique" || name.includes("diables") || name.includes("red flames");
 };
+const inferredCategory = (team) => {
+  if (CATEGORY_LABELS[team?.national_category]) return team.national_category;
+  const name = belgianValue(team?.name);
+  const match = name.match(/\bu(\d{2})\b/);
+  return match && CATEGORY_LABELS[`u${match[1]}`] ? `u${match[1]}` : (name.includes("flames") || /\bwomen\b/.test(name) ? "women" : "senior");
+};
 
 function countryCodeFor(name = "") {
   const clean = name.replace(/\s+(U\d+|W|Women)$/i, "").trim();
@@ -134,20 +140,40 @@ export default function NationalTeamsPage() {
 
   useEffect(() => {
     // Une équipe A peut être importée avant que son drapeau « suivie » soit
-    // renseigné. On garde ce drapeau pour les sélections ajoutées à la main,
-    // mais toute sélection belge déjà présente doit rester visible ici.
-    supabase.from("clubs").select("id,name,short_name,logo_url,national_category,national_gender,fifa_ranking,national_followed,ext").eq("team_type", "national").then(({ data, error }) => {
+    // renseigné. Certains anciens imports avaient aussi un libellé Belgique
+    // sans team_type=national : on les remonte afin de ne jamais perdre le
+    // lien vers leurs matchs et convocations historiques.
+    (async () => {
+      const fields = "id,name,short_name,logo_url,national_category,national_gender,fifa_ranking,national_followed,ext";
+      const [nationalResult, legacyResult] = await Promise.all([
+        supabase.from("clubs").select(fields).eq("team_type", "national"),
+        supabase.from("clubs").select(fields).or("name.ilike.Belgium%,name.ilike.Belgique%,name.ilike.%Diables%,name.ilike.%Flames%"),
+      ]);
+      const error = nationalResult.error || legacyResult.error;
       if (error) { setSchemaMissing(true); setLoading(false); return; }
-      const sorted = (data || []).filter((team) => team.national_followed || isBelgianNationalTeam(team)).sort((a, b) => {
-        const categoryA = CATEGORY_ORDER.indexOf(a.national_category);
-        const categoryB = CATEGORY_ORDER.indexOf(b.national_category);
-        return (categoryA < 0 ? 99 : categoryA) - (categoryB < 0 ? 99 : categoryB) || (a.name || "").localeCompare(b.name || "", "fr");
-      });
+      const byId = new Map([...(nationalResult.data || []), ...(legacyResult.data || [])].map((team) => [team.id, team]));
+      const candidates = [...byId.values()].filter((team) => team.national_followed || isBelgianNationalTeam(team));
+      const ids = candidates.map((team) => team.id);
+      const [matchResult, callupResult] = ids.length ? await Promise.all([
+        supabase.from("matches").select("home_club_id,away_club_id").or(`home_club_id.in.(${ids.join(",")}),away_club_id.in.(${ids.join(",")})`).limit(1000),
+        supabase.from("national_team_callups").select("national_team_id").in("national_team_id", ids).limit(1000),
+      ]) : [{ data: [] }, { data: [] }];
+      const activity = new Map(ids.map((id) => [id, 0]));
+      for (const match of matchResult.data || []) { if (activity.has(match.home_club_id)) activity.set(match.home_club_id, activity.get(match.home_club_id) + 1); if (activity.has(match.away_club_id)) activity.set(match.away_club_id, activity.get(match.away_club_id) + 1); }
+      for (const callup of callupResult.data || []) if (activity.has(callup.national_team_id)) activity.set(callup.national_team_id, activity.get(callup.national_team_id) + 1);
+      const canonical = new Map();
+      for (const team of candidates) {
+        const enriched = { ...team, national_category: inferredCategory(team), national_gender: team.national_gender || (inferredCategory(team) === "women" ? "women" : "men"), _activity: activity.get(team.id) || 0 };
+        const key = `${enriched.national_gender}:${enriched.national_category}`;
+        const current = canonical.get(key);
+        if (!current || enriched._activity > current._activity || (enriched._activity === current._activity && enriched.national_followed && !current.national_followed)) canonical.set(key, enriched);
+      }
+      const sorted = [...canonical.values()].sort((a, b) => (CATEGORY_ORDER.indexOf(a.national_category) < 0 ? 99 : CATEGORY_ORDER.indexOf(a.national_category)) - (CATEGORY_ORDER.indexOf(b.national_category) < 0 ? 99 : CATEGORY_ORDER.indexOf(b.national_category)) || b._activity - a._activity);
       setTeams(sorted);
       setSelectedGender((current) => current || sorted[0]?.national_gender || "men");
       setSelectedId((current) => current || sorted[0]?.id || "");
       if (!sorted.length) setLoading(false);
-    });
+    })();
   }, []);
 
   useEffect(() => {

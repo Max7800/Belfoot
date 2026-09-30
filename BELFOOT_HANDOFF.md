@@ -2346,3 +2346,20 @@ Fonctionnalités Belfoot qui seraient de bons candidats à généraliser dans le
   U21 placé directement sous l'identité. Le bloc latéral redondant est retiré ; les parcours club et
   international restent séparés.
 - Aucun SQL, aucune migration et aucun appel API-Football ne sont nécessaires pour ce lot.
+
+### 2026-09-30 — ChatGPT — réparation du chaînage sélections et plan
+
+- Diagnostic de production : la page Diables affichait une fiche « Diables Rouges » sans matchs,
+  sélection ni notes. Aucun historique n'a été supprimé. Le mécanisme pouvait choisir une nouvelle
+  fiche provider vide à la place d'une ancienne fiche Belgique encore reliée aux matchs et convocations.
+  La page considère désormais les anciennes fiches portant Belgique/Diables/Flames et choisit, pour
+  chaque catégorie A/U21/F, celle qui possède réellement le plus de matchs ou convocations. Elle ne
+  crée ni ne modifie aucune donnée.
+- Le contrôle du Plan d'import pouvait échouer sur `expected_clubs` lorsqu'une saison appartenait à
+  une ligne doublon masquée de l'interface. Cette absence de configuration est maintenant tolérée :
+  le contrôle utilise l'estimation de secours et reste accessible, pour permettre l'audit en lecture
+  seule avant toute consolidation.
+- Les statistiques par compétition sont remontées juste sous l'en-tête d'une fiche joueur. Sur mobile,
+  elles passent en cartes compactes (matchs, titularisations, minutes, buts, passes, note) sans tableau
+  horizontal à faire défiler ; le tableau détaillé reste réservé au desktop.
+- Aucun SQL, aucune migration et aucun appel API-Football ne sont nécessaires pour ce correctif.
