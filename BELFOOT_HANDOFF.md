@@ -1298,6 +1298,12 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
 
 ## CURRENT_GIT_STATE
 
+> **Lot Claude #2 (avant-lancement, fichiers neufs)** : pages légales **`/cgu`**, **`/confidentialite`**
+> (RGPD/APD belge), **`/mentions-legales`** (avec `[À COMPLÉTER]` pour éditeur/contact/juridiction) ;
+> **`app/sitemap.js`** dynamique (routes + articles publiés + compétitions + clubs + joueurs + sujets forum,
+> tolérant) ; **`app/robots.js`** ; liens légaux ajoutés dans `components/Footer.js`. Base URL = `siteConfig.domain`
+> (`a-definir.be` → se remplit avec le vrai domaine). Zéro collision (que des fichiers neufs + footer additif).
+>
 > **Lot Claude (non poussé au moment de cette note)** : fix pipeline **« Découvrir les Belges »**
 > (`football.discover-belgians`) — mêmes mécaniques que le fix transferts de Codex : un club par lot +
 > `saveClubCheckpoint`, nouveau pipeline `discover` avec `drainJobs`, bouton brut masqué. Codex n'a donc
