@@ -2296,3 +2296,20 @@ Fonctionnalités Belfoot qui seraient de bons candidats à généraliser dans le
   pas dépasser la durée Vercel Hobby. Chaque succès marque la saison dans `players.ext.career_stats_seasons` :
   une relance ignore les joueurs déjà terminés et reprend uniquement les autres.
 - Aucun nouvel SQL et aucun appel API-Football n'ont été nécessaires pour développer ce lot.
+
+### 2026-09-30 — ChatGPT — centre éditorial des Belges à l’étranger
+
+- La page `/belges-a-l-etranger` ne commence plus par un long annuaire. Elle présente désormais le
+  **Belge du moment** en priorité, puis quatre joueurs en forme, les prochains rendez-vous, les
+  championnats représentés et enfin le répertoire filtrable.
+- Le Belge du moment respecte le choix administrateur `featured_player_id` déjà existant. Sans choix,
+  le premier joueur du classement de forme prend ce rôle automatiquement. La présentation reste
+  compacte sur mobile : quatre cartes, deux colonnes, et des indicateurs de notes récents.
+- Les notes des cartes suivent la convention Belfoot : vert à partir de 7, jaune de 6 à 6,99, rouge
+  sous 6. Les drapeaux de pays passent par le catalogue commun de nationalités, plus complet que
+  l'ancienne liste locale de quelques pays.
+- Les statistiques et le classement de forme de cette page écartent les lignes d’équipe nationale :
+  cette vue reste un suivi en club à l’étranger, tandis que le parcours international est traité sur
+  la fiche joueur.
+- Aucun SQL, aucune migration et aucun appel API-Football ne sont nécessaires. La page exploite
+  uniquement les données déjà présentes dans Supabase.
