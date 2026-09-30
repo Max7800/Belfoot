@@ -1298,6 +1298,12 @@ coupe = `components/football/CupRounds.js` ; URL/résolution rétrocompatible de
 
 ## CURRENT_GIT_STATE
 
+> **Lot Claude (non poussé au moment de cette note)** : fix pipeline **« Découvrir les Belges »**
+> (`football.discover-belgians`) — mêmes mécaniques que le fix transferts de Codex : un club par lot +
+> `saveClubCheckpoint`, nouveau pipeline `discover` avec `drainJobs`, bouton brut masqué. Codex n'a donc
+> **pas** à repousser sa version (éviter le doublon). Fichiers : `discoverPlayers.js`, `jobs/discoverBelgians.js`,
+> `lib/jobCatalog.js`, `components/admin/panels.js`.
+
 - **Branche** : `main` · **HEAD** : `fcbff48` (« Fiabilise mercato et details internationaux »).
 - **État** : gros travail Codex/ChatGPT mergé depuis `632766e` (~60 commits). Détail = CHANGELOG ci-dessous
   (entrées 2026-09-28 / 2026-09-29). Résumé :

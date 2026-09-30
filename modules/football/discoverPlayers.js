@@ -17,10 +17,18 @@ export async function discoverBelgians(db, competition, ctx = {}) {
   if (matchesError) throw matchesError;
   const clubIds = [...new Set((matches || []).flatMap((match) => [match.home_club_id, match.away_club_id]).filter(Boolean))];
   if (!clubIds.length) return `${competition.name}: aucun club (fais d'abord l'import)`;
-  const { data: clubs, error: clubsError } = await db.from("clubs").select("id,name,external_id,team_type,parent_club_id").in("id", clubIds);
+  const { data: clubs, error: clubsError } = await db.from("clubs").select("id,name,external_id,team_type,parent_club_id").in("id", clubIds).order("id");
   if (clubsError) throw clubsError;
+  // Un club par lot : l'endpoint squad est lent et dépassait les 60 s de Vercel
+  // Hobby (job annulé sans checkpoint). Le pipeline reprend automatiquement au
+  // club suivant via le checkpoint ; aucun club déjà traité n'est rejoué.
+  const list = clubs || [];
+  const startClubIndex = Math.max(0, Number(ctx.startClubIndex) || 0);
+  const batchSize = 1;
+  const endClubIndex = Math.min(list.length, startClubIndex + batchSize);
   let found = 0;
-  for (const club of clubs || []) {
+  for (let clubIndex = startClubIndex; clubIndex < endClubIndex; clubIndex++) {
+    const club = list[clubIndex];
     const players = await provider.fetchSquadPlayers({ external_id: club.external_id }, { ...ctx, leagueId: competition.external_id });
     const belgians = players.filter((p) => (p.nationality || "").toLowerCase() === nationality.toLowerCase());
     for (const p of belgians) {
@@ -64,6 +72,11 @@ export async function discoverBelgians(db, competition, ctx = {}) {
       }
       found++;
     }
+    await ctx.saveClubCheckpoint?.(clubIndex + 1);
   }
-  return `${competition.name}: ${found} ${nationality}`;
+  return {
+    detail: `${competition.name}: ${found} ${nationality} · clubs ${endClubIndex}/${list.length}`,
+    complete: endClubIndex >= list.length,
+    progress: { current: endClubIndex, total: list.length, unit: "clubs" },
+  };
 }
