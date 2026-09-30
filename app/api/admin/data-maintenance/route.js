@@ -26,10 +26,53 @@ async function countByMatchIds(db, table, matchIds, extra = null) {
   return total;
 }
 
+const isBelgianSelection = (team) => /^(belgium|belgique)(\s|$)/i.test(team?.name || "") || /^(belgium|belgique)$/i.test(team?.ext?.country || team?.ext?.team?.country || "");
+
+async function auditProviderDuplicates(db) {
+  const [competitionResult, seasonResult, matchResult, nationalTeamResult] = await Promise.all([
+    db.from("competitions").select("id,name,slug,provider,external_id,public_visible,competition_scope").not("provider", "is", null),
+    db.from("seasons").select("id,label,competition_id,import_status,public_active"),
+    db.from("matches").select("id,competition_id").range(0, 9999),
+    db.from("clubs").select("id,name,external_id,national_category,national_gender,national_followed,ext").eq("team_type", "national"),
+  ]);
+  const error = competitionResult.error || seasonResult.error || matchResult.error || nationalTeamResult.error;
+  if (error) throw error;
+  const seasonsByCompetition = (seasonResult.data || []).reduce((map, season) => {
+    const rows = map.get(season.competition_id) || []; rows.push(season); map.set(season.competition_id, rows); return map;
+  }, new Map());
+  const matchesByCompetition = (matchResult.data || []).reduce((map, match) => map.set(match.competition_id, (map.get(match.competition_id) || 0) + 1), new Map());
+  const groups = new Map();
+  for (const competition of competitionResult.data || []) {
+    if (!competition.external_id) continue;
+    const key = `${competition.provider}:${competition.external_id}`;
+    const rows = groups.get(key) || []; rows.push(competition); groups.set(key, rows);
+  }
+  const duplicates = [...groups.entries()].filter(([, rows]) => rows.length > 1).map(([key, rows]) => ({
+    key,
+    provider: rows[0].provider,
+    externalId: rows[0].external_id,
+    rows: rows.map((competition) => ({
+      id: competition.id, name: competition.name, slug: competition.slug, scope: competition.competition_scope || "national", publicVisible: competition.public_visible !== false,
+      seasons: (seasonsByCompetition.get(competition.id) || []).map((season) => ({ id: season.id, label: season.label, status: season.import_status, publicActive: season.public_active })),
+      matches: matchesByCompetition.get(competition.id) || 0,
+    })),
+  }));
+  return {
+    duplicates,
+    belgianSelections: (nationalTeamResult.data || []).filter(isBelgianSelection).map((team) => ({
+      id: team.id, name: team.name, externalId: team.external_id, category: team.national_category || "à préciser", gender: team.national_gender || "men", followed: !!team.national_followed,
+    })).sort((a, b) => ({ senior: 0, u21: 1, women: 2 }[a.category] ?? 9) - ({ senior: 0, u21: 1, women: 2 }[b.category] ?? 9)),
+  };
+}
+
 export async function POST(request) {
   const auth = await adminContext(request);
   if (auth.response) return auth.response;
   const input = await request.json().catch(() => ({}));
+  if (input.action === "audit-duplicates") {
+    try { return Response.json({ mode: "read-only", ...(await auditProviderDuplicates(auth.db)) }); }
+    catch (error) { return Response.json({ error: error.message || String(error) }, { status: 500 }); }
+  }
   if (!input.seasonId) return Response.json({ error: "Choisis une saison à analyser." }, { status: 400 });
 
   try {

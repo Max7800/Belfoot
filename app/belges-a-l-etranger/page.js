@@ -29,9 +29,13 @@ function latestTotals(rows = []) {
 }
 
 function PlayerPhoto({ player, className = "h-16 w-16" }) {
-  return player?.photo_url
-    ? <img src={player.photo_url} className={`${className} shrink-0 rounded-2xl object-cover ring-1 ring-white/10`} alt="" />
-    : <span className={`${className} flex shrink-0 items-center justify-center rounded-2xl bg-white/[0.06] text-lg font-black`}>{player?.name?.slice(0, 2).toUpperCase()}</span>;
+  const initials = player?.name?.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase() || "BF";
+  // Les photos API peuvent expirer ou être absentes. Le monogramme reste donc
+  // toujours sous l'image : le bloc « Belge du moment » ne casse jamais.
+  return <span className={`${className} relative flex shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-white/[0.06] text-lg font-black ring-1 ring-white/10`}>
+    <span aria-hidden="true">{initials}</span>
+    {player?.photo_url && <img src={player.photo_url} className="absolute inset-0 h-full w-full object-cover" alt="" onError={(event) => { event.currentTarget.remove(); }} />}
+  </span>;
 }
 
 function SectionHeader({ section }) {

@@ -22,7 +22,14 @@ const normalizeNationName = (value) => String(value || "")
   .trim()
   .toLowerCase();
 const NORMALIZED_COUNTRY_CODES = Object.fromEntries(Object.entries(COUNTRY_CODES).map(([name, code]) => [normalizeNationName(name), code]));
-const isBelgianNationalTeam = (team) => /^(belgium|belgique)(\s|$)/i.test(team?.name || "") || /^(belgium|belgique)$/i.test(team?.ext?.country || team?.ext?.team?.country || "");
+const belgianValue = (value) => String(value || "").trim().toLocaleLowerCase("fr");
+const isBelgianNationalTeam = (team) => {
+  const name = belgianValue(team?.name);
+  const country = belgianValue(team?.ext?.country || team?.ext?.team?.country);
+  // Certains imports nomment les équipes « Belgium U21 », d'autres
+  // renseignent uniquement le pays dans ext. Les deux doivent rester visibles.
+  return /^(belgium|belgique)(\s|$)/i.test(name) || country === "belgium" || country === "belgique" || name.includes("diables") || name.includes("red flames");
+};
 
 function countryCodeFor(name = "") {
   const clean = name.replace(/\s+(U\d+|W|Women)$/i, "").trim();

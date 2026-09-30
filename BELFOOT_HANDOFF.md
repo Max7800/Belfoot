@@ -2328,3 +2328,21 @@ Fonctionnalités Belfoot qui seraient de bons candidats à généraliser dans le
   « Jupiler Pro League »). Les données, saisons et historiques ne sont ni fusionnés ni supprimés :
   c'est une protection d'interface en attendant une consolidation contrôlée ultérieure.
 - Aucun SQL, aucune migration et aucun appel API-Football ne sont nécessaires pour ces correctifs.
+
+### 2026-09-30 — ChatGPT — audit des sélections et compactage des fiches
+
+- Le Plan d'import ajoute un audit **en lecture seule** des doublons provider. Il affiche les
+  compétitions ayant le même couple `provider + external_id`, leurs saisons, leur nombre de matchs
+  et les sélections belges réellement stockées (`A`, `U21`, Red Flames, etc.). Il ne fusionne, ne
+  supprime et ne relance absolument rien : la consolidation viendra seulement après validation du
+  rapport par l'administrateur.
+- La détection de la Belgique sur `/diables-rouges` est tolérante aux variantes réellement renvoyées
+  par les imports (`Belgium U21`, pays dans `ext`, « Diables », Red Flames). Si A ou U21 ne ressortent
+  toujours pas, l'audit montrera qu'elles ne sont plus présentes dans `clubs` et il faudra les relier
+  par la synchronisation ciblée, plutôt que de créer de fausses équipes côté interface.
+- Le visuel « Belge du moment » garde maintenant un monogramme sous la photo : une URL de portrait
+  expirée ne peut plus laisser une image cassée ou déstructurer la carte.
+- La fiche joueur est moins étirée sur desktop : colonnes plus resserrées et total des sélections A /
+  U21 placé directement sous l'identité. Le bloc latéral redondant est retiré ; les parcours club et
+  international restent séparés.
+- Aucun SQL, aucune migration et aucun appel API-Football ne sont nécessaires pour ce lot.

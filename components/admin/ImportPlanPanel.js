@@ -93,6 +93,8 @@ export default function ImportPlanPanel() {
   const [maintenanceCoverage, setMaintenanceCoverage] = useState({});
   const [purgePreview, setPurgePreview] = useState(null);
   const [purgeConfirmation, setPurgeConfirmation] = useState("");
+  const [duplicateAudit, setDuplicateAudit] = useState(null);
+  const [duplicateAuditStatus, setDuplicateAuditStatus] = useState("idle");
 
   const load = useCallback(async () => {
     setStatus("loading"); setMessage("");
@@ -197,6 +199,11 @@ export default function ImportPlanPanel() {
       setMaintenanceStatus("error");
     }
   };
+  const analyzeDuplicates = async () => {
+    setDuplicateAuditStatus("loading");
+    try { setDuplicateAudit(await requestMaintenance({ action: "audit-duplicates" })); setDuplicateAuditStatus("ready"); }
+    catch (error) { setDuplicateAudit({ error: error.message }); setDuplicateAuditStatus("error"); }
+  };
   const saveCoverage = async () => {
     setMaintenanceStatus("loading");
     try {
@@ -236,6 +243,7 @@ export default function ImportPlanPanel() {
 
     <section className="mb-6 rounded-2xl border border-line/10 bg-surface p-4">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-black">Compétitions par territoire</h2><p className="text-xs text-muted">Belgique, Europe et international sont séparés sans modifier l’ordre réel des imports.</p></div><button type="button" onClick={save} disabled={status === "saving" || schedule.capacity <= 0 || schedule.oversized.length > 0} className="rounded-xl bg-accent px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{status === "saving" ? "Enregistrement…" : "Enregistrer le plan"}</button></div>
+      <div className="mb-4 rounded-xl border border-violet-400/20 bg-violet-400/[0.05] p-3"><div className="flex flex-wrap items-center justify-between gap-3"><div><b className="text-sm text-violet-100">Audit des doublons provider</b><p className="mt-1 text-[11px] leading-5 text-muted">Compare les fiches ayant le même ID API, leurs saisons et leurs matchs. Lecture seule : rien ne sera fusionné ni supprimé.</p></div><button type="button" onClick={analyzeDuplicates} disabled={duplicateAuditStatus === "loading"} className="inline-flex items-center gap-2 rounded-lg border border-violet-300/25 bg-violet-400/10 px-3 py-2 text-xs font-bold text-violet-100 disabled:opacity-50"><Search className={`h-3.5 w-3.5 ${duplicateAuditStatus === "loading" ? "animate-pulse" : ""}`} />{duplicateAuditStatus === "loading" ? "Audit…" : "Auditer maintenant"}</button></div>{duplicateAudit?.error && <p className="mt-3 text-xs text-red-200">{duplicateAudit.error}</p>}{duplicateAudit && !duplicateAudit.error && <div className="mt-3 space-y-2 text-xs"><div className="rounded-lg border border-line/10 bg-bg/30 p-2.5"><b>{duplicateAudit.duplicates?.length || 0} doublon(s) de compétition détecté(s)</b><span className="ml-2 text-muted">et {duplicateAudit.belgianSelections?.length || 0} sélection(s) belges présentes.</span></div>{duplicateAudit.duplicates?.map((group) => <div key={group.key} className="overflow-hidden rounded-lg border border-amber-400/20"><div className="bg-amber-400/[0.06] px-3 py-2 font-bold text-amber-100">ID API {group.externalId} · {group.provider}</div>{group.rows.map((row) => <div key={row.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line/10 px-3 py-2"><b>{row.name}</b><span className="text-muted">{row.matches} matchs · {row.seasons.map((season) => season.label).join(", ") || "aucune saison"}</span>{row.publicVisible && <span className="text-emerald-300">public</span>}</div>)}</div>)}{duplicateAudit.belgianSelections?.length > 0 && <div className="rounded-lg border border-sky-400/20 bg-sky-400/[0.05] p-2.5"><b className="text-sky-100">Sélections belges détectées :</b><span className="ml-2 text-muted">{duplicateAudit.belgianSelections.map((team) => `${team.name} (${team.category}${team.followed ? ", suivie" : ""})`).join(" · ")}</span></div>}</div>}</div>
       <div className="space-y-4">{PLAN_CATEGORIES.map((category) => {
         const rows = competitionsByCategory[category.key] || [];
         const includesSelections = category.key === "international" && nationalTeams.length > 0;
