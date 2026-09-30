@@ -65,7 +65,10 @@ export default function ClubPage() {
     const requestedContext = requestedYear
       ? [...contexts.values()].find((entry) => seasonYear(seasonById.get(entry.match.season_id)?.label) === requestedYear)
       : null;
-    const contextMatch = requestedContext?.match || [...contexts.values()].sort((a, b) => b.count - a.count || b.latest - a.latest)[0]?.match;
+    // Par défaut, une fiche club doit refléter la saison la plus récente, pas
+    // l'archive qui contient le plus de rencontres. Sinon un 2024/25 complet
+    // masque durablement l'effectif 2026/27 encore en cours et ses transferts.
+    const contextMatch = requestedContext?.match || [...contexts.values()].sort((a, b) => b.latest - a.latest || b.count - a.count)[0]?.match;
     const [clubResult, playerResult, membershipResult, coachResult, linkedResult] = await Promise.all([
       ids.length ? supabase.from("clubs").select("id,name,logo_url").in("id", ids) : Promise.resolve({ data: [] }),
       supabase.from("players").select("*").eq("club_id", id).order("name"),

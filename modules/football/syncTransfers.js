@@ -36,7 +36,11 @@ export async function syncTransfers(db, competition, ctx = {}) {
   const clubByExternalId = new Map((knownClubs || []).map((club) => [String(club.external_id), club]));
 
   const startClubIndex = Math.max(0, Number(ctx.startClubIndex) || 0);
-  const batchSize = Math.max(1, Math.min(Number(ctx.clubBatchSize) || (ctx.pipelineRunId ? 3 : clubs.length), 6));
+  // L'endpoint /transfers peut répondre lentement. Trois clubs successifs
+  // suffisaient à dépasser les 60 s de Vercel Hobby et annulaient le job sans
+  // checkpoint final. Un club par lot est repris automatiquement par le
+  // pipeline ; aucun club déjà checkpointé n'est rejoué.
+  const batchSize = 1;
   const endClubIndex = Math.min(clubs.length, startClubIndex + batchSize);
   let imported = 0;
   let rosterChanges = 0;

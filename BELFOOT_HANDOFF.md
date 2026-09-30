@@ -2354,6 +2354,39 @@ Fonctionnalités Belfoot qui seraient de bons candidats à généraliser dans le
   `/clubs/:id`.
 - Aucun SQL, aucune migration et aucun appel API-Football ne sont nécessaires.
 
+### 2026-09-30 — ChatGPT — effectif de la saison active en fiche club
+
+- Le contexte par défaut d’une fiche club privilégie maintenant la saison ayant le match le plus
+  récent, puis le volume de matchs. Auparavant, une archive 2024/25 complète était choisie avant
+  une 2026/27 en cours : elle affichait un ancien effectif et faisait paraître les transferts
+  inactifs. Une saison reste sélectionnable explicitement via `?season=2024` si nécessaire.
+- Le job de mercato reste utile pour inscrire les mouvements dans l’historique et corriger les
+  appartenances ; cette correction n’envoie aucun appel API et ne modifie aucune donnée.
+
+### 2026-09-30 — ChatGPT — contrôle Nations League réaliste
+
+- Le contrôle de préparation utilisait le repli générique international `20 clubs / 380 matchs`
+  pour l’UEFA Nations League. Avec les 156 matchs réellement fournis pour 2026/27, la saison restait
+  artificiellement bloquée même après les synchronisations. Le format reconnu utilise maintenant
+  `54 clubs / 156 matchs` et remplace aussi automatiquement l’ancien couple générique déjà stocké.
+- Les compteurs restants restent distincts : les 8 matchs signalés nécessitent encore leurs détails
+  (événements, compositions, performances et statistiques collectives). Le pipeline **Compléter la
+  saison** doit être utilisé plutôt que les boutons individuels : il poursuit les lots sans rejouer les
+  matchs déjà marqués comme traités.
+- Aucun SQL, aucune migration et aucun appel API-Football ne sont nécessaires pour ce correctif.
+
+### 2026-09-30 — ChatGPT — mercato compatible Vercel Hobby
+
+- Diagnostic confirmé par l’historique : `football.transfers` expirait avec
+  `FUNCTION_INVOCATION_TIMEOUT`. Il essayait plusieurs clubs successivement dans une invocation,
+  alors qu’un appel `/transfers` peut être lent.
+- Le pipeline **« Mettre à jour le mercato »** traite désormais exactement un club par lot, stocke le
+  checkpoint puis déclenche la suite automatiquement. Les mouvements déjà enregistrés restent
+  idempotents. Le bouton de job brut est retiré de l’administration pour empêcher de relancer le
+  chemin qui expire.
+- Aucun SQL ni migration ne sont nécessaires. Les prochains lots consommeront un appel API par club ;
+  aucun appel n’a été lancé pendant ce correctif.
+
 ### 2026-09-30 — ChatGPT — réparation du chaînage sélections et plan
 
 - Diagnostic de production : la page Diables affichait une fiche « Diables Rouges » sans matchs,

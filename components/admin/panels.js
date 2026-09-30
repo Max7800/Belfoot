@@ -276,7 +276,9 @@ export function JobsPanel() {
     </div>
 
     {Object.entries(JOB_GROUPS).sort((a, b) => a[1].order - b[1].order).map(([g, meta]) => {
-      const keys = jobsInGroup(g).filter((key) => !targetedJobs.has(key));
+      // Le mercato a son pipeline dédié : le bouton brut lançait plusieurs
+      // clubs dans une seule invocation et pouvait expirer sur Vercel Hobby.
+      const keys = jobsInGroup(g).filter((key) => !targetedJobs.has(key) && key !== "football.transfers");
       if (!keys.length) return null;
       return (
         <div key={g} className="mb-3">
