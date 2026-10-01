@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { zoneAt } from "@/lib/standingsZones";
 
-export default function StandingsTable({ standings, clubs, zones = [], L = (k, d) => d, entityLabel = null }) {
+export default function StandingsTable({ standings, clubs, zones = [], L = (k, d) => d, entityLabel = null, highlight = () => false }) {
   const zoneFor = (pos) => zoneAt(zones, pos);
   const name = (id) => clubs[id]?.name || "—";
   return (
@@ -13,12 +13,13 @@ export default function StandingsTable({ standings, clubs, zones = [], L = (k, d
           <tbody>
             {standings.map((r, i) => {
               const z = zoneFor(i + 1);
+              const hl = highlight(r.club);
               return (
-                <tr key={r.club} className="border-t border-line/10 text-center transition-colors hover:bg-white/[0.035]">
+                <tr key={r.club} className={`border-t border-line/10 text-center transition-colors ${hl ? "bg-gradient-to-r from-red-500/[0.14] via-amber-300/[0.05] to-transparent shadow-[inset_3px_0_0_rgba(252,211,77,.9)]" : "hover:bg-white/[0.035]"}`}>
                   <td className="p-2.5 text-left">
                     <span className="inline-flex items-center gap-2">
                       <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border text-xs font-black" style={z ? { borderColor: `${z.color}80`, background: `${z.color}22`, color: z.color } : { borderColor: "rgba(148,163,184,0.5)", background: "rgba(148,163,184,0.2)", color: "rgb(226,232,240)" }}>{i + 1}</span>
-                      <Link href={`/clubs/${r.club}`} className="inline-flex items-center gap-2 font-semibold hover:text-accent">{clubs[r.club]?.logo_url && <img src={clubs[r.club].logo_url} className="h-6 w-6 object-contain" alt="" />}{name(r.club)}</Link>
+                      <Link href={`/clubs/${r.club}`} className={`inline-flex items-center gap-2 font-semibold hover:text-accent ${hl ? "text-amber-100" : ""}`}>{clubs[r.club]?.logo_url && <img src={clubs[r.club].logo_url} className="h-6 w-6 object-contain" alt="" />}{name(r.club)}{hl && <span className="text-xs" title="Club belge">🇧🇪</span>}</Link>
                     </span>
                   </td>
                   <td className="px-2 text-muted">{r.played}</td><td className="px-2">{r.won}</td><td className="px-2">{r.drawn}</td><td className="px-2">{r.lost}</td><td className="px-2 font-medium">{r.gd > 0 ? `+${r.gd}` : r.gd}</td><td className="px-3"><span className="inline-flex min-w-9 justify-center rounded-lg bg-white/[0.06] px-2 py-1 font-black">{r.pts}</span></td>
