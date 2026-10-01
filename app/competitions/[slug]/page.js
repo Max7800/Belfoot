@@ -183,7 +183,22 @@ export default function CompetitionPage() {
   }, [playerStats, matchPlayerStats, seasonLabel]);
   const seasonMatches = matches;
   const phases = useMemo(() => competitionPhases(seasonMatches, competitionType), [seasonMatches, competitionType]);
-  const primaryPhase = (isCup ? phases[phases.length - 1] : phases[0]) || null;
+  const primaryPhase = useMemo(() => {
+    const def = (isCup ? phases[phases.length - 1] : phases[0]) || null;
+    if (!def) return null;
+    const played = (ph) => seasonMatches.some((m) => (m.phase || "—") === ph && m.status === "finished" && m.home_score != null);
+    if (played(def)) return def;
+    // Phase par défaut pas encore commencée (ex. League Stage à venir) → on montre
+    // la phase contenant le match joué le plus récent, pour ne pas afficher du vide.
+    let best = def, bestTime = -Infinity;
+    for (const m of seasonMatches) {
+      if (m.status === "finished" && m.home_score != null && m.kickoff) {
+        const t = new Date(m.kickoff).getTime();
+        if (t > bestTime) { bestTime = t; best = m.phase || "—"; }
+      }
+    }
+    return best;
+  }, [phases, isCup, seasonMatches]);
   const curPhase = phase && phases.includes(phase) ? phase : primaryPhase;
   const phaseIsKnockout = isCup || (isHybrid && isKnockoutPhase(curPhase));
   const knockoutPhases = useMemo(() => phases.filter(isKnockoutPhase), [phases]);
