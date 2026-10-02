@@ -423,18 +423,16 @@ export default function CompetitionPage() {
               <Card title={europeanClubCompetition ? "Course au Top 8" : L("comp.top5", "Classement — Top 5")} onSee={() => setTab("classement")}>
                 <div className="flex h-full flex-col">
                   <div className="flex flex-1 flex-col">
-                    {(() => {
-                      if (standings.length === 0) return <p className="py-3 text-muted">—</p>;
-                      const limit = europeanClubCompetition ? 8 : 5;
-                      const top = standings.slice(0, limit).map((r, i) => ({ r, pos: i + 1 }));
+                    {standings.length === 0 ? <p className="py-3 text-muted">—</p> : europeanClubCompetition ? (() => {
+                      const top = standings.slice(0, 8).map((r, i) => ({ r, pos: i + 1 }));
                       const shown = new Set(top.map((x) => x.r.club));
-                      const belOutside = europeanClubCompetition ? standings.map((r, i) => ({ r, pos: i + 1 })).filter((x) => !shown.has(x.r.club) && isBelgianClubCountry(clubsMap[x.r.club]?.ext?.country)) : [];
-                      const row = ({ r, pos }) => {
-                        const bel = europeanClubCompetition && isBelgianClubCountry(clubsMap[r.club]?.ext?.country);
-                        const z = europeanClubCompetition ? { color: pos <= 8 ? "#34d399" : pos <= 24 ? "#fbbf24" : "#f87171" } : zoneFor(pos);
+                      const belOutside = standings.map((r, i) => ({ r, pos: i + 1 })).filter((x) => !shown.has(x.r.club) && isBelgianClubCountry(clubsMap[x.r.club]?.ext?.country));
+                      const erow = ({ r, pos }) => {
+                        const bel = isBelgianClubCountry(clubsMap[r.club]?.ext?.country);
+                        const z = zoneFor(pos) || { color: pos <= 8 ? "#34d399" : pos <= 24 ? "#fbbf24" : "#f87171" };
                         return (
                           <div key={r.club} className={`flex min-w-0 items-center gap-2 px-1.5 py-2 ${bel ? "bg-gradient-to-r from-red-500/[0.18] via-amber-300/[0.07] to-transparent shadow-[inset_3px_0_0_rgba(252,211,77,.9)]" : ""}`}>
-                            <span className="w-6 shrink-0 text-center text-xs font-black tabular-nums" style={{ color: z ? z.color : "rgb(148,163,184)" }}>{pos}</span>
+                            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-xs font-black tabular-nums" style={{ background: `${z.color}26`, color: z.color, boxShadow: `inset 0 0 0 1px ${z.color}55` }}>{pos}</span>
                             {clubsMap[r.club]?.logo_url && <img src={clubsMap[r.club].logo_url} className="h-6 w-6 shrink-0 object-contain" alt="" />}
                             <Link href={clubHref(r.club)} className={`min-w-0 flex-1 truncate font-semibold hover:text-accent ${bel ? "text-amber-100" : ""}`}>{clubName(r.club)}</Link>
                             {bel && <span className="shrink-0 text-xs" title="Club belge">🇧🇪</span>}
@@ -445,12 +443,23 @@ export default function CompetitionPage() {
                       };
                       return (
                         <div className="divide-y divide-white/[0.05]">
-                          {top.map(row)}
+                          {top.map(erow)}
                           {belOutside.length > 0 && <div key="sep" className="py-1 text-center text-sm leading-none text-muted/60">⋯</div>}
-                          {belOutside.map(row)}
+                          {belOutside.map(erow)}
                         </div>
                       );
-                    })()}
+                    })() : (
+                      <div className="flex flex-1 flex-col justify-between gap-1">
+                        {standings.slice(0, 5).map((r, i) => { const z = zoneFor(i + 1); return (
+                          <div key={r.club} className="group flex min-w-0 items-center gap-2 rounded-xl border border-white/[0.035] bg-gradient-to-r from-white/[0.045] to-transparent px-2 py-1.5 transition hover:border-accent/20 hover:bg-white/[0.06]">
+                            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border text-xs font-black" style={z ? { borderColor: `${z.color}80`, background: `${z.color}22`, color: z.color } : { borderColor: "rgba(148,163,184,0.5)", background: "rgba(148,163,184,0.2)", color: "rgb(226,232,240)" }}>{i + 1}</span>
+                            {clubsMap[r.club]?.logo_url && <img src={clubsMap[r.club].logo_url} className="h-6 w-6 shrink-0 object-contain" alt="" />}
+                            <Link href={clubHref(r.club)} className="min-w-0 flex-1 truncate font-semibold hover:text-accent">{clubName(r.club)}</Link>
+                            <FormDots res={clubForm(phaseFinished, r.club)} />
+                            <b className="min-w-9 rounded-lg bg-white/[0.06] px-1.5 py-1 text-center tabular-nums">{r.pts}</b>
+                          </div>); })}
+                      </div>
+                    )}
                   </div>
                   {europeanClubCompetition ? <div className="mt-3 rounded-lg border border-amber-300/15 bg-amber-300/[0.05] px-2.5 py-2 text-[10px] text-muted"><b className="text-amber-200">9–24</b> disputent les barrages. Le classement complet reste disponible dans l’onglet dédié.</div> : zones.length > 0 && <div className="mt-3 flex flex-wrap gap-x-2 gap-y-1 border-t border-line/10 pt-2 text-[10px] text-muted">{zones.map((z, i) => <span key={i} className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full" style={{ background: z.color }} />{z.label}</span>)}</div>}
                 </div>
@@ -528,12 +537,12 @@ export default function CompetitionPage() {
       {!seasonLoading && tab === "classement" && (partialCompetition
         ? <div className="rounded-2xl border border-amber-400/25 bg-amber-400/5 p-6 text-center"><div className="font-black text-amber-200">Classement indisponible pendant l’import partiel</div><p className="mt-2 text-sm text-muted">Lance la synchronisation complète et contrôlée de la compétition depuis l’administration pour afficher toutes les équipes et tous les matchs.</p></div>
         : isNationsLeague && nationsGroups.length
-        ? <div className="space-y-7"><NationsLeagueStandings groups={nationsGroups} clubs={clubsMap} division={nationsDivision} onDivisionChange={setNationsDivision} />{knockoutPhases.length > 0 && <section><h2 className="mb-3 text-sm font-black uppercase tracking-wider text-muted">Phase finale et barrages</h2><CupRounds matches={seasonMatches} clubs={clubsMap} phases={knockoutPhases} activePhase={knockoutPhases.includes(curPhase) ? curPhase : knockoutPhases[0]} onPhaseChange={(next) => { setPhase(next); setRound("all"); }} L={L} /></section>}</div>
+        ? <div className="space-y-7"><NationsLeagueStandings groups={nationsGroups} clubs={clubsMap} division={nationsDivision} onDivisionChange={setNationsDivision} />{knockoutPhases.length > 0 && <section><h2 className="mb-3 text-sm font-black uppercase tracking-wider text-muted">Phase finale et barrages</h2><CupRounds highlight={(clubId) => europeanClubCompetition && isBelgianClubCountry(clubsMap[clubId]?.ext?.country)} matches={seasonMatches} clubs={clubsMap} phases={knockoutPhases} activePhase={knockoutPhases.includes(curPhase) ? curPhase : knockoutPhases[0]} onPhaseChange={(next) => { setPhase(next); setRound("all"); }} L={L} /></section>}</div>
         : isCup
-        ? <CupRounds matches={seasonMatches} clubs={clubsMap} phases={phases} activePhase={curPhase} onPhaseChange={(next) => { setPhase(next); setRound("all"); }} L={L} />
+        ? <CupRounds highlight={(clubId) => europeanClubCompetition && isBelgianClubCountry(clubsMap[clubId]?.ext?.country)} matches={seasonMatches} clubs={clubsMap} phases={phases} activePhase={curPhase} onPhaseChange={(next) => { setPhase(next); setRound("all"); }} L={L} />
         : isHybrid
           ? <div><PhaseChips />{phaseIsKnockout
-            ? <CupRounds matches={seasonMatches} clubs={clubsMap} phases={knockoutPhases} activePhase={curPhase} onPhaseChange={(next) => { setPhase(next); setRound("all"); }} showPhaseSelector={false} L={L} />
+            ? <CupRounds highlight={(clubId) => europeanClubCompetition && isBelgianClubCountry(clubsMap[clubId]?.ext?.country)} matches={seasonMatches} clubs={clubsMap} phases={knockoutPhases} activePhase={curPhase} onPhaseChange={(next) => { setPhase(next); setRound("all"); }} showPhaseSelector={false} L={L} />
             : <StandingsTable standings={standings} clubs={clubsMap} zones={zones} L={L} entityLabel={isInternational ? "Sélection" : null} highlight={(clubId) => europeanClubCompetition && isBelgianClubCountry(clubsMap[clubId]?.ext?.country)} />}</div>
           : <div><PhaseChips /><StandingsTable standings={standings} clubs={clubsMap} zones={zones} L={L} entityLabel={isInternational ? "Sélection" : null} highlight={(clubId) => europeanClubCompetition && isBelgianClubCountry(clubsMap[clubId]?.ext?.country)} /></div>)}
 

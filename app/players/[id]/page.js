@@ -7,6 +7,7 @@ import { useParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { useLabels } from "@/lib/labels";
 import DiscussButton from "@/components/forum/DiscussButton";
+import BackButton from "@/components/BackButton";
 import { playerAge } from "@/lib/playerAge";
 import { preferAssignedPlayerStats } from "@/lib/playerStats";
 import { NATIONAL_TEAM_CATALOG, isNationalSelectionClub, nationalityBadges, ratingTone } from "@/lib/nationalities";
@@ -278,7 +279,7 @@ export default function PlayerPage() {
   };
 
   if (state.player === undefined) return <div className="space-y-4"><div className="h-7 w-40 animate-pulse rounded bg-surface" /><div className="h-52 animate-pulse rounded-3xl bg-surface" /></div>;
-  if (state.player === null) return <div><Link href="/belges-a-l-etranger" className="mb-5 inline-flex items-center gap-2 text-sm text-muted hover:text-content"><ArrowLeft className="h-4 w-4" />Retour aux Belges</Link><p className="rounded-2xl border border-red-500/25 bg-red-500/10 p-4 text-sm text-red-300">{state.error || "Joueur introuvable."}</p></div>;
+  if (state.player === null) return <div><BackButton fallback="/belges-a-l-etranger" className="mb-5" /><p className="rounded-2xl border border-red-500/25 bg-red-500/10 p-4 text-sm text-red-300">{state.error || "Joueur introuvable."}</p></div>;
   const p = state.player;
   const position = POSITION_LABELS[p.position] || p.position;
   const currentAge = playerAge(p);
@@ -286,7 +287,7 @@ export default function PlayerPage() {
 
   return (
     <div className="mx-auto max-w-5xl">
-      <Link href="/belges-a-l-etranger" className="mb-5 inline-flex items-center gap-2 text-sm font-semibold text-muted transition hover:text-content"><ArrowLeft className="h-4 w-4" />Retour aux Belges à l’étranger</Link>
+      <BackButton fallback="/belges-a-l-etranger" className="mb-5" />
 
       <section className="relative overflow-hidden rounded-3xl border border-line/10 bg-gradient-to-br from-surface via-surface2/70 to-bg p-5 shadow-[0_24px_70px_-48px_rgba(0,0,0,.95)] sm:p-7">
         <div className="pointer-events-none absolute right-0 top-0 h-48 w-48 rounded-full bg-accent/10 blur-3xl" />

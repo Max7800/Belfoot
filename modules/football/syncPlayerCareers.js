@@ -1,5 +1,5 @@
 import { getProvider } from "./providers";
-import { upsertExternal } from "./sync";
+import { upsertExternal, ensureCompetitions } from "./sync";
 import { squadRoleForClub, upsertPlayerMembership } from "./playerMemberships";
 import { isNationalSelectionClub } from "@/lib/nationalities";
 
@@ -96,26 +96,22 @@ export async function syncPlayerCareers(db, competition, ctx = {}) {
           national_category: row.team.national ? (/\bU\s?(\d{2})\b/i.exec(row.team.name)?.[1] ? `u${/\bU\s?(\d{2})\b/i.exec(row.team.name)[1]}` : "senior") : null,
           ext: { country: row.team.country, national: row.team.national, imported_for: "player-career" },
         })));
-        await ensureExternalReferences(db, "competitions", competition.provider, seasonStats.map((row) => ({
+        const compMap = await ensureCompetitions(db, competition.provider, seasonStats.map((row) => ({
           external_id: row.competition.external_id,
           name: row.competition.name,
           logo_url: row.competition.logo_url,
-          provider: competition.provider,
-          public_visible: false,
           competition_type: row.competition.type,
           ext: { country: row.competition.country, country_flag: row.competition.flag_url, imported_for: "player-career" },
         })));
 
         const teamExternalIds = [...new Set(seasonStats.map((row) => row.team.external_id))];
-        const competitionExternalIds = [...new Set(seasonStats.map((row) => row.competition.external_id))];
-        const [{ data: statClubs, error: statClubsError }, { data: statCompetitions, error: statCompetitionsError }] = await Promise.all([
-          teamExternalIds.length ? db.from("clubs").select("id,name,external_id,team_type,national_category,ext").eq("source", competition.provider).in("external_id", teamExternalIds) : Promise.resolve({ data: [] }),
-          competitionExternalIds.length ? db.from("competitions").select("id,external_id").eq("source", competition.provider).in("external_id", competitionExternalIds) : Promise.resolve({ data: [] }),
-        ]);
+        const { data: statClubs, error: statClubsError } = teamExternalIds.length
+          ? await db.from("clubs").select("id,name,external_id,team_type,national_category,ext").eq("source", competition.provider).in("external_id", teamExternalIds)
+          : { data: [] };
         if (statClubsError) throw statClubsError;
-        if (statCompetitionsError) throw statCompetitionsError;
         const statClubMap = Object.fromEntries((statClubs || []).map((club) => [String(club.external_id), club]));
-        const statCompetitionMap = Object.fromEntries((statCompetitions || []).map((item) => [String(item.external_id), item]));
+        const statCompetitions = [...compMap.values()];
+        const statCompetitionMap = Object.fromEntries(statCompetitions.map((item) => [String(item.external_id), item]));
         const seasonYear = String(seasonStats[0]?.season || String(ctx.season || "").match(/\d{4}/)?.[0] || "");
         const seasonLabel = seasonYear ? `${seasonYear}-${Number(seasonYear) + 1}` : String(ctx.season || "");
         const statCompetitionIds = (statCompetitions || []).map((item) => item.id);

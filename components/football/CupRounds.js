@@ -74,25 +74,25 @@ function orderedBracketStages(matches, phases) {
   return stages;
 }
 
-function BracketCard({ match, clubs, top, cardHeight, leftConnector, rightConnector, pairHeight }) {
+function BracketCard({ match, clubs, top, cardHeight, leftConnector, rightConnector, pairHeight, highlight = () => false }) {
   const home = clubs[match.home_club_id] || {};
   const away = clubs[match.away_club_id] || {};
   const finished = isMatchFinished(match) && match.home_score != null && match.away_score != null;
   const winner = finished && match.home_score !== match.away_score ? (match.home_score > match.away_score ? "home" : "away") : null;
-  const team = (club, score, side) => <div className={`flex min-w-0 items-center gap-2 px-2 py-1.5 ${winner === side ? "bg-emerald-400/[0.08] text-emerald-200" : ""}`}>{club.logo_url ? <img src={club.logo_url} className="h-5 w-5 shrink-0 object-contain" alt="" /> : <span className="h-5 w-5 shrink-0 rounded bg-white/[0.05]" />}<span className="min-w-0 flex-1 truncate text-xs font-semibold">{club.name || "À déterminer"}</span><b className="shrink-0 text-xs tabular-nums">{score ?? "–"}</b></div>;
+  const team = (club, score, side, clubId) => { const hl = highlight(clubId); return <div className={`flex min-w-0 items-center gap-2 px-2 py-1.5 ${winner === side ? "bg-emerald-400/[0.08] text-emerald-200" : hl ? "bg-gradient-to-r from-red-500/[0.16] to-transparent" : ""}`}>{club.logo_url ? <img src={club.logo_url} className="h-5 w-5 shrink-0 object-contain" alt="" /> : <span className="h-5 w-5 shrink-0 rounded bg-white/[0.05]" />}<span className={`min-w-0 flex-1 truncate text-xs font-semibold ${hl ? "text-amber-100" : ""}`}>{club.name || "À déterminer"}</span>{hl && <span className="shrink-0 text-[10px]" title="Club belge">🇧🇪</span>}<b className="shrink-0 text-xs tabular-nums">{score ?? "–"}</b></div>; };
   return <div className="absolute inset-x-0" style={{ top, height: cardHeight }}>
     {leftConnector && <span className="absolute -left-5 top-1/2 w-5 border-t border-sky-400/35" />}
     {rightConnector && <span className="absolute -right-5 top-1/2 w-5 border-t border-sky-400/35" />}
     {pairHeight > 0 && <span className="absolute -right-5 top-1/2 border-r border-sky-400/35" style={{ height: pairHeight }} />}
     {match.legCount > 1 && <span className="absolute -top-2 right-2 z-10 rounded-full border border-sky-300/25 bg-surface2 px-2 py-0.5 text-[8px] font-black uppercase tracking-wider text-sky-200">Cumul · {match.legCount} manches</span>}
     <Link href={`/matchs/${match.id}`} className="block overflow-hidden rounded-xl border border-line/15 bg-[linear-gradient(145deg,rgba(18,31,50,.98),rgba(7,17,31,.98))] shadow-sm transition hover:border-sky-300/45">
-      {team(home, match.home_score, "home")}
-      <div className="border-t border-line/10">{team(away, match.away_score, "away")}</div>
+      {team(home, match.home_score, "home", match.home_club_id)}
+      <div className="border-t border-line/10">{team(away, match.away_score, "away", match.away_club_id)}</div>
     </Link>
   </div>;
 }
 
-function Bracket({ stages, mobile = false }) {
+function Bracket({ stages, mobile = false, highlight = () => false }) {
   const shown = mobile && stages.length > 4 ? stages.slice(-4) : stages;
   const baseCount = Math.max(1, ...shown.map((stage) => stage.matches.length));
   const slotHeight = mobile ? 72 : 76;
@@ -108,7 +108,7 @@ function Bracket({ stages, mobile = false }) {
           {stage.matches.map((match, index) => {
             const top = 36 + centers[index] - cardHeight / 2;
             const pairHeight = stageIndex < shown.length - 1 && index % 2 === 0 && centers[index + 1] != null ? centers[index + 1] - centers[index] : 0;
-            return <BracketCard key={match.id} match={match} clubs={stage.clubs} top={top} cardHeight={cardHeight} leftConnector={stageIndex > 0} rightConnector={stageIndex < shown.length - 1} pairHeight={pairHeight} />;
+            return <BracketCard key={match.id} match={match} clubs={stage.clubs} top={top} cardHeight={cardHeight} leftConnector={stageIndex > 0} rightConnector={stageIndex < shown.length - 1} pairHeight={pairHeight} highlight={highlight} />;
           })}
         </section>;
       })}
@@ -116,7 +116,7 @@ function Bracket({ stages, mobile = false }) {
   </div>;
 }
 
-export default function CupRounds({ matches, clubs, phases, activePhase, onPhaseChange, showPhaseSelector = true, L = (key, fallback) => fallback }) {
+export default function CupRounds({ matches, clubs, phases, activePhase, onPhaseChange, showPhaseSelector = true, L = (key, fallback) => fallback, highlight = () => false }) {
   const selected = activePhase || phases[phases.length - 1] || null;
   const rows = matches.filter((match) => (match.phase || "—") === selected).sort((a, b) => new Date(a.kickoff || 0) - new Date(b.kickoff || 0));
   const bracketStages = orderedBracketStages(matches, phases).map((stage) => ({ ...stage, clubs }));
@@ -128,8 +128,8 @@ export default function CupRounds({ matches, clubs, phases, activePhase, onPhase
     </div>
 
     {bracketStages.length >= 2 && <>
-      <div className="sm:hidden"><Bracket stages={bracketStages} mobile /></div>
-      <div className="hidden sm:block"><Bracket stages={bracketStages} /></div>
+      <div className="sm:hidden"><Bracket stages={bracketStages} mobile highlight={highlight} /></div>
+      <div className="hidden sm:block"><Bracket stages={bracketStages} highlight={highlight} /></div>
     </>}
 
     <div className="mt-5 border-t border-line/10 pt-5">

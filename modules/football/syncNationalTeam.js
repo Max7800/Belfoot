@@ -1,5 +1,5 @@
 import { getProvider } from "./providers";
-import { upsertExternal } from "./sync";
+import { upsertExternal, ensureCompetitions } from "./sync";
 import { ensureSeason, seasonLabel, seasonYear } from "./season";
 import { frenchNationName } from "@/lib/frenchNations";
 
@@ -30,32 +30,19 @@ async function ensureInternationalCompetitions(db, providerKey, matches) {
       ext: { country: match.league_country || "World", country_flag: match.league_flag || null, imported_for: "national-teams" },
     });
   }
-  const ids = [...definitions.keys()];
-  if (!ids.length) return new Map();
-
-  const { data: existing, error: selectError } = await db.from("competitions").select("id,external_id,source,provider").in("external_id", ids);
-  if (selectError) throw selectError;
-  const existingByExternal = new Map((existing || []).map((row) => [String(row.external_id), row]));
-
-  for (const definition of definitions.values()) {
-    if (existingByExternal.has(definition.external_id)) continue;
-    const { data, error } = await db.from("competitions").insert({
-      source: providerKey,
-      provider: providerKey,
-      external_id: definition.external_id,
-      name: definition.name,
-      slug: `international-${definition.external_id}`,
-      logo_url: definition.logo_url,
-      competition_type: "cup",
-      competition_scope: "international",
-      public_visible: false,
-      ext: definition.ext,
-      synced_at: new Date().toISOString(),
-    }).select("id,external_id,source,provider").single();
-    if (error) throw new Error(`${definition.name}: ${error.message}`);
-    existingByExternal.set(definition.external_id, data);
-  }
-  return new Map([...existingByExternal.entries()].map(([externalId, row]) => [externalId, row.id]));
+  if (!definitions.size) return new Map();
+  // Chemin unique et sûr : réutilise la compétition existante (par provider+external_id)
+  // au lieu d'en créer un doublon → ne viole jamais l'index unique.
+  const byExt = await ensureCompetitions(db, providerKey, [...definitions.values()].map((d) => ({
+    external_id: d.external_id,
+    name: d.name,
+    slug: `international-${d.external_id}`,
+    logo_url: d.logo_url,
+    competition_type: "cup",
+    competition_scope: "international",
+    ext: d.ext,
+  })));
+  return new Map([...byExt.entries()].map(([externalId, row]) => [externalId, row.id]));
 }
 
 export async function syncNationalTeam(db, ctx = {}) {

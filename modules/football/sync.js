@@ -58,3 +58,34 @@ export async function upsertExternal(db, table, source, rows, ownedFields = []) 
   }
   return inserts.length + updates.length;
 }
+
+// Crée ou RÉUTILISE des compétitions sans jamais violer l'index unique
+// (provider, external_id). Chemin unique et sûr pour toute création de compétition
+// (sélections, carrières, imports…). Retourne une Map(external_id string -> ligne).
+export async function ensureCompetitions(db, provider, defs) {
+  const uniq = [...new Map((defs || []).filter((d) => d && d.external_id != null).map((d) => [String(d.external_id), d])).values()];
+  if (!uniq.length) return new Map();
+  const ids = uniq.map((d) => String(d.external_id));
+  const read = async () => {
+    const { data, error } = await db.from("competitions").select("*").eq("provider", provider).in("external_id", ids);
+    if (error) throw error;
+    return new Map((data || []).map((r) => [String(r.external_id), r]));
+  };
+  let byExt = await read();
+  const missing = uniq
+    .filter((d) => !byExt.has(String(d.external_id)))
+    .map((d) => ({ source: provider, public_visible: false, ...d, provider, external_id: String(d.external_id) }));
+  if (missing.length) {
+    const { error } = await db.from("competitions").insert(missing);
+    if (error) {
+      if (error.code !== "23505") throw new Error(`competitions: ${error.message}`);
+      // Conflit dans le lot (course / doublon résiduel) -> une par une, en ignorant les doublons.
+      for (const row of missing) {
+        const { error: rowError } = await db.from("competitions").insert(row);
+        if (rowError && rowError.code !== "23505") throw new Error(`competitions: ${rowError.message}`);
+      }
+    }
+    byExt = await read();
+  }
+  return byExt;
+}
