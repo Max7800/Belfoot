@@ -34,12 +34,13 @@ export async function syncPlayerCareers(db, competition, ctx = {}) {
     .select("id,name,external_id,source,nationality,career_sync_status,career_synced_at,ext")
     .eq("source", competition.provider)
     .not("external_id", "is", null);
+  let clubIds = [];
   if (targeted) {
     playersQuery = playersQuery.eq("id", ctx.playerId);
   } else {
     const { data: matches, error: matchesError } = await db.from("matches").select("home_club_id,away_club_id").eq("competition_id", competition.id);
     if (matchesError) throw matchesError;
-    const clubIds = [...new Set((matches || []).flatMap((match) => [match.home_club_id, match.away_club_id]).filter(Boolean))];
+    clubIds = [...new Set((matches || []).flatMap((match) => [match.home_club_id, match.away_club_id]).filter(Boolean))];
     if (!clubIds.length) return `${competition.name}: aucun club rattaché`;
     playersQuery = playersQuery.eq("tracked", true).eq("active", true).in("club_id", clubIds);
   }
