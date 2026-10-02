@@ -189,5 +189,16 @@ export async function syncPlayerCareers(db, competition, ctx = {}) {
     }
   }
   if (targeted && errors.length) throw new Error(errors.join("; "));
-  return `${competition.name}: ${players.length} carrière(s), ${memberships} affectation(s) historiques${ctx.includeCareerStats ? ` · ${statLines} ligne(s) statistique(s) toutes compétitions` : ""}${errors.length ? ` · ${errors.length} erreur(s): ${errors.join("; ")}` : ""}`;
+  const detail = `${competition.name}: ${players.length} carrière(s), ${memberships} affectation(s) historiques${ctx.includeCareerStats ? ` · ${statLines} ligne(s) statistique(s) toutes compétitions` : ""}${errors.length ? ` · ${errors.length} erreur(s): ${errors.join("; ")}` : ""}`;
+  if (targeted) return detail;
+  // Lot : on signale l'avancement pour qu'un pipeline draine tous les joueurs de la
+  // division (terminé quand plus aucun joueur n'a d'historique manquant).
+  const { count: remaining } = await db.from("players").select("id", { count: "exact", head: true })
+    .eq("tracked", true).eq("active", true).in("club_id", clubIds).is("career_synced_at", null);
+  const left = remaining || 0;
+  return {
+    detail: `${detail}${left ? ` · ${left} joueur(s) restant(s)` : " · division à jour"}`,
+    complete: left === 0,
+    progress: { current: players.length, total: left + players.length, unit: "joueurs" },
+  };
 }
