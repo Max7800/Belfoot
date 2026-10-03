@@ -43,6 +43,8 @@ export async function syncPlayerCareers(db, competition, ctx = {}) {
     clubIds = [...new Set((matches || []).flatMap((match) => [match.home_club_id, match.away_club_id]).filter(Boolean))];
     if (!clubIds.length) return `${competition.name}: aucun club rattaché`;
     playersQuery = playersQuery.eq("tracked", true).eq("active", true).in("club_id", clubIds);
+    // Full refresh : ne traiter que les joueurs pas encore rafraîchis dans cette passe.
+    if (ctx.refreshBefore) playersQuery = playersQuery.or(`career_synced_at.is.null,career_synced_at.lt.${ctx.refreshBefore}`);
   }
   const { data: players, error: playersError } = await playersQuery
     .order("career_synced_at", { ascending: true, nullsFirst: true })
@@ -194,8 +196,12 @@ export async function syncPlayerCareers(db, competition, ctx = {}) {
   if (targeted) return detail;
   // Lot : on signale l'avancement pour qu'un pipeline draine tous les joueurs de la
   // division (terminé quand plus aucun joueur n'a d'historique manquant).
-  const { count: remaining } = await db.from("players").select("id", { count: "exact", head: true })
-    .eq("tracked", true).eq("active", true).in("club_id", clubIds).is("career_synced_at", null);
+  let remainingQuery = db.from("players").select("id", { count: "exact", head: true })
+    .eq("tracked", true).eq("active", true).in("club_id", clubIds);
+  remainingQuery = ctx.refreshBefore
+    ? remainingQuery.or(`career_synced_at.is.null,career_synced_at.lt.${ctx.refreshBefore}`)
+    : remainingQuery.is("career_synced_at", null);
+  const { count: remaining } = await remainingQuery;
   const left = remaining || 0;
   return {
     detail: `${detail}${left ? ` · ${left} joueur(s) restant(s)` : " · division à jour"}`,
