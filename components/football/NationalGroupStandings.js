@@ -4,9 +4,10 @@ import { supabase } from "@/lib/supabaseClient";
 import { computeStandings } from "@/lib/standings";
 
 // Classement du GROUPE de la sélection, par compétition (Nations League, qualif CDM…).
-// Le groupe = la sélection + ses adversaires dans cette compétition. On calcule le
-// classement à partir de TOUS les matchs intra-groupe (les compétitions nationales
-// sont synchronisées en entier). Les amicaux (pas de mini-championnat) sont ignorés.
+// IMPORTANT : tout est scopé sur la SAISON EN COURS (l'édition du match le plus récent),
+// sinon on mélange les éditions (ex. NL 2024 + NL 2026 = groupe incohérent).
+// Le groupe = la sélection + ses adversaires de cette édition ; le classement est calculé
+// sur tous les matchs intra-groupe de cette saison. Les amicaux sont ignorés.
 export default function NationalGroupStandings({ teamId, matches, competitions }) {
   const [tables, setTables] = useState([]);
 
@@ -17,17 +18,22 @@ export default function NationalGroupStandings({ teamId, matches, competitions }
       for (const m of matches) { if (m.competition_id) (byComp[m.competition_id] ||= []).push(m); }
       const out = [];
       const clubIds = new Set();
-      for (const [compId, compMatches] of Object.entries(byComp)) {
+      for (const [compId, allCompMatches] of Object.entries(byComp)) {
+        // Saison en cours = celle du match le plus récent de la sélection dans cette compétition.
+        const withSeason = allCompMatches.filter((m) => m.season_id && m.kickoff).sort((a, b) => new Date(b.kickoff) - new Date(a.kickoff));
+        const seasonId = withSeason[0]?.season_id;
+        if (!seasonId) continue;
+        const compMatches = allCompMatches.filter((m) => m.season_id === seasonId);
         const opponents = new Set();
         for (const m of compMatches) { const opp = m.home_club_id === teamId ? m.away_club_id : m.home_club_id; if (opp) opponents.add(opp); }
         if (!opponents.size) continue;
         const group = [teamId, ...opponents];
-        const seasonId = compMatches.find((m) => m.season_id)?.season_id;
-        let q = supabase.from("matches").select("home_club_id,away_club_id,home_score,away_score,status").eq("competition_id", compId).in("home_club_id", group).in("away_club_id", group);
-        if (seasonId) q = q.eq("season_id", seasonId);
-        const { data: gm } = await q;
+        const { data: gm } = await supabase.from("matches")
+          .select("home_club_id,away_club_id,home_score,away_score,status")
+          .eq("competition_id", compId).eq("season_id", seasonId)
+          .in("home_club_id", group).in("away_club_id", group);
         const groupMatches = gm || [];
-        // Vrai groupe = il existe des matchs entre adversaires (pas que les matchs de la sélection).
+        // Vrai groupe = des matchs existent entre adversaires (pas uniquement ceux de la sélection).
         const hasOpponentMatches = groupMatches.some((m) => m.home_club_id !== teamId && m.away_club_id !== teamId);
         if (!hasOpponentMatches) continue;
         const standings = computeStandings(groupMatches);
