@@ -11,8 +11,10 @@ import CompetitionTransfers from "@/components/football/CompetitionTransfers";
 import CupRounds from "@/components/football/CupRounds";
 import NationsLeagueStandings from "@/components/football/NationsLeagueStandings";
 import CompetitionHeader from "@/components/football/CompetitionHeader";
+import CompetitionSyncButton from "@/components/football/CompetitionSyncButton";
 import Watermark from "@/components/football/Watermark";
 import { computeStandings } from "@/lib/standings";
+import { isMatchFinished } from "@/lib/matchStatus";
 import { competitionPhases, formatCompetitionName, getCompetitionType, isEuropeanClubCompetition, isKnockoutPhase } from "@/lib/competitionType";
 import { competitionPath, resolveCompetitionRoute } from "@/lib/competitionRoutes";
 import { useLabels } from "@/lib/labels";
@@ -210,7 +212,10 @@ export default function CompetitionPage() {
     setNationsDivision((current) => nationsDivisions.includes(current) ? current : nationsDivisions.includes("A") ? "A" : nationsDivisions[0]);
   }, [nationsDivisions]);
   const zones = zonesForPhase(comp, activeSeason, curPhase, primaryPhase);
-  const phaseFinished = phaseMatches.filter((m) => m.status === "finished" && m.home_score != null);
+  // Un match compte au classement s'il est terminé, OU s'il a un score final et a
+  // commencé il y a > 3 h (donc fini, même si la sync n'a pas encore finalisé le statut).
+  // Les matchs réellement en direct restent exclus (les points comptent au coup de sifflet final).
+  const phaseFinished = phaseMatches.filter((m) => m.home_score != null && (isMatchFinished(m) || (m.kickoff && Date.parse(m.kickoff) < Date.now() - 10800000)));
   const standings = useMemo(() => phaseIsKnockout ? [] : computeStandings(phaseFinished), [phaseFinished, phaseIsKnockout]);
   const rounds = useMemo(() => { const seen = new Map(); for (const m of phaseMatches) { const k = m.round_number != null ? String(m.round_number) : (m.round_raw || "?"); if (!seen.has(k)) seen.set(k, { key: k, num: m.round_number, label: m.round_number != null ? `${L("comp.round", "Journée")} ${m.round_number}` : (m.round_raw || "Tour") }); } return [...seen.values()].sort((a, b) => (a.num ?? 999) - (b.num ?? 999)); }, [phaseMatches]);
   const shownMatches = round === "all" ? phaseMatches : phaseMatches.filter((m) => (m.round_number != null ? String(m.round_number) : (m.round_raw || "?")) === round);
@@ -389,6 +394,7 @@ export default function CompetitionPage() {
         <div className="flex items-center gap-2">
           <div className="-mx-1 min-w-0 flex-1 overflow-x-auto px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"><div className="flex w-max gap-1">{TABS.map(([k, l]) => <button key={k} onClick={() => setTab(k)} className={`shrink-0 px-3 py-2 text-sm ${tab === k ? "border-b-2 border-accent font-bold text-content" : "text-muted hover:text-content"}`}>{l}</button>)}</div></div>
           {seasons.length > 0 && <select value={seasonLabel} onChange={(e) => { setSeasonLabel(e.target.value); setPhase(null); setRound("all"); }} className="hidden shrink-0 rounded border border-line/10 bg-surface px-2 py-1 text-xs sm:block">{seasons.map((s) => <option key={s.id}>{s.label}</option>)}</select>}
+          <CompetitionSyncButton competition={comp} />
         </div>
         {seasons.length > 0 && <select value={seasonLabel} onChange={(e) => { setSeasonLabel(e.target.value); setPhase(null); setRound("all"); }} className="mb-3 mt-2 w-full rounded-xl border border-line/10 bg-surface px-3 py-2 text-sm sm:hidden">{seasons.map((s) => <option key={s.id}>{s.label}</option>)}</select>}
       </div>

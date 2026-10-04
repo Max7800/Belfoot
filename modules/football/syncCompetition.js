@@ -134,7 +134,31 @@ export async function syncCompetition(db, competition, ctx = {}) {
     const n = await upsertExternal(db, "matches", competition.provider, resolved,
       ["competition_id", "season_id", "home_club_id", "away_club_id", "home_score", "away_score", "status", "minute", "kickoff", "matchday", "round_raw", "phase", "round_number"]);
     const liveCount = resolved.filter((match) => match.status === "live").length;
-    return `${competition.name}: ${n} match(s) du jour traité(s), ${liveCount} en direct`;
+
+    // Finalisation : un match peut rester "live" en base si le cron a manqué le coup
+    // de sifflet (il disparaît ensuite du flux du jour). On re-récupère l'état FINAL
+    // réel des matchs restés "live" depuis > 3 h et on les clôture proprement.
+    // Auto-limité : zéro appel API tant qu'aucun match n'est bloqué.
+    let finalized = 0;
+    if (provider.fetchMatchesByExternalIds) {
+      const cutoff = new Date(Date.now() - 3 * 3600 * 1000).toISOString();
+      const { data: stuck } = await db.from("matches").select("id,external_id")
+        .eq("competition_id", competition.id).eq("status", "live")
+        .not("external_id", "is", null).lt("kickoff", cutoff)
+        .order("kickoff", { ascending: true }).limit(20);
+      if (stuck?.length) {
+        const fresh = await provider.fetchMatchesByExternalIds(stuck.map((s) => s.external_id), ctx);
+        const byExt = new Map(fresh.map((f) => [String(f.external_id), f]));
+        for (const s of stuck) {
+          const f = byExt.get(String(s.external_id));
+          if (!f || f.status === "live") continue; // toujours en cours selon le provider → on laisse
+          await db.from("matches").update({ status: f.status, home_score: f.home_score, away_score: f.away_score, minute: f.minute ?? null }).eq("id", s.id);
+          finalized++;
+        }
+      }
+    }
+
+    return `${competition.name}: ${n} match(s) du jour traité(s), ${liveCount} en direct${finalized ? ` · ${finalized} finalisé(s)` : ""}`;
   }
 
   // ── Mode FULL : clubs (dérivés + enrichis) + tous les matchs + coverage ─────

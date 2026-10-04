@@ -129,6 +129,13 @@ const provider = {
     const y = seasonYear(ctx.season || competition.ext?.season);
     return (await api(`/fixtures?league=${competition.external_id}&season=${y}`, ctx)).map(mapFixture);
   },
+  // Re-récupère l'état FINAL (statut + score) de fixtures précises, par leur id
+  // provider. Sert à finaliser des matchs restés "live" après le coup de sifflet.
+  async fetchMatchesByExternalIds(externalIds, ctx = {}) {
+    const ids = [...new Set((externalIds || []).map(String).filter(Boolean))].slice(0, 20);
+    if (!ids.length) return [];
+    return (await api(`/fixtures?ids=${ids.join("-")}`, ctx)).map(mapFixture);
+  },
   async fetchStandings(competition, ctx = {}) {
     const y = seasonYear(ctx.season || competition.ext?.season);
     const rows = await api(`/standings?league=${competition.external_id}&season=${y}`, ctx);

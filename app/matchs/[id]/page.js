@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
+import Link from "next/link";
 import { Radio, RefreshCw } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { useLabels } from "@/lib/labels";
@@ -126,9 +127,9 @@ export default function MatchPage() {
   return <div className="mx-auto max-w-5xl">
     <div className="mb-2 text-center text-xs uppercase tracking-wider text-muted">{comp?.name}{m.matchday ? ` · Journée ${m.matchday}` : ""}</div>
     <div className={`mb-3 flex items-center justify-center gap-3 rounded-3xl border bg-gradient-to-br from-surface via-surface2 to-bg px-3 py-6 shadow-[0_24px_70px_-42px_rgba(0,0,0,0.9)] sm:gap-6 sm:px-6 sm:py-8 ${status.live ? "border-red-500/30" : "border-line/10"}`}>
-      <div className="flex min-w-0 flex-1 flex-col items-center gap-2">{home.logo_url && <img src={home.logo_url} className="h-14 w-14 object-contain sm:h-20 sm:w-20" alt="" />}<span className="text-center text-sm font-bold sm:text-base">{home.name}</span></div>
+      {m.home_club_id ? <Link href={`/clubs/${m.home_club_id}`} className="flex min-w-0 flex-1 flex-col items-center gap-2 transition hover:opacity-80">{home.logo_url && <img src={home.logo_url} className="h-14 w-14 object-contain sm:h-20 sm:w-20" alt="" />}<span className="text-center text-sm font-bold hover:text-accent sm:text-base">{home.name}</span></Link> : <div className="flex min-w-0 flex-1 flex-col items-center gap-2">{home.logo_url && <img src={home.logo_url} className="h-14 w-14 object-contain sm:h-20 sm:w-20" alt="" />}<span className="text-center text-sm font-bold sm:text-base">{home.name}</span></div>}
       <div className="shrink-0 text-center"><div className="text-3xl font-black tabular-nums sm:text-4xl">{m.home_score ?? "-"} : {m.away_score ?? "-"}</div><div className={`mt-1 text-xs font-bold ${status.live ? "text-red-400" : "text-muted"}`}>{status.live && <span className="mr-1 animate-pulse">●</span>}{status.label}</div>{m.kickoff && <div className="mt-1 max-w-28 text-[10px] text-muted">{new Date(m.kickoff).toLocaleString("fr-BE", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</div>}</div>
-      <div className="flex min-w-0 flex-1 flex-col items-center gap-2">{away.logo_url && <img src={away.logo_url} className="h-14 w-14 object-contain sm:h-20 sm:w-20" alt="" />}<span className="text-center text-sm font-bold sm:text-base">{away.name}</span></div>
+      {m.away_club_id ? <Link href={`/clubs/${m.away_club_id}`} className="flex min-w-0 flex-1 flex-col items-center gap-2 transition hover:opacity-80">{away.logo_url && <img src={away.logo_url} className="h-14 w-14 object-contain sm:h-20 sm:w-20" alt="" />}<span className="text-center text-sm font-bold hover:text-accent sm:text-base">{away.name}</span></Link> : <div className="flex min-w-0 flex-1 flex-col items-center gap-2">{away.logo_url && <img src={away.logo_url} className="h-14 w-14 object-contain sm:h-20 sm:w-20" alt="" />}<span className="text-center text-sm font-bold sm:text-base">{away.name}</span></div>}
     </div>
 
     <div className="mb-5 flex flex-wrap items-center justify-center gap-2 text-[10px] text-muted"><span className={`h-1.5 w-1.5 rounded-full ${realtime === "connected" ? "bg-green-400" : realtime === "fallback" ? "bg-amber-400" : "bg-muted"}`} />{realtime === "connected" ? "Direct connecté" : realtime === "fallback" ? "Actualisation automatique" : "Connexion…"}{lastUpdated && <span>· {lastUpdated.toLocaleTimeString("fr-BE", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</span>}<button type="button" onClick={() => { refreshScore(); refreshEvents(); }} aria-label="Actualiser le match" className="rounded p-1 hover:bg-surface"><RefreshCw size={11} /></button><DiscussButton refType="match" refId={id} title={`Discussion : ${home.name || "?"} - ${away.name || "?"}`} label="Discuter" /></div>
