@@ -14,7 +14,7 @@ import CompetitionHeader from "@/components/football/CompetitionHeader";
 import CompetitionSyncButton from "@/components/football/CompetitionSyncButton";
 import Watermark from "@/components/football/Watermark";
 import { computeStandings } from "@/lib/standings";
-import { isMatchFinished } from "@/lib/matchStatus";
+import { isMatchOver } from "@/lib/matchStatus";
 import { competitionPhases, formatCompetitionName, getCompetitionType, isEuropeanClubCompetition, isKnockoutPhase } from "@/lib/competitionType";
 import { competitionPath, resolveCompetitionRoute } from "@/lib/competitionRoutes";
 import { useLabels } from "@/lib/labels";
@@ -213,9 +213,8 @@ export default function CompetitionPage() {
   }, [nationsDivisions]);
   const zones = zonesForPhase(comp, activeSeason, curPhase, primaryPhase);
   // Un match compte au classement s'il est terminé, OU s'il a un score final et a
-  // commencé il y a > 3 h (donc fini, même si la sync n'a pas encore finalisé le statut).
-  // Les matchs réellement en direct restent exclus (les points comptent au coup de sifflet final).
-  const phaseFinished = phaseMatches.filter((m) => m.home_score != null && (isMatchFinished(m) || (m.kickoff && Date.parse(m.kickoff) < Date.now() - 10800000)));
+  // commencé il y a > 3 h (règle centralisée dans isMatchOver ; le direct reste exclu).
+  const phaseFinished = phaseMatches.filter(isMatchOver);
   const standings = useMemo(() => phaseIsKnockout ? [] : computeStandings(phaseFinished), [phaseFinished, phaseIsKnockout]);
   const rounds = useMemo(() => { const seen = new Map(); for (const m of phaseMatches) { const k = m.round_number != null ? String(m.round_number) : (m.round_raw || "?"); if (!seen.has(k)) seen.set(k, { key: k, num: m.round_number, label: m.round_number != null ? `${L("comp.round", "Journée")} ${m.round_number}` : (m.round_raw || "Tour") }); } return [...seen.values()].sort((a, b) => (a.num ?? 999) - (b.num ?? 999)); }, [phaseMatches]);
   const shownMatches = round === "all" ? phaseMatches : phaseMatches.filter((m) => (m.round_number != null ? String(m.round_number) : (m.round_raw || "?")) === round);
