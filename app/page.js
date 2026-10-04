@@ -87,9 +87,8 @@ export default function Home() {
   const [homeNationsDivision, setHomeNationsDivision] = useState("A");
 
   useEffect(() => { (async () => {
-    const [recentMatchResult, clubResult, competitionResult, seasonResult, playerResult, newsResult, votwResult, topicsResult] = await Promise.all([
+    const [recentMatchResult, competitionResult, seasonResult, playerResult, newsResult, votwResult, topicsResult] = await Promise.all([
       supabase.from("matches").select(PUBLIC_MATCH_FIELDS).order("kickoff", { ascending: false }).limit(250),
-      supabase.from("clubs").select("id,name,logo_url,team_type,national_followed,national_category,ext"),
       supabase.from("competitions").select("*"),
       supabase.from("seasons").select("*"),
       supabase.from("players").select(PUBLIC_PLAYER_FIELDS).eq("tracked", true).eq("active", true),
@@ -113,10 +112,24 @@ export default function Home() {
     }));
     const matchesById = new Map((recentMatchResult.data || []).map((match) => [match.id, match]));
     carouselMatchResults.forEach((result) => (result.data || []).forEach((match) => matchesById.set(match.id, match)));
+
+    // Charger UNIQUEMENT les clubs référencés (matchs affichés + joueurs suivis), par
+    // paquets. L'accueil reste rapide quel que soit le nombre total de clubs en base
+    // (ligues + coupes + sélections + clubs étrangers des Belges) — pas besoin de limiter.
+    const neededClubIds = new Set();
+    for (const match of matchesById.values()) { if (match.home_club_id) neededClubIds.add(match.home_club_id); if (match.away_club_id) neededClubIds.add(match.away_club_id); }
+    for (const player of (playerResult.data || [])) { if (player.club_id) neededClubIds.add(player.club_id); }
+    const clubList = [];
+    const clubIdChunks = [...neededClubIds];
+    for (let i = 0; i < clubIdChunks.length; i += 400) {
+      const { data } = await supabase.from("clubs").select("id,name,logo_url,team_type,national_followed,national_category,ext").in("id", clubIdChunks.slice(i, i + 400));
+      if (data) clubList.push(...data);
+    }
+
     setData({
       loading: false,
       matches: [...matchesById.values()],
-      clubs: Object.fromEntries((clubResult.data || []).map((club) => [club.id, club])),
+      clubs: Object.fromEntries(clubList.map((club) => [club.id, club])),
       competitions: competitionRows,
       seasons: seasonRows,
       players: playerResult.data || [],
