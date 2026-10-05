@@ -1,0 +1,119 @@
+"use client";
+import { useMemo, useState } from "react";
+import Link from "next/link";
+import { ComposableMap, Geographies, Geography, ZoomableGroup, Marker } from "react-simple-maps";
+import { geoCentroid } from "d3-geo";
+
+const GEO_URL = "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json";
+
+// Nom pays Belfoot -> nom du fond de carte (world-atlas). À ajuster au fil de l'eau.
+const COUNTRY_ALIAS = {
+  "England": "United Kingdom", "Scotland": "United Kingdom", "Wales": "United Kingdom", "Northern Ireland": "United Kingdom",
+  "USA": "United States of America", "United States": "United States of America",
+  "Türkiye": "Turkey", "Czechia": "Czech Republic", "Czech Republic": "Czech Republic",
+  "South Korea": "South Korea", "North Macedonia": "North Macedonia", "Bosnia & Herzegovina": "Bosnia and Herz.",
+  "Ivory Coast": "Côte d'Ivoire", "Saudi Arabia": "Saudi Arabia", "UAE": "United Arab Emirates",
+  "Serbia": "Serbia", "Russia": "Russia", "Netherlands": "Netherlands",
+};
+const geoName = (c) => COUNTRY_ALIAS[c] || c;
+
+export default function BelgiansWorldMap({ players = [] }) {
+  const [selected, setSelected] = useState(null);
+  const [tooltip, setTooltip] = useState(null);
+
+  // Agrège les exilés par pays (nom carte).
+  const byCountry = useMemo(() => {
+    const map = {};
+    for (const p of players) {
+      const raw = p?.country;
+      if (!raw || raw === "À renseigner") continue;
+      const name = geoName(raw);
+      (map[name] ||= { label: raw, list: [] }).list.push(p);
+    }
+    return map;
+  }, [players]);
+
+  const max = Math.max(1, ...Object.values(byCountry).map((c) => c.list.length));
+  const fillFor = (n) => (n ? `rgba(227,6,19,${(0.22 + 0.63 * (n / max)).toFixed(2)})` : "rgba(255,255,255,0.045)");
+  const current = selected && byCountry[selected];
+
+  return (
+    <div className="rounded-2xl border border-line/10 bg-surface/60 p-3 sm:p-4">
+      <div className="mb-2 flex items-center justify-between">
+        <div className="text-xs font-black uppercase tracking-wider text-amber-300">🌍 Les Belges dans le monde</div>
+        <div className="text-[11px] text-muted">{players.length} exilé(s) · clique un pays</div>
+      </div>
+
+      <div className="relative overflow-hidden rounded-xl bg-[#0b1220]">
+        <ComposableMap projection="geoMercator" projectionConfig={{ scale: 130 }} style={{ width: "100%", height: "auto" }}>
+          <ZoomableGroup center={[12, 32]} zoom={1} maxZoom={6}>
+            <Geographies geography={GEO_URL}>
+              {({ geographies }) => (
+                <>
+                  {geographies.map((geo) => {
+                    const name = geo.properties.name;
+                    const entry = byCountry[name];
+                    const n = entry?.list.length || 0;
+                    return (
+                      <Geography
+                        key={geo.rsmKey}
+                        geography={geo}
+                        onMouseEnter={() => n && setTooltip({ name: entry.label, count: n })}
+                        onMouseLeave={() => setTooltip(null)}
+                        onClick={() => n && setSelected((s) => (s === name ? null : name))}
+                        style={{
+                          default: { fill: fillFor(n), stroke: "rgba(255,255,255,0.1)", strokeWidth: 0.4, outline: "none" },
+                          hover: { fill: n ? "#e30613" : "rgba(255,255,255,0.07)", outline: "none", cursor: n ? "pointer" : "default", stroke: "rgba(255,255,255,0.25)", strokeWidth: 0.5 },
+                          pressed: { fill: "#e30613", outline: "none" },
+                        }}
+                      />
+                    );
+                  })}
+                  {geographies.map((geo) => {
+                    const entry = byCountry[geo.properties.name];
+                    if (!entry) return null;
+                    const centroid = geoCentroid(geo);
+                    if (!centroid || Number.isNaN(centroid[0])) return null;
+                    return (
+                      <Marker key={`c-${geo.rsmKey}`} coordinates={centroid}>
+                        <circle r={7} fill="#e30613" stroke="#fff" strokeWidth={0.6} />
+                        <text textAnchor="middle" y={2.6} fontSize={7} fontWeight="900" fill="#fff">{entry.list.length}</text>
+                      </Marker>
+                    );
+                  })}
+                </>
+              )}
+            </Geographies>
+          </ZoomableGroup>
+        </ComposableMap>
+        {tooltip && (
+          <div className="pointer-events-none absolute left-1/2 top-2 -translate-x-1/2 rounded-lg bg-black/85 px-3 py-1 text-xs font-bold text-white">
+            {tooltip.name} · {tooltip.count} Belge{tooltip.count > 1 ? "s" : ""}
+          </div>
+        )}
+      </div>
+
+      {current && (
+        <div className="mt-3">
+          <div className="mb-2 flex items-center justify-between">
+            <div className="text-sm font-black">{current.label} <span className="text-muted">— {current.list.length} Belge(s)</span></div>
+            <button onClick={() => setSelected(null)} className="text-[11px] text-muted hover:text-content">Fermer ✕</button>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {current.list.map((p) => (
+              <Link key={p.player.id} href={`/players/${p.player.id}`} className="flex items-center gap-2 rounded-xl border border-line/10 bg-surface2 p-2 transition hover:border-accent/40">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-surface text-sm">
+                  {p.player?.photo_url ? <img src={p.player.photo_url} className="h-9 w-9 object-cover" alt="" onError={(e) => e.currentTarget.remove()} /> : "👤"}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-bold">{p.player.name}</span>
+                  <span className="flex items-center gap-1 truncate text-xs text-muted">{p.club?.logo_url && <img src={p.club.logo_url} className="h-3.5 w-3.5 object-contain" alt="" />}{p.club?.name || "—"}</span>
+                </span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

@@ -7,6 +7,8 @@ import { useBelgiansAbroadConfig } from "@/lib/belgiansAbroad";
 import { isNationalSelectionClub, nationalityBadges, ratingTone } from "@/lib/nationalities";
 import { PUBLIC_MATCH_FIELDS, PUBLIC_MATCH_PLAYER_STATS_FIELDS, PUBLIC_PLAYER_FIELDS, loadMatchesByIds, loadPlayerStatsForPlayers } from "@/lib/publicFootballData";
 import { supabase } from "@/lib/supabaseClient";
+import dynamic from "next/dynamic";
+const BelgiansWorldMap = dynamic(() => import("@/components/football/BelgiansWorldMap"), { ssr: false, loading: () => <div className="rounded-2xl border border-line/10 bg-surface/60 p-8 text-center text-sm text-muted">Chargement de la carte…</div> });
 
 const FLAGS = { England: "🏴", France: "🇫🇷", Germany: "🇩🇪", Italy: "🇮🇹", Spain: "🇪🇸", Netherlands: "🇳🇱", Portugal: "🇵🇹", Scotland: "🏴", Turkey: "🇹🇷", Austria: "🇦🇹", Switzerland: "🇨🇭", Greece: "🇬🇷", USA: "🇺🇸", Belgium: "🇧🇪" };
 const POSITIONS = { Goalkeeper: "Gardien", GK: "Gardien", Defender: "Défenseur", DEF: "Défenseur", Midfielder: "Milieu", MID: "Milieu", Attacker: "Attaquant", FWD: "Attaquant" };
@@ -80,23 +82,33 @@ export default function BelgiansAbroadPage() {
     if (competitionResult.error) throw competitionResult.error;
     const players = (playerResult.data || []).filter((player) => isBelgian(player.nationality));
     const playerIds = players.map((player) => player.id);
-    const [clubResult, statsRows, performanceResult] = await Promise.all([
-      supabase.from("clubs").select("id,name,logo_url,team_type,ext"),
+    const [statsRows, performanceResult] = await Promise.all([
       loadPlayerStatsForPlayers(supabase, playerIds),
       playerIds.length ? supabase.from("match_player_stats").select(PUBLIC_MATCH_PLAYER_STATS_FIELDS).in("player_id", playerIds).order("synced_at", { ascending: false }).limit(500) : Promise.resolve({ data: [] }),
     ]);
-    if (clubResult.error) throw clubResult.error;
     if (performanceResult.error) throw performanceResult.error;
     const followedTeamIds = [...new Set(players.flatMap((player) => [player.club_id, player.national_team_id]).filter(Boolean))];
     const upcomingResult = followedTeamIds.length ? await supabase.from("matches").select(PUBLIC_MATCH_FIELDS).or(`home_club_id.in.(${followedTeamIds.join(",")}),away_club_id.in.(${followedTeamIds.join(",")})`).neq("status", "finished").gte("kickoff", new Date().toISOString()).order("kickoff", { ascending: true }).limit(100) : { data: [] };
     if (upcomingResult.error) throw upcomingResult.error;
     const performanceMatches = await loadMatchesByIds(supabase, (performanceResult.data || []).map((row) => row.match_id));
     const matchMap = new Map([...(upcomingResult.data || []), ...performanceMatches].map((match) => [match.id, match]));
+    // Charger UNIQUEMENT les clubs référencés (joueurs + sélections + adversaires des
+    // matchs + clubs des stats), par paquets → fini les « Club à renseigner » dus au
+    // plafond de 1000 clubs, et ça reste rapide quel que soit le total en base.
+    const clubIdSet = new Set(followedTeamIds);
+    for (const match of matchMap.values()) { if (match.home_club_id) clubIdSet.add(match.home_club_id); if (match.away_club_id) clubIdSet.add(match.away_club_id); }
+    for (const row of statsRows) { if (row.club_id) clubIdSet.add(row.club_id); }
+    const clubList = [];
+    const clubIdArr = [...clubIdSet].filter(Boolean);
+    for (let i = 0; i < clubIdArr.length; i += 400) {
+      const { data } = await supabase.from("clubs").select("id,name,logo_url,team_type,ext").in("id", clubIdArr.slice(i, i + 400));
+      if (data) clubList.push(...data);
+    }
     const stats = {};
     for (const row of statsRows) (stats[row.player_id] ||= []).push(row);
     setData({
       players,
-      clubs: Object.fromEntries((clubResult.data || []).map((item) => [item.id, item])),
+      clubs: Object.fromEntries(clubList.map((item) => [item.id, item])),
       competitions: Object.fromEntries((competitionResult.data || []).map((item) => [item.id, item])),
       stats,
       matches: [...matchMap.values()],
@@ -189,7 +201,7 @@ export default function BelgiansAbroadPage() {
       {data.loading && <div className="grid gap-4 sm:grid-cols-2"><div className="h-48 animate-pulse rounded-2xl bg-surface" /><div className="h-48 animate-pulse rounded-2xl bg-surface" /></div>}
       {!data.loading && data.error && <p className="rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">Impossible de charger les Belges à l'étranger : {data.error}</p>}
       {!data.loading && !data.error && <>
-        {view.enriched.length > 0 && <div className="space-y-9"><FeaturedPlayer item={view.featured} />{config.sections.find((section) => section.key === "form")?.enabled !== false && <section><SectionHeader section={config.sections.find((section) => section.key === "form")} />{content.form}</section>}{config.sections.filter((section) => section.enabled && !["players", "form"].includes(section.key)).map((section) => <section key={section.key}><SectionHeader section={section} />{content[section.key]}</section>)}</div>}
+        {view.enriched.length > 0 && <div className="space-y-9"><FeaturedPlayer item={view.featured} /><BelgiansWorldMap players={view.enriched} />{config.sections.find((section) => section.key === "form")?.enabled !== false && <section><SectionHeader section={config.sections.find((section) => section.key === "form")} />{content.form}</section>}{config.sections.filter((section) => section.enabled && !["players", "form"].includes(section.key)).map((section) => <section key={section.key}><SectionHeader section={section} />{content[section.key]}</section>)}</div>}
         {config.sections.find((section) => section.key === "players")?.enabled !== false && <section className={view.enriched.length > 0 ? "mt-9" : ""}>{content.players}</section>}
       </>}
     </div>
