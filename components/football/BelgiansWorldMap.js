@@ -92,9 +92,9 @@ export default function BelgiansWorldMap({ players = [] }) {
                     const centroid = geoCentroid(geo);
                     if (!centroid || Number.isNaN(centroid[0])) return null;
                     return (
-                      <Marker key={`c-${geo.rsmKey}`} coordinates={centroid}>
-                        <circle r={badgeR} fill="#e30613" stroke="#fff" strokeWidth={0.5} />
-                        <text textAnchor="middle" y={badgeR * 0.38} fontSize={badgeR * 1.05} fontWeight="900" fill="#fff">{entry.list.length}</text>
+                      <Marker key={`c-${geo.rsmKey}`} coordinates={centroid} style={{ default: { pointerEvents: "none" } }}>
+                        <circle r={badgeR} fill="#e30613" stroke="#fff" strokeWidth={0.5} style={{ pointerEvents: "none" }} />
+                        <text textAnchor="middle" y={badgeR * 0.38} fontSize={badgeR * 1.05} fontWeight="900" fill="#fff" style={{ pointerEvents: "none" }}>{entry.list.length}</text>
                       </Marker>
                     );
                   })}
