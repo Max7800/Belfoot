@@ -17,11 +17,21 @@ const COUNTRY_ALIAS = {
 };
 const geoName = (c) => COUNTRY_ALIAS[c] || c;
 
+// Vues par continent (centre [lng, lat] + zoom).
+const VIEWS = {
+  monde: { label: "🌍 Monde", center: [12, 28], zoom: 1 },
+  europe: { label: "🇪🇺 Europe", center: [14, 54], zoom: 4.5 },
+  ameriques: { label: "🌎 Amériques", center: [-80, 5], zoom: 1.7 },
+  afrique: { label: "🌍 Afrique", center: [20, 2], zoom: 2.2 },
+  asie: { label: "🌏 Asie", center: [95, 28], zoom: 2 },
+};
+
 export default function BelgiansWorldMap({ players = [] }) {
+  const [viewKey, setViewKey] = useState("europe");
   const [selected, setSelected] = useState(null);
   const [tooltip, setTooltip] = useState(null);
+  const view = VIEWS[viewKey];
 
-  // Agrège les exilés par pays (nom carte).
   const byCountry = useMemo(() => {
     const map = {};
     for (const p of players) {
@@ -36,17 +46,24 @@ export default function BelgiansWorldMap({ players = [] }) {
   const max = Math.max(1, ...Object.values(byCountry).map((c) => c.list.length));
   const fillFor = (n) => (n ? `rgba(227,6,19,${(0.22 + 0.63 * (n / max)).toFixed(2)})` : "rgba(255,255,255,0.045)");
   const current = selected && byCountry[selected];
+  const badgeR = viewKey === "monde" ? 7 : 3.5;
 
   return (
     <div className="rounded-2xl border border-line/10 bg-surface/60 p-3 sm:p-4">
-      <div className="mb-2 flex items-center justify-between">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <div className="text-xs font-black uppercase tracking-wider text-amber-300">🌍 Les Belges dans le monde</div>
-        <div className="text-[11px] text-muted">{players.length} exilé(s) · clique un pays</div>
+        <div className="text-[11px] text-muted">{players.length} exilé(s)</div>
+      </div>
+
+      <div className="mb-2 flex flex-wrap gap-1">
+        {Object.entries(VIEWS).map(([key, v]) => (
+          <button key={key} onClick={() => { setViewKey(key); setSelected(null); }} className={`rounded-lg px-2.5 py-1 text-xs font-bold transition ${viewKey === key ? "bg-accent text-white" : "bg-surface2 text-muted hover:text-content"}`}>{v.label}</button>
+        ))}
       </div>
 
       <div className="relative overflow-hidden rounded-xl bg-[#0b1220]">
         <ComposableMap projection="geoMercator" projectionConfig={{ scale: 130 }} style={{ width: "100%", height: "auto" }}>
-          <ZoomableGroup center={[12, 32]} zoom={1} maxZoom={6}>
+          <ZoomableGroup center={view.center} zoom={view.zoom} maxZoom={8}>
             <Geographies geography={GEO_URL}>
               {({ geographies }) => (
                 <>
@@ -76,8 +93,8 @@ export default function BelgiansWorldMap({ players = [] }) {
                     if (!centroid || Number.isNaN(centroid[0])) return null;
                     return (
                       <Marker key={`c-${geo.rsmKey}`} coordinates={centroid}>
-                        <circle r={7} fill="#e30613" stroke="#fff" strokeWidth={0.6} />
-                        <text textAnchor="middle" y={2.6} fontSize={7} fontWeight="900" fill="#fff">{entry.list.length}</text>
+                        <circle r={badgeR} fill="#e30613" stroke="#fff" strokeWidth={0.5} />
+                        <text textAnchor="middle" y={badgeR * 0.38} fontSize={badgeR * 1.05} fontWeight="900" fill="#fff">{entry.list.length}</text>
                       </Marker>
                     );
                   })}
