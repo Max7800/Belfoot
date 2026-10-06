@@ -3,23 +3,37 @@ import { discoverBelgians } from "../discoverPlayers";
 export default {
   key: "football.discover-belgians",
   async run({ db, competitionId, ...ctx }) {
-    let query = db.from("competitions").select("*").not("provider", "is", null);
+    let query = db.from("competitions").select("*").not("provider", "is", null).order("id");
     if (competitionId) query = query.eq("id", competitionId);
     const { data: comps, error } = await query;
     if (error) throw error;
-    if (!comps?.length) return "aucune compétition avec provider";
-    // Cas ciblé (une compétition) : un club par lot, repris automatiquement par
-    // le pipeline via le checkpoint (comme les transferts).
-    if (competitionId && comps.length === 1) {
-      return discoverBelgians(db, comps[0], {
-        ...ctx,
-        startClubIndex: Number(ctx.resumeState?.clubIndex) || 0,
-        saveClubCheckpoint: async (clubIndex) => ctx.saveCheckpoint?.({ clubIndex }),
-      });
+    const list = comps || [];
+    if (!list.length) return "aucune compétition avec provider";
+
+    // Checkpoint COMBINÉ (compétition + club) : un club par lot, que l'on cible une
+    // compétition OU qu'on scanne tout le monde. Le pipeline reprend au bon endroit,
+    // sans jamais dépasser le budget ni le timeout.
+    const resume = ctx.resumeState || {};
+    const compIndex = Math.max(0, Number(resume.compIndex) || 0);
+    const clubIndex = Math.max(0, Number(resume.clubIndex) || 0);
+    if (compIndex >= list.length) {
+      return { detail: "Découverte terminée.", complete: true, progress: { current: list.length, total: list.length, unit: "compétitions" } };
     }
-    // Cas multi-compétitions (chemin secondaire, sans checkpoint).
-    const out = [];
-    for (const c of comps) { const r = await discoverBelgians(db, c, ctx); out.push(typeof r === "string" ? r : r.detail); }
-    return out.join(" | ");
+
+    const comp = list[compIndex];
+    const result = await discoverBelgians(db, comp, {
+      ...ctx,
+      startClubIndex: clubIndex,
+      saveClubCheckpoint: async (nextClubIndex) => ctx.saveCheckpoint?.({ compIndex, clubIndex: nextClubIndex }),
+    });
+    const detail = typeof result === "string" ? result : result.detail;
+    const compDone = typeof result !== "object" || result.complete !== false;
+
+    if (!compDone) {
+      return { detail, complete: false, progress: (typeof result === "object" && result.progress) || { current: compIndex + 1, total: list.length, unit: "compétitions" } };
+    }
+    const nextCompIndex = compIndex + 1;
+    await ctx.saveCheckpoint?.({ compIndex: nextCompIndex, clubIndex: 0 });
+    return { detail: `${detail} · compétition ${nextCompIndex}/${list.length}`, complete: nextCompIndex >= list.length, progress: { current: nextCompIndex, total: list.length, unit: "compétitions" } };
   },
 };
