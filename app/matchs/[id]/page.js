@@ -10,6 +10,7 @@ import MatchPlayerRatings from "@/components/football/MatchPlayerRatings";
 import MatchTeamStats from "@/components/football/MatchTeamStats";
 import DiableRatings from "@/components/football/DiableRatings";
 import { isMatchLive, matchStatusMeta } from "@/lib/matchStatus";
+import { competitionPath } from "@/lib/competitionRoutes";
 import DiscussButton from "@/components/forum/DiscussButton";
 
 const eventIcon = (type) => ({ goal: "⚽", yellow: "🟨", red: "🟥", sub: "🔁" }[type] || "•");
@@ -76,7 +77,7 @@ export default function MatchPage() {
     const [cl, ev, cp, li, ps, ts, ca] = await Promise.all([
       supabase.from("clubs").select("id,name,logo_url,team_type,national_followed,national_category,national_gender").in("id", ids.length ? ids : ["00000000-0000-0000-0000-000000000000"]),
       supabase.from("match_events").select("*").eq("match_id", id).order("minute", { ascending: true }),
-      match.competition_id ? supabase.from("competitions").select("id,name").eq("id", match.competition_id).maybeSingle() : Promise.resolve({ data: null }),
+      match.competition_id ? supabase.from("competitions").select("id,name,slug,logo_url").eq("id", match.competition_id).maybeSingle() : Promise.resolve({ data: null }),
       supabase.from("match_lineups").select("*").eq("match_id", id),
       supabase.from("match_player_stats").select("*").eq("match_id", id),
       supabase.from("match_team_stats").select("*").eq("match_id", id),
@@ -125,7 +126,10 @@ export default function MatchPage() {
   const emptyEvents = "Aucun événement importé. Le job plafonné « Événements de match » permet de les récupérer.";
 
   return <div className="mx-auto max-w-5xl">
-    <div className="mb-2 text-center text-xs uppercase tracking-wider text-muted">{comp?.name}{m.matchday ? ` · Journée ${m.matchday}` : ""}</div>
+    <div className="mb-2 flex items-center justify-center gap-2 text-xs uppercase tracking-wider text-muted">
+      {comp ? <Link href={competitionPath(comp)} className="inline-flex items-center gap-1.5 rounded-full border border-line/15 bg-surface px-3 py-1 font-bold text-content transition hover:border-accent/40 hover:text-accent">{comp.logo_url && <img src={comp.logo_url} className="h-4 w-4 object-contain" alt="" />}{comp.name}<span aria-hidden>→</span></Link> : null}
+      {m.matchday ? <span>Journée {m.matchday}</span> : null}
+    </div>
     <div className={`mb-3 flex items-center justify-center gap-3 rounded-3xl border bg-gradient-to-br from-surface via-surface2 to-bg px-3 py-6 shadow-[0_24px_70px_-42px_rgba(0,0,0,0.9)] sm:gap-6 sm:px-6 sm:py-8 ${status.live ? "border-red-500/30" : "border-line/10"}`}>
       {m.home_club_id ? <Link href={`/clubs/${m.home_club_id}`} className="flex min-w-0 flex-1 flex-col items-center gap-2 transition hover:opacity-80">{home.logo_url && <img src={home.logo_url} className="h-14 w-14 object-contain sm:h-20 sm:w-20" alt="" />}<span className="text-center text-sm font-bold hover:text-accent sm:text-base">{home.name}</span></Link> : <div className="flex min-w-0 flex-1 flex-col items-center gap-2">{home.logo_url && <img src={home.logo_url} className="h-14 w-14 object-contain sm:h-20 sm:w-20" alt="" />}<span className="text-center text-sm font-bold sm:text-base">{home.name}</span></div>}
       <div className="shrink-0 text-center"><div className="text-3xl font-black tabular-nums sm:text-4xl">{m.home_score ?? "-"} : {m.away_score ?? "-"}</div><div className={`mt-1 text-xs font-bold ${status.live ? "text-red-400" : "text-muted"}`}>{status.live && <span className="mr-1 animate-pulse">●</span>}{status.label}</div>{m.kickoff && <div className="mt-1 max-w-28 text-[10px] text-muted">{new Date(m.kickoff).toLocaleString("fr-BE", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</div>}</div>
