@@ -150,21 +150,22 @@ const provider = {
   // Contrairement à fetchTeamMatches, aucune ligue n'est filtrée : cela permet
   // de réunir qualifications, tournoi final, Nations League et amicaux.
   async fetchNationalTeamMatches(teamExternalId, ctx = {}) {
-    // Les campagnes de sélection (qualifs Euro/CdM, Nations League) sont rangées côté API
-    // sous l'année de DÉBUT de campagne et s'étalent sur deux ans : on récupère l'année
-    // courante ET la précédente, sinon on rate les matchs (passés comme à venir) d'une
-    // campagne démarrée l'an dernier — ex. qualifs Euro U21.
-    const y = Number(seasonYear(ctx.season));
-    const years = [...new Set([y, y - 1])];
+    // On NE DEVINE PAS la saison : les campagnes de sélection (qualifs Euro/CdM, Nations
+    // League) sont rangées de façon imprévisible côté API (année de début, de finale…).
+    // On demande directement les derniers matchs JOUÉS et les prochains À VENIR de l'équipe,
+    // toutes compétitions confondues → résultats récents + calendrier fiables quelle que
+    // soit la saison de la campagne.
+    const count = 40;
+    const [lastRows, nextRows] = await Promise.all([
+      api(`/fixtures?team=${teamExternalId}&last=${count}`, ctx),
+      api(`/fixtures?team=${teamExternalId}&next=${count}`, ctx),
+    ]);
     const seen = new Set();
     const all = [];
-    for (const year of years) {
-      const rows = await api(`/fixtures?team=${teamExternalId}&season=${year}`, ctx);
-      for (const fixture of rows.map(mapFixture)) {
-        if (fixture.external_id == null || seen.has(fixture.external_id)) continue;
-        seen.add(fixture.external_id);
-        all.push(fixture);
-      }
+    for (const fixture of [...lastRows, ...nextRows].map(mapFixture)) {
+      if (fixture.external_id == null || seen.has(fixture.external_id)) continue;
+      seen.add(fixture.external_id);
+      all.push(fixture);
     }
     return all;
   },
