@@ -2,7 +2,26 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { ComposableMap, Geographies, Geography, ZoomableGroup, Marker } from "react-simple-maps";
-import { geoCentroid } from "d3-geo";
+import { geoCentroid, geoArea } from "d3-geo";
+
+// Ancre de la pastille : centroïde du PLUS GRAND polygone du pays, pas le centroïde
+// global. Sinon les territoires d'outre-mer (France+Guyane, Espagne+Canaries,
+// Pays-Bas+Caraïbes, USA+Alaska…) tirent le point à côté — ex. la France finissait
+// au-dessus du Portugal.
+function badgeAnchor(geo) {
+  const g = geo.geometry;
+  if (!g) return geoCentroid(geo);
+  if (g.type === "MultiPolygon") {
+    let best = null, bestArea = -1;
+    for (const coordinates of g.coordinates) {
+      const poly = { type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates } };
+      const area = geoArea(poly);
+      if (area > bestArea) { bestArea = area; best = poly; }
+    }
+    if (best) return geoCentroid(best);
+  }
+  return geoCentroid(geo);
+}
 
 const GEO_URL = "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json";
 
@@ -93,7 +112,7 @@ export default function BelgiansWorldMap({ players = [] }) {
                     const name = geo.properties.name;
                     const entry = byCountry[name];
                     if (!entry) return null;
-                    const centroid = geoCentroid(geo);
+                    const centroid = badgeAnchor(geo);
                     if (!centroid || Number.isNaN(centroid[0])) return null;
                     const n = entry.list.length;
                     return (
