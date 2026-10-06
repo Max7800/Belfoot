@@ -117,7 +117,12 @@ export async function syncNationalTeam(db, ctx = {}) {
   });
   await upsertExternal(db, "matches", providerKey, resolvedMatches, ["competition_id", "season_id", "home_club_id", "away_club_id", "home_score", "away_score", "status", "minute", "kickoff", "matchday", "round_raw", "phase", "round_number", "provider"]);
 
-  const { error: deactivateError } = await db.from("national_team_callups").update({ active: false, updated_at: syncedAt }).eq("national_team_id", nationalTeamId).eq("season", selectedSeason).eq("source", providerKey).eq("locked", false);
+  // Désactive TOUTES les convocations de la sélection (toutes saisons confondues) avant de
+  // réactiver l'effectif actuel. L'affichage lit les convocations actives sans filtre de
+  // saison : sans ça, un joueur convoqué une saison passée (ex. parti dans une autre
+  // sélection) resterait « actif » à vie. L'historique est conservé (lignes gardées,
+  // active=false) ; les convocations verrouillées manuellement ne sont pas touchées.
+  const { error: deactivateError } = await db.from("national_team_callups").update({ active: false, updated_at: syncedAt }).eq("national_team_id", nationalTeamId).eq("source", providerKey).eq("locked", false);
   if (deactivateError) throw deactivateError;
 
   let callups = 0;
