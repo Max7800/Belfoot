@@ -105,18 +105,19 @@ export async function GET(request) {
 
     let used = 0;
     const results = [];
+    const callsPerSelection = 5; // fiche + matchs (2 saisons) + effectif, avec marge
     for (const { team, windowActive } of picked) {
-      if (used + 3 > reservedCalls) break;
+      if (used + callsPerSelection > reservedCalls) break;
       try {
         const result = await runJob("football.national-team", {
           db,
           teamExternalId: team.external_id,
           nationalCategory: team.national_category || "senior",
           season,
-          requestLimit: 3,
+          requestLimit: callsPerSelection,
           apifootballKey: process.env.APIFOOTBALL_KEY,
         });
-        used += 3;
+        used += callsPerSelection;
         results.push({ team: team.name, windowActive, ok: true, result });
       } catch (error) {
         // Une sélection bloquée par le plan ou en erreur ne doit pas casser le cron.
