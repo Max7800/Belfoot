@@ -18,6 +18,31 @@ async function clubMap(db, source) {
   if (error) throw error;
   return Object.fromEntries((data || []).map((c) => [c.external_id, c.id]));
 }
+
+// Réparation référentielle (sans appel API) : re-relie les matchs d'une saison dont le
+// club est resté null (ex. créés par le live avant que le club existe) mais dont l'ID
+// d'équipe stocké dans ext est désormais résolvable. Auto-limité : 0 ligne une fois sain.
+async function relinkNullClubMatches(db, competition, seasonId, map) {
+  const { data: broken, error } = await db.from("matches")
+    .select("id,home_club_id,away_club_id,ext")
+    .eq("competition_id", competition.id).eq("season_id", seasonId)
+    .or("home_club_id.is.null,away_club_id.is.null");
+  if (error) throw error;
+  let fixed = 0;
+  for (const m of broken || []) {
+    const patch = {};
+    const homeId = map[m.ext?.home_ext];
+    const awayId = map[m.ext?.away_ext];
+    if (!m.home_club_id && homeId) patch.home_club_id = homeId;
+    if (!m.away_club_id && awayId) patch.away_club_id = awayId;
+    if (Object.keys(patch).length) {
+      const { error: updateError } = await db.from("matches").update(patch).eq("id", m.id);
+      if (updateError) throw updateError;
+      fixed++;
+    }
+  }
+  return fixed;
+}
 function resolveMatches(matches, competitionId, seasonId, map) {
   return matches.map((m) => {
     const pr = parseRound(m.round);
@@ -145,6 +170,8 @@ export async function syncCompetition(db, competition, ctx = {}) {
     const resolved = resolveMatches(live, competition.id, season.id, map);
     const n = await upsertExternal(db, "matches", competition.provider, resolved,
       ["competition_id", "season_id", "home_club_id", "away_club_id", "home_score", "away_score", "status", "minute", "kickoff", "matchday", "round_raw", "phase", "round_number"]);
+    // Re-relie au passage les matchs passés restés sans club (le live ne refetch que le jour).
+    await relinkNullClubMatches(db, competition, season.id, map);
     const liveCount = resolved.filter((match) => match.status === "live").length;
 
     // Finalisation : un match peut rester "live" en base si le cron a manqué le coup
@@ -198,6 +225,9 @@ export async function syncCompetition(db, competition, ctx = {}) {
   const map = await clubMap(db, competition.provider);
   const matchN = await upsertExternal(db, "matches", competition.provider, resolveMatches(matches, competition.id, season.id, map),
     ["competition_id", "season_id", "home_club_id", "away_club_id", "home_score", "away_score", "status", "minute", "kickoff", "matchday", "round_raw", "phase", "round_number"]);
+  // Filet de sécurité : re-relie les matchs de la saison restés sans club mais désormais
+  // résolvables (créés par un live antérieur, ou hors fenêtre de fetchMatches).
+  await relinkNullClubMatches(db, competition, season.id, map);
 
   let leagueName = competition.name;
   let finalExt = {
