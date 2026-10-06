@@ -129,7 +129,19 @@ export async function syncCompetition(db, competition, ctx = {}) {
     const fetchLive = provider.fetchLiveMatches || provider.fetchMatches;
     if (!fetchLive) return `${competition.name}: pas de live`;
     const live = await fetchLive.call(provider, competition, ctx);
-    const map = await clubMap(db, competition.provider);
+    // Un match live peut référencer une équipe pas encore importée (sync complète pas
+    // faite) : sans création, home/away_club_id reste null et le nom s'affiche « — ».
+    // On crée UNIQUEMENT les clubs manquants, sans écraser le nom/logo des existants.
+    const existingMap = await clubMap(db, competition.provider);
+    const missingClubs = [];
+    const seenMissing = new Set();
+    for (const m of live) {
+      for (const [ext, name] of [[m.home_ext, m.home_name], [m.away_ext, m.away_name]]) {
+        if (ext && !existingMap[ext] && !seenMissing.has(ext)) { seenMissing.add(ext); missingClubs.push({ external_id: ext, name: name || ext }); }
+      }
+    }
+    if (missingClubs.length) await upsertExternal(db, "clubs", competition.provider, missingClubs, ["name"]);
+    const map = missingClubs.length ? await clubMap(db, competition.provider) : existingMap;
     const resolved = resolveMatches(live, competition.id, season.id, map);
     const n = await upsertExternal(db, "matches", competition.provider, resolved,
       ["competition_id", "season_id", "home_club_id", "away_club_id", "home_score", "away_score", "status", "minute", "kickoff", "matchday", "round_raw", "phase", "round_number"]);
