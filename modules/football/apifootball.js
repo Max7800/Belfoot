@@ -3,10 +3,14 @@ import { seasonYear } from "./season";
 
 const BASE = "https://v3.football.api-sports.io";
 function mapStatus(short) {
-  if (["FT", "AET", "PEN"].includes(short)) return "finished";
+  // Terminés, y compris les résultats actés sans jeu (WO = forfait, AWD = tapis vert).
+  if (["FT", "AET", "PEN", "WO", "AWD"].includes(short)) return "finished";
   if (["PST", "CANC", "ABD", "SUSP", "INT"].includes(short)) return "postponed";
-  if (["NS", "TBD"].includes(short)) return "scheduled";
-  return "live";
+  // « live » est désormais EXPLICITE : seuls les codes réellement en jeu. Tout code
+  // inconnu retombe sur « scheduled » (défaut sûr) et non plus « live », pour ne jamais
+  // afficher en direct un match non joué / au statut exotique.
+  if (["1H", "HT", "2H", "ET", "BT", "P", "LIVE"].includes(short)) return "live";
+  return "scheduled";
 }
 function mapFixture(f) {
   return {
