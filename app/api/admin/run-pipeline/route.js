@@ -129,6 +129,7 @@ export async function POST(request) {
         const result = await runJob(jobKey, {
           db,
           ...params,
+          globalScope: pipeline.globalScope || false,
           matchCap: stepMatchCap,
           drain: pipeline.drainJobs?.includes(jobKey) || false,
           requestLimit: remaining,

@@ -62,7 +62,8 @@ export default function BelgiansWorldMap({ players = [] }) {
       </div>
 
       <div className="relative overflow-hidden rounded-xl bg-[#0b1220]">
-        <ComposableMap projection="geoMercator" projectionConfig={{ scale: 130 }} style={{ width: "100%", height: "auto" }}>
+        <style>{`.rsm-svg,.rsm-geographies,.rsm-geography,.rsm-zoomable-group,.rsm-svg *{outline:none!important;}.rsm-svg:focus,.rsm-zoomable-group:focus{outline:none!important;}`}</style>
+        <ComposableMap projection="geoMercator" projectionConfig={{ scale: 130 }} style={{ width: "100%", height: "auto", outline: "none" }}>
           <ZoomableGroup center={view.center} zoom={view.zoom} maxZoom={8}>
             <Geographies geography={GEO_URL}>
               {({ geographies }) => (

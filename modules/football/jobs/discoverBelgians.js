@@ -23,6 +23,10 @@ export default {
     const comp = list[compIndex];
     const result = await discoverBelgians(db, comp, {
       ...ctx,
+      // En scan mondial (pas de compétition ciblée), chaque compétition garde SA
+      // propre saison : forcer une saison unique (ex. 2026-2027) ne correspondrait à
+      // aucun club importé ailleurs → 0 Belge détecté partout. Ciblé = saison du ctx.
+      season: competitionId ? ctx.season : (comp.ext?.season || ctx.season),
       startClubIndex: clubIndex,
       saveClubCheckpoint: async (nextClubIndex) => ctx.saveCheckpoint?.({ compIndex, clubIndex: nextClubIndex }),
     });
