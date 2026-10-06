@@ -1,4 +1,6 @@
 // Déclaration des entités football pour l'admin générique (EntityManager).
+import { COMPETITION_SCOPES } from "@/lib/competitionScopes";
+
 export const FOOTBALL_ENTITIES = {
   competitions: {
     table: "competitions", title: "Compétitions", singular: "Compétition", orderBy: "position", hasSource: true, slugFrom: "name",
@@ -18,7 +20,7 @@ export const FOOTBALL_ENTITIES = {
       { key: "portal_title", label: "Portail : titre (vide = titre du bandeau)", type: "text" },
       { key: "portal_subtitle", label: "Portail : texte (vide = sous-titre du bandeau)", type: "textarea" },
       { key: "public_visible", label: "Visible dans les pages publiques", type: "bool" },
-      { key: "competition_scope", label: "Portail", type: "select", options: ["national", "europe", "international"] },
+      { key: "competition_scope", label: "Portail (catégorie)", type: "select", options: COMPETITION_SCOPES.map((scope) => ({ value: scope.key, label: `${scope.icon} ${scope.label}` })) },
       { key: "zones", label: "Zones de classement", type: "zones" },
       { key: "rating_min", label: "Note : min. apparitions", type: "number" },
       { key: "live_enabled", label: "Direct activé pour les jobs automatiques", type: "bool" },

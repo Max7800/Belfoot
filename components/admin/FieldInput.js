@@ -21,7 +21,7 @@ export default function FieldInput({ field, value, onChange, scope, uploadScope 
     case "date":
       return <div>{label}<input type="date" value={(value || "").slice(0, 10)} onChange={(e) => onChange(e.target.value || null)} className={box} /></div>;
     case "select":
-      return <div>{label}<select value={value || ""} onChange={(e) => onChange(e.target.value)} className={box}><option value="">—</option>{(field.options || []).map((o) => <option key={o} value={o}>{o}</option>)}</select></div>;
+      return <div>{label}<select value={value || ""} onChange={(e) => onChange(e.target.value)} className={box}><option value="">—</option>{(field.options || []).map((o) => { const val = typeof o === "object" ? o.value : o; const lbl = typeof o === "object" ? o.label : o; return <option key={val} value={val}>{lbl}</option>; })}</select></div>;
     case "image":
       return <div>{label}<ImageField value={value} onChange={onChange} uploadScope={uploadScope} /></div>;
     case "gallery":
