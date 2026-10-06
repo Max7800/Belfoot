@@ -13,6 +13,7 @@ import { normalizeNationalTeamsConfig } from "@/lib/nationalTeams";
 import { normalizeProposeConfig } from "@/lib/propose";
 import { normalizeRankings } from "@/lib/rankings";
 import { invalidateTilesCache, TILE_SCOPES } from "@/lib/tiles";
+import { COMPETITION_SCOPES, groupCompetitionsByScope } from "@/lib/competitionScopes";
 
 function distinctProviderCompetitions(rows = []) {
   const grouped = new Map();
@@ -233,15 +234,20 @@ export function JobsPanel() {
     <p className="mb-3 text-xs leading-5 text-muted">Chaque lancement affiche maintenant son coût estimé et respecte un budget strict. Une relance identique est bloquée tant que le premier job travaille. La base 2024/2025 reste la référence de développement ; le passage à 2026/2027 se fera ici, compétition par compétition, lorsque l'abonnement API sera actif.</p>
     <div className="mb-3 flex flex-wrap items-center gap-2">
       <select value={compId} onChange={(e) => setCompId(e.target.value)} className="rounded border border-line/10 bg-surface2 px-2 py-1 text-sm"><option value="">Choisir une compétition…</option>{(() => {
-        const SCOPE_LABELS = { belgique: "🇧🇪 Belgique", europe: "🇪🇺 Europe", international: "🌍 International", national: "🏳️ Sélections" };
-        const SCOPE_ORDER = ["belgique", "europe", "international", "national", ""];
-        const byScope = {};
-        for (const c of comps) { const s = c.competition_scope || ""; (byScope[s] ||= []).push(c); }
-        return SCOPE_ORDER.filter((s) => byScope[s]?.length).map((s) => (
-          <optgroup key={s || "autre"} label={SCOPE_LABELS[s] || "Autres"}>
-            {byScope[s].map((c) => <option key={c.id} value={c.id}>{c.live_enabled ? "🔴 " : ""}{c.name}{c.ext?.country ? ` · ${c.ext.country}` : ""}</option>)}
-          </optgroup>
-        ));
+        // Taxonomie partagée avec le plan d'import : Belgique / Europe / Étranger (par pays) / Sélections.
+        const byName = (a, b) => a.name.localeCompare(b.name);
+        const buckets = groupCompetitionsByScope(comps, byName);
+        const opt = (c) => <option key={c.id} value={c.id}>{c.live_enabled ? "🔴 " : ""}{c.name}{c.ext?.country ? ` · ${c.ext.country}` : ""}</option>;
+        return COMPETITION_SCOPES.flatMap((scope) => {
+          if (scope.key === "etranger") {
+            return Object.keys(buckets.etranger).sort((a, b) => a.localeCompare(b)).map((country) => (
+              <optgroup key={`etr-${country}`} label={`${scope.icon} ${country}`}>{buckets.etranger[country].map(opt)}</optgroup>
+            ));
+          }
+          const rows = buckets[scope.key] || [];
+          if (!rows.length) return [];
+          return [<optgroup key={scope.key} label={`${scope.icon} ${scope.label}`}>{rows.map(opt)}</optgroup>];
+        });
       })()}</select>
       <label className="text-xs text-muted">Saison</label>
       <select value={season} onChange={(e) => setSeason(e.target.value)} className="w-32 rounded border border-line/10 bg-surface2 px-2 py-1 text-sm">{seasonOptions.map((label) => <option key={label} value={label}>{label}</option>)}</select>

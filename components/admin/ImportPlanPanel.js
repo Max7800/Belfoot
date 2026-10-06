@@ -13,14 +13,14 @@ import {
   importPlanSchedule,
   normalizeImportPlan,
 } from "@/lib/importPlan";
+import { COMPETITION_SCOPES, groupCompetitionsByScope } from "@/lib/competitionScopes";
 
 const groupLabel = Object.fromEntries(IMPORT_GROUPS.map((group) => [group.key, group.label]));
 const scopeOptions = Object.entries(IMPORT_SCOPES);
-const PLAN_CATEGORIES = [
-  { key: "national", label: "Belgique", icon: "🇧🇪", description: "Pro League, Challenger Pro League, Croky Cup et autres compétitions belges." },
-  { key: "europe", label: "Europe", icon: "🌍", description: "Champions League, Europa League et Conference League." },
-  { key: "international", label: "International", icon: "🌐", description: "Nations League, Euro, Coupe du monde et sélections." },
-];
+// Catégories du plan = taxonomie partagée avec le sélecteur de sync (Belgique / Europe /
+// Étranger par pays / Sélections). La catégorie « Sélections » (international) porte aussi
+// les sélections nationales suivies.
+const PLAN_CATEGORIES = COMPETITION_SCOPES;
 
 // Certains anciens imports ont créé une ligne éditoriale puis une ligne API
 // pour le même provider/id. Elles doivent être consolidées en base plus tard,
@@ -144,6 +144,14 @@ export default function ImportPlanPanel() {
   const updateNationalSeason = (id, season, patch) => setPlan((current) => ({ ...current, nationalTeams: { ...current.nationalTeams, [id]: { ...current.nationalTeams[id], seasons: { ...current.nationalTeams[id].seasons, [season]: { ...current.nationalTeams[id].seasons[season], ...patch } } } } }));
   const updateSeason = (label, patch) => setPlan((current) => ({ ...current, seasons: current.seasons.map((season) => season.label === label ? { ...season, ...patch } : season) }));
 
+  // Carte d'une compétition (case Autoriser + groupe d'ordre + saisons). Réutilisée
+  // dans chaque catégorie ET dans les sous-groupes par pays de « Étranger ».
+  const renderCompetitionArticle = (competition) => {
+    const config = plan.competitions[competition.id];
+    if (!config) return null;
+    return <article key={competition.id} className="rounded-xl border border-line/10 bg-surface/70 p-3"><div className="grid gap-3 lg:grid-cols-[auto_minmax(180px,1fr)_180px_80px] lg:items-center"><label className="flex items-center gap-2 text-xs font-bold"><input type="checkbox" checked={config.enabled} onChange={(event) => updateCompetition(competition.id, { enabled: event.target.checked })} />Autoriser</label><div><b className="block text-sm">{competition.name}</b><span className="text-[10px] text-muted">{competition.provider} · ID {competition.external_id}{competition.ext?.country ? ` · ${competition.ext.country}` : ""}</span></div><select value={config.group} onChange={(event) => updateCompetition(competition.id, { group: event.target.value })} className="rounded-lg border border-line/10 bg-surface2 px-2 py-2 text-xs">{IMPORT_GROUPS.filter((group) => group.key !== "national").map((group) => <option key={group.key} value={group.key}>{group.label}</option>)}</select><label className="text-[10px] uppercase text-muted">Ordre<input type="number" min="1" value={config.order} onChange={(event) => updateCompetition(competition.id, { order: Number(event.target.value) || 999 })} className="mt-1 w-full rounded border border-line/10 bg-surface2 px-2 py-1 text-sm text-content" /></label></div><div className="mt-3 grid gap-2 sm:grid-cols-3">{plan.seasons.map((season) => <div key={season.label}><div className="mb-1 text-[10px] font-black text-muted">{season.label}</div><SeasonTarget value={config.seasons[season.label]} disabled={!config.enabled || !season.enabled} onChange={(patch) => updateCompetitionSeason(competition.id, season.label, patch)} /></div>)}</div></article>;
+  };
+
   const save = async () => {
     setStatus("saving"); setMessage("");
     const { data } = await supabase.from("site_settings").select("data").eq("id", 1).maybeSingle();
@@ -182,9 +190,10 @@ export default function ImportPlanPanel() {
   const estimate = useMemo(() => importPlanEstimate(plan), [plan]);
   const schedule = useMemo(() => importPlanSchedule(plan, competitions, nationalTeams), [plan, competitions, nationalTeams]);
   const competitionName = Object.fromEntries(competitions.map((competition) => [competition.id, competition.name]));
-  const competitionsByCategory = useMemo(() => Object.fromEntries(PLAN_CATEGORIES.map((category) => [category.key, competitions
-    .filter((competition) => (competition.competition_scope || "national") === category.key)
-    .sort((a, b) => (Number(plan.competitions[a.id]?.order) || 999) - (Number(plan.competitions[b.id]?.order) || 999) || a.name.localeCompare(b.name))])), [competitions, plan.competitions]);
+  const scopeBuckets = useMemo(() => groupCompetitionsByScope(
+    competitions,
+    (a, b) => (Number(plan.competitions[a.id]?.order) || 999) - (Number(plan.competitions[b.id]?.order) || 999) || a.name.localeCompare(b.name),
+  ), [competitions, plan.competitions]);
   const analyzeMaintenance = async () => {
     if (!maintenanceSeasonId) return;
     setMaintenanceStatus("loading"); setMaintenanceReport(null);
@@ -245,13 +254,19 @@ export default function ImportPlanPanel() {
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-black">Compétitions par territoire</h2><p className="text-xs text-muted">Belgique, Europe et international sont séparés sans modifier l’ordre réel des imports.</p></div><button type="button" onClick={save} disabled={status === "saving" || schedule.capacity <= 0 || schedule.oversized.length > 0} className="rounded-xl bg-accent px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{status === "saving" ? "Enregistrement…" : "Enregistrer le plan"}</button></div>
       <div className="mb-4 rounded-xl border border-violet-400/20 bg-violet-400/[0.05] p-3"><div className="flex flex-wrap items-center justify-between gap-3"><div><b className="text-sm text-violet-100">Audit des doublons provider</b><p className="mt-1 text-[11px] leading-5 text-muted">Compare les fiches ayant le même ID API, leurs saisons et leurs matchs. Lecture seule : rien ne sera fusionné ni supprimé.</p></div><button type="button" onClick={analyzeDuplicates} disabled={duplicateAuditStatus === "loading"} className="inline-flex items-center gap-2 rounded-lg border border-violet-300/25 bg-violet-400/10 px-3 py-2 text-xs font-bold text-violet-100 disabled:opacity-50"><Search className={`h-3.5 w-3.5 ${duplicateAuditStatus === "loading" ? "animate-pulse" : ""}`} />{duplicateAuditStatus === "loading" ? "Audit…" : "Auditer maintenant"}</button></div>{duplicateAudit?.error && <p className="mt-3 text-xs text-red-200">{duplicateAudit.error}</p>}{duplicateAudit && !duplicateAudit.error && <div className="mt-3 space-y-2 text-xs"><div className="rounded-lg border border-line/10 bg-bg/30 p-2.5"><b>{duplicateAudit.duplicates?.length || 0} doublon(s) de compétition détecté(s)</b><span className="ml-2 text-muted">et {duplicateAudit.belgianSelections?.length || 0} sélection(s) belges présentes.</span></div>{duplicateAudit.duplicates?.map((group) => <div key={group.key} className="overflow-hidden rounded-lg border border-amber-400/20"><div className="bg-amber-400/[0.06] px-3 py-2 font-bold text-amber-100">ID API {group.externalId} · {group.provider}</div>{group.rows.map((row) => <div key={row.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line/10 px-3 py-2"><b>{row.name}</b><span className="text-muted">{row.matches} matchs · {row.seasons.map((season) => season.label).join(", ") || "aucune saison"}</span>{row.publicVisible && <span className="text-emerald-300">public</span>}</div>)}</div>)}{duplicateAudit.belgianSelections?.length > 0 && <div className="rounded-lg border border-sky-400/20 bg-sky-400/[0.05] p-2.5"><b className="text-sky-100">Sélections belges détectées :</b><span className="ml-2 text-muted">{duplicateAudit.belgianSelections.map((team) => `${team.name} (${team.category}${team.followed ? ", suivie" : ""})`).join(" · ")}</span></div>}</div>}</div>
       <div className="space-y-4">{PLAN_CATEGORIES.map((category) => {
-        const rows = competitionsByCategory[category.key] || [];
+        // « Étranger » : rangé par pays. Autres catégories : liste à plat.
+        const countries = category.byCountry ? Object.keys(scopeBuckets.etranger).sort((a, b) => a.localeCompare(b)) : [];
+        const rows = category.byCountry ? [] : (scopeBuckets[category.key] || []);
+        const count = category.byCountry ? countries.reduce((sum, country) => sum + scopeBuckets.etranger[country].length, 0) : rows.length;
         const includesSelections = category.key === "international" && nationalTeams.length > 0;
         return <details key={category.key} open className="overflow-hidden rounded-2xl border border-line/10 bg-bg/25">
-          <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 marker:hidden"><span className="text-xl">{category.icon}</span><span className="min-w-0 flex-1"><b className="block">{category.label}</b><span className="block truncate text-[11px] text-muted">{category.description}</span></span><span className="rounded-full border border-line/10 bg-surface px-2.5 py-1 text-[10px] font-bold text-muted">{rows.length + (includesSelections ? nationalTeams.length : 0)} cible(s)</span></summary>
-          <div className="space-y-3 border-t border-line/10 p-3">{rows.map((competition) => { const config = plan.competitions[competition.id]; if (!config) return null; return <article key={competition.id} className="rounded-xl border border-line/10 bg-surface/70 p-3"><div className="grid gap-3 lg:grid-cols-[auto_minmax(180px,1fr)_180px_80px] lg:items-center"><label className="flex items-center gap-2 text-xs font-bold"><input type="checkbox" checked={config.enabled} onChange={(event) => updateCompetition(competition.id, { enabled: event.target.checked })} />Autoriser</label><div><b className="block text-sm">{competition.name}</b><span className="text-[10px] text-muted">{competition.provider} · ID {competition.external_id}</span></div><select value={config.group} onChange={(event) => updateCompetition(competition.id, { group: event.target.value })} className="rounded-lg border border-line/10 bg-surface2 px-2 py-2 text-xs">{IMPORT_GROUPS.filter((group) => group.key !== "national").map((group) => <option key={group.key} value={group.key}>{group.label}</option>)}</select><label className="text-[10px] uppercase text-muted">Ordre<input type="number" min="1" value={config.order} onChange={(event) => updateCompetition(competition.id, { order: Number(event.target.value) || 999 })} className="mt-1 w-full rounded border border-line/10 bg-surface2 px-2 py-1 text-sm text-content" /></label></div><div className="mt-3 grid gap-2 sm:grid-cols-3">{plan.seasons.map((season) => <div key={season.label}><div className="mb-1 text-[10px] font-black text-muted">{season.label}</div><SeasonTarget value={config.seasons[season.label]} disabled={!config.enabled || !season.enabled} onChange={(patch) => updateCompetitionSeason(competition.id, season.label, patch)} /></div>)}</div></article>; })}
+          <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 marker:hidden"><span className="text-xl">{category.icon}</span><span className="min-w-0 flex-1"><b className="block">{category.label}</b><span className="block truncate text-[11px] text-muted">{category.description}</span></span><span className="rounded-full border border-line/10 bg-surface px-2.5 py-1 text-[10px] font-bold text-muted">{count + (includesSelections ? nationalTeams.length : 0)} cible(s)</span></summary>
+          <div className="space-y-3 border-t border-line/10 p-3">
+            {category.byCountry
+              ? countries.map((country) => <div key={country} className="space-y-3"><div className="flex items-center gap-2 px-1 pt-1"><span className="text-[10px] font-black uppercase tracking-[.16em] text-muted">{country}</span><span className="rounded-full border border-line/10 bg-surface px-2 py-0.5 text-[9px] font-bold text-muted">{scopeBuckets.etranger[country].length}</span></div>{scopeBuckets.etranger[country].map(renderCompetitionArticle)}</div>)
+              : rows.map(renderCompetitionArticle)}
             {includesSelections && <div className="space-y-3"><div className="px-1 pt-1 text-[10px] font-black uppercase tracking-[.16em] text-muted">Sélections belges suivies</div>{nationalTeams.map((team, index) => { const externalId = String(team.external_id || ""); const config = plan.nationalTeams[externalId] || hydrateNationalConfig({}, index); return <article key={team.id} className="rounded-xl border border-line/10 bg-surface/70 p-3"><div className="flex flex-wrap items-center gap-3"><label className="flex items-center gap-2 text-xs font-bold"><input type="checkbox" checked={config.enabled} disabled={!externalId} onChange={(event) => updateNational(externalId, { enabled: event.target.checked })} />Autoriser</label><div className="min-w-[180px] flex-1"><b className="block text-sm">{team.name}</b><span className="text-[10px] text-muted">ID équipe {externalId || "manquant"}</span></div><label className="text-[10px] uppercase text-muted">Ordre<input type="number" min="1" value={config.order} onChange={(event) => updateNational(externalId, { order: Number(event.target.value) || 999 })} className="mt-1 w-20 rounded border border-line/10 bg-surface2 px-2 py-1 text-sm text-content" /></label></div><div className="mt-3 grid gap-2 sm:grid-cols-3">{plan.seasons.map((season) => <div key={season.label}><div className="mb-1 text-[10px] font-black text-muted">{season.label}</div><SeasonTarget national value={config.seasons[season.label]} disabled={!config.enabled || !season.enabled} onChange={(patch) => updateNationalSeason(externalId, season.label, patch)} /></div>)}</div></article>; })}</div>}
-            {!rows.length && !includesSelections && <p className="rounded-xl border border-dashed border-line/15 p-4 text-sm text-muted">Aucune compétition dans cette catégorie.</p>}
+            {!count && !includesSelections && <p className="rounded-xl border border-dashed border-line/15 p-4 text-sm text-muted">Aucune compétition dans cette catégorie.</p>}
           </div>
         </details>;
       })}</div>
