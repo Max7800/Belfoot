@@ -13,7 +13,7 @@ import {
   importPlanSchedule,
   normalizeImportPlan,
 } from "@/lib/importPlan";
-import { COMPETITION_SCOPES, groupCompetitionsByScope } from "@/lib/competitionScopes";
+import { COMPETITION_SCOPES, groupCompetitionsByScope, resolveCompetitionScope, competitionCountry } from "@/lib/competitionScopes";
 
 const groupLabel = Object.fromEntries(IMPORT_GROUPS.map((group) => [group.key, group.label]));
 const scopeOptions = Object.entries(IMPORT_SCOPES);
@@ -95,6 +95,7 @@ export default function ImportPlanPanel() {
   const [purgeConfirmation, setPurgeConfirmation] = useState("");
   const [duplicateAudit, setDuplicateAudit] = useState(null);
   const [duplicateAuditStatus, setDuplicateAuditStatus] = useState("idle");
+  const [activationSeason, setActivationSeason] = useState("all");
 
   const load = useCallback(async () => {
     setStatus("loading"); setMessage("");
@@ -194,6 +195,29 @@ export default function ImportPlanPanel() {
     competitions,
     (a, b) => (Number(plan.competitions[a.id]?.order) || 999) - (Number(plan.competitions[b.id]?.order) || 999) || a.name.localeCompare(b.name),
   ), [competitions, plan.competitions]);
+  // Saisons (activation publique) rangées avec la MÊME taxonomie que le plan, pour
+  // qu'une liste qui grossit reste navigable. Filtre de saison pour retrouver vite 2025-2026.
+  const competitionById = useMemo(() => Object.fromEntries(competitions.map((competition) => [competition.id, competition])), [competitions]);
+  const activationGroups = useMemo(() => {
+    const buckets = { belgique: [], europe: [], etranger: {}, international: [] };
+    const sortRows = (rows) => rows.sort((a, b) => (competitionName[a.competition_id] || "").localeCompare(competitionName[b.competition_id] || "") || String(b.label).localeCompare(String(a.label)));
+    for (const season of seasons) {
+      if (activationSeason !== "all" && season.label !== activationSeason) continue;
+      const competition = competitionById[season.competition_id];
+      const scope = resolveCompetitionScope(competition || {});
+      if (scope === "etranger") (buckets.etranger[competitionCountry(competition)] ||= []).push(season);
+      else buckets[scope].push(season);
+    }
+    sortRows(buckets.belgique); sortRows(buckets.europe); sortRows(buckets.international);
+    for (const country of Object.keys(buckets.etranger)) sortRows(buckets.etranger[country]);
+    return buckets;
+  }, [seasons, activationSeason, competitionById, competitionName]);
+
+  const renderSeasonRow = (season) => {
+    const report = readiness[season.id];
+    const failedChecks = report?.checks?.filter((item) => item.blocking && !item.ok) || [];
+    return <div key={season.id} className="border-t border-line/10 p-3 text-sm"><div className="flex flex-wrap items-center gap-3"><div className="min-w-[190px] flex-1"><b>{competitionName[season.competition_id] || "Compétition"} · {season.label}</b><div className="mt-0.5 text-[10px] uppercase tracking-wider text-muted">{season.import_status || "inconnu"}{report?.scopeLabel ? ` · ${report.scopeLabel}` : ""}</div></div><div className="min-w-[150px] sm:w-52"><div className="mb-1 flex justify-between text-[10px] font-bold uppercase tracking-wider text-muted"><span>Contrôles</span><span>{report ? `${report.progress}%` : "…"}</span></div><div className="h-1.5 overflow-hidden rounded-full bg-bg"><div className={`h-full rounded-full ${report?.ok ? "bg-emerald-400" : "bg-amber-400"}`} style={{ width: `${report?.progress || 0}%` }} /></div></div>{season.public_active ? <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-bold text-emerald-300"><CheckCircle2 className="h-3.5 w-3.5" />Par défaut</span> : <>{["draft", "error", "importing"].includes(season.import_status) && <button type="button" onClick={() => markReady(season)} disabled={status === "saving" || !report?.ok} className="rounded-lg border border-amber-400/25 bg-amber-400/10 px-3 py-1.5 text-xs font-bold text-amber-200 disabled:cursor-not-allowed disabled:opacity-40">{report?.ok ? "Marquer prête" : "Contrôles incomplets"}</button>}{season.import_status === "ready" && <button type="button" onClick={() => activate(season)} disabled={status === "saving" || !report?.ok} className="rounded-lg border border-emerald-400/25 bg-emerald-400/10 px-3 py-1.5 text-xs font-bold text-emerald-200 disabled:cursor-not-allowed disabled:opacity-40">{report?.ok ? "Utiliser par défaut" : "Revalidation requise"}</button>}</>}</div>{report && <div className="mt-3 grid gap-2 lg:grid-cols-[minmax(0,1fr)_auto]"><div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted"><span>{report.counts.matches}{report.counts.expectedMatches ? ` / ${report.counts.expectedMatches}` : ""} matchs</span><span>{report.counts.clubs}{report.counts.expectedClubs ? ` / ${report.counts.expectedClubs}` : ""} clubs</span>{report.scope !== "base" && <span>{report.counts.memberships} affectations d’effectif</span>}{report.scope === "complete" && <span>{report.counts.pendingEvents + report.counts.pendingLineups + report.counts.pendingPlayerStats} traitements de match restants</span>}</div>{failedChecks.length > 0 && <div className="text-[11px] text-amber-200">{failedChecks.map((item) => `${item.label} : ${item.detail}`).join(" · ")}</div>}</div>}</div>;
+  };
   const analyzeMaintenance = async () => {
     if (!maintenanceSeasonId) return;
     setMaintenanceStatus("loading"); setMaintenanceReport(null);
@@ -287,7 +311,22 @@ export default function ImportPlanPanel() {
       </div>}
     </section>
 
-    <section><div className="mb-3"><h2 className="text-lg font-black">Activation publique des saisons</h2><p className="mt-1 text-xs text-muted">Chaque saison est contrôlée côté serveur. Une archive prête reste consultable et une seule saison est proposée par défaut pour chaque compétition.</p></div><div className="divide-y divide-line/10 overflow-hidden rounded-2xl border border-line/10 bg-surface">{seasons.map((season) => { const report = readiness[season.id]; const failedChecks = report?.checks?.filter((item) => item.blocking && !item.ok) || []; return <div key={season.id} className="p-3 text-sm"><div className="flex flex-wrap items-center gap-3"><div className="min-w-[190px] flex-1"><b>{competitionName[season.competition_id] || "Compétition"} · {season.label}</b><div className="mt-0.5 text-[10px] uppercase tracking-wider text-muted">{season.import_status || "inconnu"}{report?.scopeLabel ? ` · ${report.scopeLabel}` : ""}</div></div><div className="min-w-[150px] sm:w-52"><div className="mb-1 flex justify-between text-[10px] font-bold uppercase tracking-wider text-muted"><span>Contrôles</span><span>{report ? `${report.progress}%` : "…"}</span></div><div className="h-1.5 overflow-hidden rounded-full bg-bg"><div className={`h-full rounded-full ${report?.ok ? "bg-emerald-400" : "bg-amber-400"}`} style={{ width: `${report?.progress || 0}%` }} /></div></div>{season.public_active ? <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-bold text-emerald-300"><CheckCircle2 className="h-3.5 w-3.5" />Par défaut</span> : <>{["draft", "error", "importing"].includes(season.import_status) && <button type="button" onClick={() => markReady(season)} disabled={status === "saving" || !report?.ok} className="rounded-lg border border-amber-400/25 bg-amber-400/10 px-3 py-1.5 text-xs font-bold text-amber-200 disabled:cursor-not-allowed disabled:opacity-40">{report?.ok ? "Marquer prête" : "Contrôles incomplets"}</button>}{season.import_status === "ready" && <button type="button" onClick={() => activate(season)} disabled={status === "saving" || !report?.ok} className="rounded-lg border border-emerald-400/25 bg-emerald-400/10 px-3 py-1.5 text-xs font-bold text-emerald-200 disabled:cursor-not-allowed disabled:opacity-40">{report?.ok ? "Utiliser par défaut" : "Revalidation requise"}</button>}</>}</div>{report && <div className="mt-3 grid gap-2 lg:grid-cols-[minmax(0,1fr)_auto]"><div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted"><span>{report.counts.matches}{report.counts.expectedMatches ? ` / ${report.counts.expectedMatches}` : ""} matchs</span><span>{report.counts.clubs}{report.counts.expectedClubs ? ` / ${report.counts.expectedClubs}` : ""} clubs</span>{report.scope !== "base" && <span>{report.counts.memberships} affectations d’effectif</span>}{report.scope === "complete" && <span>{report.counts.pendingEvents + report.counts.pendingLineups + report.counts.pendingPlayerStats} traitements de match restants</span>}</div>{failedChecks.length > 0 && <div className="text-[11px] text-amber-200">{failedChecks.map((item) => `${item.label} : ${item.detail}`).join(" · ")}</div>}</div>}</div>; })}</div></section>
+    <section><div className="mb-3 flex flex-wrap items-end justify-between gap-3"><div><h2 className="text-lg font-black">Activation publique des saisons</h2><p className="mt-1 text-xs text-muted">Chaque saison est contrôlée côté serveur. Une archive prête reste consultable et une seule saison est proposée par défaut pour chaque compétition.</p></div><label className="text-[10px] font-bold uppercase tracking-wider text-muted">Filtrer par saison<select value={activationSeason} onChange={(event) => setActivationSeason(event.target.value)} className="mt-1 block rounded-lg border border-line/10 bg-surface2 px-3 py-2 text-sm font-normal normal-case text-content"><option value="all">Toutes les saisons</option>{plan.seasons.map((season) => <option key={season.label} value={season.label}>{season.label}</option>)}</select></label></div>
+      <div className="space-y-4">{COMPETITION_SCOPES.map((category) => {
+        const countries = category.byCountry ? Object.keys(activationGroups.etranger).sort((a, b) => a.localeCompare(b)) : [];
+        const rows = category.byCountry ? [] : (activationGroups[category.key] || []);
+        const count = category.byCountry ? countries.reduce((sum, country) => sum + activationGroups.etranger[country].length, 0) : rows.length;
+        if (!count) return null;
+        return <details key={category.key} open className="overflow-hidden rounded-2xl border border-line/10 bg-surface">
+          <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 marker:hidden"><span className="text-xl">{category.icon}</span><b className="min-w-0 flex-1">{category.label}</b><span className="rounded-full border border-line/10 bg-bg/40 px-2.5 py-1 text-[10px] font-bold text-muted">{count} saison(s)</span></summary>
+          <div>{category.byCountry
+            ? countries.map((country) => <div key={country}><div className="border-t border-line/10 bg-bg/30 px-4 py-1.5 text-[10px] font-black uppercase tracking-[.16em] text-muted">{country}</div>{activationGroups.etranger[country].map(renderSeasonRow)}</div>)
+            : rows.map(renderSeasonRow)}</div>
+        </details>;
+      })}</div>
+      {!seasons.length && <p className="rounded-2xl border border-dashed border-line/15 p-4 text-sm text-muted">Aucune saison importée pour le moment.</p>}
+      {seasons.length > 0 && !COMPETITION_SCOPES.some((category) => category.byCountry ? Object.keys(activationGroups.etranger).length : activationGroups[category.key]?.length) && <p className="rounded-2xl border border-dashed border-line/15 p-4 text-sm text-muted">Aucune saison pour ce filtre.</p>}
+    </section>
     <div className="mt-5 flex items-start gap-2 rounded-xl border border-amber-400/20 bg-amber-400/5 p-3 text-xs text-amber-100"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /><p>Les projections sont volontairement hautes et réparties sur plusieurs journées si nécessaire. Le préflight basé sur les données déjà importées donnera le coût précis avant chaque pipeline.</p></div>
   </div>;
 }
