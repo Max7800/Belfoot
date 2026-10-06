@@ -96,6 +96,7 @@ export default function ImportPlanPanel() {
   const [duplicateAudit, setDuplicateAudit] = useState(null);
   const [duplicateAuditStatus, setDuplicateAuditStatus] = useState("idle");
   const [activationSeason, setActivationSeason] = useState("all");
+  const [readinessBusy, setReadinessBusy] = useState({});
 
   const load = useCallback(async () => {
     setStatus("loading"); setMessage("");
@@ -126,15 +127,11 @@ export default function ImportPlanPanel() {
     });
     const hiddenDuplicates = rawCompetitionRows.length - competitionRows.length;
     if (resetArchiveScopes || resetSeasonEstimates || hiddenDuplicates) setMessage(`${resetArchiveScopes || resetSeasonEstimates ? "Plan adapté : périmètre et nombres de clubs/matchs sont maintenant définis saison par saison." : ""}${hiddenDuplicates ? `${resetArchiveScopes || resetSeasonEstimates ? " " : ""}${hiddenDuplicates} doublon(s) provider sont masqués du plan ; aucune donnée ni saison n’est supprimée.` : ""} Enregistre pour confirmer.`);
-    try {
-      const result = seasonRows.length ? await requestReadiness({ seasonIds: seasonRows.map((season) => season.id) }) : { reports: [] };
-      setReadiness(Object.fromEntries((result.reports || []).map((report) => [report.season.id, report])));
-      setStatus("idle");
-    } catch (readinessError) {
-      setReadiness({});
-      setStatus("error");
-      setMessage(`Plan chargé, mais contrôle des saisons indisponible : ${readinessError.message}`);
-    }
+    // Contrôles chargés À LA DEMANDE (bouton par saison, ci-dessous) : l'audit groupé
+    // de toutes les saisons dépassait le timeout dès qu'on importait beaucoup de
+    // championnats, et laissait toute la section sans contrôle ni promotion possible.
+    setReadiness({});
+    setStatus("idle");
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -213,10 +210,40 @@ export default function ImportPlanPanel() {
     return buckets;
   }, [seasons, activationSeason, competitionById, competitionName]);
 
+  // Liste à plat des saisons actuellement affichées (après filtre), pour le bouton
+  // « Vérifier les contrôles affichés ».
+  const visibleSeasons = useMemo(() => [
+    ...activationGroups.belgique,
+    ...activationGroups.europe,
+    ...Object.values(activationGroups.etranger).flat(),
+    ...activationGroups.international,
+  ], [activationGroups]);
+
+  // Audit d'UNE saison à la fois (requête légère, jamais de timeout).
+  const auditSeason = async (seasonId) => {
+    setReadinessBusy((current) => ({ ...current, [seasonId]: true }));
+    try {
+      const result = await requestReadiness({ seasonIds: [seasonId] });
+      const report = (result.reports || [])[0];
+      if (report) setReadiness((current) => ({ ...current, [seasonId]: report }));
+    } catch (error) {
+      setStatus("error"); setMessage(`Contrôle de saison indisponible : ${error.message}`);
+    } finally {
+      setReadinessBusy((current) => ({ ...current, [seasonId]: false }));
+    }
+  };
+  // Vérifie les saisons affichées une par une (séquentiel = pas de requête géante).
+  const auditVisibleSeasons = async () => {
+    for (const season of visibleSeasons) {
+      if (!readiness[season.id]) await auditSeason(season.id);
+    }
+  };
+
   const renderSeasonRow = (season) => {
     const report = readiness[season.id];
+    const busy = readinessBusy[season.id];
     const failedChecks = report?.checks?.filter((item) => item.blocking && !item.ok) || [];
-    return <div key={season.id} className="border-t border-line/10 p-3 text-sm"><div className="flex flex-wrap items-center gap-3"><div className="min-w-[190px] flex-1"><b>{competitionName[season.competition_id] || "Compétition"} · {season.label}</b><div className="mt-0.5 text-[10px] uppercase tracking-wider text-muted">{season.import_status || "inconnu"}{report?.scopeLabel ? ` · ${report.scopeLabel}` : ""}</div></div><div className="min-w-[150px] sm:w-52"><div className="mb-1 flex justify-between text-[10px] font-bold uppercase tracking-wider text-muted"><span>Contrôles</span><span>{report ? `${report.progress}%` : "…"}</span></div><div className="h-1.5 overflow-hidden rounded-full bg-bg"><div className={`h-full rounded-full ${report?.ok ? "bg-emerald-400" : "bg-amber-400"}`} style={{ width: `${report?.progress || 0}%` }} /></div></div>{season.public_active ? <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-bold text-emerald-300"><CheckCircle2 className="h-3.5 w-3.5" />Par défaut</span> : <>{["draft", "error", "importing"].includes(season.import_status) && <button type="button" onClick={() => markReady(season)} disabled={status === "saving" || !report?.ok} className="rounded-lg border border-amber-400/25 bg-amber-400/10 px-3 py-1.5 text-xs font-bold text-amber-200 disabled:cursor-not-allowed disabled:opacity-40">{report?.ok ? "Marquer prête" : "Contrôles incomplets"}</button>}{season.import_status === "ready" && <button type="button" onClick={() => activate(season)} disabled={status === "saving" || !report?.ok} className="rounded-lg border border-emerald-400/25 bg-emerald-400/10 px-3 py-1.5 text-xs font-bold text-emerald-200 disabled:cursor-not-allowed disabled:opacity-40">{report?.ok ? "Utiliser par défaut" : "Revalidation requise"}</button>}</>}</div>{report && <div className="mt-3 grid gap-2 lg:grid-cols-[minmax(0,1fr)_auto]"><div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted"><span>{report.counts.matches}{report.counts.expectedMatches ? ` / ${report.counts.expectedMatches}` : ""} matchs</span><span>{report.counts.clubs}{report.counts.expectedClubs ? ` / ${report.counts.expectedClubs}` : ""} clubs</span>{report.scope !== "base" && <span>{report.counts.memberships} affectations d’effectif</span>}{report.scope === "complete" && <span>{report.counts.pendingEvents + report.counts.pendingLineups + report.counts.pendingPlayerStats} traitements de match restants</span>}</div>{failedChecks.length > 0 && <div className="text-[11px] text-amber-200">{failedChecks.map((item) => `${item.label} : ${item.detail}`).join(" · ")}</div>}</div>}</div>;
+    return <div key={season.id} className="border-t border-line/10 p-3 text-sm"><div className="flex flex-wrap items-center gap-3"><div className="min-w-[190px] flex-1"><b>{competitionName[season.competition_id] || "Compétition"} · {season.label}</b><div className="mt-0.5 text-[10px] uppercase tracking-wider text-muted">{season.import_status || "inconnu"}{report?.scopeLabel ? ` · ${report.scopeLabel}` : ""}</div></div>{report && <div className="min-w-[150px] sm:w-52"><div className="mb-1 flex justify-between text-[10px] font-bold uppercase tracking-wider text-muted"><span>Contrôles</span><span>{report.progress}%</span></div><div className="h-1.5 overflow-hidden rounded-full bg-bg"><div className={`h-full rounded-full ${report.ok ? "bg-emerald-400" : "bg-amber-400"}`} style={{ width: `${report.progress || 0}%` }} /></div></div>}{season.public_active ? <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-bold text-emerald-300"><CheckCircle2 className="h-3.5 w-3.5" />Par défaut</span> : !report ? <button type="button" onClick={() => auditSeason(season.id)} disabled={busy} className="rounded-lg border border-line/20 px-3 py-1.5 text-xs font-bold text-muted hover:text-content disabled:opacity-50">{busy ? "Contrôle…" : "Vérifier les contrôles"}</button> : <>{["draft", "error", "importing"].includes(season.import_status) && <button type="button" onClick={() => markReady(season)} disabled={status === "saving" || !report.ok} className="rounded-lg border border-amber-400/25 bg-amber-400/10 px-3 py-1.5 text-xs font-bold text-amber-200 disabled:cursor-not-allowed disabled:opacity-40">{report.ok ? "Marquer prête" : "Contrôles incomplets"}</button>}{season.import_status === "ready" && <button type="button" onClick={() => activate(season)} disabled={status === "saving" || !report.ok} className="rounded-lg border border-emerald-400/25 bg-emerald-400/10 px-3 py-1.5 text-xs font-bold text-emerald-200 disabled:cursor-not-allowed disabled:opacity-40">{report.ok ? "Utiliser par défaut" : "Revalidation requise"}</button>}</>}</div>{report && <div className="mt-3 grid gap-2 lg:grid-cols-[minmax(0,1fr)_auto]"><div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted"><span>{report.counts.matches}{report.counts.expectedMatches ? ` / ${report.counts.expectedMatches}` : ""} matchs</span><span>{report.counts.clubs}{report.counts.expectedClubs ? ` / ${report.counts.expectedClubs}` : ""} clubs</span>{report.scope !== "base" && <span>{report.counts.memberships} affectations d’effectif</span>}{report.scope === "complete" && <span>{report.counts.pendingEvents + report.counts.pendingLineups + report.counts.pendingPlayerStats} traitements de match restants</span>}</div>{failedChecks.length > 0 && <div className="text-[11px] text-amber-200">{failedChecks.map((item) => `${item.label} : ${item.detail}`).join(" · ")}</div>}</div>}</div>;
   };
   const analyzeMaintenance = async () => {
     if (!maintenanceSeasonId) return;
@@ -311,7 +338,7 @@ export default function ImportPlanPanel() {
       </div>}
     </section>
 
-    <section><div className="mb-3 flex flex-wrap items-end justify-between gap-3"><div><h2 className="text-lg font-black">Activation publique des saisons</h2><p className="mt-1 text-xs text-muted">Chaque saison est contrôlée côté serveur. Une archive prête reste consultable et une seule saison est proposée par défaut pour chaque compétition.</p></div><label className="text-[10px] font-bold uppercase tracking-wider text-muted">Filtrer par saison<select value={activationSeason} onChange={(event) => setActivationSeason(event.target.value)} className="mt-1 block rounded-lg border border-line/10 bg-surface2 px-3 py-2 text-sm font-normal normal-case text-content"><option value="all">Toutes les saisons</option>{plan.seasons.map((season) => <option key={season.label} value={season.label}>{season.label}</option>)}</select></label></div>
+    <section><div className="mb-3 flex flex-wrap items-end justify-between gap-3"><div><h2 className="text-lg font-black">Activation publique des saisons</h2><p className="mt-1 text-xs text-muted">Chaque saison est contrôlée côté serveur. Une archive prête reste consultable et une seule saison est proposée par défaut pour chaque compétition.</p></div><div className="flex items-end gap-2"><label className="text-[10px] font-bold uppercase tracking-wider text-muted">Filtrer par saison<select value={activationSeason} onChange={(event) => setActivationSeason(event.target.value)} className="mt-1 block rounded-lg border border-line/10 bg-surface2 px-3 py-2 text-sm font-normal normal-case text-content"><option value="all">Toutes les saisons</option>{plan.seasons.map((season) => <option key={season.label} value={season.label}>{season.label}</option>)}</select></label><button type="button" onClick={auditVisibleSeasons} disabled={!visibleSeasons.length} className="rounded-lg border border-line/15 bg-surface px-3 py-2 text-xs font-bold text-muted hover:text-content disabled:opacity-50" title="Lance les contrôles des saisons affichées, une par une">Vérifier les contrôles affichés</button></div></div>
       <div className="space-y-4">{COMPETITION_SCOPES.map((category) => {
         const countries = category.byCountry ? Object.keys(activationGroups.etranger).sort((a, b) => a.localeCompare(b)) : [];
         const rows = category.byCountry ? [] : (activationGroups[category.key] || []);
