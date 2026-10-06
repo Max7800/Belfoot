@@ -61,8 +61,10 @@ export default function BelgiansWorldMap({ players = [] }) {
         ))}
       </div>
 
+      <div className="mb-2 text-[11px] text-muted">👆 Clique sur un <span className="font-bold text-accent">pastille rouge</span> (ou le pays surligné) pour voir les Belges qui y jouent.</div>
+
       <div className="relative overflow-hidden rounded-xl bg-[#0b1220]">
-        <style>{`.rsm-svg,.rsm-geographies,.rsm-geography,.rsm-zoomable-group,.rsm-svg *{outline:none!important;}.rsm-svg:focus,.rsm-zoomable-group:focus{outline:none!important;}`}</style>
+        <style>{`.rsm-svg,.rsm-geographies,.rsm-geography,.rsm-zoomable-group,.rsm-svg *{outline:none!important;}.rsm-svg:focus,.rsm-zoomable-group:focus{outline:none!important;}@keyframes bfHalo{0%,100%{opacity:.12}50%{opacity:.4}}.bf-halo{animation:bfHalo 2.2s ease-in-out infinite;}.bf-badge{transition:transform .12s ease;transform-box:fill-box;transform-origin:center;}.bf-badge:hover{transform:scale(1.25);}`}</style>
         <ComposableMap projection="geoMercator" projectionConfig={{ scale: 130 }} style={{ width: "100%", height: "auto", outline: "none" }}>
           <ZoomableGroup center={view.center} zoom={view.zoom} maxZoom={8}>
             <Geographies geography={GEO_URL}>
@@ -88,14 +90,26 @@ export default function BelgiansWorldMap({ players = [] }) {
                     );
                   })}
                   {geographies.map((geo) => {
-                    const entry = byCountry[geo.properties.name];
+                    const name = geo.properties.name;
+                    const entry = byCountry[name];
                     if (!entry) return null;
                     const centroid = geoCentroid(geo);
                     if (!centroid || Number.isNaN(centroid[0])) return null;
+                    const n = entry.list.length;
                     return (
-                      <Marker key={`c-${geo.rsmKey}`} coordinates={centroid} style={{ default: { pointerEvents: "none" } }}>
-                        <circle r={badgeR} fill="#e30613" stroke="#fff" strokeWidth={0.5} style={{ pointerEvents: "none" }} />
-                        <text textAnchor="middle" y={badgeR * 0.38} fontSize={badgeR * 1.05} fontWeight="900" fill="#fff" style={{ pointerEvents: "none" }}>{entry.list.length}</text>
+                      <Marker
+                        key={`c-${geo.rsmKey}`}
+                        coordinates={centroid}
+                        onMouseEnter={() => setTooltip({ name: entry.label, count: n })}
+                        onMouseLeave={() => setTooltip(null)}
+                        onClick={() => setSelected((s) => (s === name ? null : name))}
+                        style={{ default: { cursor: "pointer" }, hover: { cursor: "pointer" }, pressed: { cursor: "pointer" } }}
+                      >
+                        <circle className="bf-halo" r={badgeR + 2} fill="#e30613" style={{ pointerEvents: "none" }} />
+                        <g className="bf-badge">
+                          <circle r={badgeR} fill="#e30613" stroke="#fff" strokeWidth={0.7} style={{ cursor: "pointer" }} />
+                          <text textAnchor="middle" y={badgeR * 0.38} fontSize={badgeR * 1.05} fontWeight="900" fill="#fff" style={{ pointerEvents: "none" }}>{n}</text>
+                        </g>
                       </Marker>
                     );
                   })}
