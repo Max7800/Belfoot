@@ -46,9 +46,14 @@ async function relinkNullClubMatches(db, competition, seasonId, map) {
 function resolveMatches(matches, competitionId, seasonId, map) {
   return matches.map((m) => {
     const pr = parseRound(m.round);
+    const homeId = map[m.home_ext];
+    const awayId = map[m.away_ext];
+    // club_id « collant » : on ne l'inclut QUE s'il est résolu. Omis = laissé tel quel à
+    // l'upsert (jamais écrasé par null), ce qui empêche une resync d'effacer un club déjà
+    // relié — cause des « — » qui revenaient après chaque synchronisation.
     return {
       external_id: m.external_id, competition_id: competitionId, season_id: seasonId,
-      home_club_id: map[m.home_ext] || null, away_club_id: map[m.away_ext] || null,
+      ...(homeId ? { home_club_id: homeId } : {}), ...(awayId ? { away_club_id: awayId } : {}),
       home_score: m.home_score, away_score: m.away_score, status: m.status, minute: m.minute ?? null,
       kickoff: m.kickoff, matchday: pr.round_number, round_raw: pr.round_raw, phase: pr.phase, round_number: pr.round_number, ext: m,
     };

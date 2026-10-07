@@ -100,8 +100,9 @@ export async function syncNationalTeam(db, ctx = {}) {
       external_id: match.external_id,
       competition_id: competitionId,
       season_id: seasonMap.get(competitionId) || null,
-      home_club_id: clubMap.get(match.home_ext) || null,
-      away_club_id: clubMap.get(match.away_ext) || null,
+      // club_id « collant » : résolu seulement, jamais null (pas d'effacement en resync).
+      ...(clubMap.get(match.home_ext) ? { home_club_id: clubMap.get(match.home_ext) } : {}),
+      ...(clubMap.get(match.away_ext) ? { away_club_id: clubMap.get(match.away_ext) } : {}),
       home_score: match.home_score,
       away_score: match.away_score,
       status: match.status,
