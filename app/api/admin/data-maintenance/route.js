@@ -1,4 +1,5 @@
 import { getAdmin } from "@/lib/supabaseAdmin";
+import { selectAllPages } from "@/modules/football/sync";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -29,25 +30,31 @@ async function countByMatchIds(db, table, matchIds, extra = null) {
 const isBelgianSelection = (team) => /^(belgium|belgique)(\s|$)/i.test(team?.name || "") || /^(belgium|belgique)$/i.test(team?.ext?.country || team?.ext?.team?.country || "");
 
 async function auditProviderDuplicates(db) {
-  const [competitionResult, seasonResult, matchResult, nationalTeamResult] = await Promise.all([
-    db.from("competitions").select("id,name,slug,provider,external_id,public_visible,competition_scope").not("provider", "is", null),
-    db.from("seasons").select("id,label,competition_id,import_status,public_active"),
-    db.from("matches").select("id,competition_id").range(0, 9999),
-    db.from("clubs").select("id,name,external_id,national_category,national_gender,national_followed,ext").eq("team_type", "national"),
+  // Lectures complètes page par page : une requête unique est plafonnée par Supabase
+  // (1 000 lignes) et faussait les volumes sur lesquels l'admin décide d'une fusion.
+  const [competitions, seasons, nationalTeams] = await Promise.all([
+    selectAllPages(() => db.from("competitions").select("id,name,slug,provider,external_id,public_visible,competition_scope").not("provider", "is", null).order("id")),
+    selectAllPages(() => db.from("seasons").select("id,label,competition_id,import_status,public_active").order("id")),
+    selectAllPages(() => db.from("clubs").select("id,name,external_id,national_category,national_gender,national_followed,ext").eq("team_type", "national").order("id")),
   ]);
-  const error = competitionResult.error || seasonResult.error || matchResult.error || nationalTeamResult.error;
-  if (error) throw error;
-  const seasonsByCompetition = (seasonResult.data || []).reduce((map, season) => {
+  const seasonsByCompetition = seasons.reduce((map, season) => {
     const rows = map.get(season.competition_id) || []; rows.push(season); map.set(season.competition_id, rows); return map;
   }, new Map());
-  const matchesByCompetition = (matchResult.data || []).reduce((map, match) => map.set(match.competition_id, (map.get(match.competition_id) || 0) + 1), new Map());
   const groups = new Map();
-  for (const competition of competitionResult.data || []) {
+  for (const competition of competitions) {
     if (!competition.external_id) continue;
     const key = `${competition.provider}:${competition.external_id}`;
     const rows = groups.get(key) || []; rows.push(competition); groups.set(key, rows);
   }
-  const duplicates = [...groups.entries()].filter(([, rows]) => rows.length > 1).map(([key, rows]) => ({
+  const duplicateGroups = [...groups.entries()].filter(([, rows]) => rows.length > 1);
+  // Comptage exact côté base, seulement pour les compétitions en doublon.
+  const matchesByCompetition = new Map();
+  for (const competition of duplicateGroups.flatMap(([, rows]) => rows)) {
+    const { count, error } = await db.from("matches").select("id", { count: "exact", head: true }).eq("competition_id", competition.id);
+    if (error) throw error;
+    matchesByCompetition.set(competition.id, count || 0);
+  }
+  const duplicates = duplicateGroups.map(([key, rows]) => ({
     key,
     provider: rows[0].provider,
     externalId: rows[0].external_id,
@@ -59,7 +66,7 @@ async function auditProviderDuplicates(db) {
   }));
   return {
     duplicates,
-    belgianSelections: (nationalTeamResult.data || []).filter(isBelgianSelection).map((team) => ({
+    belgianSelections: nationalTeams.filter(isBelgianSelection).map((team) => ({
       id: team.id, name: team.name, externalId: team.external_id, category: team.national_category || "à préciser", gender: team.national_gender || "men", followed: !!team.national_followed,
     })).sort((a, b) => ({ senior: 0, u21: 1, women: 2 }[a.category] ?? 9) - ({ senior: 0, u21: 1, women: 2 }[b.category] ?? 9)),
   };

@@ -1,5 +1,5 @@
 import { getProvider } from "./providers";
-import { upsertExternal } from "./sync";
+import { idMapByExternalIds, upsertExternal } from "./sync";
 import { ensureSeason, seasonLabel, seasonYear } from "./season";
 
 function parseRound(raw) {
@@ -13,21 +13,23 @@ function parseRound(raw) {
   return { round_raw: str, phase: str, round_number: null };  // coupe / phase sans numéro
 }
 
-async function clubMap(db, source) {
-  const { data, error } = await db.from("clubs").select("id,external_id").eq("source", source);
-  if (error) throw error;
-  return Object.fromEntries((data || []).map((c) => [c.external_id, c.id]));
+// Correspondance external_id -> id limitée aux équipes réellement référencées :
+// jamais la table entière, tronquée au-delà du plafond Supabase (cause des « — »).
+function teamExternalIds(matches) {
+  return (matches || []).flatMap((match) => [match.home_ext, match.away_ext]);
 }
 
 // Réparation référentielle (sans appel API) : re-relie les matchs d'une saison dont le
 // club est resté null (ex. créés par le live avant que le club existe) mais dont l'ID
 // d'équipe stocké dans ext est désormais résolvable. Auto-limité : 0 ligne une fois sain.
-async function relinkNullClubMatches(db, competition, seasonId, map) {
+async function relinkNullClubMatches(db, competition, seasonId) {
   const { data: broken, error } = await db.from("matches")
     .select("id,home_club_id,away_club_id,ext")
     .eq("competition_id", competition.id).eq("season_id", seasonId)
     .or("home_club_id.is.null,away_club_id.is.null");
   if (error) throw error;
+  if (!broken?.length) return 0;
+  const map = await idMapByExternalIds(db, "clubs", competition.provider, teamExternalIds((broken || []).map((m) => m.ext || {})));
   let fixed = 0;
   for (const m of broken || []) {
     const patch = {};
@@ -162,7 +164,7 @@ export async function syncCompetition(db, competition, ctx = {}) {
     // Un match live peut référencer une équipe pas encore importée (sync complète pas
     // faite) : sans création, home/away_club_id reste null et le nom s'affiche « — ».
     // On crée UNIQUEMENT les clubs manquants, sans écraser le nom/logo des existants.
-    const existingMap = await clubMap(db, competition.provider);
+    const existingMap = await idMapByExternalIds(db, "clubs", competition.provider, teamExternalIds(live));
     const missingClubs = [];
     const seenMissing = new Set();
     for (const m of live) {
@@ -171,12 +173,12 @@ export async function syncCompetition(db, competition, ctx = {}) {
       }
     }
     if (missingClubs.length) await upsertExternal(db, "clubs", competition.provider, missingClubs, ["name"]);
-    const map = missingClubs.length ? await clubMap(db, competition.provider) : existingMap;
+    const map = missingClubs.length ? await idMapByExternalIds(db, "clubs", competition.provider, teamExternalIds(live)) : existingMap;
     const resolved = resolveMatches(live, competition.id, season.id, map);
     const n = await upsertExternal(db, "matches", competition.provider, resolved,
       ["competition_id", "season_id", "home_club_id", "away_club_id", "home_score", "away_score", "status", "minute", "kickoff", "matchday", "round_raw", "phase", "round_number"]);
     // Re-relie au passage les matchs passés restés sans club (le live ne refetch que le jour).
-    await relinkNullClubMatches(db, competition, season.id, map);
+    await relinkNullClubMatches(db, competition, season.id);
     const liveCount = resolved.filter((match) => match.status === "live").length;
 
     // Finalisation : un match peut rester "live" en base si le cron a manqué le coup
@@ -227,12 +229,12 @@ export async function syncCompetition(db, competition, ctx = {}) {
     }
   }
   await linkKnownReserveTeams(db);
-  const map = await clubMap(db, competition.provider);
+  const map = await idMapByExternalIds(db, "clubs", competition.provider, [...seasonClubExternalIds]);
   const matchN = await upsertExternal(db, "matches", competition.provider, resolveMatches(matches, competition.id, season.id, map),
     ["competition_id", "season_id", "home_club_id", "away_club_id", "home_score", "away_score", "status", "minute", "kickoff", "matchday", "round_raw", "phase", "round_number"]);
   // Filet de sécurité : re-relie les matchs de la saison restés sans club mais désormais
   // résolvables (créés par un live antérieur, ou hors fenêtre de fetchMatches).
-  await relinkNullClubMatches(db, competition, season.id, map);
+  await relinkNullClubMatches(db, competition, season.id);
 
   let leagueName = competition.name;
   let finalExt = {

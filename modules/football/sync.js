@@ -14,6 +14,43 @@ async function mapWithConcurrency(items, limit, worker) {
   await Promise.all(workers);
 }
 
+// Supabase (PostgREST) plafonne chaque réponse (« Max rows », 1 000 par défaut)
+// SANS signaler d'erreur. Charger « toute la table » pour construire une
+// correspondance external_id -> id perd donc silencieusement des lignes dès que
+// la table grandit. On ne lit que les identifiants demandés, par paquets dont la
+// taille reste toujours sous ce plafond (une ligne au plus par external_id).
+export async function loadByExternalIds(db, table, source, externalIds, columns = "id,external_id") {
+  const ids = [...new Set((externalIds || []).filter((value) => value !== null && value !== undefined && value !== "").map(String))];
+  const byExternalId = new Map();
+  for (const batch of chunks(ids, 100)) {
+    const { data, error } = await db.from(table).select(columns).eq("source", source).in("external_id", batch);
+    if (error) throw new Error(`${table}: ${error.message}`);
+    for (const row of data || []) byExternalId.set(String(row.external_id), row);
+  }
+  return byExternalId;
+}
+
+// Variante { external_id: id } pour les appelants qui indexent un objet simple.
+export async function idMapByExternalIds(db, table, source, externalIds) {
+  const rows = await loadByExternalIds(db, table, source, externalIds);
+  return Object.fromEntries([...rows.entries()].map(([externalId, row]) => [externalId, row.id]));
+}
+
+// Lit TOUTES les lignes d'une requête, page par page. `buildQuery` doit renvoyer
+// une requête neuve et triée de façon stable. On avance du nombre de lignes
+// réellement reçues et on s'arrête sur une page vide : le résultat reste complet
+// même si le plafond serveur est inférieur à la taille de page demandée.
+export async function selectAllPages(buildQuery, pageSize = 1000) {
+  const rows = [];
+  for (let from = 0; ; ) {
+    const { data, error } = await buildQuery().range(from, from + pageSize - 1);
+    if (error) throw error;
+    if (!data?.length) return rows;
+    rows.push(...data);
+    from += data.length;
+  }
+}
+
 export async function upsertExternal(db, table, source, rows, ownedFields = []) {
   const now = new Date().toISOString();
   const uniqueRows = [...new Map((rows || []).filter((row) => row.external_id).map((row) => [String(row.external_id), row])).values()];

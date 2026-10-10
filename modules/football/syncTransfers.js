@@ -1,6 +1,7 @@
 import { getProvider } from "./providers";
 import { upsertPlayerMembership } from "./playerMemberships";
 import { loadCompetitionSeasonClubIds } from "./seasonClubs";
+import { loadByExternalIds } from "./sync";
 
 const seasonStart = (value) => Number((String(value || "").match(/\d{4}/) || [0])[0]);
 const transferSeason = (date) => {
@@ -28,13 +29,6 @@ export async function syncTransfers(db, competition, ctx = {}) {
   if (clubsError) throw clubsError;
   if (!clubs?.length) return `${competition.name}: aucun club`;
 
-  const { data: knownClubs, error: knownClubsError } = await db.from("clubs")
-    .select("id,name,external_id,team_type,parent_club_id")
-    .eq("source", competition.provider)
-    .not("external_id", "is", null);
-  if (knownClubsError) throw knownClubsError;
-  const clubByExternalId = new Map((knownClubs || []).map((club) => [String(club.external_id), club]));
-
   const startClubIndex = Math.max(0, Number(ctx.startClubIndex) || 0);
   // L'endpoint /transfers peut répondre lentement. Trois clubs successifs
   // suffisaient à dépasser les 60 s de Vercel Hobby et annulaient le job sans
@@ -50,6 +44,12 @@ export async function syncTransfers(db, competition, ctx = {}) {
     const transfers = (await provider.fetchTeamTransfers(clubs[clubIndex], ctx))
       .filter((transfer) => transferSeason(transfer.transfer_date) === season)
       .sort((a, b) => String(a.transfer_date || "").localeCompare(String(b.transfer_date || "")));
+    // Clubs de départ/arrivée résolus pour CES transferts uniquement : une lecture de
+    // tous les clubs était tronquée au-delà du plafond Supabase, et un club pourtant
+    // connu passait alors pour inconnu (joueur détaché de son nouveau club).
+    const clubByExternalId = await loadByExternalIds(db, "clubs", competition.provider,
+      transfers.flatMap((transfer) => [transfer.from_club_external_id, transfer.to_club_external_id]),
+      "id,name,external_id,team_type,parent_club_id");
     const playerExternalIds = [...new Set(transfers.map((transfer) => transfer.player_external_id))];
     const { data: existingPlayers, error: playersError } = playerExternalIds.length
       ? await db.from("players").select("id,external_id,locked,club_id").eq("source", competition.provider).in("external_id", playerExternalIds)
