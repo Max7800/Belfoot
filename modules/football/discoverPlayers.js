@@ -1,6 +1,7 @@
 import { getProvider } from "./providers";
 import { clearUnassignedPlayerStats, upsertPlayerMembership } from "./playerMemberships";
 import { seasonYear } from "./season";
+import { providerIdentityPatch } from "@/lib/playerIdentity";
 
 export async function discoverBelgians(db, competition, ctx = {}) {
   const provider = getProvider(competition.provider);
@@ -35,7 +36,10 @@ export async function discoverBelgians(db, competition, ctx = {}) {
       const { data: existing, error: existingError } = await db.from("players").select("id,locked,club_id,nationality,ext").eq("source", competition.provider).eq("external_id", p.external_id).maybeSingle();
       if (existingError) throw existingError;
       const primaryClub = !["reserve", "u23", "youth", "women"].includes(club.team_type);
-      const patch = { source: competition.provider, external_id: p.external_id, name: p.name, nationality: existing?.ext?.editorial_nationality ? existing.nationality : p.nationality, position: p.position, photo_url: p.photo_url, club_id: primaryClub || !existing?.club_id ? club.id : existing.club_id, country: competition.ext?.country || null, competition: competition.name, synced_at: new Date().toISOString() };
+      // Même règle que les effectifs : une double nationalité ou une valeur fixée
+      // dans l'administration n'est jamais réduite à la seule nationalité de l'API.
+      const identity = providerIdentityPatch(existing, { nationality: p.nationality, birth_date: p.birth_date });
+      const patch = { source: competition.provider, external_id: p.external_id, name: p.name, ...identity, position: p.position, photo_url: p.photo_url, club_id: primaryClub || !existing?.club_id ? club.id : existing.club_id, country: competition.ext?.country || null, competition: competition.name, synced_at: new Date().toISOString() };
       let playerId = existing?.id;
       if (existing && !existing.locked) {
         const { error } = await db.from("players").update(patch).eq("id", existing.id);

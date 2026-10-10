@@ -85,7 +85,7 @@ export default function PlayerPage() {
   const [state, setState] = useState({ player: undefined, club: null, nationalTeam: null, currentClubId: null, memberships: [], stats: [], performances: [], matches: [], competitions: {}, clubs: {}, error: "" });
   const [refreshKey, setRefreshKey] = useState(0);
   const [editing, setEditing] = useState(false);
-  const [editor, setEditor] = useState({ primaryNationality: "", secondNationality: "", nationalTeamId: "" });
+  const [editor, setEditor] = useState({ primaryNationality: "", secondNationality: "", nationalTeamId: "", birthDate: "", binationalWatch: false });
   const [nationalTeams, setNationalTeams] = useState([]);
   const [adminStatus, setAdminStatus] = useState("");
   const [adminBusy, setAdminBusy] = useState(false);
@@ -200,7 +200,13 @@ export default function PlayerPage() {
 
   const openEditor = async () => {
     const values = String(state.player?.nationality || "").split(/[,;/|]/).map((value) => value.trim()).filter(Boolean);
-    setEditor({ primaryNationality: values[0] || "", secondNationality: values[1] || "", nationalTeamId: state.player?.national_team_id || "" });
+    setEditor({
+      primaryNationality: values[0] || "",
+      secondNationality: values.slice(1).join(", "),
+      nationalTeamId: state.player?.national_team_id || "",
+      birthDate: String(state.player?.birth_date || "").slice(0, 10),
+      binationalWatch: state.player?.ext?.binational_watch === true,
+    });
     setAdminStatus(""); setEditing(true);
     if (!nationalTeams.length) {
       const { data } = await supabase.from("clubs").select("id,name,logo_url,national_category").eq("team_type", "national").order("name");
@@ -216,7 +222,11 @@ export default function PlayerPage() {
   const saveEditorialIdentity = async () => {
     setAdminBusy(true); setAdminStatus("");
     const nationality = [editor.primaryNationality.trim(), editor.secondNationality.trim()].filter(Boolean).join(", ");
-    const ext = { ...(state.player?.ext || {}), editorial_nationality: true };
+    const birthDate = editor.birthDate.trim();
+    if (birthDate && !/^\d{4}-\d{2}-\d{2}$/.test(birthDate)) { setAdminBusy(false); setAdminStatus("Erreur : date de naissance attendue au format AAAA-MM-JJ."); return; }
+    // Marqueurs éditoriaux : les synchronisations ne remplacent plus ces valeurs.
+    // Vider la date rend sa mise à jour au provider (la valeur connue est gardée).
+    const ext = { ...(state.player?.ext || {}), editorial_nationality: true, editorial_birth_date: Boolean(birthDate), binational_watch: editor.binationalWatch };
     let nationalTeamId = editor.nationalTeamId || null;
     if (nationalTeamId?.startsWith("catalog:")) {
       const code = nationalTeamId.slice("catalog:".length);
@@ -245,6 +255,10 @@ export default function PlayerPage() {
       nationality: nationality || null,
       national_team_id: nationalTeamId,
       national_team_locked: true,
+      ...(birthDate ? { birth_date: birthDate } : {}),
+      // Un binational classé « à suivre » entre dans le suivi Belfoot ; décocher
+      // ne retire pas le suivi (choix séparé, modifiable dans Joueurs).
+      ...(editor.binationalWatch ? { tracked: true } : {}),
       ext,
     }).eq("id", id);
     setAdminBusy(false);
@@ -300,7 +314,7 @@ export default function PlayerPage() {
 
       {isAdmin && <section className="mt-4 rounded-2xl border border-amber-300/20 bg-amber-300/[0.05] p-4">
         <div className="flex flex-wrap items-center gap-2"><div className="mr-auto"><div className="text-[10px] font-black uppercase tracking-[.18em] text-amber-200">Outils administrateur</div><p className="mt-1 text-xs text-muted">Corrige l’identité sportive ou actualise uniquement l’histoire de ce joueur.</p></div><button type="button" onClick={openEditor} disabled={adminBusy} className="inline-flex items-center gap-2 rounded-xl border border-line/15 bg-surface px-3 py-2 text-xs font-bold disabled:opacity-50"><Pencil className="h-3.5 w-3.5" />Modifier la fiche</button><button type="button" onClick={refreshCareer} disabled={adminBusy || !view.primaryCompetitionId} className="inline-flex items-center gap-2 rounded-xl border border-amber-300/25 bg-amber-300/10 px-3 py-2 text-xs font-bold text-amber-100 disabled:opacity-50"><RefreshCw className={`h-3.5 w-3.5 ${adminBusy ? "animate-spin" : ""}`} />Carrière + stats</button></div>
-        {editing && <div className="mt-4 grid gap-3 border-t border-line/10 pt-4 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1.4fr_auto]"><label className="text-[10px] font-bold uppercase tracking-wider text-muted">Nationalité principale<input value={editor.primaryNationality} onChange={(event) => setEditor((current) => ({ ...current, primaryNationality: event.target.value }))} placeholder="Belgique" className="mt-1 block w-full rounded-lg border border-line/10 bg-surface2 px-3 py-2 text-sm normal-case tracking-normal text-content" /></label><label className="text-[10px] font-bold uppercase tracking-wider text-muted">Deuxième nationalité<input value={editor.secondNationality} onChange={(event) => setEditor((current) => ({ ...current, secondNationality: event.target.value }))} placeholder="Maroc, RD Congo, Grèce…" className="mt-1 block w-full rounded-lg border border-line/10 bg-surface2 px-3 py-2 text-sm normal-case tracking-normal text-content" /></label><label className="text-[10px] font-bold uppercase tracking-wider text-muted">Sélection représentée<select value={editor.nationalTeamId} onChange={(event) => setEditor((current) => ({ ...current, nationalTeamId: event.target.value }))} className="mt-1 block w-full rounded-lg border border-line/10 bg-surface2 px-3 py-2 text-sm normal-case tracking-normal text-content"><option value="">Aucune / à préciser</option>{nationalTeams.map((team) => <option key={team.id} value={team.value || team.id}>{team.flag || "🌍"} {team.name}{team.stored && team.national_category ? ` · ${team.national_category}` : ""}</option>)}</select></label><div className="flex items-end gap-2"><button type="button" onClick={saveEditorialIdentity} disabled={adminBusy || !editor.primaryNationality.trim()} className="inline-flex h-10 items-center gap-2 rounded-lg bg-accent px-3 text-xs font-bold text-white disabled:opacity-50"><Save className="h-3.5 w-3.5" />Enregistrer</button><button type="button" onClick={() => setEditing(false)} disabled={adminBusy} className="inline-flex h-10 items-center rounded-lg border border-line/10 px-3 text-muted"><X className="h-4 w-4" /></button></div></div>}
+        {editing && <div className="mt-4 grid gap-3 border-t border-line/10 pt-4 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1.4fr_auto] xl:grid-cols-[1fr_1fr_1.3fr_0.9fr_auto_auto]"><label className="text-[10px] font-bold uppercase tracking-wider text-muted">Nationalité principale<input value={editor.primaryNationality} onChange={(event) => setEditor((current) => ({ ...current, primaryNationality: event.target.value }))} placeholder="Belgique" className="mt-1 block w-full rounded-lg border border-line/10 bg-surface2 px-3 py-2 text-sm normal-case tracking-normal text-content" /></label><label className="text-[10px] font-bold uppercase tracking-wider text-muted">Deuxième nationalité<input value={editor.secondNationality} onChange={(event) => setEditor((current) => ({ ...current, secondNationality: event.target.value }))} placeholder="Maroc, RD Congo, Grèce…" className="mt-1 block w-full rounded-lg border border-line/10 bg-surface2 px-3 py-2 text-sm normal-case tracking-normal text-content" /></label><label className="text-[10px] font-bold uppercase tracking-wider text-muted">Sélection représentée<select value={editor.nationalTeamId} onChange={(event) => setEditor((current) => ({ ...current, nationalTeamId: event.target.value }))} className="mt-1 block w-full rounded-lg border border-line/10 bg-surface2 px-3 py-2 text-sm normal-case tracking-normal text-content"><option value="">Aucune / à préciser</option>{nationalTeams.map((team) => <option key={team.id} value={team.value || team.id}>{team.flag || "🌍"} {team.name}{team.stored && team.national_category ? ` · ${team.national_category}` : ""}</option>)}</select></label><label className="text-[10px] font-bold uppercase tracking-wider text-muted">Date de naissance<input type="date" value={editor.birthDate} onChange={(event) => setEditor((current) => ({ ...current, birthDate: event.target.value }))} className="mt-1 block w-full rounded-lg border border-line/10 bg-surface2 px-3 py-2 text-sm normal-case tracking-normal text-content" /></label><label className="flex items-center gap-2 self-end pb-2 text-xs font-bold text-content"><input type="checkbox" checked={editor.binationalWatch} onChange={(event) => setEditor((current) => ({ ...current, binationalWatch: event.target.checked }))} className="h-4 w-4 accent-[rgb(var(--accent))]" />Belge binational à suivre</label><div className="flex items-end gap-2"><button type="button" onClick={saveEditorialIdentity} disabled={adminBusy || !editor.primaryNationality.trim()} className="inline-flex h-10 items-center gap-2 rounded-lg bg-accent px-3 text-xs font-bold text-white disabled:opacity-50"><Save className="h-3.5 w-3.5" />Enregistrer</button><button type="button" onClick={() => setEditing(false)} disabled={adminBusy} className="inline-flex h-10 items-center rounded-lg border border-line/10 px-3 text-muted"><X className="h-4 w-4" /></button></div></div>}
         {adminStatus && <p className={`mt-3 rounded-lg border px-3 py-2 text-xs ${adminStatus.startsWith("Erreur") ? "border-red-400/25 bg-red-500/10 text-red-200" : "border-emerald-400/20 bg-emerald-500/10 text-emerald-200"}`}>{adminStatus}</p>}
       </section>}
 

@@ -25,6 +25,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { sortPublicSeasons } from "@/lib/publicSeasons";
 import { PUBLIC_MATCH_FIELDS, PUBLIC_PLAYER_FIELDS, loadPlayerStatsForPlayers } from "@/lib/publicFootballData";
 import { preferAssignedPlayerStats } from "@/lib/playerStats";
+import { isBelgianFollowed } from "@/lib/playerIdentity";
 import { isNationsLeagueCompetition, nationsLeagueGroups } from "@/lib/nationsLeague";
 
 const normal = (value) => String(value || "").trim().toLocaleLowerCase("fr");
@@ -91,7 +92,7 @@ export default function Home() {
       supabase.from("matches").select(PUBLIC_MATCH_FIELDS).order("kickoff", { ascending: false }).limit(250),
       supabase.from("competitions").select("*"),
       supabase.from("seasons").select("*"),
-      supabase.from("players").select(PUBLIC_PLAYER_FIELDS).eq("tracked", true).eq("active", true),
+      supabase.from("players").select(`${PUBLIC_PLAYER_FIELDS},binational_watch:ext->binational_watch`).eq("tracked", true).eq("active", true),
       supabase.from("entries").select("id,slug,title,excerpt,category,cover_url,published_at").eq("collection", "news").eq("published", true).is("deleted_at", null).order("published_at", { ascending: false, nullsFirst: false }).limit(9),
       supabase.from("votw_sessions").select("id,matchday,season_label,formation,status,closes_at").order("created_at", { ascending: false }).limit(5),
       supabase.from("forum_topics").select("id,title,author_name,last_activity").order("last_activity", { ascending: false }).limit(4),
@@ -147,7 +148,7 @@ export default function Home() {
     const statMap = {};
     for (const row of data.stats) (statMap[row.player_id] ||= []).push(row);
 
-    const players = data.players.filter((player) => isBelgian(player.nationality)).map((player) => {
+    const players = data.players.filter(isBelgianFollowed).map((player) => {
       const rows = statMap[player.id] || [];
       const statsCompetition = rows.map((row) => competitionMap[row.competition_id]).find(Boolean);
       const club = data.clubs[player.club_id];

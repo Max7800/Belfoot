@@ -46,6 +46,7 @@ export function createFakeSupabase(seed = {}, { maxRows = 1000, rpc = {} } = {})
       },
       insert(payload) { state.op = "insert"; state.payload = payload; return builder; },
       update(payload) { state.op = "update"; state.payload = payload; return builder; },
+      delete() { state.op = "delete"; return builder; },
       upsert(payload, options = {}) { state.op = "upsert"; state.payload = payload; state.options = options; return builder; },
       eq(column, value) { state.filters.push((row) => row[column] === value); return builder; },
       neq(column, value) { state.filters.push((row) => row[column] !== value); return builder; },
@@ -110,6 +111,9 @@ export function createFakeSupabase(seed = {}, { maxRows = 1000, rpc = {} } = {})
       } else if (state.op === "update") {
         rows = table(name).filter(matches);
         for (const row of rows) Object.assign(row, state.payload);
+      } else if (state.op === "delete") {
+        rows = table(name).filter(matches);
+        tables[name] = table(name).filter((row) => !matches(row));
       } else if (state.op === "upsert") {
         const keys = String(state.options.onConflict || "id").split(",").map((key) => key.trim());
         const payloads = Array.isArray(state.payload) ? state.payload : [state.payload];
