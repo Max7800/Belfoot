@@ -2,6 +2,7 @@ import { getProvider } from "./providers";
 import { upsertPlayerMembership } from "./playerMemberships";
 import { loadCompetitionSeasonClubIds } from "./seasonClubs";
 import { loadByExternalIds } from "./sync";
+import { isCurrentSeason } from "@/lib/playerSnapshot";
 
 const seasonStart = (value) => Number((String(value || "").match(/\d{4}/) || [0])[0]);
 const transferSeason = (date) => {
@@ -15,6 +16,7 @@ export async function syncTransfers(db, competition, ctx = {}) {
   if (!provider?.fetchTeamTransfers) return `${competition.name}: transferts non supportés`;
   const season = seasonStart(ctx.season || competition.ext?.season);
   if (!season) throw new Error("Saison invalide pour les transferts");
+  const currentSeason = isCurrentSeason(season);
 
   const { data: seasonRow } = await db.from("seasons").select("id").eq("competition_id", competition.id).ilike("label", `${season}%`).maybeSingle();
   let matchesQuery = db.from("matches").select("home_club_id,away_club_id").eq("competition_id", competition.id);
@@ -132,10 +134,14 @@ export async function syncTransfers(db, competition, ctx = {}) {
           ext: { transfer_type: transfer.transfer_type },
           syncedAt: now,
         });
-        const { error } = await db.from("players").update({ club_id: toClub.id, active: true, synced_at: now }).eq("id", player.id).eq("locked", false);
-        if (error) throw error;
+        // Le « club actuel » n'est déplacé que par un mouvement de la saison en
+        // cours : un mercato d'archive ne réécrit que l'historique (affectations).
+        if (currentSeason) {
+          const { error } = await db.from("players").update({ club_id: toClub.id, active: true, synced_at: now }).eq("id", player.id).eq("locked", false);
+          if (error) throw error;
+        }
         rosterChanges++;
-      } else if (fromClub && player.club_id === fromClub.id) {
+      } else if (currentSeason && fromClub && player.club_id === fromClub.id) {
         const { error } = await db.from("players").update({ club_id: null, synced_at: now }).eq("id", player.id).eq("locked", false);
         if (error) throw error;
       }

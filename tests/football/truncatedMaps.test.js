@@ -13,8 +13,12 @@ let provider = {};
 const register = (methods) => { provider = { key: PROVIDER, ...methods }; registerProvider(provider); };
 
 const COMPETITION = { id: "comp-1", name: "Pro League", provider: PROVIDER, external_id: "144", ext: {} };
-const SEASON = { id: "season-2026", competition_id: "comp-1", label: "2026-2027" };
-const CTX = { season: "2026-2027" };
+// Saison courante (bascule au 1er juillet) : le mercato ne déplace le « club
+// actuel » que pour la saison en cours, le test doit rester valable dans le temps.
+const NOW = new Date();
+const YEAR = NOW.getUTCMonth() >= 6 ? NOW.getUTCFullYear() : NOW.getUTCFullYear() - 1;
+const SEASON = { id: "season-2026", competition_id: "comp-1", label: `${YEAR}-${YEAR + 1}` };
+const CTX = { season: SEASON.label };
 
 const fixture = (id, home, away, extra = {}) => ({
   external_id: String(id), home_ext: String(home), away_ext: String(away), home_name: `Club ${home}`, away_name: `Club ${away}`,
@@ -123,7 +127,7 @@ describe("syncTransfers au-delà de 1 000 clubs", () => {
     register({
       async fetchTeamTransfers(club) {
         if (club.external_id !== "1") return [];
-        return [{ player_external_id: "1", player_name: "Joueur 1", transfer_date: "2026-07-15", transfer_type: "€ 5M", from_club_external_id: "1", from_club_name: "Club 1", to_club_external_id: "1100", to_club_name: "Club 1100", ext: {} }];
+        return [{ player_external_id: "1", player_name: "Joueur 1", transfer_date: `${YEAR}-07-15`, transfer_type: "€ 5M", from_club_external_id: "1", from_club_name: "Club 1", to_club_external_id: "1100", to_club_name: "Club 1100", ext: {} }];
       },
     });
     const db = createFakeSupabase({
@@ -131,13 +135,13 @@ describe("syncTransfers au-delà de 1 000 clubs", () => {
       players: [{ id: "p-1", source: PROVIDER, external_id: "1", name: "Joueur 1", club_id: clubId(1), locked: false }],
       seasons: [{ ...SEASON }],
       matches: [{ id: "m-1", source: PROVIDER, external_id: "9001", competition_id: "comp-1", season_id: "season-2026", home_club_id: clubId(1), away_club_id: clubId(2) }],
-      player_team_seasons: [{ id: "pts-old", player_id: "p-1", club_id: clubId(1), season: "2026", season_start_year: 2026, active: true, locked: false, joined_at: null }],
+      player_team_seasons: [{ id: "pts-old", player_id: "p-1", club_id: clubId(1), season: String(YEAR), season_start_year: YEAR, active: true, locked: false, joined_at: null }],
     });
     await syncTransfers(db, { ...COMPETITION }, CTX);
 
     expect(db.rows("players").find((row) => row.id === "p-1").club_id).toBe(clubId(1100));
     expect(db.rows("player_transfers")[0]).toMatchObject({ from_club_id: clubId(1), to_club_id: clubId(1100), player_id: "p-1" });
-    expect(db.rows("player_team_seasons").find((row) => row.id === "pts-old")).toMatchObject({ active: false, left_at: "2026-07-15" });
+    expect(db.rows("player_team_seasons").find((row) => row.id === "pts-old")).toMatchObject({ active: false, left_at: `${YEAR}-07-15` });
     expect(db.rows("player_team_seasons").find((row) => row.club_id === clubId(1100))).toMatchObject({ active: true, membership_type: "permanent" });
   });
 });

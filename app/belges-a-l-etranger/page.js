@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useBelgiansAbroadConfig } from "@/lib/belgiansAbroad";
 import { isNationalSelectionClub, nationalityBadges, ratingTone } from "@/lib/nationalities";
 import { belgianWatchStatus, isBelgianFollowed } from "@/lib/playerIdentity";
+import { clubNationalLeagues, resolvePlayerCountry, resolvePlayerLeague } from "@/lib/playerSnapshot";
 import { PUBLIC_MATCH_FIELDS, PUBLIC_MATCH_PLAYER_STATS_FIELDS, PUBLIC_PLAYER_FIELDS, loadMatchesByIds, loadPlayerStatsForPlayers } from "@/lib/publicFootballData";
 import { supabase } from "@/lib/supabaseClient";
 import dynamic from "next/dynamic";
@@ -122,17 +123,20 @@ export default function BelgiansAbroadPage() {
   })().catch((error) => setData((current) => ({ ...current, loading: false, error: error.message || String(error) }))); }, []);
 
   const view = useMemo(() => {
+    // Championnat national connu de chaque club, d'après toutes les lignes chargées.
+    const clubLeagues = clubNationalLeagues(Object.values(data.stats).flat(), data.competitions);
     const enriched = data.players.map((player) => {
       const club = data.clubs[player.club_id];
       // La fiche étrangère reste un bilan de club : les lignes de sélection
       // appartiennent au parcours international de la fiche joueur.
       const playerStats = (data.stats[player.id] || []).filter((row) => !isNationalSelectionClub(data.clubs[row.club_id], player.nationality));
-      const statsCompetition = playerStats.map((row) => data.competitions[row.competition_id]).find((item) => item?.ext?.country);
       const domesticBelgianClub = playerStats.some((row) => row.club_id === player.club_id && isBelgian(data.competitions[row.competition_id]?.ext?.country));
-      const clubCountry = club?.ext?.country || club?.ext?.team?.country || "";
-      const resolvedCountry = clubCountry || player.country || statsCompetition?.ext?.country || "À renseigner";
-      const resolvedCompetition = player.competition || statsCompetition?.name || "Championnat à renseigner";
-      return { player, club, nationalTeam: data.clubs[player.national_team_id], watch: belgianWatchStatus(player, data.clubs[player.national_team_id]), country: resolvedCountry, competition: resolvedCompetition, competitionData: statsCompetition, totals: latestTotals(playerStats), domesticBelgianClub };
+      // Championnat et pays : statistiques du club actuel, puis championnat du club,
+      // puis instantané s'il est valide — jamais « World » ni une coupe d'Europe.
+      const league = resolvePlayerLeague({ player, statRows: playerStats, competitionsById: data.competitions, clubLeagues });
+      const resolvedCountry = resolvePlayerCountry({ player, club, league: league.competition }) || "À renseigner";
+      const resolvedCompetition = league.name || "Championnat à renseigner";
+      return { player, club, nationalTeam: data.clubs[player.national_team_id], watch: belgianWatchStatus(player, data.clubs[player.national_team_id]), country: resolvedCountry, competition: resolvedCompetition, competitionData: league.competition, totals: latestTotals(playerStats), domesticBelgianClub };
     }).filter((item) => item.club && item.club.team_type !== "national" && !item.domesticBelgianClub && !isBelgianClub(item.club) && !isBelgian(item.country));
 
     const playerMap = Object.fromEntries(enriched.map((item) => [item.player.id, item]));

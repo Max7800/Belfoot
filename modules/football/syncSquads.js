@@ -2,6 +2,7 @@ import { getProvider } from "./providers";
 import { clearUnassignedPlayerStats, upsertPlayerMembership } from "./playerMemberships";
 import { loadCompetitionSeasonClubIds } from "./seasonClubs";
 import { providerIdentityPatch } from "@/lib/playerIdentity";
+import { playerSnapshotPatch } from "@/lib/playerSnapshot";
 
 async function mapWithConcurrency(items, limit, worker) {
   const queue = [...items];
@@ -30,7 +31,7 @@ export async function syncSquads(db, competition, ctx = {}) {
   const matchClubIds = [...new Set((ms || []).flatMap((m) => [m.home_club_id, m.away_club_id]).filter(Boolean))];
   const clubIds = await loadCompetitionSeasonClubIds(db, competition, ctx.season, matchClubIds);
   if (!clubIds.length) return `${competition.name}: aucun club (fais d'abord l'import)`;
-  const { data: clubs, error: clubsError } = await db.from("clubs").select("id,name,external_id,team_type,parent_club_id").in("id", clubIds).order("id");
+  const { data: clubs, error: clubsError } = await db.from("clubs").select("id,name,external_id,team_type,parent_club_id,ext").in("id", clubIds).order("id");
   if (clubsError) throw clubsError;
 
   const nowDate = new Date();
@@ -67,7 +68,7 @@ export async function syncSquads(db, competition, ctx = {}) {
     })).values()];
     const externalIds = players.map((player) => player.external_id);
     const { data: existingRows, error: existingRowsError } = externalIds.length
-      ? await db.from("players").select("id,locked,club_id,external_id,nationality,ext").eq("source", competition.provider).in("external_id", externalIds)
+      ? await db.from("players").select("id,locked,club_id,external_id,nationality,country,competition,ext").eq("source", competition.provider).in("external_id", externalIds)
       : { data: [], error: null };
     if (existingRowsError) throw existingRowsError;
     const existingByExternalId = new Map((existingRows || []).map((player) => [String(player.external_id), player]));
@@ -97,7 +98,7 @@ export async function syncSquads(db, competition, ctx = {}) {
       // l'API (l'effectif actuel /players/squads n'en fournit pas), jamais remplacées
       // si elles ont été fixées dans l'administration.
       const identity = providerIdentityPatch(existing, { nationality: p.nationality, birth_date: p.birth_date });
-      const patch = { source: competition.provider, external_id: p.external_id, name: p.name, ...identity, position: p.position, photo_url: p.photo_url, age: p.age, club_id: primaryClub || !existing?.club_id ? club.id : existing.club_id, country: competition.ext?.country || null, competition: competition.name, synced_at: now };
+      const patch = { source: competition.provider, external_id: p.external_id, name: p.name, ...identity, position: p.position, photo_url: p.photo_url, age: p.age, ...playerSnapshotPatch({ existing, club, competition, season, primaryClub }), synced_at: now };
       let pid = existing?.id;
       if (existing && !existing.locked) {
         const { error } = await db.from("players").update(patch).eq("id", existing.id);

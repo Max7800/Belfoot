@@ -3,6 +3,7 @@ import { loadByExternalIds, upsertExternal } from "./sync";
 import { ensureSeason, seasonLabel, seasonYear } from "./season";
 import { clearUnassignedPlayerStats, upsertPlayerMembership } from "./playerMemberships";
 import { providerIdentityPatch } from "@/lib/playerIdentity";
+import { playerSnapshotPatch } from "@/lib/playerSnapshot";
 
 function parseRound(raw) {
   if (!raw) return { round_raw: null, phase: null, round_number: null };
@@ -41,7 +42,7 @@ export async function syncTeamTest(db, competition, ctx = {}) {
   }
   await upsertExternal(db, "clubs", competition.provider, [...derivedClubs.values()], ["name", "logo_url"]);
   // Uniquement les clubs de ces matchs : une lecture de tous les clubs serait tronquée.
-  const clubRows = [...(await loadByExternalIds(db, "clubs", competition.provider, [String(teamExternalId), ...derivedClubs.keys()], "id,name,external_id,team_type,parent_club_id")).values()];
+  const clubRows = [...(await loadByExternalIds(db, "clubs", competition.provider, [String(teamExternalId), ...derivedClubs.keys()], "id,name,external_id,team_type,parent_club_id,ext")).values()];
   const clubMap = Object.fromEntries(clubRows.map((row) => [String(row.external_id), row.id]));
   const resolvedMatches = matches.map((match) => {
     const round = parseRound(match.round);
@@ -68,11 +69,14 @@ export async function syncTeamTest(db, competition, ctx = {}) {
   const teamClubId = clubMap[String(teamExternalId)];
   if (!teamClubId) throw new Error(`${club.name}: club importé mais identifiant local introuvable`);
   const teamClub = (clubRows || []).find((row) => row.id === teamClubId);
+  const snapshotCompetition = leagueInfo
+    ? { ...competition, name: leagueInfo.name || competition.name, ext: { ...(competition.ext || {}), country: leagueInfo.country, providerType: leagueInfo.type } }
+    : competition;
   const squad = await provider.fetchSquadPlayers({ external_id: teamExternalId }, { ...ctx, season, leagueId: competition.external_id });
   const belgians = squad.filter((player) => String(player.nationality || "").toLowerCase() === "belgium");
   const syncedAt = new Date().toISOString();
   for (const player of belgians) {
-    const { data: existing, error: existingError } = await db.from("players").select("id,locked,nationality,ext").eq("source", competition.provider).eq("external_id", player.external_id).maybeSingle();
+    const { data: existing, error: existingError } = await db.from("players").select("id,locked,club_id,nationality,country,competition,ext").eq("source", competition.provider).eq("external_id", player.external_id).maybeSingle();
     if (existingError) throw existingError;
     const patch = {
       source: competition.provider,
@@ -82,9 +86,9 @@ export async function syncTeamTest(db, competition, ctx = {}) {
       position: player.position,
       photo_url: player.photo_url,
       age: player.age,
-      club_id: teamClubId,
-      country: leagueInfo?.country || competition.ext?.country || "England",
-      competition: leagueInfo?.name || competition.name,
+      // Instantané « club actuel » : mêmes règles que les effectifs (championnat
+      // national de la saison courante seulement ; aucun pays inventé).
+      ...playerSnapshotPatch({ existing, club: teamClub || { id: teamClubId }, competition: snapshotCompetition, season, primaryClub: true }),
       tracked: true,
       active: true,
       synced_at: syncedAt,

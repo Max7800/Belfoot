@@ -22,7 +22,8 @@ jobs:
       - name: Installer Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # Vitest 5 exige Node ^22.12 (ou ^24) ; Next 16 accepte >=20.9.
+          node-version: 22
           cache: npm
       - name: Installer les dependances
         run: npm ci
@@ -35,5 +36,7 @@ jobs:
           fi
       - name: Lint
         run: npm run lint
+      - name: Tests automatises
+        run: npm test
       - name: Build de production
         run: npm run build
