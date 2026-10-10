@@ -36,8 +36,9 @@ export async function resolveNationalPlayerClubs(db, ctx = {}) {
     if (clubError || !club) throw clubError || new Error(`${info.club.name}: club local introuvable`);
     const { error: updateError } = await db.from("players").update({
       club_id: club.id,
-      country: info.country,
-      competition: info.competition,
+      // Pays/championnat seulement s'ils désignent le championnat national du club :
+      // jamais « World » ni le nom d'une coupe d'Europe.
+      ...(info.nationalLeague ? { country: info.country, competition: info.competition } : {}),
       position: player.position || info.position,
       tracked: true,
       synced_at: new Date().toISOString(),

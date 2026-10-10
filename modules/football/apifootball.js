@@ -268,11 +268,15 @@ const provider = {
     const best = [...grouped.entries()].sort((a, b) => b[1].appearances - a[1].appearances)[0];
     if (!best) return null;
     const [teamId, aggregate] = best;
-    const stat = aggregate.competitions.sort((a, b) => (Number(b.games?.appearences) || 0) - (Number(a.games?.appearences) || 0))[0];
+    // Le championnat national du club prime sur une coupe ou une compétition
+    // internationale (pays « World »), même si le joueur y compte plus de matchs.
+    const nationalLeague = (entry) => String(entry.league?.type || "").toLowerCase() === "league" && entry.league?.country && !/^world$/i.test(entry.league.country);
+    const stat = aggregate.competitions.sort((a, b) => Number(nationalLeague(b)) - Number(nationalLeague(a)) || (Number(b.games?.appearences) || 0) - (Number(a.games?.appearences) || 0))[0];
     return {
       club: { external_id: teamId, name: stat.team?.name || `Club ${teamId}`, logo_url: stat.team?.logo || null },
       country: stat.league?.country || null,
       competition: stat.league?.name || null,
+      nationalLeague: Boolean(nationalLeague(stat)),
       position: stat.games?.position || null,
     };
   },

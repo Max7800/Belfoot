@@ -2,6 +2,7 @@ import { getProvider } from "./providers";
 import { clearUnassignedPlayerStats, upsertPlayerMembership } from "./playerMemberships";
 import { seasonYear } from "./season";
 import { providerIdentityPatch } from "@/lib/playerIdentity";
+import { playerSnapshotPatch } from "@/lib/playerSnapshot";
 
 export async function discoverBelgians(db, competition, ctx = {}) {
   const provider = getProvider(competition.provider);
@@ -18,7 +19,7 @@ export async function discoverBelgians(db, competition, ctx = {}) {
   if (matchesError) throw matchesError;
   const clubIds = [...new Set((matches || []).flatMap((match) => [match.home_club_id, match.away_club_id]).filter(Boolean))];
   if (!clubIds.length) return `${competition.name}: aucun club (fais d'abord l'import)`;
-  const { data: clubs, error: clubsError } = await db.from("clubs").select("id,name,external_id,team_type,parent_club_id").in("id", clubIds).order("id");
+  const { data: clubs, error: clubsError } = await db.from("clubs").select("id,name,external_id,team_type,parent_club_id,ext").in("id", clubIds).order("id");
   if (clubsError) throw clubsError;
   // Un club par lot : l'endpoint squad est lent et dépassait les 60 s de Vercel
   // Hobby (job annulé sans checkpoint). Le pipeline reprend automatiquement au
@@ -33,13 +34,13 @@ export async function discoverBelgians(db, competition, ctx = {}) {
     const players = await provider.fetchSquadPlayers({ external_id: club.external_id }, { ...ctx, leagueId: competition.external_id });
     const belgians = players.filter((p) => (p.nationality || "").toLowerCase() === nationality.toLowerCase());
     for (const p of belgians) {
-      const { data: existing, error: existingError } = await db.from("players").select("id,locked,club_id,nationality,ext").eq("source", competition.provider).eq("external_id", p.external_id).maybeSingle();
+      const { data: existing, error: existingError } = await db.from("players").select("id,locked,club_id,nationality,country,competition,ext").eq("source", competition.provider).eq("external_id", p.external_id).maybeSingle();
       if (existingError) throw existingError;
       const primaryClub = !["reserve", "u23", "youth", "women"].includes(club.team_type);
       // Même règle que les effectifs : une double nationalité ou une valeur fixée
       // dans l'administration n'est jamais réduite à la seule nationalité de l'API.
       const identity = providerIdentityPatch(existing, { nationality: p.nationality, birth_date: p.birth_date });
-      const patch = { source: competition.provider, external_id: p.external_id, name: p.name, ...identity, position: p.position, photo_url: p.photo_url, club_id: primaryClub || !existing?.club_id ? club.id : existing.club_id, country: competition.ext?.country || null, competition: competition.name, synced_at: new Date().toISOString() };
+      const patch = { source: competition.provider, external_id: p.external_id, name: p.name, ...identity, position: p.position, photo_url: p.photo_url, ...playerSnapshotPatch({ existing, club, competition, season, primaryClub }), synced_at: new Date().toISOString() };
       let playerId = existing?.id;
       if (existing && !existing.locked) {
         const { error } = await db.from("players").update(patch).eq("id", existing.id);
