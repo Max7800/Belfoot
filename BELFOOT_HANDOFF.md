@@ -1,5 +1,16 @@
 # BELFOOT — Passation technique
 
+## Roadmap fiabilité des données — état au 10/10/2026 (Claude)
+
+Ordre validé avec l'utilisateur (audit du 10/10) : P0-2 → P0-1 → P0-4 → P0-7 → résolveur de saison exact → P0-3/P0-8 → saisons `importing`/pointeur `ext.season`.
+
+- **P0-2 — saison des matchs de sélection : FUSIONNÉ** (PR #1, `c5f9615`, production `Ready`). `syncNationalTeam` rattache chaque match à la saison `league.season` fournie par l'API (`nationalMatchSeasons.js`) au lieu de la saison imposée par le cron `national-refresh`. Saison absente/ambiguë : saison existante conservée, nouveau match inséré sans saison et signalé ; saison inhabituelle conservée et signalée ; matchs verrouillés ignorés et comptés à part. **Reste à vérifier en réel** : détail du prochain job « Synchroniser une sélection » (« saisons API : … ») et classement de groupe `/diables-rouges`. Seuls les 40+40 matchs récents par sélection sont réparés ; les saisons « 2026-2027 » parasites déjà créées restent (vides, non publiques).
+- **P0-1 — correspondances tronquées à 1 000 lignes : CORRIGÉ LOCALEMENT** (branche `fix/id-maps-pagination`, non poussée au moment de cette note). Supabase plafonne chaque réponse (« Max rows ») sans erreur : les correspondances `external_id → id` lues sur toute la table perdaient des clubs/joueurs (« — », `player_id` vides, joueur détaché de son club d'arrivée au mercato). Nouveaux utilitaires dans `modules/football/sync.js` : `loadByExternalIds`/`idMapByExternalIds` (lecture ciblée par paquets de 100) et `selectAllPages` (pagination complète, robuste à un plafond plus bas). Appliqués à `syncCompetition` (full + live + réparation des matchs sans club), `syncEvents`, `syncLineups` (+ liens `club_id`/`player_id` « collants » : jamais remis à `null`), `syncTransfers`, `syncTeamTest` et à l'audit des doublons de `/api/admin/data-maintenance` (comptage exact des matchs). Aucun SQL, aucun appel API.
+- **Non traité volontairement** : `linkKnownReserveTeams` lit encore tous les clubs (recherche par nom, effet limité au rattachement Club NXT/Jong Genk…).
+- **Tests** : `npm test` (Vitest) — le faux client `tests/helpers/fakeSupabase.js` reproduit le plafond de 1 000 lignes. La CI GitHub (`quality.yml`) n'exécute pas encore `npm test`.
+- **Preview Vercel** : échoue car `NEXT_PUBLIC_SUPABASE_URL`/`ANON_KEY` ne sont pas définies pour l'environnement Preview (1er déploiement Preview du projet ; reproduit localement). Sans lien avec le code. Ne pas connecter une Preview à la base de production sans accord.
+- **À documenter** : les ~40 commits du 1er au 7 octobre (crons `competition-refresh`/`national-refresh`, carte des Belges, découverte « monde », taxonomie `etranger`) ne figurent pas dans le changelog ci-dessous. Deux migrations portent le numéro `0039` (`data_retention`, `competition_scope_etranger`).
+
 ## Chantier local en attente de push — conservation et purge contrôlée (29/09/2026)
 
 - Nouvelle migration idempotente `football/0039_data_retention.sql` : table `club_season_coverage` et fonction admin `archive_secondary_club_data`.

@@ -1,5 +1,6 @@
 import { getProvider } from "./providers";
 import { seasonLabel } from "./season";
+import { idMapByExternalIds, selectAllPages } from "./sync";
 
 function coverageFlags(competition) {
   const fixtures = competition.ext?.coverage?.fixtures || {};
@@ -47,15 +48,11 @@ export async function syncLineups(db, competition, ctx = {}) {
   if (!candidates?.length) return ctx.drain
     ? { detail: `${competition.name}: aucun match éligible`, complete: true, progress: { current: 0, total: 0, unit: "matchs détaillés" } }
     : `${competition.name}: aucun match éligible`;
-  const [clubRows, playerRows] = await Promise.all([
-    db.from("clubs").select("id,external_id,team_type").eq("source", competition.provider),
-    db.from("players").select("id,external_id").eq("source", competition.provider),
-  ]);
-  if (clubRows.error) throw clubRows.error;
-  if (playerRows.error) throw playerRows.error;
-  const clubMap = Object.fromEntries((clubRows.data || []).map((club) => [club.external_id, club.id]));
-  const nationalTeamIds = new Set((clubRows.data || []).filter((club) => club.team_type === "national").map((club) => club.id));
-  const playerMap = Object.fromEntries((playerRows.data || []).map((player) => [player.external_id, player.id]));
+  // Toutes les sélections nationales du provider, lues page par page : une lecture
+  // unique serait tronquée au-delà du plafond Supabase. Les clubs et joueurs, eux,
+  // sont résolus plus bas uniquement pour les identifiants réellement rencontrés.
+  const nationalRows = await selectAllPages(() => db.from("clubs").select("id").eq("source", competition.provider).eq("team_type", "national").order("id"));
+  const nationalTeamIds = new Set(nationalRows.map((club) => club.id));
   // La réparation des convocations ne doit jamais rescanner toute l'histoire
   // avant chaque appel provider. Un petit lot borné suffit : les exécutions
   // suivantes reprennent les lignes restantes et restent compatibles Hobby.
@@ -69,6 +66,7 @@ export async function syncLineups(db, competition, ctx = {}) {
       .limit(20)
     : { data: [], error: null };
   if (unresolvedError) throw unresolvedError;
+  const playerMap = await idMapByExternalIds(db, "players", competition.provider, (unresolvedRows || []).map((row) => row.player_external_id));
   let relinked = 0;
   let materialized = 0;
   for (const row of unresolvedRows || []) {
@@ -152,6 +150,12 @@ export async function syncLineups(db, competition, ctx = {}) {
     const stats = playerResult.status === "fulfilled" ? playerResult.value : [];
     const teamStats = teamResult.status === "fulfilled" ? teamResult.value : [];
     const now = new Date().toISOString();
+    // Correspondances limitées aux équipes et joueurs de CE match.
+    const matchPlayerExternalIds = [...lineups.flatMap((team) => (team.players || []).map((row) => row.player_ext)), ...stats.map((row) => row.player_ext)];
+    const [clubMap, matchPlayerMap] = await Promise.all([
+      idMapByExternalIds(db, "clubs", competition.provider, [...lineups, ...stats, ...teamStats].map((row) => row.team_ext)),
+      idMapByExternalIds(db, "players", competition.provider, matchPlayerExternalIds),
+    ]);
     const { data: lockedLineups } = await db.from("match_lineups").select("club_id").eq("match_id", match.id).eq("locked", true);
     const lockedClubIds = new Set((lockedLineups || []).map((row) => row.club_id));
     for (const row of lineups) {
@@ -183,11 +187,15 @@ export async function syncLineups(db, competition, ctx = {}) {
     const lockedCallupPlayerIds = new Set((lockedCallups || []).map((row) => row.player_id));
     for (const row of merged.values()) {
       if (!row.player_ext || lockedPlayerIds.has(row.player_ext)) continue;
+      const clubId = clubMap[row.team_ext] || null;
+      const playerId = matchPlayerMap[row.player_ext] || playerMap[row.player_ext] || null;
       const payload = {
         match_id: match.id,
         competition_id: competition.id,
-        club_id: clubMap[row.team_ext] || null,
-        player_id: playerMap[row.player_ext] || null,
+        // Liens « collants » : inclus seulement s'ils sont résolus, pour qu'une
+        // correspondance manquée n'efface jamais un club ou un joueur déjà relié.
+        ...(clubId ? { club_id: clubId } : {}),
+        ...(playerId ? { player_id: playerId } : {}),
         player_external_id: row.player_ext,
         player_name: row.player_name || null,
         number: row.number ?? null,
@@ -210,12 +218,12 @@ export async function syncLineups(db, competition, ctx = {}) {
       };
       const { error } = await db.from("match_player_stats").upsert(payload, { onConflict: "match_id,source,player_external_id" });
       if (error) throw error;
-      if (payload.club_id && payload.player_id && nationalTeamIds.has(payload.club_id) && !lockedCallupPlayerIds.has(payload.player_id)) {
+      if (clubId && playerId && nationalTeamIds.has(clubId) && !lockedCallupPlayerIds.has(playerId)) {
         const callupStatus = payload.starter ? "started" : (Number(payload.minutes) > 0 ? "played" : "bench");
         const { error: callupError } = await db.from("national_match_callups").upsert({
           match_id: match.id,
-          national_team_id: payload.club_id,
-          player_id: payload.player_id,
+          national_team_id: clubId,
+          player_id: playerId,
           status: callupStatus,
           shirt_number: payload.number,
           position: payload.position,

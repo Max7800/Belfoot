@@ -1,5 +1,5 @@
 import { getProvider } from "./providers";
-import { upsertExternal } from "./sync";
+import { loadByExternalIds, upsertExternal } from "./sync";
 import { ensureSeason, seasonLabel, seasonYear } from "./season";
 import { clearUnassignedPlayerStats, upsertPlayerMembership } from "./playerMemberships";
 
@@ -39,9 +39,9 @@ export async function syncTeamTest(db, competition, ctx = {}) {
     if (match.away_ext) derivedClubs.set(match.away_ext, { external_id: match.away_ext, name: match.away_name || match.away_ext, logo_url: match.away_logo || null });
   }
   await upsertExternal(db, "clubs", competition.provider, [...derivedClubs.values()], ["name", "logo_url"]);
-  const { data: clubRows, error: clubError } = await db.from("clubs").select("id,name,external_id,team_type,parent_club_id").eq("source", competition.provider);
-  if (clubError) throw clubError;
-  const clubMap = Object.fromEntries((clubRows || []).map((row) => [row.external_id, row.id]));
+  // Uniquement les clubs de ces matchs : une lecture de tous les clubs serait tronquée.
+  const clubRows = [...(await loadByExternalIds(db, "clubs", competition.provider, [String(teamExternalId), ...derivedClubs.keys()], "id,name,external_id,team_type,parent_club_id")).values()];
+  const clubMap = Object.fromEntries(clubRows.map((row) => [String(row.external_id), row.id]));
   const resolvedMatches = matches.map((match) => {
     const round = parseRound(match.round);
     return {
@@ -64,7 +64,7 @@ export async function syncTeamTest(db, competition, ctx = {}) {
   });
   await upsertExternal(db, "matches", competition.provider, resolvedMatches, ["competition_id", "season_id", "home_club_id", "away_club_id", "home_score", "away_score", "status", "minute", "kickoff", "matchday", "round_raw", "phase", "round_number"]);
 
-  const teamClubId = clubMap[teamExternalId];
+  const teamClubId = clubMap[String(teamExternalId)];
   if (!teamClubId) throw new Error(`${club.name}: club importé mais identifiant local introuvable`);
   const teamClub = (clubRows || []).find((row) => row.id === teamClubId);
   const squad = await provider.fetchSquadPlayers({ external_id: teamExternalId }, { ...ctx, season, leagueId: competition.external_id });

@@ -1,5 +1,6 @@
 import { getProvider } from "./providers";
 import { seasonLabel } from "./season";
+import { idMapByExternalIds } from "./sync";
 
 export async function syncEvents(db, competition, ctx = {}) {
   const provider = getProvider(competition.provider);
@@ -38,12 +39,15 @@ export async function syncEvents(db, competition, ctx = {}) {
       : `${competition.name}: événements déjà à jour`;
   }
 
-  const clubMap = Object.fromEntries((await db.from("clubs").select("id,external_id").eq("source", competition.provider)).data?.map((c) => [c.external_id, c.id]) || []);
-  const playerMap = Object.fromEntries((await db.from("players").select("id,external_id").eq("source", competition.provider)).data?.map((p) => [p.external_id, p.id]) || []);
-
   let n = 0;
   for (const m of todo) {
     const evs = await provider.fetchEvents({ external_id: m.external_id }, ctx);
+    // Correspondances limitées aux équipes et joueurs de CE match (jamais la table
+    // entière, tronquée au-delà du plafond Supabase). Les erreurs de lecture remontent.
+    const [clubMap, playerMap] = await Promise.all([
+      idMapByExternalIds(db, "clubs", competition.provider, evs.map((e) => e.team_ext)),
+      idMapByExternalIds(db, "players", competition.provider, evs.map((e) => e.player_ext)),
+    ]);
     const rows = evs.map((e) => ({
       minute: e.minute, type: e.type,
       player_id: playerMap[e.player_ext] || null, club_id: clubMap[e.team_ext] || null,
