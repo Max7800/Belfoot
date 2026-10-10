@@ -2,6 +2,7 @@ import { getProvider } from "./providers";
 import { upsertExternal, ensureCompetitions } from "./sync";
 import { ensureSeason, seasonLabel, seasonYear } from "./season";
 import { frenchNationName } from "@/lib/frenchNations";
+import { resolveNationalMatchSeason } from "./nationalMatchSeasons";
 
 const ALLOWED_CATEGORIES = new Set(["senior", "u23", "u21", "u20", "u19", "u18", "u17", "women"]);
 
@@ -86,20 +87,55 @@ export async function syncNationalTeam(db, ctx = {}) {
   if (!nationalTeamId) throw new Error(`${team.name}: sélection importée mais identifiant local introuvable`);
 
   const competitionMap = await ensureInternationalCompetitions(db, providerKey, matches);
-  const seasonMap = new Map();
-  for (const competitionId of new Set(competitionMap.values())) {
-    const row = await ensureSeason(db, competitionId, selectedSeason);
-    seasonMap.set(competitionId, row.id);
+
+  // Matchs déjà en base parmi ceux reçus, avec leur verrou. Un match verrouillé
+  // n'est jamais modifié (upsertExternal l'ignore) : il ne crée donc aucune
+  // saison et n'entre dans aucun compteur. Un match absent est « nouveau ».
+  const knownMatches = new Map();
+  const incomingIds = [...new Set(matches.filter((match) => competitionMap.has(match.league_ext)).map((match) => String(match.external_id)).filter(Boolean))];
+  for (let index = 0; index < incomingIds.length; index += 75) {
+    const { data: knownRows, error: knownError } = await db.from("matches").select("external_id,locked").eq("source", providerKey).in("external_id", incomingIds.slice(index, index + 75));
+    if (knownError) throw knownError;
+    for (const row of knownRows || []) knownMatches.set(String(row.external_id), row);
   }
+
+  // Saison de CHAQUE match = saison fournie par l'API pour ce match (jamais la
+  // saison demandée par le cron : les derniers/prochains matchs couvrent
+  // plusieurs campagnes). Seules les saisons réellement rencontrées sont créées.
+  const matchSeasons = new Map();
+  const seasonIds = new Map();
+  const seasonCounts = new Map();
+  const unusualSeasons = [];
+  const withoutSeason = [];
+  let lockedIgnored = 0;
+  for (const match of matches) {
+    const competitionId = competitionMap.get(match.league_ext);
+    if (!competitionId) continue;
+    if (knownMatches.get(String(match.external_id))?.locked) { lockedIgnored++; continue; }
+    const resolved = resolveNationalMatchSeason(match);
+    matchSeasons.set(match.external_id, resolved);
+    if (!resolved.label) { withoutSeason.push(match); continue; }
+    seasonCounts.set(resolved.label, (seasonCounts.get(resolved.label) || 0) + 1);
+    if (resolved.unusual) unusualSeasons.push(`${match.home_name || "?"}–${match.away_name || "?"} du ${String(match.kickoff || "").slice(0, 10) || "?"} : saison API ${resolved.year}`);
+    const key = `${competitionId}:${resolved.label}`;
+    if (!seasonIds.has(key)) seasonIds.set(key, (await ensureSeason(db, competitionId, resolved.label)).id);
+  }
+
+  // Sans saison API exploitable : un match existant garde sa saison actuelle
+  // (season_id omis du patch) ; un nouveau match est inséré sans saison et signalé.
+  const newWithoutSeason = withoutSeason.filter((match) => !knownMatches.has(String(match.external_id)));
 
   const resolvedMatches = matches.flatMap((match) => {
     const competitionId = competitionMap.get(match.league_ext);
     if (!competitionId) return [];
+    if (knownMatches.get(String(match.external_id))?.locked) return [];
     const round = parseRound(match.round);
+    const seasonLabelForMatch = matchSeasons.get(match.external_id)?.label;
+    const seasonId = seasonLabelForMatch ? seasonIds.get(`${competitionId}:${seasonLabelForMatch}`) : null;
     return [{
       external_id: match.external_id,
       competition_id: competitionId,
-      season_id: seasonMap.get(competitionId) || null,
+      ...(seasonId ? { season_id: seasonId } : {}),
       // club_id « collant » : résolu seulement, jamais null (pas d'effacement en resync).
       ...(clubMap.get(match.home_ext) ? { home_club_id: clubMap.get(match.home_ext) } : {}),
       ...(clubMap.get(match.away_ext) ? { away_club_id: clubMap.get(match.away_ext) } : {}),
@@ -170,5 +206,13 @@ export async function syncNationalTeam(db, ctx = {}) {
   }
 
   const competitionNames = [...new Set(matches.map((match) => match.league_name).filter(Boolean))];
-  return `${team.name} (${category.toUpperCase()}) : ${resolvedMatches.length} matchs, ${competitionMap.size} compétitions (${competitionNames.join(", ") || "aucune"}) et ${callups} joueurs (${season})`;
+  const listPreview = (items) => items.slice(0, 5).join(" ; ") + (items.length > 5 ? ` ; +${items.length - 5}` : "");
+  const seasonSummary = [...seasonCounts.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([label, count]) => `${label} ×${count}`).join(", ");
+  const notes = [`saisons API : ${seasonSummary || "aucune"}`];
+  const existingWithoutSeason = withoutSeason.length - newWithoutSeason.length;
+  if (existingWithoutSeason) notes.push(`avertissement : ${existingWithoutSeason} match(s) existant(s) sans saison API exploitable : saison actuelle conservée`);
+  if (newWithoutSeason.length) notes.push(`avertissement : ${newWithoutSeason.length} nouveau(x) match(s) inséré(s) sans saison : ${listPreview(newWithoutSeason.map((match) => `${match.home_name || "?"}–${match.away_name || "?"} du ${String(match.kickoff || "").slice(0, 10) || "?"}`))}`);
+  if (unusualSeasons.length) notes.push(`avertissement : ${unusualSeasons.length} saison(s) API inhabituelle(s), conservée(s) : ${listPreview(unusualSeasons)}`);
+  if (lockedIgnored) notes.push(`matchs verrouillés ignorés : ${lockedIgnored}`);
+  return `${team.name} (${category.toUpperCase()}) : ${resolvedMatches.length} matchs, ${competitionMap.size} compétitions (${competitionNames.join(", ") || "aucune"}) et ${callups} joueurs (${season}) · ${notes.join(" · ")}`;
 }
