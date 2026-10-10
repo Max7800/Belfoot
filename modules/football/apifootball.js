@@ -12,7 +12,7 @@ function mapStatus(short) {
   if (["1H", "HT", "2H", "ET", "BT", "P", "LIVE"].includes(short)) return "live";
   return "scheduled";
 }
-function mapFixture(f) {
+export function mapFixture(f) {
   return {
     external_id: String(f.fixture.id),
     home_ext: String(f.teams.home.id), away_ext: String(f.teams.away.id),
@@ -27,6 +27,9 @@ function mapFixture(f) {
     round: f.league?.round || null,
     kickoff: f.fixture.date || null,
     league_ext: f.league?.id ? String(f.league.id) : null,
+    // Saison API brute (YYYY). Conservée telle quelle : sa validation se fait
+    // à l'usage (voir nationalMatchSeasons.js), jamais par un repli silencieux.
+    league_season: f.league?.season ?? null,
     league_name: f.league?.name || null,
     league_logo: f.league?.logo || null,
     league_country: f.league?.country || null,
