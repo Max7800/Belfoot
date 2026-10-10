@@ -2,6 +2,7 @@ import { getProvider } from "./providers";
 import { loadByExternalIds, upsertExternal } from "./sync";
 import { ensureSeason, seasonLabel, seasonYear } from "./season";
 import { clearUnassignedPlayerStats, upsertPlayerMembership } from "./playerMemberships";
+import { providerIdentityPatch } from "@/lib/playerIdentity";
 
 function parseRound(raw) {
   if (!raw) return { round_raw: null, phase: null, round_number: null };
@@ -71,16 +72,16 @@ export async function syncTeamTest(db, competition, ctx = {}) {
   const belgians = squad.filter((player) => String(player.nationality || "").toLowerCase() === "belgium");
   const syncedAt = new Date().toISOString();
   for (const player of belgians) {
-    const { data: existing } = await db.from("players").select("id,locked").eq("source", competition.provider).eq("external_id", player.external_id).maybeSingle();
+    const { data: existing, error: existingError } = await db.from("players").select("id,locked,nationality,ext").eq("source", competition.provider).eq("external_id", player.external_id).maybeSingle();
+    if (existingError) throw existingError;
     const patch = {
       source: competition.provider,
       external_id: player.external_id,
       name: player.name,
-      nationality: player.nationality,
+      ...providerIdentityPatch(existing, { nationality: player.nationality, birth_date: player.birth_date }),
       position: player.position,
       photo_url: player.photo_url,
       age: player.age,
-      birth_date: player.birth_date,
       club_id: teamClubId,
       country: leagueInfo?.country || competition.ext?.country || "England",
       competition: leagueInfo?.name || competition.name,

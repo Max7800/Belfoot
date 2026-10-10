@@ -1,6 +1,7 @@
 import { getProvider } from "./providers";
 import { clearUnassignedPlayerStats, upsertPlayerMembership } from "./playerMemberships";
 import { loadCompetitionSeasonClubIds } from "./seasonClubs";
+import { providerIdentityPatch } from "@/lib/playerIdentity";
 
 async function mapWithConcurrency(items, limit, worker) {
   const queue = [...items];
@@ -92,8 +93,11 @@ export async function syncSquads(db, competition, ctx = {}) {
     await mapWithConcurrency(players, 8, async (p) => {
       const existing = existingByExternalId.get(String(p.external_id));
       const primaryClub = !["reserve", "u23", "youth", "women"].includes(club.team_type);
-      const manualNationality = existing?.ext?.editorial_nationality || /[,;/|]|\bbelgo\b/i.test(existing?.nationality || "");
-      const patch = { source: competition.provider, external_id: p.external_id, name: p.name, nationality: manualNationality ? existing.nationality : p.nationality, position: p.position, photo_url: p.photo_url, age: p.age, birth_date: p.birth_date, club_id: primaryClub || !existing?.club_id ? club.id : existing.club_id, country: competition.ext?.country || null, competition: competition.name, synced_at: now };
+      // Nationalité et date de naissance : jamais effacées par une valeur absente de
+      // l'API (l'effectif actuel /players/squads n'en fournit pas), jamais remplacées
+      // si elles ont été fixées dans l'administration.
+      const identity = providerIdentityPatch(existing, { nationality: p.nationality, birth_date: p.birth_date });
+      const patch = { source: competition.provider, external_id: p.external_id, name: p.name, ...identity, position: p.position, photo_url: p.photo_url, age: p.age, club_id: primaryClub || !existing?.club_id ? club.id : existing.club_id, country: competition.ext?.country || null, competition: competition.name, synced_at: now };
       let pid = existing?.id;
       if (existing && !existing.locked) {
         const { error } = await db.from("players").update(patch).eq("id", existing.id);
