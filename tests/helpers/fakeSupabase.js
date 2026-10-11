@@ -27,6 +27,18 @@ function parseOr(expression) {
   return (row) => clauses.some((clause) => clause(row));
 }
 
+// Valeurs par défaut des colonnes, comme dans les migrations (0001 : locked
+// default false sur les entités synchronisées ; 0011 : team_type default
+// 'first_team').
+const COLUMN_DEFAULTS = {
+  clubs: { locked: false, team_type: "first_team" },
+  players: { locked: false },
+  coaches: { locked: false },
+  competitions: { locked: false },
+  seasons: { locked: false },
+  matches: { locked: false },
+};
+
 export function createFakeSupabase(seed = {}, { maxRows = 1000, rpc = {} } = {}) {
   const tables = {};
   const rpcCalls = [];
@@ -79,7 +91,7 @@ export function createFakeSupabase(seed = {}, { maxRows = 1000, rpc = {} } = {})
 
     function insertRows(rows) {
       return rows.map((row) => {
-        const stored = { id: newId(name), ...row };
+        const stored = { id: newId(name), ...(COLUMN_DEFAULTS[name] || {}), ...row };
         table(name).push(stored);
         return stored;
       });

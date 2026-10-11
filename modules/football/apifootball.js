@@ -112,6 +112,9 @@ const provider = {
     return rows.map((x) => ({
       external_id: String(x.team.id), name: x.team.name, logo_url: x.team.logo || null, city: x.venue?.city || null,
       country: x.team.country || null,
+      // Sélection nationale selon l'API (team.national) : seule source fiable pour
+      // ne pas traiter une équipe nationale comme un club.
+      national: x.team.national === true,
       founded_year: x.team.founded ?? null,
       stadium_name: x.venue?.name || null,
       stadium_capacity: x.venue?.capacity ?? null,
@@ -125,6 +128,7 @@ const provider = {
     if (!x?.team?.id) return null;
     return {
       external_id: String(x.team.id), name: x.team.name, logo_url: x.team.logo || null, city: x.venue?.city || null,
+      national: x.team.national === true,
       founded_year: x.team.founded ?? null,
       stadium_name: x.venue?.name || null,
       stadium_capacity: x.venue?.capacity ?? null,

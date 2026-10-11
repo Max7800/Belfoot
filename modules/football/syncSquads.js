@@ -3,6 +3,7 @@ import { clearUnassignedPlayerStats, upsertPlayerMembership } from "./playerMemb
 import { loadCompetitionSeasonClubIds } from "./seasonClubs";
 import { providerIdentityPatch } from "@/lib/playerIdentity";
 import { playerSnapshotPatch } from "@/lib/playerSnapshot";
+import { isNationalTeam } from "./nationalClassification";
 
 async function mapWithConcurrency(items, limit, worker) {
   const queue = [...items];
@@ -31,7 +32,7 @@ export async function syncSquads(db, competition, ctx = {}) {
   const matchClubIds = [...new Set((ms || []).flatMap((m) => [m.home_club_id, m.away_club_id]).filter(Boolean))];
   const clubIds = await loadCompetitionSeasonClubIds(db, competition, ctx.season, matchClubIds);
   if (!clubIds.length) return `${competition.name}: aucun club (fais d'abord l'import)`;
-  const { data: clubs, error: clubsError } = await db.from("clubs").select("id,name,external_id,team_type,parent_club_id,ext").in("id", clubIds).order("id");
+  const { data: clubs, error: clubsError } = await db.from("clubs").select("id,name,external_id,team_type,parent_club_id,national_category,ext").in("id", clubIds).order("id");
   if (clubsError) throw clubsError;
 
   const nowDate = new Date();
@@ -39,6 +40,7 @@ export async function syncSquads(db, competition, ctx = {}) {
   const currentSeasonStart = nowDate.getUTCMonth() >= 6 ? nowDate.getUTCFullYear() : nowDate.getUTCFullYear() - 1;
   const currentSeason = Number(season) === currentSeasonStart;
   let n = 0;
+  let nationalTeamsSkipped = 0;
   const orderedClubs = clubs || [];
   const startClubIndex = Math.max(0, Number(ctx.startClubIndex) || 0);
   const defaultBatchSize = ctx.pipelineRunId ? 1 : Math.max(1, orderedClubs.length);
@@ -55,7 +57,16 @@ export async function syncSquads(db, competition, ctx = {}) {
     ]);
     const seasonByExternalId = new Map((seasonPlayers || []).filter((player) => player.external_id).map((player) => [String(player.external_id), player]));
     const authoritativeCurrentSquad = currentSeason && (currentPlayers || []).length > 0;
-    const rosterSource = authoritativeCurrentSquad ? currentPlayers : seasonPlayers;
+    // Sélection nationale : identité et statistiques (parcours international) sont
+    // mises à jour, mais jamais d'affectation de CLUB, de désactivation ni de
+    // « club actuel ». Les convocations vivent dans national_team_callups. La
+    // convocation du moment ne remplace donc pas la liste de la saison : les deux
+    // sont réunies, pour garder les statistiques des joueurs non rappelés.
+    const nationalTeam = isNationalTeam(club, competition);
+    if (nationalTeam) nationalTeamsSkipped++;
+    const rosterSource = nationalTeam
+      ? [...(seasonPlayers || []), ...(currentPlayers || [])]
+      : authoritativeCurrentSquad ? currentPlayers : seasonPlayers;
     const players = [...new Map((rosterSource || []).filter((player) => player.external_id).map((player) => {
       const seasonPlayer = seasonByExternalId.get(String(player.external_id));
       return [String(player.external_id), {
@@ -73,7 +84,7 @@ export async function syncSquads(db, competition, ctx = {}) {
     if (existingRowsError) throw existingRowsError;
     const existingByExternalId = new Map((existingRows || []).map((player) => [String(player.external_id), player]));
 
-    if (authoritativeCurrentSquad) {
+    if (authoritativeCurrentSquad && !nationalTeam) {
       const currentExternalIds = new Set(externalIds.map(String));
       const { data: currentMemberships, error: membershipsError } = await db.from("player_team_seasons")
         .select("id,external_id,locked")
@@ -98,7 +109,7 @@ export async function syncSquads(db, competition, ctx = {}) {
       // l'API (l'effectif actuel /players/squads n'en fournit pas), jamais remplacées
       // si elles ont été fixées dans l'administration.
       const identity = providerIdentityPatch(existing, { nationality: p.nationality, birth_date: p.birth_date });
-      const patch = { source: competition.provider, external_id: p.external_id, name: p.name, ...identity, position: p.position, photo_url: p.photo_url, age: p.age, ...playerSnapshotPatch({ existing, club, competition, season, primaryClub }), synced_at: now };
+      const patch = { source: competition.provider, external_id: p.external_id, name: p.name, ...identity, position: p.position, photo_url: p.photo_url, age: p.age, ...(nationalTeam ? {} : playerSnapshotPatch({ existing, club, competition, season, primaryClub })), synced_at: now };
       let pid = existing?.id;
       if (existing && !existing.locked) {
         const { error } = await db.from("players").update(patch).eq("id", existing.id);
@@ -114,7 +125,7 @@ export async function syncSquads(db, competition, ctx = {}) {
           const { error } = await db.from("player_season_stats").upsert({ player_id: pid, club_id: club.id, season_id: seasonRow?.id || null, competition_id: competition.id, season, ...p.stats, source: competition.provider, external_id: p.external_id, synced_at: now }, { onConflict: "player_id,club_id,competition_id,season" });
           if (error) throw new Error(`${competition.name}: stats ${p.name}: ${error.message}`);
         })() : Promise.resolve(),
-        upsertPlayerMembership(db, {
+        nationalTeam ? Promise.resolve() : upsertPlayerMembership(db, {
           playerId: pid,
           club,
           season,
@@ -132,7 +143,7 @@ export async function syncSquads(db, competition, ctx = {}) {
     await ctx.saveClubCheckpoint?.(clubIndex + 1);
   }
   return {
-    detail: `${competition.name}: ${n} joueurs (+ stats saison) · clubs ${endClubIndex}/${orderedClubs.length}`,
+    detail: `${competition.name}: ${n} joueurs (+ stats saison) · clubs ${endClubIndex}/${orderedClubs.length}${nationalTeamsSkipped ? ` · ${nationalTeamsSkipped} sélection(s) : aucune affectation de club` : ""}`,
     complete: endClubIndex >= orderedClubs.length,
     progress: { current: endClubIndex, total: orderedClubs.length, unit: "clubs" },
   };
