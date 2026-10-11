@@ -51,12 +51,31 @@ export async function selectAllPages(buildQuery, pageSize = 1000) {
   }
 }
 
-export async function upsertExternal(db, table, source, rows, ownedFields = []) {
+// Fusion de `ext` : les clés du provider s'ajoutent ou se mettent à jour, mais
+// une valeur absente (null/undefined) n'efface jamais une valeur connue, et les
+// clés que le provider ne renvoie pas (ex. country, imported_for) sont gardées.
+export function mergeExt(existing, incoming) {
+  const merged = { ...(existing && typeof existing === "object" && !Array.isArray(existing) ? existing : {}) };
+  for (const [key, value] of Object.entries(incoming || {})) {
+    if (value !== null && value !== undefined) merged[key] = value;
+  }
+  return merged;
+}
+
+// extMode :
+//   "replace" (défaut) : ext = payload provider complet (matchs, entraîneurs…) ;
+//   "merge"            : ext existant complété par le payload (fiches clubs) ;
+//   "keep"             : ext existant conservé tel quel ; payload seulement à la
+//                        création (lignes minimales dérivées d'un match, qui
+//                        écrasaient sinon le pays du club).
+export async function upsertExternal(db, table, source, rows, ownedFields = [], { extMode = "replace" } = {}) {
+  if (!["replace", "merge", "keep"].includes(extMode)) throw new Error(`upsertExternal: extMode inconnu ${extMode}`);
   const now = new Date().toISOString();
   const uniqueRows = [...new Map((rows || []).filter((row) => row.external_id).map((row) => [String(row.external_id), row])).values()];
   const existingByExternalId = new Map();
+  const columns = extMode === "merge" ? "id,locked,external_id,ext" : "id,locked,external_id";
   for (const ids of chunks(uniqueRows.map((row) => String(row.external_id)), 75)) {
-    const { data, error } = await db.from(table).select("id,locked,external_id").eq("source", source).in("external_id", ids);
+    const { data, error } = await db.from(table).select(columns).eq("source", source).in("external_id", ids);
     if (error) throw new Error(`${table}: ${error.message}`);
     for (const existing of data || []) existingByExternalId.set(String(existing.external_id), existing);
   }
@@ -66,7 +85,10 @@ export async function upsertExternal(db, table, source, rows, ownedFields = []) 
   for (const r of uniqueRows) {
     const existing = existingByExternalId.get(String(r.external_id));
     if (existing?.locked) continue;
-    const patch = { source, external_id: r.external_id, ext: r.ext || r, synced_at: now };
+    const incomingExt = r.ext || r;
+    const patch = { source, external_id: r.external_id, synced_at: now };
+    if (!existing || extMode === "replace") patch.ext = incomingExt;
+    else if (extMode === "merge") patch.ext = mergeExt(existing.ext, incomingExt);
     for (const f of ownedFields) if (r[f] !== undefined) patch[f] = r[f];
     if (existing) updates.push({ id: existing.id, externalId: r.external_id, patch });
     else inserts.push(patch);

@@ -31,7 +31,7 @@ export async function resolveNationalPlayerClubs(db, ctx = {}) {
   for (const player of candidates) {
     const info = await provider.fetchPlayerClubSeason(player, { ...ctx, season, nationalTeamExternalId: teamExternalId });
     if (!info?.club) { unresolved.push(player.name); continue; }
-    await upsertExternal(db, "clubs", providerKey, [info.club], ["name", "logo_url"]);
+    await upsertExternal(db, "clubs", providerKey, [info.club], ["name", "logo_url"], { extMode: "merge" });
     const { data: club, error: clubError } = await db.from("clubs").select("id,name,team_type,parent_club_id").eq("source", providerKey).eq("external_id", info.club.external_id).maybeSingle();
     if (clubError || !club) throw clubError || new Error(`${info.club.name}: club local introuvable`);
     const { error: updateError } = await db.from("players").update({

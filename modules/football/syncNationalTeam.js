@@ -69,14 +69,14 @@ export async function syncNationalTeam(db, ctx = {}) {
 
   await upsertExternal(db, "clubs", providerKey, [{ ...team, name: frenchNationName(team.name), team_type: "national", national_category: category, national_gender: gender, national_followed: true }], [
     "name", "short_name", "logo_url", "city", "founded_year", "stadium_name", "stadium_capacity", "stadium_address", "stadium_image_url", "team_type", "national_category", "national_gender", "national_followed",
-  ]);
+  ], { extMode: "merge" });
 
   const opponents = new Map();
   for (const match of matches) {
     if (match.home_ext && match.home_ext !== teamExternalId) opponents.set(match.home_ext, { external_id: match.home_ext, name: frenchNationName(match.home_name) || match.home_ext, logo_url: match.home_logo || null, team_type: "national", national_category: category, national_gender: gender, national_followed: false });
     if (match.away_ext && match.away_ext !== teamExternalId) opponents.set(match.away_ext, { external_id: match.away_ext, name: frenchNationName(match.away_name) || match.away_ext, logo_url: match.away_logo || null, team_type: "national", national_category: category, national_gender: gender, national_followed: false });
   }
-  await upsertExternal(db, "clubs", providerKey, [...opponents.values()], ["name", "logo_url", "team_type", "national_category", "national_gender", "national_followed"]);
+  await upsertExternal(db, "clubs", providerKey, [...opponents.values()], ["name", "logo_url", "team_type", "national_category", "national_gender", "national_followed"], { extMode: "keep" });
 
   const externalClubIds = [...opponents.keys()];
   if (!externalClubIds.includes(teamExternalId)) externalClubIds.push(teamExternalId);
