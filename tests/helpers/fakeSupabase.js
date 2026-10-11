@@ -16,12 +16,31 @@ function compare(left, op, right) {
   throw new Error(`fakeSupabase: opérateur non géré ${op}`);
 }
 
-// Syntaxe PostgREST minimale de .or("a.is.null,b.lte.2026-07-15").
+// Syntaxe PostgREST minimale de .or("a.is.null,b.lte.2026-07-15,c.in.(x,y)").
+// Les virgules à l'intérieur d'une liste in.(…) ne séparent pas les clauses.
+function splitOrClauses(expression) {
+  const parts = [];
+  let depth = 0;
+  let current = "";
+  for (const char of String(expression)) {
+    if (char === "(") depth++;
+    if (char === ")") depth--;
+    if (char === "," && depth === 0) { parts.push(current); current = ""; continue; }
+    current += char;
+  }
+  if (current) parts.push(current);
+  return parts;
+}
+
 function parseOr(expression) {
-  const clauses = String(expression).split(",").map((part) => {
+  const clauses = splitOrClauses(expression).map((part) => {
     const [column, op, ...rest] = part.split(".");
     const value = rest.join(".");
     if (op === "is" && value === "null") return (row) => row[column] === null || row[column] === undefined;
+    if (op === "in") {
+      const set = new Set(value.replace(/^\(|\)$/g, "").split(",").filter(Boolean));
+      return (row) => set.has(String(row[column]));
+    }
     return (row) => compare(row[column], op, value);
   });
   return (row) => clauses.some((clause) => clause(row));
@@ -39,7 +58,17 @@ const COLUMN_DEFAULTS = {
   matches: { locked: false },
 };
 
-export function createFakeSupabase(seed = {}, { maxRows = 1000, rpc = {} } = {}) {
+// Valeurs par défaut calculées à l'insertion (0001_core : job_runs.status
+// default 'running', started_at default now()). Suit l'horloge simulée des tests.
+const DYNAMIC_DEFAULTS = {
+  job_runs: () => ({ status: "running", started_at: new Date().toISOString() }),
+};
+
+// `uniqueIndexes` reproduit des index uniques partiels de la base, par ex.
+// { competitions: [["source", "external_id"], ["slug"]] } : une insertion qui
+// en violerait un échoue ENTIÈREMENT avec le code Postgres 23505, comme un
+// INSERT multiple réel (une clé à null n'entre pas dans l'index).
+export function createFakeSupabase(seed = {}, { maxRows = 1000, rpc = {}, uniqueIndexes = {} } = {}) {
   const tables = {};
   const rpcCalls = [];
   let nextId = 1;
@@ -89,9 +118,23 @@ export function createFakeSupabase(seed = {}, { maxRows = 1000, rpc = {} } = {})
       },
     };
 
+    function uniqueViolation(rows) {
+      const present = (value) => value !== null && value !== undefined;
+      for (const keys of uniqueIndexes[name] || []) {
+        const seen = new Set(table(name).filter((row) => keys.every((key) => present(row[key]))).map((row) => keys.map((key) => String(row[key])).join("\u0000")));
+        for (const row of rows) {
+          if (!keys.every((key) => present(row[key]))) continue;
+          const value = keys.map((key) => String(row[key])).join("\u0000");
+          if (seen.has(value)) return { code: "23505", message: `duplicate key value violates unique constraint "${name}_${keys.join("_")}"` };
+          seen.add(value);
+        }
+      }
+      return null;
+    }
+
     function insertRows(rows) {
       return rows.map((row) => {
-        const stored = { id: newId(name), ...(COLUMN_DEFAULTS[name] || {}), ...row };
+        const stored = { id: newId(name), ...(COLUMN_DEFAULTS[name] || {}), ...(DYNAMIC_DEFAULTS[name]?.() || {}), ...row };
         table(name).push(stored);
         return stored;
       });
@@ -119,7 +162,10 @@ export function createFakeSupabase(seed = {}, { maxRows = 1000, rpc = {} } = {})
         rows = selectRows();
         if (state.countOnly) return { data: null, count: rows.length, error: null };
       } else if (state.op === "insert") {
-        rows = insertRows(Array.isArray(state.payload) ? state.payload : [state.payload]);
+        const payloads = Array.isArray(state.payload) ? state.payload : [state.payload];
+        const violation = uniqueViolation(payloads);
+        if (violation) return { data: null, error: violation };
+        rows = insertRows(payloads);
       } else if (state.op === "update") {
         rows = table(name).filter(matches);
         for (const row of rows) Object.assign(row, state.payload);

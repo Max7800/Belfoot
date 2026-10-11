@@ -67,6 +67,11 @@ export async function syncNationalTeam(db, ctx = {}) {
   ]);
   if (!team) throw new Error(`Sélection ${teamExternalId} introuvable`);
 
+  // Compétitions résolues AVANT toute écriture : une collision (slug ou
+  // identifiant ambigu) arrête la synchronisation sans toucher aux clubs,
+  // aux matchs ni aux convocations.
+  const competitionMap = await ensureInternationalCompetitions(db, providerKey, matches);
+
   await upsertExternal(db, "clubs", providerKey, [{ ...team, name: frenchNationName(team.name), team_type: "national", national_category: category, national_gender: gender, national_followed: true }], [
     "name", "short_name", "logo_url", "city", "founded_year", "stadium_name", "stadium_capacity", "stadium_address", "stadium_image_url", "team_type", "national_category", "national_gender", "national_followed",
   ], { extMode: "merge" });
@@ -85,8 +90,6 @@ export async function syncNationalTeam(db, ctx = {}) {
   const clubMap = new Map((clubRows || []).map((row) => [String(row.external_id), row.id]));
   const nationalTeamId = clubMap.get(teamExternalId);
   if (!nationalTeamId) throw new Error(`${team.name}: sélection importée mais identifiant local introuvable`);
-
-  const competitionMap = await ensureInternationalCompetitions(db, providerKey, matches);
 
   // Matchs déjà en base parmi ceux reçus, avec leur verrou. Un match verrouillé
   // n'est jamais modifié (upsertExternal l'ignore) : il ne crée donc aucune

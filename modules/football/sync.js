@@ -118,33 +118,114 @@ export async function upsertExternal(db, table, source, rows, ownedFields = [], 
   return inserts.length + updates.length;
 }
 
-// Crée ou RÉUTILISE des compétitions sans jamais violer l'index unique
-// (provider, external_id). Chemin unique et sûr pour toute création de compétition
-// (sélections, carrières, imports…). Retourne une Map(external_id string -> ligne).
+// Code stable d'une collision : `runJob` le conserve dans job_runs.params.error_code
+// (la classe de l'erreur ne survit pas à la journalisation), ce qui permet au cron
+// des sélections de reconnaître un échec qui se reproduira à l'identique.
+export const COMPETITION_COLLISION = "COMPETITION_COLLISION";
+
+// Collision entre une compétition demandée et la base : la correspondance est
+// incertaine, aucune fiche n'est créée ni réutilisée pour les ligues en cause.
+// `collisions` détaille chaque cas (identifiant API, slug, fiches en cause) pour
+// un diagnostic sans relecture. Le message ne parle que des compétitions :
+// l'appelant précise ce qu'il a éventuellement déjà écrit par ailleurs.
+export class CompetitionCollisionError extends Error {
+  constructor(collisions) {
+    const describe = (item) => `ligue ${item.externalId}${item.slug ? ` (slug ${item.slug})` : ""} : ${item.reason}${item.rows.length ? ` [${item.rows.map((row) => `${row.id} « ${row.name || "?"} » ${row.source || "?"}/${row.provider || "?"}:${row.external_id ?? "?"}`).join(" ; ")}]` : ""}`;
+    super(`Collision de compétitions, correspondance incertaine (aucune fiche créée ni réutilisée pour ces ligues) : ${collisions.map(describe).join(" · ")}`);
+    this.name = "CompetitionCollisionError";
+    this.code = COMPETITION_COLLISION;
+    this.collisions = collisions;
+  }
+}
+
+const COLLISION_FIELDS = "id,name,slug,source,provider,external_id";
+
+// `provider` non renseigné : null, ou chaîne vide (valeur enregistrée par
+// l'éditeur d'administration quand le champ texte est vidé).
+const blankProvider = (value) => value === null || value === undefined || String(value).trim() === "";
+
+// Une fiche correspond à une ligue du provider si elle est déclarée pour ce
+// provider, ou si son `provider` est vide mais sa `source` est ce provider.
+function ownedByProvider(row, provider) {
+  return row.provider === provider || (blankProvider(row.provider) && row.source === provider);
+}
+
+// Classe chaque définition : fiche existante réutilisable, création possible,
+// ou collision (plusieurs fiches pour un identifiant, fiche d'un autre provider
+// sur la même source, slug déjà pris par une autre ligue). Le nom n'est jamais
+// une clé : deux compétitions homonymes restent distinctes par leur identifiant.
+async function classifyCompetitions(db, provider, defs) {
+  const ids = defs.map((d) => String(d.external_id));
+  const slugs = [...new Set(defs.map((d) => d.slug).filter(Boolean))];
+  const [byProvider, bySource, bySlug] = await Promise.all([
+    db.from("competitions").select("*").eq("provider", provider).in("external_id", ids),
+    db.from("competitions").select("*").eq("source", provider).in("external_id", ids),
+    slugs.length ? db.from("competitions").select(COLLISION_FIELDS).in("slug", slugs) : Promise.resolve({ data: [], error: null }),
+  ]);
+  for (const result of [byProvider, bySource, bySlug]) if (result.error) throw new Error(`competitions: ${result.error.message}`);
+  const candidates = new Map();
+  for (const row of [...(byProvider.data || []), ...(bySource.data || [])]) candidates.set(row.id, row);
+  const rowsByExternalId = new Map();
+  for (const row of candidates.values()) {
+    const key = String(row.external_id);
+    rowsByExternalId.set(key, [...(rowsByExternalId.get(key) || []), row]);
+  }
+  const existing = new Map();
+  const toCreate = [];
+  const collisions = [];
+  const brief = (row) => ({ id: row.id, name: row.name, slug: row.slug, source: row.source, provider: row.provider, external_id: row.external_id });
+  for (const def of defs) {
+    const externalId = String(def.external_id);
+    const rows = rowsByExternalId.get(externalId) || [];
+    if (rows.length > 1) { collisions.push({ externalId, slug: def.slug || null, reason: "plusieurs fiches portent cet identifiant", rows: rows.map(brief) }); continue; }
+    if (rows.length === 1) {
+      if (ownedByProvider(rows[0], provider)) existing.set(externalId, rows[0]);
+      else collisions.push({ externalId, slug: def.slug || null, reason: `fiche déclarée pour un autre provider (${rows[0].provider || "source " + rows[0].source})`, rows: [brief(rows[0])] });
+      continue;
+    }
+    const slugOwners = def.slug ? (bySlug.data || []).filter((row) => row.slug === def.slug) : [];
+    if (slugOwners.length) { collisions.push({ externalId, slug: def.slug, reason: "slug déjà utilisé par une autre compétition", rows: slugOwners.map(brief) }); continue; }
+    toCreate.push(def);
+  }
+  return { existing, toCreate, collisions };
+}
+
+// Crée ou RÉUTILISE des compétitions sans jamais ignorer une erreur d'unicité
+// (index (source, external_id) et slug). Chemin unique pour toute création de
+// compétition (sélections, carrières, imports…). Retourne une
+// Map(external_id string -> ligne) complète, ou lève CompetitionCollisionError
+// AVANT toute insertion si une correspondance est incertaine.
 export async function ensureCompetitions(db, provider, defs) {
   const uniq = [...new Map((defs || []).filter((d) => d && d.external_id != null).map((d) => [String(d.external_id), d])).values()];
   if (!uniq.length) return new Map();
-  const ids = uniq.map((d) => String(d.external_id));
-  const read = async () => {
-    const { data, error } = await db.from("competitions").select("*").eq("provider", provider).in("external_id", ids);
-    if (error) throw error;
-    return new Map((data || []).map((r) => [String(r.external_id), r]));
-  };
-  let byExt = await read();
-  const missing = uniq
-    .filter((d) => !byExt.has(String(d.external_id)))
-    .map((d) => ({ source: provider, public_visible: false, ...d, provider, external_id: String(d.external_id) }));
-  if (missing.length) {
-    const { error } = await db.from("competitions").insert(missing);
+  const first = await classifyCompetitions(db, provider, uniq);
+  if (first.collisions.length) throw new CompetitionCollisionError(first.collisions);
+  const byExt = new Map(first.existing);
+  const rowsToInsert = first.toCreate.map((d) => ({ source: provider, public_visible: false, ...d, provider, external_id: String(d.external_id) }));
+  if (rowsToInsert.length) {
+    const { error } = await db.from("competitions").insert(rowsToInsert);
+    if (error && error.code !== "23505") throw new Error(`competitions: ${error.message}`);
     if (error) {
-      if (error.code !== "23505") throw new Error(`competitions: ${error.message}`);
-      // Conflit dans le lot (course / doublon résiduel) -> une par une, en ignorant les doublons.
-      for (const row of missing) {
+      // Violation d'unicité : soit une autre synchronisation vient de créer la
+      // même ligue (course, réutilisable), soit une collision est apparue
+      // entre-temps. On reclasse ligne par ligne au lieu d'ignorer l'erreur.
+      for (const row of rowsToInsert) {
         const { error: rowError } = await db.from("competitions").insert(row);
         if (rowError && rowError.code !== "23505") throw new Error(`competitions: ${rowError.message}`);
+        if (rowError) {
+          const retry = await classifyCompetitions(db, provider, [row]);
+          if (retry.collisions.length || !retry.existing.has(row.external_id)) {
+            throw new CompetitionCollisionError(retry.collisions.length ? retry.collisions : [{ externalId: row.external_id, slug: row.slug || null, reason: `insertion refusée par la base (${rowError.message}) sans fiche réutilisable`, rows: [] }]);
+          }
+        }
       }
     }
-    byExt = await read();
   }
+  // Relecture finale : chaque ligue demandée doit désigner exactement une fiche.
+  const final = await classifyCompetitions(db, provider, uniq);
+  if (final.collisions.length) throw new CompetitionCollisionError(final.collisions);
+  for (const [externalId, row] of final.existing) byExt.set(externalId, row);
+  const unresolved = uniq.filter((d) => !byExt.has(String(d.external_id)));
+  if (unresolved.length) throw new CompetitionCollisionError(unresolved.map((d) => ({ externalId: String(d.external_id), slug: d.slug || null, reason: "fiche introuvable après création", rows: [] })));
   return byExt;
 }
