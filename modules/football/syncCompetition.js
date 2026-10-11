@@ -172,7 +172,7 @@ export async function syncCompetition(db, competition, ctx = {}) {
         if (ext && !existingMap[ext] && !seenMissing.has(ext)) { seenMissing.add(ext); missingClubs.push({ external_id: ext, name: name || ext }); }
       }
     }
-    if (missingClubs.length) await upsertExternal(db, "clubs", competition.provider, missingClubs, ["name"]);
+    if (missingClubs.length) await upsertExternal(db, "clubs", competition.provider, missingClubs, ["name"], { extMode: "keep" });
     const map = missingClubs.length ? await idMapByExternalIds(db, "clubs", competition.provider, teamExternalIds(live)) : existingMap;
     const resolved = resolveMatches(live, competition.id, season.id, map);
     const n = await upsertExternal(db, "matches", competition.provider, resolved,
@@ -216,14 +216,14 @@ export async function syncCompetition(db, competition, ctx = {}) {
     if (m.away_ext) derived.set(m.away_ext, { external_id: m.away_ext, name: m.away_name || m.away_ext });
   }
   const seasonClubExternalIds = new Set(derived.keys());
-  let clubsN = await upsertExternal(db, "clubs", competition.provider, [...derived.values()], ["name"]);
+  let clubsN = await upsertExternal(db, "clubs", competition.provider, [...derived.values()], ["name"], { extMode: "keep" });
   if (provider.fetchClubs) {
     let clubs = null;
     try { clubs = await provider.fetchClubs(competition, ctx); }
     catch (error) { warnings.push(`clubs: ${error.message}`); }
     if (clubs) {
       for (const club of clubs) if (club.external_id) seasonClubExternalIds.add(String(club.external_id));
-      await upsertExternal(db, "clubs", competition.provider, clubs, ["name", "short_name", "logo_url", "city"]);
+      await upsertExternal(db, "clubs", competition.provider, clubs, ["name", "short_name", "logo_url", "city"], { extMode: "merge" });
       await fillMissingClubProfile(db, competition.provider, clubs);
       clubsN = Math.max(clubsN, clubs.length);
     }

@@ -32,7 +32,7 @@ export async function syncTeamTest(db, competition, ctx = {}) {
 
   const club = await provider.fetchClubById(teamExternalId, { ...ctx, season });
   if (!club) throw new Error(`${competition.name}: équipe ${teamExternalId} introuvable`);
-  await upsertExternal(db, "clubs", competition.provider, [club], ["name", "short_name", "logo_url", "city", "founded_year", "stadium_name", "stadium_capacity", "stadium_address", "stadium_image_url"]);
+  await upsertExternal(db, "clubs", competition.provider, [club], ["name", "short_name", "logo_url", "city", "founded_year", "stadium_name", "stadium_capacity", "stadium_address", "stadium_image_url"], { extMode: "merge" });
 
   const matches = await provider.fetchTeamMatches(competition, teamExternalId, { ...ctx, season });
   const derivedClubs = new Map();
@@ -40,7 +40,7 @@ export async function syncTeamTest(db, competition, ctx = {}) {
     if (match.home_ext) derivedClubs.set(match.home_ext, { external_id: match.home_ext, name: match.home_name || match.home_ext, logo_url: match.home_logo || null });
     if (match.away_ext) derivedClubs.set(match.away_ext, { external_id: match.away_ext, name: match.away_name || match.away_ext, logo_url: match.away_logo || null });
   }
-  await upsertExternal(db, "clubs", competition.provider, [...derivedClubs.values()], ["name", "logo_url"]);
+  await upsertExternal(db, "clubs", competition.provider, [...derivedClubs.values()], ["name", "logo_url"], { extMode: "keep" });
   // Uniquement les clubs de ces matchs : une lecture de tous les clubs serait tronquée.
   const clubRows = [...(await loadByExternalIds(db, "clubs", competition.provider, [String(teamExternalId), ...derivedClubs.keys()], "id,name,external_id,team_type,parent_club_id,ext")).values()];
   const clubMap = Object.fromEntries(clubRows.map((row) => [String(row.external_id), row.id]));
