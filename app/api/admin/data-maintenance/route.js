@@ -1,5 +1,6 @@
 import { getAdmin } from "@/lib/supabaseAdmin";
 import { selectAllPages } from "@/modules/football/sync";
+import { applyMatchClubLinks, applyPlayerStatLinks, relinkMatchClubs, relinkMatchPlayerStats } from "@/modules/football/relinkWithoutApi";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -12,7 +13,7 @@ async function adminContext(request) {
   if (error || !user) return { response: Response.json({ error: "Unauthorized" }, { status: 401 }) };
   const { data: profile } = await db.from("profiles").select("role").eq("id", user.id).maybeSingle();
   if (profile?.role !== "admin") return { response: Response.json({ error: "Forbidden" }, { status: 403 }) };
-  return { db };
+  return { db, user };
 }
 
 async function countByMatchIds(db, table, matchIds, extra = null) {
@@ -79,6 +80,36 @@ export async function POST(request) {
   if (input.action === "audit-duplicates") {
     try { return Response.json({ mode: "read-only", ...(await auditProviderDuplicates(auth.db)) }); }
     catch (error) { return Response.json({ error: error.message || String(error) }, { status: 500 }); }
+  }
+  // Reliaison SANS appel API (performances sans joueur, matchs sans club).
+  // « relink-preview » n'écrit rien ; « relink-apply » exige la confirmation
+  // « RELIER » et journalise chaque lien posé dans audit_log (retour arrière exact).
+  if (["relink-preview", "relink-apply"].includes(input.action)) {
+    const apply = input.action === "relink-apply";
+    if (apply && input.confirmation !== "RELIER") return Response.json({ error: "Recopie « RELIER » pour confirmer." }, { status: 400 });
+    try {
+      const performances = input.target === "performances";
+      if (!performances && input.target !== "matches") return Response.json({ error: "Cible inconnue (performances ou matches)." }, { status: 400 });
+      // Toujours un aperçu d'abord : il fixe le plan exact de ce lot.
+      const options = { competitionId: input.competitionId || null, limit: input.limit, afterId: input.afterId || null, apply: false };
+      const result = performances ? await relinkMatchPlayerStats(auth.db, options) : await relinkMatchClubs(auth.db, options);
+      if (!apply) return Response.json({ mode: "read-only", ...result, links: result.links.slice(0, 20) });
+      // Journal AVANT écriture : sans journal, aucun lien n'est posé.
+      let applied = [];
+      if (result.links.length) {
+        const { error: logError } = await auth.db.from("audit_log").insert({
+          actor: auth.user.id,
+          action: performances ? "football.relink.match_player_stats" : "football.relink.match_clubs",
+          target_table: performances ? "match_player_stats" : "matches",
+          meta: { competition_id: input.competitionId || null, after_id: input.afterId || null, planned_links: result.links },
+        });
+        if (logError) throw new Error(`Journal non écrit, aucun lien posé : ${logError.message}`);
+        applied = performances ? await applyPlayerStatLinks(auth.db, result.links) : await applyMatchClubLinks(auth.db, result.links);
+      }
+      return Response.json({ mode: "applied", ...result, linked: applied.length, links: applied.length });
+    } catch (error) {
+      return Response.json({ error: error.message || String(error) }, { status: 500 });
+    }
   }
   if (!input.seasonId) return Response.json({ error: "Choisis une saison à analyser." }, { status: 400 });
 
