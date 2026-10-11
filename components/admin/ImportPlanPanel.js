@@ -14,6 +14,7 @@ import {
   normalizeImportPlan,
 } from "@/lib/importPlan";
 import { COMPETITION_SCOPES, groupCompetitionsByScope, resolveCompetitionScope, competitionCountry } from "@/lib/competitionScopes";
+import RelinkPanel from "@/components/admin/RelinkPanel";
 
 const groupLabel = Object.fromEntries(IMPORT_GROUPS.map((group) => [group.key, group.label]));
 const scopeOptions = Object.entries(IMPORT_SCOPES);
@@ -327,6 +328,7 @@ export default function ImportPlanPanel() {
 
     <section className="mb-6 rounded-2xl border border-cyan-400/20 bg-cyan-400/5 p-4">
       <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="flex items-center gap-2 font-black"><Database className="h-4 w-4 text-cyan-300" />Entretien des données</h2><p className="mt-1 max-w-2xl text-xs leading-5 text-muted">Inventorie une saison, attribue un niveau à chaque club puis simule obligatoirement l’archivage avant confirmation.</p></div><span className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-cyan-200">Simulation obligatoire</span></div>
+      <div className="mt-4"><RelinkPanel /></div>
       <div className="mt-4 flex flex-col gap-2 sm:flex-row"><select value={maintenanceSeasonId} onChange={(event) => { setMaintenanceSeasonId(event.target.value); setMaintenanceReport(null); setMaintenanceStatus("idle"); }} className="min-w-0 flex-1 rounded-xl border border-line/10 bg-surface2 px-3 py-2 text-sm">{seasons.map((season) => <option key={season.id} value={season.id}>{competitionName[season.competition_id] || "Compétition"} · {season.label}</option>)}</select><button type="button" onClick={analyzeMaintenance} disabled={!maintenanceSeasonId || maintenanceStatus === "loading"} className="inline-flex items-center justify-center gap-2 rounded-xl border border-cyan-300/25 bg-cyan-300/10 px-4 py-2 text-sm font-bold text-cyan-100 disabled:opacity-50"><Search className={`h-4 w-4 ${maintenanceStatus === "loading" ? "animate-pulse" : ""}`} />{maintenanceStatus === "loading" ? "Analyse…" : "Analyser la saison"}</button></div>
       {maintenanceReport?.error && <div className="mt-3 rounded-xl border border-red-400/25 bg-red-500/10 p-3 text-sm text-red-200">{maintenanceReport.error}</div>}
       {maintenanceReport?.counts && <div className="mt-4"><div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">{[
