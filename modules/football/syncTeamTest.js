@@ -1,5 +1,6 @@
 import { getProvider } from "./providers";
 import { loadByExternalIds, upsertExternal } from "./sync";
+import { classifyNationalTeams } from "./nationalClassification";
 import { ensureSeason, seasonLabel, seasonYear } from "./season";
 import { clearUnassignedPlayerStats, upsertPlayerMembership } from "./playerMemberships";
 import { providerIdentityPatch } from "@/lib/playerIdentity";
@@ -33,6 +34,7 @@ export async function syncTeamTest(db, competition, ctx = {}) {
   const club = await provider.fetchClubById(teamExternalId, { ...ctx, season });
   if (!club) throw new Error(`${competition.name}: équipe ${teamExternalId} introuvable`);
   await upsertExternal(db, "clubs", competition.provider, [club], ["name", "short_name", "logo_url", "city", "founded_year", "stadium_name", "stadium_capacity", "stadium_address", "stadium_image_url"], { extMode: "merge" });
+  await classifyNationalTeams(db, competition.provider, [club]);
 
   const matches = await provider.fetchTeamMatches(competition, teamExternalId, { ...ctx, season });
   const derivedClubs = new Map();

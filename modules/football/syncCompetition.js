@@ -1,5 +1,6 @@
 import { getProvider } from "./providers";
 import { idMapByExternalIds, upsertExternal } from "./sync";
+import { classifyNationalTeams } from "./nationalClassification";
 import { ensureSeason, seasonLabel, seasonYear } from "./season";
 
 function parseRound(raw) {
@@ -225,6 +226,8 @@ export async function syncCompetition(db, competition, ctx = {}) {
       for (const club of clubs) if (club.external_id) seasonClubExternalIds.add(String(club.external_id));
       await upsertExternal(db, "clubs", competition.provider, clubs, ["name", "short_name", "logo_url", "city"], { extMode: "merge" });
       await fillMissingClubProfile(db, competition.provider, clubs);
+      // Les sélections (team.national) ne doivent jamais rester typées comme des clubs.
+      await classifyNationalTeams(db, competition.provider, clubs);
       clubsN = Math.max(clubsN, clubs.length);
     }
   }

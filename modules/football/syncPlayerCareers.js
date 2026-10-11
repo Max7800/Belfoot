@@ -2,6 +2,7 @@ import { getProvider } from "./providers";
 import { upsertExternal, ensureCompetitions } from "./sync";
 import { squadRoleForClub, upsertPlayerMembership } from "./playerMemberships";
 import { isNationalSelectionClub } from "@/lib/nationalities";
+import { classifyNationalTeams } from "./nationalClassification";
 
 function inferredTeamType(name, national = false) {
   if (national) return "national";
@@ -67,6 +68,8 @@ export async function syncPlayerCareers(db, competition, ctx = {}) {
         team_type: inferredTeamType(row.team.name, row.team.national),
         ext: row.ext || {},
       })));
+      // Une sélection déjà présente mais typée comme un club est reclassée.
+      await classifyNationalTeams(db, competition.provider, history.map((row) => row.team));
       const externalIds = [...new Set(history.map((row) => row.team.external_id))];
       const { data: clubs, error: clubsError } = externalIds.length
         ? await db.from("clubs").select("id,name,external_id,team_type,national_category,ext").eq("source", competition.provider).in("external_id", externalIds)
@@ -75,7 +78,8 @@ export async function syncPlayerCareers(db, competition, ctx = {}) {
       const clubMap = Object.fromEntries((clubs || []).map((club) => [club.external_id, club]));
       for (const row of history) {
         const club = clubMap[row.team.external_id];
-        if (!club || isNationalSelectionClub(club, player.nationality)) continue;
+        // Une sélection n'est jamais une affectation de club (convocations à part).
+        if (!club || row.team.national || isNationalSelectionClub(club, player.nationality)) continue;
         await upsertPlayerMembership(db, {
           playerId: player.id,
           club,
@@ -99,6 +103,7 @@ export async function syncPlayerCareers(db, competition, ctx = {}) {
           national_category: row.team.national ? (/\bU\s?(\d{2})\b/i.exec(row.team.name)?.[1] ? `u${/\bU\s?(\d{2})\b/i.exec(row.team.name)[1]}` : "senior") : null,
           ext: { country: row.team.country, national: row.team.national, imported_for: "player-career" },
         })));
+        await classifyNationalTeams(db, competition.provider, seasonStats.map((row) => row.team));
         const compMap = await ensureCompetitions(db, competition.provider, seasonStats.map((row) => ({
           external_id: row.competition.external_id,
           name: row.competition.name,
@@ -145,7 +150,7 @@ export async function syncPlayerCareers(db, competition, ctx = {}) {
           const club = statClubMap[row.team.external_id];
           const statCompetition = statCompetitionMap[row.competition.external_id];
           if (!club || !statCompetition) continue;
-          if (!isNationalSelectionClub(club, row.player.nationality || player.nationality)) {
+          if (!row.team.national && !isNationalSelectionClub(club, row.player.nationality || player.nationality)) {
             await upsertPlayerMembership(db, {
               playerId: player.id,
               club,

@@ -2,6 +2,7 @@ import { getProvider } from "./providers";
 import { upsertExternal } from "./sync";
 import { seasonLabel, seasonYear } from "./season";
 import { upsertPlayerMembership } from "./playerMemberships";
+import { isNationalTeam } from "./nationalClassification";
 
 export async function resolveNationalPlayerClubs(db, ctx = {}) {
   const providerKey = "apifootball";
@@ -32,8 +33,10 @@ export async function resolveNationalPlayerClubs(db, ctx = {}) {
     const info = await provider.fetchPlayerClubSeason(player, { ...ctx, season, nationalTeamExternalId: teamExternalId });
     if (!info?.club) { unresolved.push(player.name); continue; }
     await upsertExternal(db, "clubs", providerKey, [info.club], ["name", "logo_url"], { extMode: "merge" });
-    const { data: club, error: clubError } = await db.from("clubs").select("id,name,team_type,parent_club_id").eq("source", providerKey).eq("external_id", info.club.external_id).maybeSingle();
+    const { data: club, error: clubError } = await db.from("clubs").select("id,name,team_type,parent_club_id,national_category,ext").eq("source", providerKey).eq("external_id", info.club.external_id).maybeSingle();
     if (clubError || !club) throw clubError || new Error(`${info.club.name}: club local introuvable`);
+    // Une autre sélection (jeunes, autre pays) n'est jamais retenue comme club.
+    if (isNationalTeam(club)) { unresolved.push(player.name); continue; }
     const { error: updateError } = await db.from("players").update({
       club_id: club.id,
       // Pays/championnat seulement s'ils désignent le championnat national du club :
