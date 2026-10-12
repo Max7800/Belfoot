@@ -1,5 +1,30 @@
 # BELFOOT — Passation technique
 
+## Roadmap des synchronisations — 8 PR (audit du 12/10/2026, Claude)
+
+Audit complet des synchronisations (lecture seule) puis plan validé avec l'utilisateur : **une seule PR à la fois, feu vert explicite à chaque étape**. Les boutons de synchronisation contextuels (fiches compétition, club, joueur) sont conservés ; le futur panneau central les complète sans les remplacer.
+
+1. **Collisions de compétitions — TERMINÉE** (PR #9, merge `e73e485`, déployée en production le 12/10). `ensureCompetitions` lève `CompetitionCollisionError` (slug ou identifiant ambigu) au lieu d'ignorer l'erreur d'unicité ; `syncNationalTeam` s'arrête avant toute écriture ; `runJob` enregistre `params.error_code` ; le cron `national-refresh` ne relance plus une sélection en collision avant l'intervalle normal (4 h en rassemblement, 20 h sinon). Aucune migration. Vérification de production avant fusion : 0 collision.
+2. **Pipelines abandonnés ou bloqués — EN COURS** (branche `fix/pipeline-leases`). Voir ci-dessous.
+3. **Périmètre explicite des jobs** : aucun job ciblé ne parcourt toute la base faute d'identifiant ; périmètre `global` explicite et réservé aux pipelines prévus ; route historique `/api/jobs/[key]` alignée.
+4. **Carte « Prochaine journée »** : pendant une journée en cours, afficher la journée complète SUIVANTE ; reports, annulations et directs bloqués pris en compte ; statuts harmonisés avec `isMatchOver`.
+5. **U21 (ligue 850)** : tous les matchs de la compétition, classements officiels des groupes, une saison par campagne (aucune saison artificielle), pas de tableau à élimination injustifié. Code d'abord ; imports et réparations de production séparés, sur autorisation.
+6. **Identité des joueurs et « Synchroniser ce club »** : noms et photos corrigés à la main protégés (`ext.editorial_fields`) ; compétitions homonymes distinguées sans renommage ; action ciblée sur un club (effectif, entraîneur, matchs de la saison choisie).
+7. **Façade commune et panneau central** : règles partagées (préflight, confirmation, périmètre, budget, journal, erreurs) ; panneau d'abord en lecture seule (historique, diagnostics).
+8. **Garde-fous d'administration** : modifications de `external_id`, suppressions de compétitions et écritures concurrentes de `site_settings` confirmées et auditées.
+
+### PR 2 — pipelines abandonnés : protections (branche `fix/pipeline-leases`, non poussée)
+
+- **Bail commun** (`lib/runLease.js`) : `LEASE_MS = (60 s de durée maximale d'une fonction + 60 s de marge) = 120 s`. Toutes les routes qui exécutent des jobs ou des pipelines déclarent `maxDuration = 60` (ajouté à `/api/jobs/[key]`) ; un test échoue si l'une dépasse la durée supposée. Au-delà du bail sans battement, l'exécution est morte (fonction coupée par Vercel), jamais seulement lente.
+- **Expiration** (`expireAbandonedRuns`, au lancement de chaque job, à la création et à la reprise d'un pipeline) : jobs `running` → `timeout` ; pipelines `running` → `error` avec explication (« Pipeline abandonné : aucun battement depuis N s… Progression conservée, reprise possible »), `finished_at`, compteur réconcilié depuis `job_runs`. Mise à jour conditionnelle (toujours `running` et toujours sans battement récent) ; rien n'est supprimé.
+- **Jeton de prise de possession** (`params.lease_token`, aucune migration) : chaque invocation de `run-pipeline` en génère un ; toute écriture de l'exécution (statut, progression, battement, compteurs, points de reprise, erreur, fin) est un seul `UPDATE … WHERE id AND status = 'running' AND params->>'lease_token' = jeton`. Une reprise fait tourner le jeton, conditionnée au statut et au jeton lus : deux reprises simultanées ne réussissent jamais toutes les deux. Une instance dépossédée reçoit `LeaseLostError` (HTTP 409) et n'écrit rien, pas même une erreur. Le battement des jobs (`persist`) est conditionné au statut du job et au jeton du pipeline : l'ancienne instance s'arrête avant son appel API suivant. La fin d'un job est conditionnée à `status = running` (un `timeout` n'est jamais réécrit).
+- **Création** : refusée (409) si un pipeline `running` à bail valide ou `paused` existe pour la même cible ; message invitant à reprendre le pipeline existant. Aucune suppression, aucune action d'abandon.
+- **Admin** : la liste des pipelines affiche « En cours », « Abandonné (bail expiré) », « En pause » ou « En erreur » avec la même règle de bail ; l'affichage n'autorise rien, la route reste seule juge.
+- **Jeton jamais envoyé au navigateur** : le panneau lit `pipeline_runs` avec `PIPELINE_RUN_PUBLIC_COLUMNS` (`lib/runLease.js`), qui exclut `params` et donc `lease_token` ; les réponses de la route le retirent aussi (`publicRun`). Vérifié par des tests (lecture du code client, réponses de la route).
+- **Réponse reçue après expiration** : le cycle réel du fournisseur API-Football (`apiFull` : `beforeRequest` → `fetch` → `afterResponse` → lecture) est testé avec un `fetch` simulé : si la réponse arrive après l'expiration du job, `afterResponse` échoue et la réponse n'est jamais exploitée (aucune écriture métier, statut `timeout` conservé).
+- **Limite** : la fenêtre entre `afterResponse` et l'appel API suivant n'est pas protégée par le jeton : les écritures métier déjà engagées sur une réponse acceptée peuvent aller à leur terme ; elles sont idempotentes, et le cas suppose une fonction vivante au-delà de 120 s, impossible avec `maxDuration = 60`.
+- **Portée des tests** : faux client Supabase, faux fournisseur ou `fetch` simulé, et contrôles SQL écrits à la main sur PostgreSQL embarqué (PGlite). Ce n'est **ni** une validation sur un véritable PostgREST (traduction réelle des filtres `->>`, `.is(null)`, `.contains()`), **ni** un test de concurrence réelle entre transactions ; ces deux points restent à vérifier sur une instance Supabase de test.
+
 ## Roadmap fiabilité des données — état au 10/10/2026 (Claude)
 
 Ordre validé avec l'utilisateur (audit du 10/10) : P0-2 → P0-1 → P0-4 → P0-7 → résolveur de saison exact → P0-3/P0-8 → saisons `importing`/pointeur `ext.season`.

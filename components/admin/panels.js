@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import siteConfig from "@/config/site";
 import { JOB_CATALOG, jobKeys, JOB_GROUPS, jobsInGroup, jobPipelines } from "@/lib/jobCatalog";
+import { LEASE_MS, PIPELINE_RUN_PUBLIC_COLUMNS, runState } from "@/lib/runLease";
 import ImageField from "@/components/ui/ImageField";
 import { CLUB_SECTIONS } from "@/lib/clubSections";
 import { normalizeStatsConfig } from "@/lib/statsSections";
@@ -112,7 +113,7 @@ export function JobsPanel() {
   const load = async () => {
     const [jobResult, pipelineResult] = await Promise.all([
       supabase.from("job_runs").select("*").order("started_at", { ascending: false }).limit(30),
-      supabase.from("pipeline_runs").select("*").order("started_at", { ascending: false }).limit(12),
+      supabase.from("pipeline_runs").select(PIPELINE_RUN_PUBLIC_COLUMNS).order("started_at", { ascending: false }).limit(12),
     ]);
     setRows(jobResult.data || []);
     setPipelineRuns(pipelineResult.data || []);
@@ -283,10 +284,14 @@ export function JobsPanel() {
       {resumablePipelineRuns.map((runItem) => {
         const definition = jobPipelines().find((item) => item.key === runItem.pipeline_key);
         if (!definition) return null;
-        const recentlyRunning = runItem.status === "running" && Date.now() - new Date(runItem.heartbeat_at || runItem.started_at).getTime() < 2 * 60 * 1000;
+        // Même règle de bail que le serveur (lib/runLease.js). Indicatif seulement :
+        // la route run-pipeline reste seule juge d'une reprise.
+        const state = runState(runItem);
+        const recentlyRunning = state === "active";
+        const stateLabel = { active: "En cours", abandoned: "Abandonné (bail expiré)", paused: "En pause", error: "En erreur" }[state] || state;
         const used = Number(runItem.request_count) || 0;
         const available = Math.max(0, (Number(runItem.request_limit) || 0) - used);
-        return <div key={runItem.id} className="mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-amber-400/30 bg-amber-400/10 p-2 text-xs text-amber-200"><span className="flex-1">« {definition.label} » · étape {Math.min((runItem.next_step || 0) + 1, definition.jobs.length)}/{definition.jobs.length} · {used} consommés · {available} disponibles{runItem.detail ? ` · ${runItem.detail}` : ""}</span><button disabled={!!busy || recentlyRunning} title={recentlyRunning ? "Exécution encore active ; reprise disponible après deux minutes sans battement." : "Reprendre à l’étape enregistrée"} onClick={() => runPipeline(definition, runItem.id)} className="rounded bg-amber-400/20 px-3 py-1 font-bold text-amber-200 disabled:opacity-50">{recentlyRunning ? "En cours" : "Reprendre"}</button></div>;
+        return <div key={runItem.id} className="mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-amber-400/30 bg-amber-400/10 p-2 text-xs text-amber-200"><span className="flex-1"><b>{stateLabel}</b> · « {definition.label} » · étape {Math.min((runItem.next_step || 0) + 1, definition.jobs.length)}/{definition.jobs.length} · {used} consommés · {available} disponibles{runItem.detail ? ` · ${runItem.detail}` : ""}</span><button disabled={!!busy || recentlyRunning} title={recentlyRunning ? `Exécution encore active ; reprise possible après ${LEASE_MS / 1000} s sans battement.` : "Reprendre à l’étape enregistrée"} onClick={() => runPipeline(definition, runItem.id)} className="rounded bg-amber-400/20 px-3 py-1 font-bold text-amber-200 disabled:opacity-50">{recentlyRunning ? "En cours" : "Reprendre"}</button></div>;
       })}
       <p className="mt-2 text-[11px] leading-5 text-muted">Pour un nouveau pipeline, le budget est partagé sur toute la séquence. Il n'existe plus de plafond caché à 100 appels : l'enveloppe saisie (jusqu'à 5 000) reste toutefois contrôlée par le préflight, le quota connu et la confirmation administrateur. « Compléter la saison » enchaîne automatiquement les lots et ignore les matchs déjà traités. Lors d'une reprise, la valeur saisie devient l'enveloppe <b>encore disponible</b> : les appels déjà consommés et l'avancement restent enregistrés.</p>
     </div>
