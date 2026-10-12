@@ -1,5 +1,5 @@
 import { getProvider } from "./providers";
-import { upsertExternal, ensureCompetitions } from "./sync";
+import { upsertExternal, ensureCompetitions, CompetitionCollisionError } from "./sync";
 import { squadRoleForClub, upsertPlayerMembership } from "./playerMemberships";
 import { isNationalSelectionClub } from "@/lib/nationalities";
 import { classifyNationalTeams } from "./nationalClassification";
@@ -57,6 +57,7 @@ export async function syncPlayerCareers(db, competition, ctx = {}) {
   let memberships = 0;
   let statLines = 0;
   const errors = [];
+  let collisions = 0;
   for (const player of players) {
     await db.from("players").update({ career_sync_status: "running" }).eq("id", player.id);
     try {
@@ -193,11 +194,19 @@ export async function syncPlayerCareers(db, competition, ctx = {}) {
       await db.from("players").update({ career_sync_status: "ok", career_synced_at: completedAt, ...(completedExt ? { ext: completedExt } : {}) }).eq("id", player.id);
     } catch (error) {
       await db.from("players").update({ career_sync_status: "error", career_synced_at: new Date().toISOString() }).eq("id", player.id);
-      errors.push(`${player.name}: ${error.message || String(error)}`);
+      // Collision : l'historique de carrière et les références de clubs de ce
+      // joueur sont déjà écrits (indépendants de la compétition) ; seules ses
+      // statistiques de saison sont écartées. Le message le dit explicitement.
+      if (error instanceof CompetitionCollisionError) {
+        collisions++;
+        errors.push(`${player.name}: statistiques de saison non enregistrées (historique de carrière et clubs déjà mis à jour) — ${error.message}`);
+      } else {
+        errors.push(`${player.name}: ${error.message || String(error)}`);
+      }
     }
   }
   if (targeted && errors.length) throw new Error(errors.join("; "));
-  const detail = `${competition.name}: ${players.length} carrière(s), ${memberships} affectation(s) historiques${ctx.includeCareerStats ? ` · ${statLines} ligne(s) statistique(s) toutes compétitions` : ""}${errors.length ? ` · ${errors.length} erreur(s): ${errors.join("; ")}` : ""}`;
+  const detail = `${competition.name}: ${players.length} carrière(s), ${memberships} affectation(s) historiques${ctx.includeCareerStats ? ` · ${statLines} ligne(s) statistique(s) toutes compétitions` : ""}${errors.length ? ` · ${errors.length} erreur(s)${collisions ? ` dont ${collisions} collision(s) de compétitions` : ""}: ${errors.join("; ")}` : ""}`;
   if (targeted) return detail;
   // Lot : on signale l'avancement pour qu'un pipeline draine tous les joueurs de la
   // division (terminé quand plus aucun joueur n'a d'historique manquant).

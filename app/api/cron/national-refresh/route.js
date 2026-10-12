@@ -1,5 +1,6 @@
 import { runJob } from "@/lib/jobs";
 import { getAdmin } from "@/lib/supabaseAdmin";
+import { COMPETITION_COLLISION } from "@/modules/football/sync";
 
 export const dynamic = "force-dynamic";
 // Vercel Hobby : 60 s max par Function. Le travail réel est borné (lots + budget).
@@ -83,13 +84,24 @@ export async function GET(request) {
       if (teamIds.includes(match.away_club_id)) inWindow.add(match.away_club_id);
     }
 
+    // Collision de compétitions : l'échec survient AVANT toute écriture, donc
+    // `synced_at` ne bouge pas. Sans mémoire de cet échec, la sélection redeviendrait
+    // « due » à chaque passage (toutes les 15 min) et consommerait ses appels API pour
+    // la même erreur. La dernière tentative en collision compte donc comme une
+    // tentative : la relance attend l'intervalle normal (fenêtre ou repos).
+    const lastCollisionAt = await lastCollisionAttempts(db, teams, now, Math.max(refreshWindow, refreshIdle));
+
     // Qui est « dû » : seuil de fraîcheur différent selon la fenêtre.
     const due = [];
+    let heldAfterCollision = 0;
     for (const team of teams) {
       const windowActive = inWindow.has(team.id);
-      const last = team.synced_at ? new Date(team.synced_at).getTime() : 0;
-      const ageHours = (now.getTime() - last) / 3600000;
-      if (ageHours >= (windowActive ? refreshWindow : refreshIdle)) due.push({ team, windowActive, ageHours });
+      const synced = team.synced_at ? new Date(team.synced_at).getTime() : 0;
+      const collision = lastCollisionAt.get(String(team.external_id)) || 0;
+      const threshold = windowActive ? refreshWindow : refreshIdle;
+      const ageHours = (now.getTime() - Math.max(synced, collision)) / 3600000;
+      if (ageHours >= threshold) due.push({ team, windowActive, ageHours });
+      else if ((now.getTime() - synced) / 3600000 >= threshold) heldAfterCollision++;
     }
     // Priorité : en fenêtre d'abord, puis les plus anciennement synchronisées.
     due.sort((a, b) => Number(b.windowActive) - Number(a.windowActive) || b.ageHours - a.ageHours);
@@ -98,7 +110,7 @@ export async function GET(request) {
     if (dryRun) {
       return Response.json({
         ok: true, dryRun: true, season, window: { from, to },
-        followed: teams.length, inWindow: [...inWindow].length, due: due.length,
+        followed: teams.length, inWindow: [...inWindow].length, due: due.length, heldAfterCollision,
         picked: picked.map((item) => ({ team: item.team.name, windowActive: item.windowActive, ageHours: Math.round(item.ageHours) })),
       });
     }
@@ -133,12 +145,32 @@ export async function GET(request) {
     return Response.json({
       ok: results.every((result) => result.ok),
       season, window: { from, to },
-      followed: teams.length, due: due.length, refreshed: results.length,
+      followed: teams.length, due: due.length, heldAfterCollision, refreshed: results.length,
       estimatedCalls: used, liveToggle, results,
     }, { status: results.length === 0 || results.some((result) => result.ok) ? 200 : 500 });
   } catch (error) {
     return Response.json({ ok: false, error: String(error?.message || error).slice(0, 500) }, { status: 500 });
   }
+}
+
+// Dernière tentative en collision de compétitions de chaque sélection (job_runs,
+// erreur marquée par runJob), sur la période où elle peut encore retarder une relance.
+async function lastCollisionAttempts(db, teams, now, lookbackHours) {
+  const targets = teams.map((team) => `team:${team.external_id}`);
+  const since = new Date(now.getTime() - lookbackHours * 3600000).toISOString();
+  const { data, error } = await db.from("job_runs").select("target_key,started_at,params")
+    .eq("job_key", "football.national-team").eq("status", "error")
+    .in("target_key", targets).gte("started_at", since)
+    .order("started_at", { ascending: false }).limit(1000);
+  if (error) throw error;
+  const latest = new Map();
+  for (const run of data || []) {
+    if (run.params?.error_code !== COMPETITION_COLLISION) continue;
+    const externalId = String(run.target_key).slice("team:".length);
+    const time = new Date(run.started_at).getTime();
+    if (!latest.has(externalId) || time > latest.get(externalId)) latest.set(externalId, time);
+  }
+  return latest;
 }
 
 async function syncSelectionLiveFlags(db, teamIds, teamIn, now, strategy) {
