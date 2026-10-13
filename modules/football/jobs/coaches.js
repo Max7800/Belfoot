@@ -1,10 +1,12 @@
 import "@/modules/football/apifootball";
 import "@/modules/football/thesportsdb";
 import { syncCoaches } from "../syncCoaches";
+import { requireCompetitionId } from "@/lib/jobScope";
 
 export default {
   key: "football.coaches",
   async run({ db, competitionId, ...ctx }) {
+    requireCompetitionId("football.coaches", competitionId);
     let query = db.from("competitions").select("*").not("provider", "is", null);
     if (competitionId) query = query.eq("id", competitionId);
     const { data: competitions } = await query;
