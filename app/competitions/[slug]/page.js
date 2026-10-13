@@ -15,6 +15,7 @@ import CompetitionSyncButton from "@/components/football/CompetitionSyncButton";
 import Watermark from "@/components/football/Watermark";
 import { computeStandings } from "@/lib/standings";
 import { isMatchOver } from "@/lib/matchStatus";
+import { isSeasonOver, nextMatchday, upcomingMatches } from "@/lib/matchdays";
 import { competitionPhases, formatCompetitionName, getCompetitionType, isEuropeanClubCompetition, isKnockoutPhase } from "@/lib/competitionType";
 import { competitionPath, resolveCompetitionRoute } from "@/lib/competitionRoutes";
 import { useLabels } from "@/lib/labels";
@@ -273,9 +274,13 @@ export default function CompetitionPage() {
 
   const lastRound = Math.max(-1, ...phaseFinished.map((m) => m.round_number ?? -1));
   const lastResults = lastRound >= 0 ? phaseMatches.filter((m) => (m.round_number ?? -1) === lastRound) : [...phaseFinished].sort((a, b) => new Date(b.kickoff) - new Date(a.kickoff)).slice(0, 10);
-  const nextRound = Math.min(Infinity, ...phaseMatches.filter((m) => m.status !== "finished" && m.round_number != null).map((m) => m.round_number));
-  const upcoming = Number.isFinite(nextRound) ? phaseMatches.filter((m) => m.round_number === nextRound) : [...seasonMatches].filter((m) => m.status !== "finished").sort((a, b) => new Date(a.kickoff || 0) - new Date(b.kickoff || 0)).slice(0, 10);
-  const allFinished = seasonMatches.length > 0 && seasonMatches.every((m) => m.status === "finished");
+  // Journée en cours → journée complète suivante ; reports, annulations et
+  // directs bloqués ne retiennent jamais la carte (règle dans lib/matchdays.js).
+  const nowMs = Date.now();
+  const nextDay = nextMatchday(phaseMatches, nowMs);
+  const nextRound = nextDay ? nextDay.round : Infinity;
+  const upcoming = nextDay ? nextDay.matches : upcomingMatches(seasonMatches, nowMs);
+  const allFinished = isSeasonOver(seasonMatches, nowMs);
 
   const clubHref = (id) => `/clubs/${id}?season=${encodeURIComponent(seasonLabel)}`;
   const ClubChip = ({ id }) => <Link href={clubHref(id)} className="inline-flex min-w-0 items-center gap-2 hover:text-accent">{clubsMap[id]?.logo_url && <img src={clubsMap[id].logo_url} className="h-5 w-5 shrink-0 object-contain" alt="" />}<span className="truncate">{clubName(id)}</span></Link>;
