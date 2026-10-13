@@ -2,6 +2,9 @@ import { runJob } from "@/lib/jobs";
 import { getAdmin } from "@/lib/supabaseAdmin";
 
 export const dynamic = "force-dynamic";
+// Même plafond que toutes les routes qui exécutent des jobs : le bail
+// (lib/runLease.js) suppose qu'aucune exécution ne dépasse 60 s.
+export const maxDuration = 60;
 
 function authorized(request) {
   const direct = request.headers.get("x-jobs-secret");

@@ -310,7 +310,7 @@ joueur est verrouillée. `syncSquads` et `discoverPlayers` font encore `continue
 les stats/découvertes. Formaliser une règle unique : le verrou protège les champs de la fiche, jamais
 les tables statistiques séparées.
 
-### DATA-06 — HAUT — Risque de quota par concurrence et répétitions — GARDE-FOUS CODÉS
+### DATA-06 — HAUT — Risque de quota par concurrence et répétitions — GARDE-FOUS CODÉS, REPRISE SÉCURISÉE (PR 2)
 
 **Correctif du 18 septembre 2026 :** `0004_job_execution_guardrails.sql` ajoute un verrou unique par
 job/cible, heartbeat, expiration après 20 minutes, compteur d'appels, budget et quota restant. Dans
@@ -330,6 +330,31 @@ réinterrogés jusqu'à leur fin. Le préflight ne compte plus que les endpoints
 
 Ajouter verrou/advisory lock, budget de requêtes, compteur journalier, `processed_at` même pour une
 réponse vide, reprise après timeout et bouton de confirmation affichant le coût maximal.
+
+**État réel au 12 octobre 2026 (relecture du code, PR 2 `fix/pipeline-leases`) :** la liste ci-dessus
+décrit la situation d'avant les correctifs ; elle n'est plus exacte.
+
+- *Avant la PR 2* : un job `running` sans battement depuis **2 minutes** (et non 20) était passé en
+  `timeout`, mais seulement au démarrage d'un job suivant ; un **pipeline** coupé restait `running`
+  indéfiniment (création bloquée sur la cible, contrôles faussés) ; la reprise n'était pas atomique et
+  une instance perdante pouvait passer en `error` le pipeline de l'instance gagnante ; un pipeline en
+  pause n'empêchait pas d'en créer un second sur la même cible.
+- *Avec la PR 2* : bail commun de 120 s (`lib/runLease.js`, 60 s de `maxDuration` + 60 s de marge,
+  vérifié par test sur toutes les routes d'exécution) ; expiration commune des jobs et des pipelines
+  (historique conservé, compteurs réconciliés) ; jeton de prise de possession `params.lease_token`
+  exigé par chaque écriture d'exécution (`UPDATE` conditionnel unique) ; reprise atomique ; création
+  refusée si un pipeline actif ou en pause existe déjà sur la cible. Aucune migration. Le jeton ne
+  quitte jamais le serveur : le panneau lit `pipeline_runs` via `PIPELINE_RUN_PUBLIC_COLUMNS`, qui
+  exclut `params` (donc `lease_token`), et les réponses de la route le retirent.
+- *Réponse reçue après expiration* : le cycle réel du fournisseur API-Football (`beforeRequest` →
+  `fetch` → `afterResponse` → lecture) est testé avec un `fetch` simulé ; une réponse arrivée après
+  l'expiration du job est bloquée par `afterResponse` et n'est jamais exploitée.
+- *Reste ouvert* : compteur journalier global de quota ; la fenêtre entre `afterResponse` et l'appel
+  API suivant n'est pas protégée par le jeton pour les écritures métier déjà engagées (idempotentes,
+  et impossibles au-delà de 60 s).
+- *Portée des preuves* : tests avec faux client, faux fournisseur ou `fetch` simulé, et SQL écrit à la
+  main sur PGlite. Ni validation sur un véritable PostgREST, ni test de concurrence réelle entre
+  transactions : à vérifier sur une instance Supabase de test.
 
 ### DATA-07 — MOYEN — Pas de timeout/retry provider — CORRIGÉ POUR API-FOOTBALL
 

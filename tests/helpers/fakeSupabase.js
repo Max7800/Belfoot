@@ -5,6 +5,14 @@
 // défaut sur Supabase) SANS erreur : c'est ce plafond silencieux qui tronquait
 // les correspondances construites sur « toute la table ».
 
+// Colonne simple ou chemin JSON PostgREST « params->>cle » (valeur texte, comme en SQL).
+function readColumn(row, column) {
+  const [base, key] = String(column).split("->>");
+  if (key === undefined) return row[base];
+  const value = row[base]?.[key];
+  return value === null || value === undefined ? null : String(value);
+}
+
 function compare(left, op, right) {
   if (op === "eq") return String(left) === String(right);
   if (op === "neq") return String(left) !== String(right);
@@ -59,9 +67,11 @@ const COLUMN_DEFAULTS = {
 };
 
 // Valeurs par défaut calculées à l'insertion (0001_core : job_runs.status
-// default 'running', started_at default now()). Suit l'horloge simulée des tests.
+// default 'running', started_at default now() ; 0005 : pipeline_runs). Suit
+// l'horloge simulée des tests.
 const DYNAMIC_DEFAULTS = {
   job_runs: () => ({ status: "running", started_at: new Date().toISOString() }),
+  pipeline_runs: () => ({ status: "running", params: {}, steps: [], next_step: 0, request_count: 0, started_at: new Date().toISOString(), heartbeat_at: new Date().toISOString() }),
 };
 
 // `uniqueIndexes` reproduit des index uniques partiels de la base, par ex.
@@ -89,19 +99,21 @@ export function createFakeSupabase(seed = {}, { maxRows = 1000, rpc = {}, unique
       update(payload) { state.op = "update"; state.payload = payload; return builder; },
       delete() { state.op = "delete"; return builder; },
       upsert(payload, options = {}) { state.op = "upsert"; state.payload = payload; state.options = options; return builder; },
-      eq(column, value) { state.filters.push((row) => row[column] === value); return builder; },
-      neq(column, value) { state.filters.push((row) => row[column] !== value); return builder; },
-      in(column, values) { const set = new Set(values); state.filters.push((row) => set.has(row[column])); return builder; },
-      is(column, value) { state.filters.push((row) => (value === null ? row[column] === null || row[column] === undefined : row[column] === value)); return builder; },
+      eq(column, value) { state.filters.push((row) => readColumn(row, column) === value); return builder; },
+      neq(column, value) { state.filters.push((row) => readColumn(row, column) !== value); return builder; },
+      in(column, values) { const set = new Set(values); state.filters.push((row) => set.has(readColumn(row, column))); return builder; },
+      is(column, value) { state.filters.push((row) => (value === null ? readColumn(row, column) === null || readColumn(row, column) === undefined : readColumn(row, column) === value)); return builder; },
+      // .contains("params", { cle: valeur }) : inclusion d'objet JSON (opérateur @>).
+      contains(column, subset) { state.filters.push((row) => Object.entries(subset || {}).every(([key, value]) => JSON.stringify(row[column]?.[key]) === JSON.stringify(value))); return builder; },
       not(column, op, value) {
         if (op !== "is" || value !== null) throw new Error("fakeSupabase: seul not(col, \"is\", null) est géré");
         state.filters.push((row) => row[column] !== null && row[column] !== undefined);
         return builder;
       },
-      lt(column, value) { state.filters.push((row) => compare(row[column], "lt", value)); return builder; },
-      lte(column, value) { state.filters.push((row) => compare(row[column], "lte", value)); return builder; },
-      gt(column, value) { state.filters.push((row) => compare(row[column], "gt", value)); return builder; },
-      gte(column, value) { state.filters.push((row) => compare(row[column], "gte", value)); return builder; },
+      lt(column, value) { state.filters.push((row) => compare(readColumn(row, column), "lt", value)); return builder; },
+      lte(column, value) { state.filters.push((row) => compare(readColumn(row, column), "lte", value)); return builder; },
+      gt(column, value) { state.filters.push((row) => compare(readColumn(row, column), "gt", value)); return builder; },
+      gte(column, value) { state.filters.push((row) => compare(readColumn(row, column), "gte", value)); return builder; },
       ilike(column, pattern) {
         const regex = new RegExp(`^${String(pattern).replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/%/g, ".*")}$`, "i");
         state.filters.push((row) => regex.test(String(row[column] ?? "")));
