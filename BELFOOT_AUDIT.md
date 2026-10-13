@@ -352,9 +352,13 @@ décrit la situation d'avant les correctifs ; elle n'est plus exacte.
 - *Reste ouvert* : compteur journalier global de quota ; la fenêtre entre `afterResponse` et l'appel
   API suivant n'est pas protégée par le jeton pour les écritures métier déjà engagées (idempotentes,
   et impossibles au-delà de 60 s).
-- *Portée des preuves* : tests avec faux client, faux fournisseur ou `fetch` simulé, et SQL écrit à la
-  main sur PGlite. Ni validation sur un véritable PostgREST, ni test de concurrence réelle entre
-  transactions : à vérifier sur une instance Supabase de test.
+- *Complément PR 2b* : la perte de bail n'est plus avalée par les appels facultatifs de
+  `syncCompetition` ni par les traitements élément par élément (`syncPlayerCareers`, `syncLineups`) :
+  le job s'arrête avant toute nouvelle écriture métier au lieu de poursuivre jusqu'à sa fin.
+- *Portée des preuves* : tests unitaires (faux client, faux fournisseur, `fetch` simulé) et, le 13/10,
+  validation locale sur un vrai PostgreSQL 17.10 et un vrai PostgREST 13.0.8 et 14.18 (filtres JSON en
+  `PATCH`, concurrence réelle avec attente de verrou, RLS) : 17/17. Non couvert : la plateforme
+  Supabase hébergée elle-même et PostgREST 16.x.
 
 ### DATA-07 — MOYEN — Pas de timeout/retry provider — CORRIGÉ POUR API-FOOTBALL
 
