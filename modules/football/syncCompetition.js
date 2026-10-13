@@ -2,6 +2,7 @@ import { getProvider } from "./providers";
 import { idMapByExternalIds, upsertExternal } from "./sync";
 import { classifyNationalTeams } from "./nationalClassification";
 import { ensureSeason, seasonLabel, seasonYear } from "./season";
+import { isLeaseLost } from "@/lib/runLease";
 
 function parseRound(raw) {
   if (!raw) return { round_raw: null, phase: null, round_number: null };
@@ -221,7 +222,9 @@ export async function syncCompetition(db, competition, ctx = {}) {
   if (provider.fetchClubs) {
     let clubs = null;
     try { clubs = await provider.fetchClubs(competition, ctx); }
-    catch (error) { warnings.push(`clubs: ${error.message}`); }
+    // Enrichissement facultatif : une erreur devient un avertissement, SAUF la
+    // perte de bail, qui doit arrêter le job avant toute autre écriture.
+    catch (error) { if (isLeaseLost(error)) throw error; warnings.push(`clubs: ${error.message}`); }
     if (clubs) {
       for (const club of clubs) if (club.external_id) seasonClubExternalIds.add(String(club.external_id));
       await upsertExternal(db, "clubs", competition.provider, clubs, ["name", "short_name", "logo_url", "city"], { extMode: "merge" });
@@ -250,7 +253,7 @@ export async function syncCompetition(db, competition, ctx = {}) {
   if (provider.fetchLeagueInfo) {
     let info = null;
     try { info = await provider.fetchLeagueInfo(competition, ctx); }
-    catch (error) { warnings.push(`infos ligue: ${error.message}`); }
+    catch (error) { if (isLeaseLost(error)) throw error; warnings.push(`infos ligue: ${error.message}`); }
     if (info) {
       leagueName = info.name || leagueName;
       finalExt = { ...finalExt, coverage: info.coverage, providerName: info.name, providerType: info.type, country: info.country, country_flag: info.flag };
@@ -264,7 +267,7 @@ export async function syncCompetition(db, competition, ctx = {}) {
     try {
       const groups = normalizeStandings(await provider.fetchStandings(competition, ctx), map);
       if (groups.length) finalExt = { ...finalExt, standings_by_season: { ...(finalExt.standings_by_season || {}), [selectedSeason]: groups } };
-    } catch (error) { warnings.push(`classements: ${error.message}`); }
+    } catch (error) { if (isLeaseLost(error)) throw error; warnings.push(`classements: ${error.message}`); }
   }
   // Ces marqueurs ne sont posés qu'après la fin du job de base. La carte par
   // saison évite qu'un import complet 2024 fasse passer une saison 2026 encore

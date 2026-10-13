@@ -3,6 +3,7 @@ import { upsertExternal, ensureCompetitions, CompetitionCollisionError } from ".
 import { squadRoleForClub, upsertPlayerMembership } from "./playerMemberships";
 import { isNationalSelectionClub } from "@/lib/nationalities";
 import { classifyNationalTeams } from "./nationalClassification";
+import { isLeaseLost } from "@/lib/runLease";
 
 function inferredTeamType(name, national = false) {
   if (national) return "national";
@@ -193,6 +194,8 @@ export async function syncPlayerCareers(db, competition, ctx = {}) {
         : player.ext;
       await db.from("players").update({ career_sync_status: "ok", career_synced_at: completedAt, ...(completedExt ? { ext: completedExt } : {}) }).eq("id", player.id);
     } catch (error) {
+      // Perte de bail : arrêt immédiat du lot, sans marquer ce joueur ni les suivants.
+      if (isLeaseLost(error)) throw error;
       await db.from("players").update({ career_sync_status: "error", career_synced_at: new Date().toISOString() }).eq("id", player.id);
       // Collision : l'historique de carrière et les références de clubs de ce
       // joueur sont déjà écrits (indépendants de la compétition) ; seules ses

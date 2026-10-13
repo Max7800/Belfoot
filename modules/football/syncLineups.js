@@ -1,6 +1,7 @@
 import { getProvider } from "./providers";
 import { seasonLabel } from "./season";
 import { idMapByExternalIds, selectAllPages } from "./sync";
+import { isLeaseLost } from "@/lib/runLease";
 
 function coverageFlags(competition) {
   const fixtures = competition.ext?.coverage?.fixtures || {};
@@ -145,6 +146,9 @@ export async function syncLineups(db, competition, ctx = {}) {
       fetchStats ? provider.fetchMatchPlayerStats({ external_id: match.external_id }, providerCtx) : Promise.resolve([]),
       fetchTeamStats ? provider.fetchMatchTeamStats({ external_id: match.external_id }, providerCtx) : Promise.resolve([]),
     ]);
+    // Perte de bail sur l'un des trois appels : arrêt AVANT toute écriture de ce match.
+    const leaseLost = results.find((result) => result.status === "rejected" && isLeaseLost(result.reason));
+    if (leaseLost) throw leaseLost.reason;
     const [lineupResult, playerResult, teamResult] = results;
     const lineups = lineupResult.status === "fulfilled" ? lineupResult.value : [];
     const stats = playerResult.status === "fulfilled" ? playerResult.value : [];
