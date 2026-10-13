@@ -1,9 +1,11 @@
 import "@/modules/football/apifootball";
 import { syncPlayerCareers } from "../syncPlayerCareers";
+import { requireCompetitionId } from "@/lib/jobScope";
 
 const playerCareersJob = {
   key: "football.player-careers",
   async run({ db, competitionId, ...ctx }) {
+    requireCompetitionId("football.player-careers", competitionId);
     const { data: competition, error } = await db.from("competitions").select("*").eq("id", competitionId).maybeSingle();
     if (error) throw error;
     if (!competition?.provider) throw new Error("Compétition introuvable ou sans provider");

@@ -1,10 +1,11 @@
 import "@/modules/football/apifootball";
 import { syncLineups } from "../syncLineups";
+import { requireCompetitionId } from "@/lib/jobScope";
 
 export default {
   key: "football.lineups",
   async run({ db, competitionId, ...ctx }) {
-    if (!competitionId) return "choisis une compétition pour lancer les compositions sans gaspiller le quota";
+    requireCompetitionId("football.lineups", competitionId);
     let query = db.from("competitions").select("*").not("provider", "is", null);
     query = query.eq("id", competitionId);
     const { data: competitions, error } = await query;

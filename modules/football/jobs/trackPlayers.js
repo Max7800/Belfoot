@@ -1,8 +1,10 @@
 import "@/modules/football/apifootball";
 import { trackPlayers } from "../trackPlayers";
+import { requireCompetitionId } from "@/lib/jobScope";
 export default {
   key: "football.track-belgians",
   async run({ db, competitionId, ...ctx }) {
+    requireCompetitionId("football.track-belgians", competitionId);
     let query = db.from("competitions").select("*").not("provider", "is", null);
     if (competitionId) query = query.eq("id", competitionId);
     const { data: competitions, error } = await query;

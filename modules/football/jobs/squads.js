@@ -1,8 +1,10 @@
 import "@/modules/football/apifootball";
 import { syncSquads } from "../syncSquads";
+import { requireCompetitionId } from "@/lib/jobScope";
 export default {
   key: "football.squads",
   async run({ db, competitionId, ...ctx }) {
+    requireCompetitionId("football.squads", competitionId);
     let _q = db.from("competitions").select("*").not("provider", "is", null); if (competitionId) _q = _q.eq("id", competitionId); const { data: comps } = await _q;
     if (!comps?.length) return "aucune compétition avec provider";
     const ordered = [...comps].sort((a, b) => String(a.id).localeCompare(String(b.id)));

@@ -1,8 +1,11 @@
 import "@/modules/football/apifootball";
 import { discoverBelgians } from "../discoverPlayers";
+import { requireCompetitionId } from "@/lib/jobScope";
 export default {
   key: "football.discover-belgians",
   async run({ db, competitionId, ...ctx }) {
+    // Seul le pipeline « monde » (globalScope) peut parcourir toutes les compétitions.
+    requireCompetitionId("football.discover-belgians", competitionId, { allowGlobal: true, globalScope: ctx.globalScope });
     let query = db.from("competitions").select("*").not("provider", "is", null).order("id");
     if (competitionId) query = query.eq("id", competitionId);
     const { data: comps, error } = await query;
