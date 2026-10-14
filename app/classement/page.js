@@ -3,19 +3,25 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { computeStandings } from "@/lib/standings";
-import { competitionPhases, getCompetitionType } from "@/lib/competitionType";
+import { competitionPhases, getCompetitionType, isKnockoutPhase } from "@/lib/competitionType";
+import { isMatchOver } from "@/lib/matchStatus";
+import { phaseGroups } from "@/lib/groupedStandings";
+import { useCompetitionMatchUpdates } from "@/lib/useCompetitionMatchUpdates";
+import GroupStandings from "@/components/football/GroupStandings";
+import SeasonNotice from "@/components/football/SeasonNotice";
 import StandingsTable from "@/components/football/StandingsTable";
 import CupRounds from "@/components/football/CupRounds";
 import { useLabels } from "@/lib/labels";
 import { competitionPath } from "@/lib/competitionRoutes";
 import { zonesForPhase } from "@/lib/standingsZones";
-import { loadClubsForMatches, loadCompetitionSeasons, loadSeasonMatches } from "@/lib/publicFootballData";
+import { loadClubsForMatches, loadPublicSeasonState, loadSeasonMatches } from "@/lib/publicFootballData";
 
 export default function ClassementPage() {
   const L = useLabels();
   const [comps, setComps] = useState([]); const [cid, setCid] = useState("");
   const [matches, setMatches] = useState([]); const [clubs, setClubs] = useState({}); const [phase, setPhase] = useState(null);
   const [seasons, setSeasons] = useState([]); const [seasonLabel, setSeasonLabel] = useState("");
+  const [unpublished, setUnpublished] = useState(false);
   const [error, setError] = useState(""); const [loading, setLoading] = useState(false);
   const activeSeason = seasons.find((season) => season.label === seasonLabel) || null;
   useEffect(() => { supabase.from("competitions").select("id,name,logo_url,public_visible,position,competition_type,ext,zones").order("name").then(({ data, error: loadError }) => {
@@ -25,8 +31,8 @@ export default function ClassementPage() {
   }); }, []);
   useEffect(() => { if (!cid) return; (async () => {
     setError(""); setClubs({}); setMatches([]);
-    const orderedSeasons = await loadCompetitionSeasons(supabase, cid);
-    setSeasons(orderedSeasons); setSeasonLabel(orderedSeasons[0]?.label || "");
+    const { seasons: orderedSeasons, unpublished: noPublishedSeason } = await loadPublicSeasonState(supabase, cid);
+    setSeasons(orderedSeasons); setSeasonLabel(orderedSeasons[0]?.label || ""); setUnpublished(noPublishedSeason);
   })().catch((e) => setError(e.message || String(e))); }, [cid]);
   useEffect(() => { if (!cid || (seasons.length && !activeSeason)) return; let alive = true; (async () => {
     setLoading(true); setError(""); setPhase(null);
@@ -34,7 +40,8 @@ export default function ClassementPage() {
     const clubMap = await loadClubsForMatches(supabase, rows);
     if (!alive) return;
     setMatches(rows); setClubs(clubMap); setLoading(false);
-  })().catch((loadError) => { if (alive) { setLoading(false); setError(loadError.message || String(loadError)); } }); return () => { alive = false; }; }, [cid, activeSeason, seasons.length]);
+  })().catch((loadError) => { if (alive) { setMatches([]); setClubs({}); setLoading(false); setError(loadError.message || String(loadError)); } }); return () => { alive = false; }; }, [cid, activeSeason, seasons.length]);
+  useCompetitionMatchUpdates(cid, activeSeason?.id || null, setMatches);
   const comp = comps.find((c) => c.id === cid) || null;
   const seasonMatches = matches;
   const type = getCompetitionType(comp, seasonMatches);
@@ -42,8 +49,10 @@ export default function ClassementPage() {
   const phases = useMemo(() => competitionPhases(seasonMatches, type), [seasonMatches, type]);
   const primaryPhase = (isCup ? phases[phases.length - 1] : phases[0]) || null;
   const cur = phase && phases.includes(phase) ? phase : primaryPhase;
-  const finished = seasonMatches.filter((m) => (m.phase || "—") === cur && m.status === "finished" && m.home_score != null);
-  const standings = useMemo(() => isCup ? [] : computeStandings(finished), [finished, isCup]);
+  const phaseMatches = useMemo(() => seasonMatches.filter((m) => (m.phase || "—") === cur), [seasonMatches, cur]);
+  const phaseIsKnockout = isCup || (type === "hybrid" && isKnockoutPhase(cur));
+  const standings = useMemo(() => phaseIsKnockout ? [] : computeStandings(phaseMatches.filter((m) => isMatchOver(m))), [phaseMatches, phaseIsKnockout]);
+  const groups = useMemo(() => phaseIsKnockout ? [] : phaseGroups(comp, activeSeason?.label, phaseMatches, clubs), [phaseIsKnockout, comp, activeSeason?.label, phaseMatches, clubs]);
   const zones = zonesForPhase(comp, activeSeason, cur, primaryPhase);
   return (
     <div>
@@ -57,6 +66,7 @@ export default function ClassementPage() {
         ))}
       </div>
       {seasons.length > 0 && <div className="mb-4 flex justify-end"><select value={seasonLabel} onChange={(e) => { setSeasonLabel(e.target.value); setPhase(null); }} className="rounded-xl border border-line/10 bg-surface px-3 py-2 text-sm">{seasons.map((season) => <option key={season.id}>{season.label}</option>)}</select></div>}
+      <SeasonNotice unpublished={unpublished} season={activeSeason} matchCount={matches.length} loading={loading} error={error} />
       {error && <p className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">{error}</p>}
       {loading ? <div className="h-56 animate-pulse rounded-2xl bg-surface" /> : isCup ? (
         <div>
@@ -66,7 +76,9 @@ export default function ClassementPage() {
       ) : (
         <>
           {phases.length > 1 && <div className="mb-4 flex flex-wrap gap-1">{phases.map((p) => <button key={p} onClick={() => setPhase(p)} className={`rounded-full border px-3 py-1 text-xs ${cur === p ? "border-accent bg-accent/10 text-accent" : "border-line/20 text-muted"}`}>{p}</button>)}</div>}
-          <StandingsTable standings={standings} clubs={clubs} zones={zones} L={L} />
+          {type === "hybrid" && phaseIsKnockout
+            ? <CupRounds matches={seasonMatches} clubs={clubs} phases={phases.filter(isKnockoutPhase)} activePhase={cur} onPhaseChange={setPhase} showPhaseSelector={false} L={L} />
+            : groups.length ? <GroupStandings groups={groups} clubs={clubs} entityLabel={comp?.competition_scope === "international" ? "Sélection" : null} L={L} /> : <StandingsTable standings={standings} clubs={clubs} zones={zones} L={L} />}
         </>
       )}
     </div>

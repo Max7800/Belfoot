@@ -10,6 +10,7 @@ import StandingsTable from "@/components/football/StandingsTable";
 import CompetitionTransfers from "@/components/football/CompetitionTransfers";
 import CupRounds from "@/components/football/CupRounds";
 import NationsLeagueStandings from "@/components/football/NationsLeagueStandings";
+import GroupStandings from "@/components/football/GroupStandings";
 import CompetitionHeader from "@/components/football/CompetitionHeader";
 import CompetitionSyncButton from "@/components/football/CompetitionSyncButton";
 import Watermark from "@/components/football/Watermark";
@@ -22,8 +23,11 @@ import { useLabels } from "@/lib/labels";
 import { useTiles } from "@/lib/tiles";
 import { zoneAt, zonesForPhase } from "@/lib/standingsZones";
 import { useStatsSections } from "@/lib/statsSections";
-import { sortPublicSeasons } from "@/lib/publicSeasons";
+import { publicSeasonState } from "@/lib/publicSeasons";
+import { useCompetitionMatchUpdates } from "@/lib/useCompetitionMatchUpdates";
+import SeasonNotice from "@/components/football/SeasonNotice";
 import { isNationsLeagueCompetition, nationsLeagueGroups } from "@/lib/nationsLeague";
+import { phaseGroups } from "@/lib/groupedStandings";
 import { PUBLIC_PLAYER_FIELDS, PUBLIC_PLAYER_STATS_FIELDS, loadClubsForMatches, loadMatchStatsForMatches, loadPlayersByIds, loadSeasonMatches } from "@/lib/publicFootballData";
 import { playerAge } from "@/lib/playerAge";
 import { preferAssignedPlayerStats } from "@/lib/playerStats";
@@ -86,6 +90,7 @@ export default function CompetitionPage() {
   const [competitions, setCompetitions] = useState([]);
   const [tab, setTab] = useState("overview");
   const [seasons, setSeasons] = useState([]); const [seasonLabel, setSeasonLabel] = useState("");
+  const [unpublishedSeasons, setUnpublishedSeasons] = useState(false);
   const [matches, setMatches] = useState([]);
   const [clubsMap, setClubsMap] = useState({});
   const [players, setPlayers] = useState([]); const [playerStats, setPlayerStats] = useState([]); const [playerMemberships, setPlayerMemberships] = useState([]);
@@ -128,11 +133,14 @@ export default function CompetitionPage() {
     setComp(c);
     const se = await supabase.from("seasons").select("*").eq("competition_id", c.id);
     if (se.error) throw se.error;
-    const orderedSeasons = sortPublicSeasons(se.data || []);
+    const { seasons: orderedSeasons, unpublished } = publicSeasonState(se.data || []);
     setSeasons(orderedSeasons); setSeasonLabel(orderedSeasons[0]?.label || "");
+    setUnpublishedSeasons(unpublished);
   })().catch(() => setComp(null)); }, [slug]);
 
   const activeSeason = seasons.find((season) => season.label === seasonLabel) || null;
+  // Scores, fins de match et corrections arrivent en direct : classements et groupes sont recalculés.
+  useCompetitionMatchUpdates(comp?.id, activeSeason?.id || null, setMatches);
   useEffect(() => { if (!comp?.id || (seasons.length && !activeSeason)) return; let alive = true; (async () => {
     setSeasonLoading(true); setDataError(""); setMatches([]); setClubsMap({}); setPlayers([]); setPlayerStats([]); setPlayerMemberships([]); setTransfers([]); setMatchPlayerStats([]); setPhase(null); setRound("all");
     const seasonMatches = await loadSeasonMatches(supabase, comp.id, activeSeason?.id);
@@ -207,6 +215,7 @@ export default function CompetitionPage() {
   const knockoutPhases = useMemo(() => phases.filter(isKnockoutPhase), [phases]);
   const phaseMatches = useMemo(() => seasonMatches.filter((m) => (m.phase || "—") === curPhase), [seasonMatches, curPhase]);
   const nationsGroups = useMemo(() => isNationsLeague ? nationsLeagueGroups(comp, seasonLabel, seasonMatches, clubsMap) : [], [isNationsLeague, comp, seasonLabel, seasonMatches, clubsMap]);
+  const groupTables = useMemo(() => (!isNationsLeague && !phaseIsKnockout) ? phaseGroups(comp, seasonLabel, phaseMatches, clubsMap) : [], [isNationsLeague, phaseIsKnockout, comp, seasonLabel, phaseMatches, clubsMap]);
   const nationsDivisions = useMemo(() => [...new Set(nationsGroups.map((group) => group.division).filter(Boolean))].sort(), [nationsGroups]);
   useEffect(() => {
     if (!nationsDivisions.length) return;
@@ -403,6 +412,7 @@ export default function CompetitionPage() {
         {seasons.length > 0 && <select value={seasonLabel} onChange={(e) => { setSeasonLabel(e.target.value); setPhase(null); setRound("all"); }} className="mb-3 mt-2 w-full rounded-xl border border-line/10 bg-surface px-3 py-2 text-sm sm:hidden">{seasons.map((s) => <option key={s.id}>{s.label}</option>)}</select>}
       </div>
 
+      <SeasonNotice unpublished={unpublishedSeasons} season={activeSeason} matchCount={matches.length} loading={seasonLoading} error={dataError} />
       {dataError && <p className="mb-5 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">Impossible de charger les données de cette saison : {dataError}</p>}
       {partialCompetition && <p className="mb-5 rounded-xl border border-amber-400/30 bg-amber-400/10 p-3 text-sm leading-6 text-amber-100"><b>Données partielles.</b> Seuls les matchs de la sélection belge suivie sont importés pour le moment. Le classement et le tableau complets apparaîtront après la synchronisation de base de cette compétition.</p>}
       {seasonLoading && <div className="h-72 animate-pulse rounded-3xl bg-surface" />}
@@ -420,6 +430,10 @@ export default function CompetitionPage() {
             ) : isNationsLeague && nationsGroups.length ? (
               <Card title={`Classements — Ligue ${nationsDivision}`} onSee={() => setTab("classement")}>
                 <NationsLeagueStandings groups={nationsGroups} clubs={clubsMap} division={nationsDivision} onDivisionChange={setNationsDivision} compact />
+              </Card>
+            ) : groupTables.length ? (
+              <Card title={L("std.groups", "Phase de groupes")} onSee={() => setTab("classement")}>
+                <GroupStandings groups={groupTables} clubs={clubsMap} entityLabel={isInternational ? "Sélection" : null} compact L={L} />
               </Card>
             ) : phaseIsKnockout ? (
               <Card title={L("cup.currentRound", "Tour sélectionné")} onSee={() => setTab("classement")}>
@@ -553,8 +567,8 @@ export default function CompetitionPage() {
         : isHybrid
           ? <div><PhaseChips />{phaseIsKnockout
             ? <CupRounds highlight={(clubId) => europeanClubCompetition && isBelgianClubCountry(clubsMap[clubId]?.ext?.country)} matches={seasonMatches} clubs={clubsMap} phases={knockoutPhases} activePhase={curPhase} onPhaseChange={(next) => { setPhase(next); setRound("all"); }} showPhaseSelector={false} L={L} />
-            : <StandingsTable standings={standings} clubs={clubsMap} zones={zones} L={L} entityLabel={isInternational ? "Sélection" : null} highlight={(clubId) => europeanClubCompetition && isBelgianClubCountry(clubsMap[clubId]?.ext?.country)} />}</div>
-          : <div><PhaseChips /><StandingsTable standings={standings} clubs={clubsMap} zones={zones} L={L} entityLabel={isInternational ? "Sélection" : null} highlight={(clubId) => europeanClubCompetition && isBelgianClubCountry(clubsMap[clubId]?.ext?.country)} /></div>)}
+            : (groupTables.length ? <GroupStandings groups={groupTables} clubs={clubsMap} entityLabel={isInternational ? "Sélection" : null} L={L} /> : <StandingsTable standings={standings} clubs={clubsMap} zones={zones} L={L} entityLabel={isInternational ? "Sélection" : null} highlight={(clubId) => europeanClubCompetition && isBelgianClubCountry(clubsMap[clubId]?.ext?.country)} />)}</div>
+          : <div><PhaseChips />{groupTables.length ? <GroupStandings groups={groupTables} clubs={clubsMap} entityLabel={isInternational ? "Sélection" : null} L={L} /> : <StandingsTable standings={standings} clubs={clubsMap} zones={zones} L={L} entityLabel={isInternational ? "Sélection" : null} highlight={(clubId) => europeanClubCompetition && isBelgianClubCountry(clubsMap[clubId]?.ext?.country)} />}</div>)}
 
       {!seasonLoading && tab === "clubs" && (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
