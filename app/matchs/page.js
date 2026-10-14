@@ -5,12 +5,15 @@ import { ArrowRight, CalendarDays, List, Radio } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import MatchRow from "@/components/football/MatchRow";
 import SeasonCalendar from "@/components/football/SeasonCalendar";
-import { loadClubsForMatches, loadCompetitionSeasons, loadSeasonMatches } from "@/lib/publicFootballData";
+import { loadClubsForMatches, loadPublicSeasonState, loadSeasonMatches } from "@/lib/publicFootballData";
+import { useCompetitionMatchUpdates } from "@/lib/useCompetitionMatchUpdates";
+import SeasonNotice from "@/components/football/SeasonNotice";
 
 export default function MatchsPage() {
   const [comps, setComps] = useState([]); const [cid, setCid] = useState("");
   const [matches, setMatches] = useState([]); const [clubs, setClubs] = useState({});
   const [seasons, setSeasons] = useState([]); const [seasonLabel, setSeasonLabel] = useState("");
+  const [unpublished, setUnpublished] = useState(false);
   const [phase, setPhase] = useState(null); const [round, setRound] = useState("all");
   const [loading, setLoading] = useState(false); const [error, setError] = useState("");
   const [view, setView] = useState("list");
@@ -21,8 +24,8 @@ export default function MatchsPage() {
   useEffect(() => { supabase.from("competitions").select("id,name,logo_url,public_visible,position").order("name").then(({ data }) => { const arr = (data || []).filter((c) => c.public_visible !== false).sort((a, b) => (a.position ?? 999) - (b.position ?? 999)); setComps(arr); if (arr[0]) setCid(arr[0].id); }); }, []);
   useEffect(() => { if (!cid) return; (async () => {
     setError(""); setMatches([]); setClubs({}); setPhase(null); setRound("all");
-    const orderedSeasons = await loadCompetitionSeasons(supabase, cid);
-    setSeasons(orderedSeasons); setSeasonLabel(orderedSeasons[0]?.label || "");
+    const { seasons: orderedSeasons, unpublished: noPublishedSeason } = await loadPublicSeasonState(supabase, cid);
+    setSeasons(orderedSeasons); setSeasonLabel(orderedSeasons[0]?.label || ""); setUnpublished(noPublishedSeason);
   })().catch((loadError) => setError(loadError.message || String(loadError))); }, [cid]);
   useEffect(() => { if (!cid || (seasons.length && !activeSeason)) return; let alive = true; (async () => {
     setLoading(true); setError(""); setPhase(null); setRound("all");
@@ -31,16 +34,7 @@ export default function MatchsPage() {
     if (!alive) return;
     setMatches(rows); setClubs(clubMap); setLoading(false);
   })().catch((loadError) => { if (alive) { setMatches([]); setClubs({}); setLoading(false); setError(loadError.message || String(loadError)); } }); return () => { alive = false; }; }, [cid, activeSeason, seasons.length]);
-  useEffect(() => {
-    if (!cid) return undefined;
-    const channel = supabase.channel(`matches-competition-${cid}`)
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "matches", filter: `competition_id=eq.${cid}` }, (payload) => {
-        if (!payload.new?.id || (activeSeason?.id && payload.new.season_id !== activeSeason.id)) return;
-        setMatches((current) => current.map((match) => match.id === payload.new.id ? payload.new : match));
-      })
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [cid, activeSeason?.id]);
+  useCompetitionMatchUpdates(cid, activeSeason?.id || null, setMatches);
   const seasonMatches = matches;
   const phases = useMemo(() => { const c = {}; for (const m of seasonMatches) { const p = m.phase || "—"; c[p] = (c[p] || 0) + 1; } return Object.keys(c).sort((a, b) => c[b] - c[a]); }, [seasonMatches]);
   const cur = phase || phases[0] || null;
@@ -67,6 +61,7 @@ export default function MatchsPage() {
         {seasons.length > 0 && <select value={seasonLabel} onChange={(e) => { setSeasonLabel(e.target.value); setPhase(null); setRound("all"); }} className="w-full rounded-xl border border-line/10 bg-surface px-3 py-2 text-sm sm:ml-auto sm:w-auto">{seasons.map((season) => <option key={season.id}>{season.label}</option>)}</select>}
       </div>
       <div className="mb-4 flex sm:justify-end"><div className="inline-flex w-full rounded-xl border border-line/10 bg-surface p-1 sm:w-auto"><button onClick={() => chooseView("calendar")} className={`order-1 flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold sm:order-2 sm:flex-none sm:py-1.5 ${view === "calendar" ? "bg-accent text-white" : "text-muted hover:text-content"}`}><CalendarDays className="h-3.5 w-3.5" />Calendrier</button><button onClick={() => chooseView("list")} className={`order-2 flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold sm:order-1 sm:flex-none sm:py-1.5 ${view === "list" ? "bg-accent text-white" : "text-muted hover:text-content"}`}><List className="h-3.5 w-3.5" />Liste</button></div></div>
+      <SeasonNotice unpublished={unpublished} season={activeSeason} matchCount={matches.length} loading={loading} error={error} />
       {error && <p className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">Impossible de charger cette saison : {error}</p>}
       {loading && <div className="mb-4 h-40 animate-pulse rounded-2xl bg-surface" />}
       {!loading && <>

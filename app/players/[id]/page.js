@@ -11,6 +11,7 @@ import BackButton from "@/components/BackButton";
 import { playerAge } from "@/lib/playerAge";
 import { preferAssignedPlayerStats } from "@/lib/playerStats";
 import { resolvePlayerCountry, resolvePlayerLeague } from "@/lib/playerSnapshot";
+import { competitionHrefs } from "@/lib/competitionLinks";
 import { NATIONAL_TEAM_CATALOG, isNationalSelectionClub, nationalityBadges, ratingTone } from "@/lib/nationalities";
 import { useAuth } from "@/lib/auth";
 
@@ -34,7 +35,13 @@ function ClubMark({ club, size = "h-7 w-7" }) {
     : <span className={`${size} flex shrink-0 items-center justify-center rounded-lg bg-white/[0.06]`}><Shield className="h-4 w-4 text-muted" /></span>;
 }
 
-function MatchCard({ match, clubs, competitions, playerTeamIds = [] }) {
+// Nom de compétition : lien vers sa page Belfoot si elle existe (lib/competitionLinks.js), sinon texte.
+function CompetitionName({ competition, href, fallback, className = "" }) {
+  const label = competition?.name || fallback;
+  return href ? <Link href={href} className={`${className} relative z-10 transition hover:text-accent hover:underline`}>{label}</Link> : <span className={className}>{label}</span>;
+}
+
+function MatchCard({ match, clubs, competitions, competitionLinks = {}, playerTeamIds = [] }) {
   const home = clubs[match.home_club_id];
   const away = clubs[match.away_club_id];
   const playerIsHome = playerTeamIds.includes(match.home_club_id);
@@ -42,25 +49,26 @@ function MatchCard({ match, clubs, competitions, playerTeamIds = [] }) {
   const date = match.kickoff ? new Date(match.kickoff) : null;
   const competition = competitions[match.competition_id];
   return (
-    <Link href={`/matchs/${match.id}`} className="group block w-full overflow-hidden rounded-2xl border border-line/10 bg-gradient-to-br from-surface via-surface/80 to-bg/55 transition hover:-translate-y-0.5 hover:border-accent/40">
+    <div className="group relative block w-full overflow-hidden rounded-2xl border border-line/10 bg-gradient-to-br from-surface via-surface/80 to-bg/55 transition hover:-translate-y-0.5 hover:border-accent/40">
+      <Link href={`/matchs/${match.id}`} aria-label={`Voir le match ${home?.name || "À confirmer"} – ${away?.name || "À confirmer"}`} className="absolute inset-0 z-[5] rounded-2xl" />
       <div className="flex items-center justify-between gap-3 border-b border-line/10 bg-white/[0.025] px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted">
         <span>{date ? date.toLocaleDateString("fr-BE", { weekday: "short", day: "numeric", month: "short" }) : "Date à confirmer"}</span>
-        <span className="max-w-[45%] truncate text-right">{competition?.name || "Match"}</span>
+        <CompetitionName competition={competition} href={competition ? competitionLinks[String(match.competition_id)] : null} fallback="Match" className="max-w-[45%] truncate text-right" />
       </div>
       <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 px-3 py-3">
         <div className={`min-w-0 text-center ${playerIsHome ? "text-content" : "text-muted"}`}><ClubMark club={home} size="mx-auto h-10 w-10" /><div className="mt-1 truncate text-[11px] font-black">{home?.name || "À confirmer"}</div></div>
         <div className="text-center"><div className="rounded-xl border border-line/10 bg-bg/70 px-2.5 py-1.5 text-sm font-black tabular-nums">{played ? `${match.home_score ?? "–"} : ${match.away_score ?? "–"}` : (date ? date.toLocaleTimeString("fr-BE", { hour: "2-digit", minute: "2-digit" }) : "VS")}</div><div className="mt-1 text-[9px] font-bold uppercase tracking-wider text-muted">{playerIsHome ? "Domicile" : "Extérieur"}</div></div>
         <div className={`min-w-0 text-center ${!playerIsHome ? "text-content" : "text-muted"}`}><ClubMark club={away} size="mx-auto h-10 w-10" /><div className="mt-1 truncate text-[11px] font-black">{away?.name || "À confirmer"}</div></div>
       </div>
-    </Link>
+    </div>
   );
 }
 
-function CompetitionStats({ stats, competitions, clubs }) {
+function CompetitionStats({ stats, competitions, clubs, competitionLinks = {} }) {
   if (!stats.length) return <p className="rounded-2xl border border-dashed border-line/15 bg-surface/40 p-5 text-sm text-muted">Pas encore de statistiques de saison.</p>;
   return <>
-    <div className="space-y-2 md:hidden">{stats.map((stat) => <article key={stat.id} className="rounded-2xl border border-line/10 bg-surface/60 p-3"><div className="flex min-w-0 items-start justify-between gap-3"><div className="min-w-0"><b className="block truncate text-sm">{competitions[stat.competition_id]?.name || "Non attribuée"}</b><span className="mt-0.5 block truncate text-[11px] text-muted">{clubs[stat.club_id]?.name || "—"} · {stat.season}</span></div>{stat.rating != null && <b className={`shrink-0 rounded-md px-2 py-1 text-xs ${ratingTone(stat.rating)}`}>{Number(stat.rating).toFixed(1)}</b>}</div><div className="mt-3 grid grid-cols-5 gap-1 text-center text-[10px] text-muted">{[["M", stat.appearances], ["T", stat.lineups], ["Min", stat.minutes], ["B", stat.goals], ["A", stat.assists]].map(([label, value]) => <span key={label} className="rounded-lg bg-black/15 px-1.5 py-1"><b className="block text-sm text-content">{value ?? 0}</b>{label}</span>)}</div></article>)}</div>
-    <div className="hidden overflow-hidden rounded-2xl border border-line/10 md:block"><table className="w-full text-sm"><thead className="bg-surface2 text-muted"><tr><th className="p-3 text-left">Compétition</th><th className="p-3 text-left">Club</th><th className="p-3 text-left">Saison</th><th>Matchs</th><th>Titu.</th><th>Min.</th><th>Buts</th><th>Passes</th><th>Note</th><th>🟨</th><th>🟥</th></tr></thead><tbody>{stats.map((stat) => <tr key={stat.id} className="border-t border-line/10 text-center"><td className="p-3 text-left font-semibold">{competitions[stat.competition_id]?.name || "Non attribuée"}</td><td className="p-3 text-left">{clubs[stat.club_id]?.name || "—"}</td><td className="p-3 text-left">{stat.season}</td><td>{stat.appearances ?? 0}</td><td>{stat.lineups ?? 0}</td><td>{stat.minutes ?? 0}</td><td className="font-bold">{stat.goals ?? 0}</td><td>{stat.assists ?? 0}</td><td>{stat.rating != null ? <b className={`inline-flex min-w-10 justify-center rounded-md px-1.5 py-1 text-xs ${ratingTone(stat.rating)}`}>{Number(stat.rating).toFixed(1)}</b> : "—"}</td><td>{stat.yellow ?? 0}</td><td>{stat.red ?? 0}</td></tr>)}</tbody></table></div>
+    <div className="space-y-2 md:hidden">{stats.map((stat) => <article key={stat.id} className="rounded-2xl border border-line/10 bg-surface/60 p-3"><div className="flex min-w-0 items-start justify-between gap-3"><div className="min-w-0"><b className="block truncate text-sm"><CompetitionName competition={competitions[stat.competition_id]} href={competitions[stat.competition_id] ? competitionLinks[String(stat.competition_id)] : null} fallback="Non attribuée" /></b><span className="mt-0.5 block truncate text-[11px] text-muted">{clubs[stat.club_id]?.name || "—"} · {stat.season}</span></div>{stat.rating != null && <b className={`shrink-0 rounded-md px-2 py-1 text-xs ${ratingTone(stat.rating)}`}>{Number(stat.rating).toFixed(1)}</b>}</div><div className="mt-3 grid grid-cols-5 gap-1 text-center text-[10px] text-muted">{[["M", stat.appearances], ["T", stat.lineups], ["Min", stat.minutes], ["B", stat.goals], ["A", stat.assists]].map(([label, value]) => <span key={label} className="rounded-lg bg-black/15 px-1.5 py-1"><b className="block text-sm text-content">{value ?? 0}</b>{label}</span>)}</div></article>)}</div>
+    <div className="hidden overflow-hidden rounded-2xl border border-line/10 md:block"><table className="w-full text-sm"><thead className="bg-surface2 text-muted"><tr><th className="p-3 text-left">Compétition</th><th className="p-3 text-left">Club</th><th className="p-3 text-left">Saison</th><th>Matchs</th><th>Titu.</th><th>Min.</th><th>Buts</th><th>Passes</th><th>Note</th><th>🟨</th><th>🟥</th></tr></thead><tbody>{stats.map((stat) => <tr key={stat.id} className="border-t border-line/10 text-center"><td className="p-3 text-left font-semibold"><CompetitionName competition={competitions[stat.competition_id]} href={competitions[stat.competition_id] ? competitionLinks[String(stat.competition_id)] : null} fallback="Non attribuée" /></td><td className="p-3 text-left">{clubs[stat.club_id]?.name || "—"}</td><td className="p-3 text-left">{stat.season}</td><td>{stat.appearances ?? 0}</td><td>{stat.lineups ?? 0}</td><td>{stat.minutes ?? 0}</td><td className="font-bold">{stat.goals ?? 0}</td><td>{stat.assists ?? 0}</td><td>{stat.rating != null ? <b className={`inline-flex min-w-10 justify-center rounded-md px-1.5 py-1 text-xs ${ratingTone(stat.rating)}`}>{Number(stat.rating).toFixed(1)}</b> : "—"}</td><td>{stat.yellow ?? 0}</td><td>{stat.red ?? 0}</td></tr>)}</tbody></table></div>
   </>;
 }
 
@@ -83,7 +91,7 @@ export default function PlayerPage() {
   const { id } = useParams();
   const L = useLabels();
   const { isAdmin } = useAuth();
-  const [state, setState] = useState({ player: undefined, club: null, nationalTeam: null, currentClubId: null, memberships: [], stats: [], performances: [], matches: [], competitions: {}, clubs: {}, error: "" });
+  const [state, setState] = useState({ player: undefined, club: null, nationalTeam: null, currentClubId: null, memberships: [], stats: [], performances: [], matches: [], competitions: {}, competitionRoutes: null, clubs: {}, error: "" });
   const [refreshKey, setRefreshKey] = useState(0);
   const [editing, setEditing] = useState(false);
   const [editor, setEditor] = useState({ primaryNationality: "", secondNationality: "", nationalTeamId: "", birthDate: "", binationalWatch: false });
@@ -127,9 +135,10 @@ export default function PlayerPage() {
     const matches = [...matchesById.values()];
     const clubIds = [...new Set([...matches.flatMap((match) => [match.home_club_id, match.away_club_id]), ...memberships.map((row) => row.club_id), ...statsRows.map((row) => row.club_id), player.national_team_id].filter(Boolean))];
     const competitionIds = [...new Set([...statsRows.map((row) => row.competition_id), ...matches.map((row) => row.competition_id)].filter(Boolean))];
-    const [clubsResult, competitionsResult] = await Promise.all([
+    const [clubsResult, competitionsResult, routesResult] = await Promise.all([
       clubIds.length ? supabase.from("clubs").select("id,name,logo_url,team_type,national_category,ext").in("id", clubIds) : Promise.resolve({ data: [] }),
-      competitionIds.length ? supabase.from("competitions").select("id,name,logo_url,provider,competition_scope,competition_type,ext").in("id", competitionIds) : Promise.resolve({ data: [] }),
+      competitionIds.length ? supabase.from("competitions").select("id,name,slug,public_visible,logo_url,provider,competition_scope,competition_type,ext").in("id", competitionIds) : Promise.resolve({ data: [] }),
+      competitionIds.length ? supabase.from("competitions").select("id,name,slug") : Promise.resolve({ data: [] }),
     ]);
     if (!alive) return;
     setState({
@@ -143,10 +152,13 @@ export default function PlayerPage() {
       matches,
       clubs: Object.fromEntries((clubsResult.data || []).map((row) => [row.id, row])),
       competitions: Object.fromEntries((competitionsResult.data || []).map((row) => [row.id, row])),
+      // Indisponible (erreur) : liens par identifiant, toujours exacts.
+      competitionRoutes: routesResult.error ? null : (routesResult.data || []),
       error: "",
     });
   })().catch((error) => alive && setState((current) => ({ ...current, player: null, error: error.message || String(error) }))); return () => { alive = false; }; }, [id, refreshKey]);
 
+  const competitionLinks = useMemo(() => competitionHrefs(state.competitions, state.competitionRoutes), [state.competitions, state.competitionRoutes]);
   const view = useMemo(() => {
     const latestSeason = Math.max(0, ...state.stats.map((row) => year(row.season)), ...state.memberships.map((row) => Number(row.season_start_year) || year(row.season)));
     const latestStats = latestSeason ? state.stats.filter((row) => year(row.season) === latestSeason) : state.stats;
@@ -329,11 +341,11 @@ export default function PlayerPage() {
         <div className="flex flex-wrap items-center gap-x-5 gap-y-3"><div className="mr-auto"><div className="text-[10px] font-black uppercase tracking-[.18em] text-accent">Saison {view.latestSeason || "en cours"}</div><p className="mt-1 text-xs text-muted">Repères de la saison active, toutes compétitions importées.</p></div><div className="flex gap-5 text-center"><div><b className="block text-xl">{view.totals.minutes}</b><span className="text-[9px] font-bold uppercase tracking-wider text-muted">Minutes</span></div><div><b className="block text-xl">{view.totals.appearances ? Math.round(view.totals.minutes / view.totals.appearances) : 0}</b><span className="text-[9px] font-bold uppercase tracking-wider text-muted">Min./match</span></div></div>{p.synced_at && <span className="w-full border-t border-line/10 pt-2 text-[10px] text-muted sm:ml-auto sm:w-auto sm:border-l sm:border-t-0 sm:pl-5 sm:pt-0">Actualisé le {new Date(p.synced_at).toLocaleDateString("fr-BE", { day: "numeric", month: "long" })}</span>}</div>
       </section>
 
-      <section className="mt-5"><div className="mb-3 flex items-center gap-2"><Sparkles className="h-5 w-5 text-accent" /><h2 className="text-lg font-black">Statistiques par compétition</h2></div><CompetitionStats stats={state.stats} competitions={state.competitions} clubs={state.clubs} /></section>
+      <section className="mt-5"><div className="mb-3 flex items-center gap-2"><Sparkles className="h-5 w-5 text-accent" /><h2 className="text-lg font-black">Statistiques par compétition</h2></div><CompetitionStats stats={state.stats} competitions={state.competitions} clubs={state.clubs} competitionLinks={competitionLinks} /></section>
 
       <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(300px,.8fr)_minmax(0,1.7fr)]">
         <div className="space-y-5">
-          <section><div className="mb-3 flex items-center gap-2"><CalendarDays className="h-5 w-5 text-accent" /><h2 className="text-lg font-black">Prochains matchs</h2></div>{view.upcoming.length ? <div className="space-y-3">{view.upcoming.map((match) => <MatchCard key={match.id} match={match} clubs={state.clubs} competitions={state.competitions} playerTeamIds={[state.currentClubId, p.national_team_id].filter(Boolean)} />)}</div> : <div className="rounded-2xl border border-dashed border-line/15 bg-surface/40 p-5 text-sm leading-6 text-muted">Aucun prochain match importé pour son club ou sa sélection.</div>}</section>
+          <section><div className="mb-3 flex items-center gap-2"><CalendarDays className="h-5 w-5 text-accent" /><h2 className="text-lg font-black">Prochains matchs</h2></div>{view.upcoming.length ? <div className="space-y-3">{view.upcoming.map((match) => <MatchCard key={match.id} match={match} clubs={state.clubs} competitions={state.competitions} competitionLinks={competitionLinks} playerTeamIds={[state.currentClubId, p.national_team_id].filter(Boolean)} />)}</div> : <div className="rounded-2xl border border-dashed border-line/15 bg-surface/40 p-5 text-sm leading-6 text-muted">Aucun prochain match importé pour son club ou sa sélection.</div>}</section>
           <section><div className="mb-3 flex items-center gap-2"><Shield className="h-5 w-5 text-accent" /><h2 className="text-lg font-black">Parcours en club</h2></div>{view.careerStints.length ? <><div className="space-y-2">{view.careerStints.slice(0, showFullCareer ? undefined : 4).map((stint) => { const club = state.clubs[stint.club_id] || (state.club?.id === stint.club_id ? state.club : null); const range = stint.start === stint.end ? (stint.seasons[0]?.season || stint.start) : `${stint.start} — ${stint.end + 1}`; return <Link key={stint.club_id || stint.id} href={`/clubs/${stint.club_id}`} className="flex items-center gap-3 rounded-2xl border border-line/10 bg-surface/60 p-3 transition hover:border-accent/40"><ClubMark club={club} size="h-9 w-9" /><div className="min-w-0 flex-1"><div className="truncate text-sm font-black">{club?.name || "Club à préciser"}</div><div className="text-[11px] text-muted">{range}{stint.seasons.length > 1 ? ` · ${stint.seasons.length} saisons` : ""}</div></div>{stint.is_primary && <span className="rounded-full bg-accent/10 px-2 py-1 text-[9px] font-bold uppercase text-accent">actuel</span>}</Link>; })}</div>{view.careerStints.length > 4 && <button type="button" onClick={() => setShowFullCareer((current) => !current)} className="mt-3 w-full rounded-xl border border-line/15 px-3 py-2 text-xs font-bold text-muted transition hover:border-accent/40 hover:text-content">{showFullCareer ? "Réduire l’historique" : `Voir les ${view.careerStints.length - 4} autres clubs`}</button>}</> : <div className="rounded-2xl border border-dashed border-line/15 bg-surface/40 p-5 text-sm text-muted">L’historique des clubs sera complété par les imports de carrière ou manuellement dans l’administration.</div>}</section>
         </div>
 
