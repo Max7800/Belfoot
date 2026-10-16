@@ -106,6 +106,17 @@ const provider = {
     const seas = L.seasons?.find((s) => String(s.year) === String(y)) || L.seasons?.[0];
     return { name: L.league?.name, logo: L.league?.logo || null, type: L.league?.type || null, country: L.country?.name, flag: L.country?.flag || null, coverage: seas?.coverage || null };
   },
+  // Toutes les saisons exposées pour la ligue (sans filtre de saison) : année,
+  // dates, saison en cours et couverture. Un seul appel, aucune écriture.
+  async fetchLeagueSeasons(competition, ctx = {}) {
+    const rows = await api(`/leagues?id=${competition.external_id}`, ctx);
+    const L = rows[0]; if (!L) return null;
+    return {
+      name: L.league?.name || null,
+      type: L.league?.type || null,
+      seasons: (L.seasons || []).map((season) => ({ year: season.year, start: season.start || null, end: season.end || null, current: season.current === true, coverage: season.coverage || null })),
+    };
+  },
   async fetchClubs(competition, ctx = {}) {
     const y = seasonYear(ctx.season || competition.ext?.season);
     const rows = await api(`/teams?league=${competition.external_id}&season=${y}`, ctx);

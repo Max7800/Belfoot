@@ -7,11 +7,14 @@ import {
   DEFAULT_IMPORT_PLAN,
   IMPORT_GROUPS,
   IMPORT_SCOPES,
+  ADDED_SEASON_ROLE,
+  addImportSeason,
   hydrateCompetitionConfig,
   hydrateNationalConfig,
   importPlanEstimate,
   importPlanSchedule,
   normalizeImportPlan,
+  removeImportSeason,
 } from "@/lib/importPlan";
 import { COMPETITION_SCOPES, groupCompetitionsByScope, resolveCompetitionScope, competitionCountry } from "@/lib/competitionScopes";
 import RelinkPanel from "@/components/admin/RelinkPanel";
@@ -123,8 +126,8 @@ export default function ImportPlanPanel() {
     setPlan({
       ...stored,
       version: 4,
-      competitions: Object.fromEntries(competitionRows.map((competition, index) => [competition.id, hydrateCompetitionConfig(competition, stored.competitions[competition.id], index, { resetArchiveScopes, resetSeasonEstimates })])),
-      nationalTeams: Object.fromEntries(nationalRows.filter((team) => team.external_id).map((team, index) => [String(team.external_id), hydrateNationalConfig(stored.nationalTeams[String(team.external_id)], index, { resetArchiveScopes })])),
+      competitions: Object.fromEntries(competitionRows.map((competition, index) => [competition.id, hydrateCompetitionConfig(competition, stored.competitions[competition.id], index, { resetArchiveScopes, resetSeasonEstimates, seasons: stored.seasons })])),
+      nationalTeams: Object.fromEntries(nationalRows.filter((team) => team.external_id).map((team, index) => [String(team.external_id), hydrateNationalConfig(stored.nationalTeams[String(team.external_id)], index, { resetArchiveScopes, seasons: stored.seasons })])),
     });
     const hiddenDuplicates = rawCompetitionRows.length - competitionRows.length;
     if (resetArchiveScopes || resetSeasonEstimates || hiddenDuplicates) setMessage(`${resetArchiveScopes || resetSeasonEstimates ? "Plan adapté : périmètre et nombres de clubs/matchs sont maintenant définis saison par saison." : ""}${hiddenDuplicates ? `${resetArchiveScopes || resetSeasonEstimates ? " " : ""}${hiddenDuplicates} doublon(s) provider sont masqués du plan ; aucune donnée ni saison n’est supprimée.` : ""} Enregistre pour confirmer.`);
@@ -142,6 +145,20 @@ export default function ImportPlanPanel() {
   const updateNational = (id, patch) => setPlan((current) => ({ ...current, nationalTeams: { ...current.nationalTeams, [id]: { ...current.nationalTeams[id], ...patch } } }));
   const updateNationalSeason = (id, season, patch) => setPlan((current) => ({ ...current, nationalTeams: { ...current.nationalTeams, [id]: { ...current.nationalTeams[id], seasons: { ...current.nationalTeams[id].seasons, [season]: { ...current.nationalTeams[id].seasons[season], ...patch } } } } }));
   const updateSeason = (label, patch) => setPlan((current) => ({ ...current, seasons: current.seasons.map((season) => season.label === label ? { ...season, ...patch } : season) }));
+  // Saison ajoutée : désactivée partout, conservée seulement après « Enregistrer le plan ».
+  const [newSeason, setNewSeason] = useState("");
+  const addSeason = () => {
+    const result = addImportSeason(plan, newSeason);
+    if (result.error) { setStatus("error"); setMessage(result.error); return; }
+    setPlan(result.plan); setNewSeason(""); setStatus("idle");
+    setMessage(`Saison ${newSeason.trim()} ajoutée, désactivée partout. Active-la puis enregistre le plan pour l’utiliser.`);
+  };
+  const removeSeason = (label) => {
+    const result = removeImportSeason(plan, label);
+    if (result.error) { setStatus("error"); setMessage(result.error); return; }
+    setPlan(result.plan); setStatus("idle"); setMessage(`Saison ${label} retirée du plan (à enregistrer).`);
+  };
+  const seasonSpan = plan.seasons.length ? `${plan.seasons[0].label.slice(0, 4)} → ${plan.seasons[plan.seasons.length - 1].label.slice(5, 9)}` : "";
 
   // Carte d'une compétition (case Autoriser + groupe d'ordre + saisons). Réutilisée
   // dans chaque catégorie ET dans les sous-groupes par pays de « Étranger ».
@@ -290,12 +307,13 @@ export default function ImportPlanPanel() {
   };
 
   return <div>
-    <div className="mb-5 flex items-start justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-[.18em] text-accent">Mois API-Football Pro</p><h1 className="mt-1 text-2xl font-black">Plan historique 2024 → 2027</h1><p className="mt-1 max-w-3xl text-sm text-muted">Trois saisons séparées, une whitelist par compétition et un quota quotidien. Enregistrer ne lance aucun import et n’active jamais 2026 automatiquement.</p></div><button type="button" onClick={load} disabled={["loading", "saving"].includes(status)} className="rounded-xl border border-line/15 bg-surface p-2 text-muted hover:text-white disabled:opacity-50" title="Actualiser"><RefreshCw className={`h-4 w-4 ${status === "loading" ? "animate-spin" : ""}`} /></button></div>
+    <div className="mb-5 flex items-start justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-[.18em] text-accent">Mois API-Football Pro</p><h1 className="mt-1 text-2xl font-black">Plan historique {seasonSpan}</h1><p className="mt-1 max-w-3xl text-sm text-muted">{plan.seasons.length} saisons séparées, une whitelist par compétition et un quota quotidien. Enregistrer ne lance aucun import et n’active jamais une saison automatiquement.</p></div><button type="button" onClick={load} disabled={["loading", "saving"].includes(status)} className="rounded-xl border border-line/15 bg-surface p-2 text-muted hover:text-white disabled:opacity-50" title="Actualiser"><RefreshCw className={`h-4 w-4 ${status === "loading" ? "animate-spin" : ""}`} /></button></div>
 
     {message && <div className={`mb-5 rounded-xl border p-3 text-sm ${status === "error" ? "border-red-400/25 bg-red-500/10 text-red-200" : "border-emerald-400/20 bg-emerald-500/10 text-emerald-200"}`}>{message}</div>}
 
     <section className="mb-6 rounded-2xl border border-line/10 bg-surface p-4">
-      <div className="grid gap-3 md:grid-cols-3">{plan.seasons.map((season) => <label key={season.label} className={`rounded-xl border p-3 ${season.enabled ? "border-accent/25 bg-accent/5" : "border-line/10 opacity-60"}`}><span className="flex items-center justify-between gap-2"><b>{season.label}</b><input type="checkbox" checked={season.enabled} onChange={(event) => updateSeason(season.label, { enabled: event.target.checked })} /></span><span className="mt-1 block text-[11px] text-muted">{season.role === "rollout" ? "Saison à activer progressivement" : "Archive conservée et consultable"}</span><strong className="mt-3 block text-xl">≈ {estimate.bySeason[season.label] || 0}</strong><span className="text-[10px] text-muted">appels planifiés</span></label>)}</div>
+      <div className="grid gap-3 md:grid-cols-3">{plan.seasons.map((season) => <label key={season.label} className={`rounded-xl border p-3 ${season.enabled ? "border-accent/25 bg-accent/5" : "border-line/10 opacity-60"}`}><span className="flex items-center justify-between gap-2"><b>{season.label}</b><input type="checkbox" checked={season.enabled} onChange={(event) => updateSeason(season.label, { enabled: event.target.checked })} /></span><span className="mt-1 block text-[11px] text-muted">{season.role === ADDED_SEASON_ROLE ? "Saison ajoutée : désactivée partout tant qu’elle n’est pas activée" : season.role === "rollout" ? "Saison à activer progressivement" : "Archive conservée et consultable"}</span><strong className="mt-3 block text-xl">≈ {estimate.bySeason[season.label] || 0}</strong><span className="text-[10px] text-muted">appels planifiés</span>{season.role === ADDED_SEASON_ROLE && <button type="button" onClick={(event) => { event.preventDefault(); removeSeason(season.label); }} className="mt-2 block text-[11px] font-semibold text-red-300 hover:underline">Retirer du plan</button>}</label>)}</div>
+      <div className="mt-3 flex flex-wrap items-center gap-2"><label className="text-xs text-muted" htmlFor="import-plan-new-season">Ajouter une saison</label><input id="import-plan-new-season" value={newSeason} onChange={(event) => setNewSeason(event.target.value)} placeholder="2027-2028" className="w-32 rounded-lg border border-line/10 bg-surface2 px-3 py-1.5 text-sm text-content" /><button type="button" onClick={addSeason} disabled={!newSeason.trim()} className="rounded-lg border border-accent/30 px-3 py-1.5 text-xs font-bold text-accent disabled:opacity-50">Ajouter</button><span className="text-[11px] text-muted">Désactivée partout par défaut ; rien n’est importé.</span></div>
       <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">{[
         ["apiBudget", "Quota quotidien", 1], ["careerReserve", "Réserve carrières / jour", 0], ["liveReserve", "Réserve direct / jour", 0],
       ].map(([key, label, min]) => <label key={key} className="text-xs text-muted">{label}<input type="number" min={min} max="50000" value={plan[key]} onChange={(event) => setPlan((current) => ({ ...current, [key]: Math.max(min, Number(event.target.value) || 0) }))} className="mt-1 block w-full rounded-lg border border-line/10 bg-surface2 px-3 py-2 text-sm text-content" /></label>)}<div className="rounded-xl border border-line/10 bg-bg/35 p-3"><b className="block text-xl">{estimate.imports}</b><span className="text-[10px] text-muted">appels historiques estimés</span></div><div className="rounded-xl border border-emerald-400/20 bg-emerald-500/5 p-3"><b className="block text-xl text-emerald-300">{schedule.days.length}</b><span className="text-[10px] text-muted">journée{schedule.days.length > 1 ? "s" : ""} d’import prévue{schedule.days.length > 1 ? "s" : ""}</span></div></div>
