@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { computeStandings } from "@/lib/standings";
 import { competitionPhases, getCompetitionType, isKnockoutPhase } from "@/lib/competitionType";
 import { isMatchOver } from "@/lib/matchStatus";
-import { phaseGroups } from "@/lib/groupedStandings";
+import { mergeGroupStagePhases, phaseGroups } from "@/lib/groupedStandings";
 import { useCompetitionMatchUpdates } from "@/lib/useCompetitionMatchUpdates";
 import GroupStandings from "@/components/football/GroupStandings";
 import SeasonNotice from "@/components/football/SeasonNotice";
@@ -43,7 +43,7 @@ export default function ClassementPage() {
   })().catch((loadError) => { if (alive) { setMatches([]); setClubs({}); setLoading(false); setError(loadError.message || String(loadError)); } }); return () => { alive = false; }; }, [cid, activeSeason, seasons.length]);
   useCompetitionMatchUpdates(cid, activeSeason?.id || null, setMatches);
   const comp = comps.find((c) => c.id === cid) || null;
-  const seasonMatches = matches;
+  const seasonMatches = useMemo(() => mergeGroupStagePhases(comp, activeSeason?.label, matches, { isKnockout: isKnockoutPhase }), [comp, activeSeason?.label, matches]);
   const type = getCompetitionType(comp, seasonMatches);
   const isCup = type === "cup";
   const phases = useMemo(() => competitionPhases(seasonMatches, type), [seasonMatches, type]);
