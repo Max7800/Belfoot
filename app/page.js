@@ -23,7 +23,8 @@ import { useHomeConfig } from "@/lib/homeSections";
 import { computeStandings } from "@/lib/standings";
 import { supabase } from "@/lib/supabaseClient";
 import { seasonScopedMatches, sortPublicSeasons } from "@/lib/publicSeasons";
-import { phaseGroups } from "@/lib/groupedStandings";
+import { mergeGroupStagePhases, phaseGroups } from "@/lib/groupedStandings";
+import { isKnockoutPhase } from "@/lib/competitionType";
 import { isMatchOver } from "@/lib/matchStatus";
 import GroupStandings from "@/components/football/GroupStandings";
 import { PUBLIC_MATCH_FIELDS, PUBLIC_PLAYER_FIELDS, loadPlayerStatsForPlayers } from "@/lib/publicFootballData";
@@ -210,7 +211,7 @@ export default function Home() {
     const slides = data.competitions.filter((competition) => allowedIds.has(competition.id)).map((competition) => {
       const competitionSeasons = data.seasons.filter((season) => season.competition_id === competition.id);
       const activeSeason = sortPublicSeasons(competitionSeasons)[0];
-      const matches = seasonScopedMatches(competitionSeasons, data.matches.filter((match) => match.competition_id === competition.id), activeSeason?.id);
+      const matches = mergeGroupStagePhases(competition, activeSeason?.label, seasonScopedMatches(competitionSeasons, data.matches.filter((match) => match.competition_id === competition.id), activeSeason?.id), { isKnockout: isKnockoutPhase });
       const phaseCounts = new Map();
       matches.forEach((match) => phaseCounts.set(match.phase || "—", (phaseCounts.get(match.phase || "—") || 0) + 1));
       const primaryPhase = [...phaseCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];

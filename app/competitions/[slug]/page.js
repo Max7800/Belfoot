@@ -27,7 +27,7 @@ import { publicSeasonState } from "@/lib/publicSeasons";
 import { useCompetitionMatchUpdates } from "@/lib/useCompetitionMatchUpdates";
 import SeasonNotice from "@/components/football/SeasonNotice";
 import { isNationsLeagueCompetition, nationsLeagueGroups } from "@/lib/nationsLeague";
-import { phaseGroups } from "@/lib/groupedStandings";
+import { mergeGroupStagePhases, phaseGroups } from "@/lib/groupedStandings";
 import { PUBLIC_PLAYER_FIELDS, PUBLIC_PLAYER_STATS_FIELDS, loadClubsForMatches, loadMatchStatsForMatches, loadPlayersByIds, loadSeasonMatches } from "@/lib/publicFootballData";
 import { playerAge } from "@/lib/playerAge";
 import { preferAssignedPlayerStats } from "@/lib/playerStats";
@@ -192,7 +192,8 @@ export default function CompetitionPage() {
     // néanmoins les leaders si l'agrégat d'un joueur manque encore.
     return { ...matchTotals, ...seasonTotals };
   }, [playerStats, matchPlayerStats, seasonLabel]);
-  const seasonMatches = matches;
+  // Phases de groupes éclatées par l'API (U21 2023) : regroupées pour l'affichage.
+  const seasonMatches = useMemo(() => mergeGroupStagePhases(comp, seasonLabel, matches, { isKnockout: isKnockoutPhase }), [comp, seasonLabel, matches]);
   const phases = useMemo(() => competitionPhases(seasonMatches, competitionType), [seasonMatches, competitionType]);
   const primaryPhase = useMemo(() => {
     const def = (isCup ? phases[phases.length - 1] : phases[0]) || null;
