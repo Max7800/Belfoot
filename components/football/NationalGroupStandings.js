@@ -2,6 +2,9 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { computeStandings } from "@/lib/standings";
+import { isKnockoutPhase } from "@/lib/competitionType";
+import { selectionGroupStanding } from "@/lib/selectionGroup";
+import { groupDisplayLabel } from "@/lib/groupedStandings";
 
 // Classement du GROUPE de la sélection, par compétition (Nations League, qualif CDM…).
 // IMPORTANT : tout est scopé sur la SAISON EN COURS (l'édition du match le plus récent),
@@ -27,6 +30,20 @@ export default function NationalGroupStandings({ teamId, matches, competitions }
         const opponents = new Set();
         for (const m of compMatches) { const opp = m.home_club_id === teamId ? m.away_club_id : m.home_club_id; if (opp) opponents.add(opp); }
         if (!opponents.size) continue;
+        // Compétition importée en entier (qualifications U21…) : groupe de la
+        // même règle que la page compétition (officiel de CETTE saison, sinon
+        // recalculé ou détecté). Sinon : calcul historique ci-dessous.
+        const [{ data: competition }, { data: season }, { data: seasonMatches }] = await Promise.all([
+          supabase.from("competitions").select("id,name,external_id,ext").eq("id", compId).maybeSingle(),
+          supabase.from("seasons").select("id,label").eq("id", seasonId).maybeSingle(),
+          supabase.from("matches").select("id,home_club_id,away_club_id,home_score,away_score,status,kickoff,phase,round_raw,season_id,ext").eq("competition_id", compId).eq("season_id", seasonId).limit(1000),
+        ]);
+        const official = selectionGroupStanding({ competition, seasonLabel: season?.label, matches: seasonMatches || [], teamId, isKnockout: isKnockoutPhase });
+        if (official) {
+          official.rows.forEach((r) => clubIds.add(r.club));
+          out.push({ compId, standings: official.rows, label: official.label, source: official.source });
+          continue;
+        }
         const group = [teamId, ...opponents];
         const { data: gm } = await supabase.from("matches")
           .select("home_club_id,away_club_id,home_score,away_score,status")
@@ -54,7 +71,7 @@ export default function NationalGroupStandings({ teamId, matches, competitions }
     <div className="space-y-3">
       {tables.map((t) => (
         <div key={t.compId} className="rounded-2xl border border-line/10 bg-surface/60 p-4">
-          <div className="mb-2 text-xs font-black uppercase tracking-wider text-amber-300">{competitions?.[t.compId]?.name || "Classement"} — groupe</div>
+          <div className="mb-2 text-xs font-black uppercase tracking-wider text-amber-300">{competitions?.[t.compId]?.name || "Classement"} — {t.label ? groupDisplayLabel(t.label, "groupe") : "groupe"}{t.source === "detected" && <span className="ml-2 text-[9px] text-amber-200/70">détecté</span>}</div>
           <div className="divide-y divide-line/10">
             {t.standings.map((r, i) => {
               const bel = r.club === teamId;

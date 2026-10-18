@@ -7,9 +7,8 @@ import { useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { groupByPosition, positionGroup } from "@/lib/positions";
 import { matchStatusMeta } from "@/lib/matchStatus";
+import { categoryLabel, sortNationalTeams, teamGender } from "@/lib/nationalCategories";
 
-const CATEGORY_LABELS = { senior: "Diables Rouges", u23: "U23", u21: "Espoirs U21", u20: "U20", u19: "U19", u18: "U18", u17: "U17", women: "Red Flames" };
-const CATEGORY_ORDER = ["senior", "u21", "u19", "u17", "u23", "u20", "u18", "women"];
 
 function dateLabel(value) {
   if (!value) return "Date à confirmer";
@@ -39,10 +38,10 @@ function MatchCard({ match, clubs, competitions }) {
 }
 
 function TeamSelector({ teams, selectedId, onSelect }) {
-  const genders = [...new Set(teams.map((team) => team.national_gender || "men"))];
+  const genders = [...new Set(teams.map((team) => teamGender(team)))];
   return <div className="space-y-3">
     {genders.length > 1 && <div className="flex flex-wrap gap-2">{genders.map((gender) => <span key={gender} className="text-[10px] font-black uppercase tracking-wider text-muted">{gender === "women" ? "Femmes" : "Hommes"}</span>)}</div>}
-    <div className="flex gap-2 overflow-x-auto pb-1">{teams.map((team) => <button key={team.id} type="button" onClick={() => onSelect(team.id)} className={`inline-flex shrink-0 items-center gap-2 rounded-xl border px-3 py-2 text-sm font-bold transition ${selectedId === team.id ? "border-red-400/50 bg-red-500/15 text-white" : "border-line/10 bg-surface text-muted hover:text-white"}`}>{team.logo_url && <img src={team.logo_url} alt="" className="h-5 w-5 object-contain" />}{CATEGORY_LABELS[team.national_category] || team.name}</button>)}</div>
+    <div className="flex gap-2 overflow-x-auto pb-1">{teams.map((team) => <button key={team.id} type="button" onClick={() => onSelect(team.id)} className={`inline-flex shrink-0 items-center gap-2 rounded-xl border px-3 py-2 text-sm font-bold transition ${selectedId === team.id ? "border-red-400/50 bg-red-500/15 text-white" : "border-line/10 bg-surface text-muted hover:text-white"}`}>{team.logo_url && <img src={team.logo_url} alt="" className="h-5 w-5 object-contain" />}{categoryLabel(team)}</button>)}</div>
   </div>;
 }
 
@@ -63,7 +62,8 @@ export default function NationalTeamDirectory({ mode }) {
   useEffect(() => {
     supabase.from("clubs").select("id,name,logo_url,national_category,national_gender").eq("team_type", "national").eq("national_followed", true).then(({ data, error: teamsError }) => {
       if (teamsError) { setError(teamsError.message); setLoading(false); return; }
-      const sorted = (data || []).sort((a, b) => CATEGORY_ORDER.indexOf(a.national_category) - CATEGORY_ORDER.indexOf(b.national_category));
+      // Même règle que la page Diables : genre et âge distincts, féminines de jeunes masquées.
+      const sorted = sortNationalTeams(data || []);
       setTeams(sorted);
       const requested = sorted.find((team) => team.id === requestedTeamId);
       setSelectedId(requested?.id || sorted[0]?.id || "");
@@ -125,7 +125,7 @@ export default function NationalTeamDirectory({ mode }) {
     <Link href="/diables-rouges" className="inline-flex items-center gap-2 text-sm font-bold text-muted transition hover:text-white"><ArrowLeft className="h-4 w-4" />Retour aux Diables Rouges</Link>
     <header className="rounded-3xl border border-red-400/20 bg-gradient-to-br from-red-950/35 via-surface to-bg p-5 sm:p-8">
       <div className="text-[10px] font-black uppercase tracking-[.22em] text-amber-300">Sélections belges</div>
-      <div className="mt-2 flex flex-wrap items-center gap-3"><h1 className="text-3xl font-black uppercase sm:text-5xl">{mode === "matches" ? "Tous les matchs" : "La sélection complète"}</h1>{selectedTeam && <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs font-bold text-slate-300">{CATEGORY_LABELS[selectedTeam.national_category] || selectedTeam.name}</span>}</div>
+      <div className="mt-2 flex flex-wrap items-center gap-3"><h1 className="text-3xl font-black uppercase sm:text-5xl">{mode === "matches" ? "Tous les matchs" : "La sélection complète"}</h1>{selectedTeam && <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs font-bold text-slate-300">{categoryLabel(selectedTeam)}</span>}</div>
       <p className="mt-3 max-w-2xl text-sm leading-6 text-muted">{mode === "matches" ? "Le calendrier complet de la Belgique, avec la compétition de chaque rencontre clairement identifiée." : "Tous les joueurs actuellement appelés, regroupés par poste avec leur club actuel."}</p>
       <div className="mt-5"><TeamSelector teams={teams} selectedId={selectedId} onSelect={setSelectedId} /></div>
     </header>
