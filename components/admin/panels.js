@@ -4,6 +4,7 @@ import { supabase } from "@/lib/supabaseClient";
 import siteConfig from "@/config/site";
 import { JOB_CATALOG, jobKeys, JOB_GROUPS, jobsInGroup, jobPipelines } from "@/lib/jobCatalog";
 import { LEASE_MS, PIPELINE_RUN_PUBLIC_COLUMNS, runState } from "@/lib/runLease";
+import { jobSeasonOptions } from "@/lib/importPlan";
 import ImageField from "@/components/ui/ImageField";
 import { CLUB_SECTIONS } from "@/lib/clubSections";
 import { normalizeStatsConfig } from "@/lib/statsSections";
@@ -102,6 +103,7 @@ export function JobsPanel() {
   const [msg, setMsg] = useState("");
   const [comps, setComps] = useState([]);
   const [availableSeasons, setAvailableSeasons] = useState([]);
+  const [importPlan, setImportPlan] = useState(null);
   const [compId, setCompId] = useState("");
   const [matchCap, setMatchCap] = useState(3);
   const [batchSize, setBatchSize] = useState(5);
@@ -125,6 +127,7 @@ export function JobsPanel() {
     load();
     supabase.from("competitions").select("*").order("name").then(({ data }) => setComps(distinctProviderCompetitions(data || [])));
     supabase.from("seasons").select("competition_id,label").order("label", { ascending: false }).then(({ data }) => setAvailableSeasons(data || []));
+    supabase.from("site_settings").select("data").eq("id", 1).maybeSingle().then(({ data }) => setImportPlan(data?.data?.football_import_plan || null));
   }, []);
   const callJob = async (key, budget) => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -225,11 +228,8 @@ export function JobsPanel() {
     setBusy(null); load();
   };
   const latestQuota = rows.find((r) => r.quota_remaining != null)?.quota_remaining;
-  const seasonOptions = [...new Set([
-    "2024-2025", "2025-2026", "2026-2027",
-    ...availableSeasons.filter((item) => !compId || String(item.competition_id) === String(compId)).map((item) => item.label),
-    season,
-  ].filter(Boolean))].sort((a, b) => String(b).localeCompare(String(a)));
+  // Saisons du plan d’import + saisons en base de la compétition (plus de liste figée).
+  const seasonOptions = jobSeasonOptions({ plan: importPlan, availableSeasons, competitionId: compId, selected: season });
   const resumablePipelineRuns = pipelineRuns
     .filter((runItem) => ["error", "paused", "running"].includes(runItem.status))
     .filter((runItem, index, items) => items.findIndex((candidate) => candidate.pipeline_key === runItem.pipeline_key && candidate.target_key === runItem.target_key) === index);
