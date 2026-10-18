@@ -13,6 +13,16 @@ Audit complet des synchronisations (lecture seule) puis plan validé avec l'util
 7. **Façade commune et panneau central** : règles partagées (préflight, confirmation, périmètre, budget, journal, erreurs) ; panneau d'abord en lecture seule (historique, diagnostics).
 8. **Garde-fous d'administration** : modifications de `external_id`, suppressions de compétitions et écritures concurrentes de `site_settings` confirmées et auditées.
 
+### PR B — rafraîchissement automatique de toutes les compétitions visibles
+
+Constat (18/10, lecture publique) : le cron `competition-refresh` excluait les compétitions internationales et synchronisait toujours la saison du calendrier (2026-2027) ; la U21 (campagne 2027-2028) et la Ligue des nations n'avaient jamais été rafraîchies. Il ne consultait pas le plan d'import avant de lancer, et lançait le passage statistiques même quand le plan ne l'autorisait pas.
+- `lib/competitionRefresh.js` + cron : **toute compétition visible avec un fournisseur**, internationales comprises, rafraîchie sur **sa saison publique** (active, sinon la plus récente publiée : même règle que l'affichage) ; sans saison publiée, rien n'est lancé.
+- Plan d'import vérifié **avant** tout lancement (`assertImportTargetAllowed`) : une cible non autorisée est écartée sans job ni appel, et listée dans `excluded`.
+- Passage « statistiques joueurs » : compétitions de clubs uniquement, et seulement si le plan autorise les effectifs pour la saison.
+- Fenêtre « jour de match » et matchs terminés : seulement ceux de la saison rafraîchie.
+- Mode simulation (`?dryRun=1`) : expose la saison retenue par compétition et les exclusions.
+- Coût : environ 4 appels par compétition et par passage (8 compétitions visibles : ~1 passage par jour au repos, toutes les 6 h en fenêtre de match), dans la réserve existante de 120 appels par passage.
+
 ### PR A — pages des sélections : catégories, FIFA, classement de groupe
 
 Audit du 18/10 (lecture publique) : l'onglet « U23 » de la page Diables était **Belgium U23 W** (sélection féminine, 0 match) et l'onglet « U17 » **Belgium U17 W** ; la page devinait la catégorie depuis le nom sans en déduire le genre (« W » ignoré), et rangeait une catégorie inconnue (U16) en équipe A. Aucune U23 masculine n'existe en base. Le classement FIFA de la Belgique A (bloc et tuile) s'affichait pour toutes les sélections, au-dessus du classement de groupe.
@@ -42,6 +52,7 @@ Toutes faites par l'utilisateur (session admin), vérifiées en lecture publique
 - **3 · Imports** `football.sync` : 2023-2024 (268 matchs, 53 équipes), 2025-2026 (256, 52), 2027-2028 (248, 51 ; 240 terminés, 8 barrages à venir du 9 au 16/11/2026) ; 12 appels ; aucun match sans équipe ni d'une autre ligue ; 2024-2025 toujours vide ; pointeur de la fiche sur 2027 ; Kosovo U21 rangée `first_team` (à traiter avec le reclassement des sélections).
 - **4 · Publication** (18/10) : 2023-2024 et 2025-2026 `ready`, 2027-2028 `active` (saison par défaut) ; contrôles à 100 %.
 - **5 · Suppression** de la saison vide 2024-2025 (SQL conditionné, testé PGlite 7/7) : 3 saisons, 772 matchs intacts. Copie dans `belfoot_backup.u21_seasons`.
+- **6 · Kosovo U21** (18/10) : reclassée sélection U21 masculine (SQL conditionné, testé PGlite 5/5 ; sauvegarde `belfoot_backup.kosovo_u21_club`), car l'API la déclare `national: false` (pays « USA »).
 - **Décisions du 18/10** : rafraîchissement automatique pour TOUTES les compétitions visibles (PR B) ; Kosovo U21 à reclasser en sélection (opération) ; U17 et U19 masculines suivies comme la U21 (même procédure) ; sélections féminines de jeunes masquées sans suppression (PR A).
 
 ### PR 5b — saisons importables durables et diagnostic de ligue (préparation de l'import U21)

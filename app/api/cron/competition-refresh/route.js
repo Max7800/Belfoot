@@ -1,17 +1,22 @@
 import { runJob } from "@/lib/jobs";
 import { getAdmin } from "@/lib/supabaseAdmin";
+import { assertImportTargetAllowed } from "@/lib/importPlan";
+import { JOB_CATALOG } from "@/lib/jobCatalog";
+import { refreshTargets } from "@/lib/competitionRefresh";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-// Rafraîchit automatiquement les COMPÉTITIONS de clubs. Deux passages :
+// Rafraîchit automatiquement TOUTES les compétitions visibles (clubs et
+// sélections), chacune sur sa saison publique (lib/competitionRefresh.js). Deux passages :
 //  1) RÉSULTATS/CLASSEMENTS (football.sync) — fenêtre de match intelligente : ~1×/jour au
 //     repos, plus souvent les jours de match. Le classement se recalcule depuis les matchs.
 //  2) STATS JOUEURS / buteurs-passeurs (football.squads) — « après chaque jour de match » :
 //     une compétition n'est rafraîchie que si elle a eu un match terminé depuis son dernier
 //     refresh stats. Lourd (par club) → lot borné + reprise sur plusieurs ticks.
+//     Réservé aux compétitions de clubs, et seulement si le plan d'import l'autorise.
 // Les scores minute par minute restent gérés par live-window. Tout respecte le plan d'import
-// (une compétition/saison non autorisée est simplement ignorée).
+// (une compétition/saison non autorisée est écartée AVANT tout lancement, sans appel API).
 const DEFAULTS = {
   window_before_hours: 36,
   window_after_hours: 6,
@@ -67,15 +72,36 @@ export async function GET(request) {
     const statsPerCall = clamp(strategy.stats_per_call, 3, 60, DEFAULTS.stats_per_call);
     const maxStatsPerTick = clamp(strategy.max_stats_per_tick, 1, 10, DEFAULTS.max_stats_per_tick);
     const reservedStatsCalls = clamp(strategy.reserved_stats_calls, statsPerCall, 2000, DEFAULTS.reserved_stats_calls);
-    const season = currentSeasonLabel(now);
+    const calendarSeason = currentSeasonLabel(now);
 
-    const { data: comps, error: compError } = await db.from("competitions")
-      .select("id,name")
+    const { data: visible, error: compError } = await db.from("competitions")
+      .select("id,name,provider,public_visible,competition_scope")
       .not("provider", "is", null)
-      .neq("public_visible", false)
-      .neq("competition_scope", "international");
+      .neq("public_visible", false);
     if (compError) throw compError;
-    if (!comps?.length) return Response.json({ ok: true, skipped: true, reason: "Aucune compétition éligible", estimatedCalls: 0 });
+    const { data: seasonRows, error: seasonsError } = (visible || []).length
+      ? await db.from("seasons").select("*").in("competition_id", visible.map((competition) => competition.id))
+      : { data: [], error: null };
+    if (seasonsError) throw seasonsError;
+    const { targets, skipped } = refreshTargets(visible || [], seasonRows || []);
+    // Plan d'import vérifié AVANT tout lancement : une cible non autorisée est
+    // écartée sans créer de job ni consommer d'appel.
+    const allowed = [];
+    for (const target of targets) {
+      const ctx = { competitionId: target.competition.id, season: target.season.label };
+      try { await assertImportTargetAllowed(db, "football.sync", ctx, JOB_CATALOG["football.sync"]); }
+      catch (error) { skipped.push({ competition: target.competition.name, reason: String(error?.message || error).slice(0, 200) }); continue; }
+      let statsAllowed = target.statsEligible;
+      if (statsAllowed) {
+        try { await assertImportTargetAllowed(db, "football.squads", ctx, JOB_CATALOG["football.squads"]); }
+        catch { statsAllowed = false; }
+      }
+      allowed.push({ ...target, statsAllowed });
+    }
+    const comps = allowed.map((target) => target.competition);
+    if (!comps.length) return Response.json({ ok: true, skipped: true, reason: "Aucune compétition éligible", estimatedCalls: 0, excluded: skipped });
+    const seasonOf = Object.fromEntries(allowed.map((target) => [target.competition.id, target.season]));
+    const statsAllowedFor = new Set(allowed.filter((target) => target.statsAllowed).map((target) => target.competition.id));
 
     const compIds = comps.map((competition) => competition.id);
     const compName = Object.fromEntries(comps.map((competition) => [competition.id, competition.name]));
@@ -86,10 +112,11 @@ export async function GET(request) {
     const from = new Date(now.getTime() - windowAfter * 3600000).toISOString();
     const to = new Date(now.getTime() + windowBefore * 3600000).toISOString();
     const statsFrom = new Date(now.getTime() - statsLookbackDays * 86400000).toISOString();
+    const seasonIds = allowed.map((target) => target.season.id);
     const [upcomingResult, liveResult, finishedResult] = await Promise.all([
-      db.from("matches").select("competition_id").in("competition_id", compIds).gte("kickoff", from).lte("kickoff", to),
-      db.from("matches").select("competition_id").in("competition_id", compIds).eq("status", "live"),
-      db.from("matches").select("competition_id,kickoff").in("competition_id", compIds).eq("status", "finished").gte("kickoff", statsFrom),
+      db.from("matches").select("competition_id,season_id").in("season_id", seasonIds).gte("kickoff", from).lte("kickoff", to),
+      db.from("matches").select("competition_id,season_id").in("season_id", seasonIds).eq("status", "live"),
+      db.from("matches").select("competition_id,season_id,kickoff").in("season_id", seasonIds).eq("status", "finished").gte("kickoff", statsFrom),
     ]);
     if (upcomingResult.error) throw upcomingResult.error;
     if (liveResult.error) throw liveResult.error;
@@ -114,6 +141,7 @@ export async function GET(request) {
     // ── Passage 2 : stats joueurs « après jour de match » ────────────────────
     const dueStats = [];
     for (const competition of comps) {
+      if (!statsAllowedFor.has(competition.id)) continue;
       const state = statsState[competition.id] || {};
       const resuming = Number(state.clubIndex) > 0;
       const last = state.lastStatsAt ? new Date(state.lastStatsAt).getTime() : 0;
@@ -128,9 +156,10 @@ export async function GET(request) {
 
     if (dryRun) {
       return Response.json({
-        ok: true, dryRun: true, season, window: { from, to },
-        eligible: comps.length, inWindow: [...inWindow].length,
-        results: { due: dueResults.length, picked: pickedResults.map((item) => ({ competition: item.competition.name, windowActive: item.windowActive, ageHours: Math.round(item.ageHours) })) },
+        ok: true, dryRun: true, calendarSeason, window: { from, to },
+        eligible: comps.length, inWindow: [...inWindow].length, excluded: skipped,
+        seasons: Object.fromEntries(allowed.map((target) => [target.competition.name, target.season.label])),
+        results: { due: dueResults.length, picked: pickedResults.map((item) => ({ competition: item.competition.name, season: seasonOf[item.competition.id].label, windowActive: item.windowActive, ageHours: Math.round(item.ageHours) })) },
         stats: { due: dueStats.length, picked: pickedStats.map((item) => ({ competition: item.competition.name, resuming: item.resuming, clubIndex: Number(statsState[item.competition.id]?.clubIndex) || 0 })) },
       });
     }
@@ -140,10 +169,10 @@ export async function GET(request) {
     for (const { competition, windowActive } of pickedResults) {
       if (used + perSyncCalls > reservedCalls) break;
       try {
-        const result = await runJob("football.sync", { db, competitionId: competition.id, season, requestLimit: perSyncCalls, apifootballKey: process.env.APIFOOTBALL_KEY, thesportsdbKey: process.env.THESPORTSDB_KEY });
+        const result = await runJob("football.sync", { db, competitionId: competition.id, season: seasonOf[competition.id].label, requestLimit: perSyncCalls, apifootballKey: process.env.APIFOOTBALL_KEY, thesportsdbKey: process.env.THESPORTSDB_KEY });
         used += perSyncCalls;
         refreshState[competition.id] = now.toISOString();
-        results.push({ pass: "results", competition: competition.name, windowActive, ok: true, result });
+        results.push({ pass: "results", competition: competition.name, season: seasonOf[competition.id].label, windowActive, ok: true, result });
       } catch (error) {
         results.push({ pass: "results", competition: competition.name, windowActive, ok: false, error: String(error?.message || error).slice(0, 300) });
       }
@@ -156,7 +185,7 @@ export async function GET(request) {
       const startClubIndex = Number(state.clubIndex) || 0;
       try {
         const result = await runJob("football.squads", {
-          db, competitionId: competition.id, season,
+          db, competitionId: competition.id, season: seasonOf[competition.id].label,
           clubBatchSize: statsClubBatch, requestLimit: statsPerCall,
           resumeState: { competitionIndex: 0, clubIndex: startClubIndex },
           apifootballKey: process.env.APIFOOTBALL_KEY,
@@ -182,8 +211,9 @@ export async function GET(request) {
 
     return Response.json({
       ok: results.length === 0 || results.some((result) => result.ok),
-      season,
+      calendarSeason,
       eligible: comps.length,
+      excluded: skipped,
       results: { due: dueResults.length, refreshed: results.filter((r) => r.pass === "results" && r.ok).length, calls: used },
       stats: { due: dueStats.length, advanced: results.filter((r) => r.pass === "stats" && r.ok).length, calls: statsUsed },
       log: results,
