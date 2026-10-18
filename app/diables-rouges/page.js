@@ -10,9 +10,8 @@ import NationalGroupStandings from "@/components/football/NationalGroupStandings
 import { groupByPosition } from "@/lib/positions";
 import { matchStatusMeta } from "@/lib/matchStatus";
 import { nationalityBadges } from "@/lib/nationalities";
+import { categoryLabel, isBelgianNationalTeam, isSeniorMenTeam, pickNationalTabs } from "@/lib/nationalCategories";
 
-const CATEGORY_LABELS = { senior: "Diables Rouges", u23: "U23", u21: "Espoirs U21", u20: "U20", u19: "U19", u18: "U18", u17: "U17", women: "Red Flames" };
-const CATEGORY_ORDER = ["senior", "u21", "u19", "u17", "u23", "u20", "u18", "women"];
 const COUNTRY_CODES = {
   Belgium: "be", Belgique: "be", France: "fr", Netherlands: "nl", "Pays-Bas": "nl", Germany: "de", Allemagne: "de", England: "gb-eng", Angleterre: "gb-eng", Spain: "es", Espagne: "es", Italy: "it", Italie: "it", Portugal: "pt", Croatia: "hr", Croatie: "hr", Denmark: "dk", Danemark: "dk", Sweden: "se", Suède: "se", Norway: "no", Norvège: "no", Finland: "fi", Finlande: "fi", Switzerland: "ch", Suisse: "ch", Austria: "at", Autriche: "at", Poland: "pl", Pologne: "pl", Ukraine: "ua", Scotland: "gb-sct", Écosse: "gb-sct", Wales: "gb-wls", "Pays de Galles": "gb-wls", Ireland: "ie", Irlande: "ie", Greece: "gr", Grèce: "gr", Turkey: "tr", Turquie: "tr", Romania: "ro", Roumanie: "ro", Hungary: "hu", Hongrie: "hu", Serbia: "rs", Serbie: "rs", Albania: "al", Albanie: "al", Slovakia: "sk", Slovaquie: "sk", Slovenia: "si", Slovénie: "si", Czechia: "cz", Tchéquie: "cz", "Czech Republic": "cz", Luxembourg: "lu", Kazakhstan: "kz", Kosovo: "xk", Morocco: "ma", Maroc: "ma", Brazil: "br", Brésil: "br", Argentina: "ar", Argentine: "ar", Uruguay: "uy", Colombia: "co", Colombie: "co", Mexico: "mx", Mexique: "mx", USA: "us", "États-Unis": "us", Canada: "ca", Japan: "jp", Japon: "jp", Senegal: "sn", Sénégal: "sn", Nigeria: "ng", Algeria: "dz", Algérie: "dz", Egypt: "eg", Égypte: "eg", Australia: "au", Australie: "au", Iran: "ir", Korea: "kr", "Corée du Sud": "kr",
 };
@@ -24,20 +23,6 @@ const normalizeNationName = (value) => String(value || "")
   .trim()
   .toLowerCase();
 const NORMALIZED_COUNTRY_CODES = Object.fromEntries(Object.entries(COUNTRY_CODES).map(([name, code]) => [normalizeNationName(name), code]));
-const belgianValue = (value) => String(value || "").trim().toLocaleLowerCase("fr");
-const isBelgianNationalTeam = (team) => {
-  const name = belgianValue(team?.name);
-  const country = belgianValue(team?.ext?.country || team?.ext?.team?.country);
-  // Certains imports nomment les équipes « Belgium U21 », d'autres
-  // renseignent uniquement le pays dans ext. Les deux doivent rester visibles.
-  return /^(belgium|belgique)(\s|$)/i.test(name) || country === "belgium" || country === "belgique" || name.includes("diables") || name.includes("red flames");
-};
-const inferredCategory = (team) => {
-  if (CATEGORY_LABELS[team?.national_category]) return team.national_category;
-  const name = belgianValue(team?.name);
-  const match = name.match(/\bu(\d{2})\b/);
-  return match && CATEGORY_LABELS[`u${match[1]}`] ? `u${match[1]}` : (name.includes("flames") || /\bwomen\b/.test(name) ? "women" : "senior");
-};
 const frenchTeamName = (value) => {
   const raw = String(value || "");
   const label = nationalityBadges(raw)[0]?.label || raw || "À confirmer";
@@ -170,14 +155,8 @@ export default function NationalTeamsPage() {
       const activity = new Map(ids.map((id) => [id, 0]));
       for (const match of matchResult.data || []) { if (activity.has(match.home_club_id)) activity.set(match.home_club_id, activity.get(match.home_club_id) + 1); if (activity.has(match.away_club_id)) activity.set(match.away_club_id, activity.get(match.away_club_id) + 1); }
       for (const callup of callupResult.data || []) if (activity.has(callup.national_team_id)) activity.set(callup.national_team_id, activity.get(callup.national_team_id) + 1);
-      const canonical = new Map();
-      for (const team of candidates) {
-        const enriched = { ...team, national_category: inferredCategory(team), national_gender: team.national_gender || (inferredCategory(team) === "women" ? "women" : "men"), _activity: activity.get(team.id) || 0 };
-        const key = `${enriched.national_gender}:${enriched.national_category}`;
-        const current = canonical.get(key);
-        if (!current || enriched._activity > current._activity || (enriched._activity === current._activity && enriched.national_followed && !current.national_followed)) canonical.set(key, enriched);
-      }
-      const sorted = [...canonical.values()].sort((a, b) => (CATEGORY_ORDER.indexOf(a.national_category) < 0 ? 99 : CATEGORY_ORDER.indexOf(a.national_category)) - (CATEGORY_ORDER.indexOf(b.national_category) < 0 ? 99 : CATEGORY_ORDER.indexOf(b.national_category)) || b._activity - a._activity);
+      // Genre et âge distincts ; féminines de jeunes masquées (lib/nationalCategories.js).
+      const sorted = pickNationalTabs(candidates, activity);
       setTeams(sorted);
       setSelectedGender((current) => current || sorted[0]?.national_gender || "men");
       setSelectedId((current) => current || sorted[0]?.id || "");
@@ -258,6 +237,8 @@ export default function NationalTeamsPage() {
   const preMatchSession = featured && ["scheduled", "live"].includes(featured.status)
     ? preMatchSessions.find((item) => item.match_id === featured.id && item.status === "open" && (!item.opens_at || new Date(item.opens_at).getTime() <= now) && (!item.closes_at || new Date(item.closes_at).getTime() > now))
     : null;
+  // Classement FIFA de la Belgique : seulement pour l'équipe A masculine.
+  const showFifa = isSeniorMenTeam(selectedTeam);
   const fifaRank = selectedTeam?.fifa_ranking || rankings.fifa.find((row) => row.isBelgium)?.rank || "—";
   const record = useMemo(() => {
     if (!selectedId) return { wins: 0, draws: 0, losses: 0, goals: 0 };
@@ -270,6 +251,7 @@ export default function NationalTeamsPage() {
       return total;
     }, { wins: 0, draws: 0, losses: 0, goals: 0 });
   }, [results, selectedId]);
+  const statTiles = [[results.length, config.labels.stats_matches, "text-white"], [record.wins, config.labels.stats_wins, "text-emerald-400"], [record.goals, config.labels.stats_goals, "text-white"], ...(showFifa ? [[fifaRank, config.labels.stats_fifa, "text-amber-300"]] : [])];
   const sectionConfig = Object.fromEntries(config.sections.map((section) => [section.key, section]));
   const displayedResults = results.slice(0, 6);
   const otherUpcoming = upcoming.filter((match) => match.id !== featured?.id).slice(0, 2);
@@ -281,9 +263,9 @@ export default function NationalTeamsPage() {
     <section className="relative overflow-hidden rounded-3xl border px-5 py-8 sm:px-8 sm:py-11" style={heroStyle}>
       {config.hero.image_url && <img src={config.hero.image_url} alt="" className="absolute inset-0 h-full w-full object-cover object-[72%_center] sm:object-center" />}
       <div className="absolute inset-0 bg-gradient-to-r from-black via-black/75 to-black/20" style={{ opacity: config.hero.overlay }} />
-      <div className="relative z-10 max-w-2xl"><div className="text-[11px] font-black uppercase tracking-[.25em]" style={{ color: config.hero.secondary_color }}>{config.hero.kicker}</div><h1 className="mt-3 text-4xl font-black uppercase leading-none sm:text-6xl">{selectedTeam?.national_category === "senior" || !selectedTeam ? config.hero.title : CATEGORY_LABELS[selectedTeam.national_category] || selectedTeam.name}</h1><p className="mt-4 max-w-xl text-sm leading-6 text-slate-300 sm:text-base">{config.hero.intro}</p>
+      <div className="relative z-10 max-w-2xl"><div className="text-[11px] font-black uppercase tracking-[.25em]" style={{ color: config.hero.secondary_color }}>{config.hero.kicker}</div><h1 className="mt-3 text-4xl font-black uppercase leading-none sm:text-6xl">{!selectedTeam || isSeniorMenTeam(selectedTeam) ? config.hero.title : categoryLabel(selectedTeam)}</h1><p className="mt-4 max-w-xl text-sm leading-6 text-slate-300 sm:text-base">{config.hero.intro}</p>
         {genders.length > 1 && <div className="mt-5 inline-flex rounded-xl border border-white/15 bg-black/25 p-1">{genders.map((gender) => <button key={gender} onClick={() => { setSelectedGender(gender); const first = teams.find((team) => (team.national_gender || "men") === gender); if (first) setSelectedId(first.id); }} className={`rounded-lg px-4 py-1.5 text-sm font-bold transition ${(selectedGender || "men") === gender ? "bg-white text-black" : "text-slate-300 hover:text-white"}`}>{gender === "women" ? "Femmes" : "Hommes"}</button>)}</div>}
-        <div className="mt-4 flex flex-wrap gap-2">{teamsForGender.map((team) => <button key={team.id} onClick={() => setSelectedId(team.id)} className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-bold transition ${selectedId === team.id ? "border-red-400/60 bg-red-500/20 text-white" : "border-white/15 bg-black/20 text-slate-300 hover:border-white/35"}`}>{team.logo_url && <img src={team.logo_url} className="h-5 w-5 object-contain" alt="" />}{CATEGORY_LABELS[team.national_category] || team.name}</button>)}</div>
+        <div className="mt-4 flex flex-wrap gap-2">{teamsForGender.map((team) => <button key={team.id} onClick={() => setSelectedId(team.id)} className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-bold transition ${selectedId === team.id ? "border-red-400/60 bg-red-500/20 text-white" : "border-white/15 bg-black/20 text-slate-300 hover:border-white/35"}`}>{team.logo_url && <img src={team.logo_url} className="h-5 w-5 object-contain" alt="" />}{categoryLabel(team)}</button>)}</div>
       </div>
     </section>
 
@@ -293,8 +275,8 @@ export default function NationalTeamsPage() {
           <PanelHeader icon={CalendarDays} title={config.labels.featured} />
           <FeaturedMatch match={featured} clubs={clubs} competitions={competitions} />
         </ModuleCard>
-        <div className="grid grid-cols-4 gap-2">
-          {[[results.length, config.labels.stats_matches, "text-white"], [record.wins, config.labels.stats_wins, "text-emerald-400"], [record.goals, config.labels.stats_goals, "text-white"], [fifaRank, config.labels.stats_fifa, "text-amber-300"]].map(([value, label, color]) => <div key={label} className="rounded-2xl border border-line/10 bg-surface/60 px-2 py-4 text-center sm:py-5"><b className={`block text-xl sm:text-2xl ${color}`}>{value}</b><span className="mt-1 block text-[8px] font-bold uppercase tracking-wider text-muted sm:text-[9px]">{label}</span></div>)}
+        <div className={`grid gap-2 ${statTiles.length === 4 ? "grid-cols-4" : "grid-cols-3"}`}>
+          {statTiles.map(([value, label, color]) => <div key={label} className="rounded-2xl border border-line/10 bg-surface/60 px-2 py-4 text-center sm:py-5"><b className={`block text-xl sm:text-2xl ${color}`}>{value}</b><span className="mt-1 block text-[8px] font-bold uppercase tracking-wider text-muted sm:text-[9px]">{label}</span></div>)}
         </div>
       {preMatchSession && <Link href={`/onze?match=${featured.id}`} className="group flex flex-col gap-4 overflow-hidden rounded-2xl border border-red-400/25 bg-gradient-to-r from-red-950/60 via-surface to-amber-950/25 p-5 transition hover:border-red-400/55 sm:flex-row sm:items-center">
         <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-amber-300/25 bg-amber-300/10"><Star className="h-5 w-5 text-amber-300" /></div>
@@ -317,12 +299,12 @@ export default function NationalTeamsPage() {
       </div>
 
       <aside className="order-5 space-y-4 lg:order-2 lg:col-span-4">
-        {rankings.fifa.length > 0 && <ModuleCard>
+        <NationalGroupStandings teamId={selectedId} matches={matches} competitions={competitions} />
+        {showFifa && rankings.fifa.length > 0 && <ModuleCard>
           <PanelHeader icon={Trophy} title={config.labels.fifa} />
           <div className="divide-y divide-line/10 overflow-hidden rounded-xl border border-line/10 bg-black/10">{rankings.fifa.map((row, index) => <div key={index} className={`flex items-center justify-between px-3 py-1.5 text-sm lg:py-2.5 ${row.isBelgium ? "bg-gradient-to-r from-red-500/20 to-amber-300/[0.06] font-black text-white" : "text-slate-300"}`}><span className="flex min-w-0 items-center gap-2.5"><span className={`inline-block w-5 shrink-0 text-center text-xs font-black tabular-nums ${Number(row.rank) <= 3 ? "text-amber-300" : "text-slate-500"}`}>{row.rank}</span><CountryFlag nation={row.nation} /><span className="truncate">{row.nation}</span></span><span className={`ml-2 w-[78px] shrink-0 text-right text-[11px] tabular-nums ${row.isBelgium ? "text-amber-200" : "text-muted"}`}>{row.points !== "" ? <>{row.points} <span className="text-[9px]">pts</span></> : "—"}</span></div>)}</div>
         </ModuleCard>}
-        <NationalGroupStandings teamId={selectedId} matches={matches} competitions={competitions} />
-        {selectedTeam?.national_category === "senior" && (selectedTeam?.national_gender || "men") === "men" && results[0] && ratingSquad.length > 0 && <DiableRatings match={results[0]} squad={ratingSquad} title={config.labels.ratings} showAllLabel={config.labels.show_all_players} showLessLabel={config.labels.show_less_players} compact />}
+        {showFifa && results[0] && ratingSquad.length > 0 && <DiableRatings match={results[0]} squad={ratingSquad} title={config.labels.ratings} showAllLabel={config.labels.show_all_players} showLessLabel={config.labels.show_less_players} compact />}
         {sectionConfig.schedule?.enabled && otherUpcoming.length > 0 && <ModuleCard>
           <PanelHeader icon={CalendarDays} title={sectionConfig.schedule.label} subtitle={sectionConfig.schedule.subtitle} accent={sectionConfig.schedule.accent} />
           <div className="space-y-3">{otherUpcoming.map((match) => <SmallMatch key={match.id} match={match} clubs={clubs} competitions={competitions} compact />)}</div>
