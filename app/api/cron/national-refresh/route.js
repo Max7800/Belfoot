@@ -59,7 +59,7 @@ export async function GET(request) {
     const season = currentSeasonLabel(now);
 
     const { data: teams, error: teamsError } = await db.from("clubs")
-      .select("id,external_id,name,national_category,synced_at")
+      .select("id,external_id,name,national_category,national_gender,synced_at")
       .eq("team_type", "national").eq("national_followed", true).not("external_id", "is", null);
     if (teamsError) throw teamsError;
     if (!teams?.length) return Response.json({ ok: true, skipped: true, reason: "Aucune sélection suivie", estimatedCalls: 0 });
@@ -125,6 +125,7 @@ export async function GET(request) {
           db,
           teamExternalId: team.external_id,
           nationalCategory: team.national_category || "senior",
+          nationalGender: team.national_gender || null,
           season,
           requestLimit: callsPerSelection,
           apifootballKey: process.env.APIFOOTBALL_KEY,

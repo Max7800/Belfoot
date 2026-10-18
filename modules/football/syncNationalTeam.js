@@ -3,8 +3,10 @@ import { upsertExternal, ensureCompetitions } from "./sync";
 import { ensureSeason, seasonLabel, seasonYear } from "./season";
 import { frenchNationName } from "@/lib/frenchNations";
 import { resolveNationalMatchSeason } from "./nationalMatchSeasons";
+import { nationalTeamTraits } from "./nationalClassification";
 
-const ALLOWED_CATEGORIES = new Set(["senior", "u23", "u21", "u20", "u19", "u18", "u17", "women"]);
+const ALLOWED_CATEGORIES = new Set(["senior", "u23", "u21", "u20", "u19", "u18", "u17", "u16", "u15", "women"]);
+const GENDERS = new Set(["men", "women"]);
 
 function parseRound(raw) {
   if (!raw) return { round_raw: null, phase: null, round_number: null };
@@ -18,6 +20,22 @@ function parseRound(raw) {
 function normalizeCategory(value) {
   const category = String(value || "senior").trim().toLowerCase();
   return ALLOWED_CATEGORIES.has(category) ? category : "senior";
+}
+
+// Catégorie (âge) et genre de la sélection synchronisée, DISTINCTS :
+// - genre : choix explicite (admin, cron), sinon nom API (« Belgium U19 W »),
+//   sinon catégorie historique « women » ; jamais déduit de l'âge seul ;
+// - l'équipe A féminine reste stockée « women » (représentation existante des
+//   Red Flames) ; une sélection féminine de jeunes garde son âge (« u19 » + women).
+export function nationalIdentity({ nationalCategory, nationalGender, teamName } = {}) {
+  let category = normalizeCategory(nationalCategory);
+  const explicit = String(nationalGender || "").trim().toLowerCase();
+  const gender = GENDERS.has(explicit) ? explicit
+    : nationalTeamTraits(teamName).gender === "women" ? "women"
+      : category === "women" ? "women" : "men";
+  if (gender === "women" && category === "senior") category = "women";
+  if (gender === "men" && category === "women") category = "senior";
+  return { category, gender };
 }
 
 async function ensureInternationalCompetitions(db, providerKey, matches) {
@@ -54,8 +72,6 @@ export async function syncNationalTeam(db, ctx = {}) {
   }
   const teamExternalId = String(ctx.teamExternalId || "").trim();
   if (!teamExternalId) throw new Error("Renseigne l’ID API-Football de la sélection");
-  const category = normalizeCategory(ctx.nationalCategory);
-  const gender = category === "women" ? "women" : "men";
   const selectedSeason = seasonLabel(ctx.season);
   const season = seasonYear(selectedSeason);
   const syncedAt = new Date().toISOString();
@@ -66,6 +82,7 @@ export async function syncNationalTeam(db, ctx = {}) {
     provider.fetchCurrentSquad({ external_id: teamExternalId }, { ...ctx, season }),
   ]);
   if (!team) throw new Error(`Sélection ${teamExternalId} introuvable`);
+  const { category, gender } = nationalIdentity({ nationalCategory: ctx.nationalCategory, nationalGender: ctx.nationalGender, teamName: team.name });
 
   // Compétitions résolues AVANT toute écriture : une collision (slug ou
   // identifiant ambigu) arrête la synchronisation sans toucher aux clubs,

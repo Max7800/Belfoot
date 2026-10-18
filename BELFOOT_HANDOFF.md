@@ -13,6 +13,15 @@ Audit complet des synchronisations (lecture seule) puis plan validé avec l'util
 7. **Façade commune et panneau central** : règles partagées (préflight, confirmation, périmètre, budget, journal, erreurs) ; panneau d'abord en lecture seule (historique, diagnostics).
 8. **Garde-fous d'administration** : modifications de `external_id`, suppressions de compétitions et écritures concurrentes de `site_settings` confirmées et auditées.
 
+### PR C — genre des sélections distinct de la catégorie (synchro et administration)
+
+Constat : `syncNationalTeam` déduisait le genre de la seule catégorie (`women` = femmes, tout le reste = hommes) ; une sélection féminine de jeunes ne pouvait être enregistrée qu'en « hommes » ; le panneau Jobs proposait « Red Flames » comme une catégorie d'âge.
+- `nationalIdentity` (`modules/football/syncNationalTeam.js`) : genre = choix explicite (admin, cron), sinon nom API (« Belgium U19 W »), sinon catégorie historique `women`. Une sélection féminine de jeunes garde son âge (`u19` + `women`) ; l'équipe A féminine reste stockée `women` (représentation existante des Red Flames, aucune migration). Adversaires enregistrés avec la même catégorie et le même genre.
+- Catégories U15 et U16 reconnues (synchro, reclassement automatique, administration).
+- Genre transmis de bout en bout : cron `national-refresh` (`national_gender` de la sélection suivie), `/api/admin/run-job`, `/api/jobs/[key]`, `runJob` (journal), job `football.national-team`.
+- Panneau Jobs : catégorie (A, U21, U19, U17, U16, U15) et **genre** (« Selon l'API » par défaut, Hommes, Femmes) choisis séparément.
+- Aucun effet sur les sélections suivies actuelles (Belgique A senior/men, U21 u21/men, Red Flames women/women).
+
 ### PR B — rafraîchissement automatique de toutes les compétitions visibles
 
 Constat (18/10, lecture publique) : le cron `competition-refresh` excluait les compétitions internationales et synchronisait toujours la saison du calendrier (2026-2027) ; la U21 (campagne 2027-2028) et la Ligue des nations n'avaient jamais été rafraîchies. Il ne consultait pas le plan d'import avant de lancer, et lançait le passage statistiques même quand le plan ne l'autorisait pas.

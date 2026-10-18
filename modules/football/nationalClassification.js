@@ -7,7 +7,7 @@
 // actuel ». Les convocations ont leur propre table (national_team_callups).
 import { loadByExternalIds } from "./sync";
 
-const AGE_CATEGORIES = new Set(["u17", "u18", "u19", "u20", "u21", "u23"]);
+const AGE_CATEGORIES = new Set(["u15", "u16", "u17", "u18", "u19", "u20", "u21", "u23"]);
 
 // Catégorie et genre d'après le nom renvoyé par l'API (« Morocco U20 W »,
 // « Belgium W », « Germany U21 »). Une catégorie inconnue n'est pas inventée.

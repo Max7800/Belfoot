@@ -23,7 +23,10 @@ describe("nationalTeamTraits", () => {
   });
 
   it("catégorie d'âge inconnue : non inventée", () => {
-    expect(nationalTeamTraits("Germany U16")).toEqual({ category: null, gender: "men" });
+    expect(nationalTeamTraits("Germany U14")).toEqual({ category: null, gender: "men" });
+    // U15 et U16 sont désormais des catégories connues (sélections de jeunes).
+    expect(nationalTeamTraits("Germany U16")).toEqual({ category: "u16", gender: "men" });
+    expect(nationalTeamTraits("Belgium U16 W")).toEqual({ category: "u16", gender: "women" });
   });
 });
 
