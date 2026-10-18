@@ -108,6 +108,9 @@ export function JobsPanel() {
   const [requestLimit, setRequestLimit] = useState(10);
   const [teamExternalId, setTeamExternalId] = useState("44");
   const [nationalCategory, setNationalCategory] = useState("senior");
+  // Genre distinct de l'âge : « auto » = déduit du nom API (« Belgium U19 W » = femmes).
+  const [nationalGender, setNationalGender] = useState("auto");
+  const nationalGenderParam = nationalGender === "auto" ? null : nationalGender;
   const [pipelineRuns, setPipelineRuns] = useState([]);
   const targetedJobs = new Set(["football.team-test", "football.national-team", "football.find-national-teams", "football.resolve-national-clubs"]);
   const load = async () => {
@@ -128,7 +131,7 @@ export function JobsPanel() {
     const r = await fetch("/api/admin/run-job", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token}` },
-      body: JSON.stringify({ key, season, competitionId: compId || null, matchCap, batchSize, requestLimit: budget ?? requestLimit, teamExternalId, nationalCategory }),
+      body: JSON.stringify({ key, season, competitionId: compId || null, matchCap, batchSize, requestLimit: budget ?? requestLimit, teamExternalId, nationalCategory, nationalGender: nationalGenderParam }),
     });
     const txt = await r.text();
     if (!r.ok) throw new Error(txt || ("HTTP " + r.status));
@@ -140,7 +143,7 @@ export function JobsPanel() {
     const response = await fetch("/api/admin/run-pipeline", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token}` },
-      body: JSON.stringify({ ...payload, season, competitionId: compId || null, matchCap, batchSize, requestLimit, teamExternalId, nationalCategory }),
+      body: JSON.stringify({ ...payload, season, competitionId: compId || null, matchCap, batchSize, requestLimit, teamExternalId, nationalCategory, nationalGender: nationalGenderParam }),
     });
     const text = await response.text();
     if (!response.ok) throw new Error(text || `HTTP ${response.status}`);
@@ -151,7 +154,7 @@ export function JobsPanel() {
     const response = await fetch("/api/admin/job-preflight", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token}` },
-      body: JSON.stringify({ ...payload, season, competitionId: compId || null, matchCap, batchSize, requestLimit, teamExternalId, nationalCategory }),
+      body: JSON.stringify({ ...payload, season, competitionId: compId || null, matchCap, batchSize, requestLimit, teamExternalId, nationalCategory, nationalGender: nationalGenderParam }),
     });
     const text = await response.text();
     if (!response.ok) throw new Error(text || `HTTP ${response.status}`);
@@ -314,7 +317,7 @@ export function JobsPanel() {
         </div>
       );
     })}
-      <div className="mb-3 rounded-xl border border-amber-400/15 bg-amber-400/5 p-3"><div className="mb-2 text-xs font-black uppercase tracking-wider text-amber-300">Imports ciblés</div><div className="flex flex-wrap items-center gap-2"><label className="text-xs text-muted">ID équipe API</label><input value={teamExternalId} onChange={(e) => setTeamExternalId(e.target.value.replace(/\D/g, ""))} placeholder="ID" className="w-20 rounded border border-line/10 bg-surface2 px-2 py-1 text-sm" /><label className="text-xs text-muted">Catégorie</label><select value={nationalCategory} onChange={(e) => setNationalCategory(e.target.value)} className="rounded border border-line/10 bg-surface2 px-2 py-1 text-sm"><option value="senior">Équipe A</option><option value="u21">U21</option><option value="u19">U19</option><option value="u17">U17</option><option value="women">Red Flames</option></select>{jobKeys().filter((key) => targetedJobs.has(key)).map((k) => <button key={k} disabled={!!busy || (JOB_CATALOG[k]?.target === "competition" && !compId) || (JOB_CATALOG[k]?.target === "national" && !teamExternalId)} onClick={() => run(k)} className="rounded border border-amber-400/25 bg-amber-400/10 px-3 py-1.5 text-sm font-bold text-amber-100 disabled:opacity-50">{JOB_CATALOG[k]?.label || k}{busy === k ? " …" : ""}</button>)}</div><p className="mt-2 text-[11px] leading-5 text-muted">1. Trouve les IDs. 2. Synchronise la sélection : toutes ses compétitions de la saison, amicaux compris, sont créées automatiquement et restent masquées du portail général. 3. « Compléter les clubs » traite au maximum le nombre indiqué dans « Max matchs », à raison d'un appel par joueur.</p></div>
+      <div className="mb-3 rounded-xl border border-amber-400/15 bg-amber-400/5 p-3"><div className="mb-2 text-xs font-black uppercase tracking-wider text-amber-300">Imports ciblés</div><div className="flex flex-wrap items-center gap-2"><label className="text-xs text-muted">ID équipe API</label><input value={teamExternalId} onChange={(e) => setTeamExternalId(e.target.value.replace(/\D/g, ""))} placeholder="ID" className="w-20 rounded border border-line/10 bg-surface2 px-2 py-1 text-sm" /><label className="text-xs text-muted">Catégorie</label><select value={nationalCategory} onChange={(e) => setNationalCategory(e.target.value)} className="rounded border border-line/10 bg-surface2 px-2 py-1 text-sm"><option value="senior">Équipe A</option><option value="u21">U21</option><option value="u19">U19</option><option value="u17">U17</option><option value="u16">U16</option><option value="u15">U15</option></select><label className="text-xs text-muted">Genre</label><select value={nationalGender} onChange={(e) => setNationalGender(e.target.value)} className="rounded border border-line/10 bg-surface2 px-2 py-1 text-sm"><option value="auto">Selon l’API</option><option value="men">Hommes</option><option value="women">Femmes</option></select>{jobKeys().filter((key) => targetedJobs.has(key)).map((k) => <button key={k} disabled={!!busy || (JOB_CATALOG[k]?.target === "competition" && !compId) || (JOB_CATALOG[k]?.target === "national" && !teamExternalId)} onClick={() => run(k)} className="rounded border border-amber-400/25 bg-amber-400/10 px-3 py-1.5 text-sm font-bold text-amber-100 disabled:opacity-50">{JOB_CATALOG[k]?.label || k}{busy === k ? " …" : ""}</button>)}</div><p className="mt-2 text-[11px] leading-5 text-muted">1. Trouve les IDs. 2. Synchronise la sélection : toutes ses compétitions de la saison, amicaux compris, sont créées automatiquement et restent masquées du portail général. 3. « Compléter les clubs » traite au maximum le nombre indiqué dans « Max matchs », à raison d'un appel par joueur.</p></div>
     <p className="mb-3 rounded-lg border border-red-400/15 bg-red-500/5 p-3 text-xs leading-5 text-muted"><b className="text-content">Direct :</b> c&apos;est le seul job autorisé sans compétition choisie ; il traite alors uniquement celles dont « Direct activé » est coché. Il consomme un appel pour la journée, puis au maximum « Max matchs » appels pour les événements des rencontres en cours. L&apos;affichage public et Supabase Realtime ne consomment aucun appel API-Football.</p>
     {msg && <p className="mb-3 whitespace-pre-line rounded border border-line/10 bg-surface p-2 text-sm text-muted">{msg}</p>}
     <div className="divide-y divide-line/10 rounded-xl border border-line/10">
