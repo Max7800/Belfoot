@@ -24,8 +24,11 @@ export function nationalTeamTraits(name) {
 // - jamais pour une ligne verrouillée (choix éditorial) ;
 // - team_type devient « national » s'il ne l'est pas déjà ;
 // - catégorie et genre seulement s'ils sont vides (jamais écrasés).
-export function nationalTeamPatch(existing, providerTeam) {
-  if (!existing || existing.locked || providerTeam?.national !== true) return {};
+// `allParticipants` : compétition de sélections (portée internationale) — tout
+// participant est une sélection, même quand l'API le déclare à tort
+// « national: false » (cas réels : Kosovo U21, Pays-Bas U19, Danemark U17…).
+export function nationalTeamPatch(existing, providerTeam, { allParticipants = false } = {}) {
+  if (!existing || existing.locked || (!allParticipants && providerTeam?.national !== true)) return {};
   const traits = nationalTeamTraits(providerTeam.name || existing.name);
   const patch = {};
   if (existing.team_type !== "national") patch.team_type = "national";
@@ -36,14 +39,14 @@ export function nationalTeamPatch(existing, providerTeam) {
 
 // Applique le classement aux clubs déjà en base pour les équipes fournies par
 // l'API (après leur upsert). Renvoie le nombre de clubs reclassés.
-export async function classifyNationalTeams(db, source, providerTeams = []) {
-  const nationals = (providerTeams || []).filter((team) => team?.national === true && team.external_id);
+export async function classifyNationalTeams(db, source, providerTeams = [], { allParticipants = false } = {}) {
+  const nationals = (providerTeams || []).filter((team) => (allParticipants || team?.national === true) && team?.external_id);
   if (!nationals.length) return 0;
   const existing = await loadByExternalIds(db, "clubs", source, nationals.map((team) => team.external_id), "id,external_id,name,team_type,national_category,national_gender,locked");
   let updated = 0;
   for (const team of nationals) {
     const row = existing.get(String(team.external_id));
-    const patch = nationalTeamPatch(row, team);
+    const patch = nationalTeamPatch(row, team, { allParticipants });
     if (!Object.keys(patch).length) continue;
     const { error } = await db.from("clubs").update(patch).eq("id", row.id).eq("locked", false);
     if (error) throw new Error(`clubs/${team.external_id}: ${error.message}`);

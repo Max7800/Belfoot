@@ -1,6 +1,6 @@
 import { getProvider } from "./providers";
 import { idMapByExternalIds, upsertExternal } from "./sync";
-import { classifyNationalTeams } from "./nationalClassification";
+import { classifyNationalTeams, isNationalTeamsCompetition } from "./nationalClassification";
 import { ensureSeason, seasonLabel, seasonYear } from "./season";
 import { isLeaseLost } from "@/lib/runLease";
 
@@ -233,6 +233,11 @@ export async function syncCompetition(db, competition, ctx = {}) {
       await classifyNationalTeams(db, competition.provider, clubs);
       clubsN = Math.max(clubsN, clubs.length);
     }
+  }
+  // Compétition de sélections : TOUS les participants (calendrier + liste API)
+  // sont des sélections, quelle que soit la valeur « national » de l'API.
+  if (isNationalTeamsCompetition(competition)) {
+    await classifyNationalTeams(db, competition.provider, [...derived.values()], { allParticipants: true });
   }
   await linkKnownReserveTeams(db);
   const map = await idMapByExternalIds(db, "clubs", competition.provider, [...seasonClubExternalIds]);
