@@ -13,6 +13,22 @@ Audit complet des synchronisations (lecture seule) puis plan validé avec l'util
 7. **Façade commune et panneau central** : règles partagées (préflight, confirmation, périmètre, budget, journal, erreurs) ; panneau d'abord en lecture seule (historique, diagnostics).
 8. **Garde-fous d'administration** : modifications de `external_id`, suppressions de compétitions et écritures concurrentes de `site_settings` confirmées et auditées.
 
+### Sélections jeunes U17 / U19 — compétitions et groupes sur plusieurs tours
+
+Opérations (18-19/10, utilisateur, vérifiées en lecture publique) : diagnostics `league-check` des ligues 886 (U17) et 893 (U19) — saisons API 2022 → 2027, classements seulement en 2026 et 2027 ; décision : importer les campagnes 2026 et 2027 (convention U21 : 2026-2027 et 2027-2028). Sauvegarde `belfoot_backup.youth_*` et préparation des fiches (portée `international`, type `hybrid`, slugs `international-886` / `international-893`, **toujours masquées**) ; plan d'import (2026-2027 et 2027-2028 en « Archive résultats ») ; 4 imports (U19 : 119 + 156 matchs ; U17 : 156 + 78). Effet de bord bénéfique de la PR B : la Ligue des nations rafraîchie a reclassé la Belgique A en sélection (`national · senior · men`), désormais suivie par le cron des sélections ; l'utilisateur a conservé son autorisation dans le plan.
+
+Constats sur les données importées (simulation du vrai code) :
+- formats hétérogènes : U19 2026-2027 « Qualifying Round » (sans classement officiel) puis « Elite Round » (7 groupes) ; U19 2027-2028 tour 1 en League A et League B (7 + 7 groupes) **plus** 78 matchs « Group Stage » à venir du cycle suivant ; U17 2026-2027 tout en « Group Stage » mais en deux tours (14 groupes, puis League A / League B), les mêmes équipes dans deux groupes ; U17 2027-2028 phase unique à 54 équipes ;
+- 6 équipes U19 et 19 U17 rangées comme clubs : l'API les déclare `national: false` (comme Kosovo U21).
+
+Correctifs (code) :
+- `classifyNationalTeams(…, { allParticipants })` + `syncCompetition` : dans une compétition de sélections (`isNationalTeamsCompetition` : portée internationale ou import des sélections), **tout participant du calendrier** est une sélection (catégorie et genre du nom), quelle que soit la valeur API ; jamais pour une ligne verrouillée, valeurs existantes jamais écrasées. Les équipes déjà importées sont reclassées à la prochaine synchronisation de la compétition.
+- `phaseGroups` : **groupes sur plusieurs tours** — si les groupes officiels se chevauchent mais que chaque match de la phase appartient à un seul d'entre eux, tous sont affichés, par date de leur premier match ; sinon (match ambigu ou hors groupe), pas de rattachement officiel.
+- `groupDisplayLabel` : « League A · Groupe 4 » / « League B · Groupe 4 » (la ligue est conservée).
+- `mergeGroupStagePhases` : pas de regroupement si une autre phase porte déjà le nom « Group Stage » (U19 2027-2028 : jamais de mélange de deux tours).
+- `selectionGroupStanding` : sélection présente dans deux groupes → celui de son dernier match.
+- Simulation sur les données réelles : U17 2026-2027 = 28 groupes officiels (tour 1 puis League A / B) ; U19 2027-2028 = League A et League B officielles, matchs du cycle suivant à part ; U21 inchangée.
+
 ### PR C — genre des sélections distinct de la catégorie (synchro et administration)
 
 Constat : `syncNationalTeam` déduisait le genre de la seule catégorie (`women` = femmes, tout le reste = hommes) ; une sélection féminine de jeunes ne pouvait être enregistrée qu'en « hommes » ; le panneau Jobs proposait « Red Flames » comme une catégorie d'âge.
