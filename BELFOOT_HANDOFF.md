@@ -13,6 +13,14 @@ Audit complet des synchronisations (lecture seule) puis plan validé avec l'util
 7. **Façade commune et panneau central** : règles partagées (préflight, confirmation, périmètre, budget, journal, erreurs) ; panneau d'abord en lecture seule (historique, diagnostics).
 8. **Garde-fous d'administration** : modifications de `external_id`, suppressions de compétitions et écritures concurrentes de `site_settings` confirmées et auditées.
 
+### Correctif — budget de temps des crons (21/10)
+
+Constat (journaux cron et `job_runs` relevés par l'utilisateur) : depuis la PR B, 10 compétitions éligibles ; à chaque passage du cron `competition-refresh` (toutes les 20 min), 4 à 5 synchros de 10 à 20 s puis coupure par Vercel à 60 s (`timeout` du job). L'état n'étant enregistré qu'en fin de passage, rien n'était sauvegardé : les mêmes compétitions étaient refaites à chaque passage (~16 appels API gaspillés toutes les 20 min), et les dernières de la liste (Pro League, Challenger, U21, U19…) n'étaient plus jamais rafraîchies depuis le 19-20/10. Le cron `national-refresh` répondait 500 à chaque passage : Red Flames suivies mais non autorisées par le plan.
+- `REFRESH_TIME_BUDGET_MS` (35 s, `lib/competitionRefresh.js`) : aucune nouvelle synchro au-delà ; les suivantes sont reportées au passage suivant (`postponedForTime`).
+- État enregistré **après chaque réussite** (relu juste avant, rien d'autre dans `site_settings` n'est écrasé).
+- `national-refresh` : sélection non autorisée par le plan pour la saison écartée avant tout lancement (`skipped`), sans compter comme un échec ; 500 seulement si toutes les tentatives échouent.
+- Mesure immédiate proposée en attendant le déploiement : `football_competition_refresh.max_competitions_per_tick = 3` (réglage, réversible).
+
 ### Sélections jeunes U17 / U19 — compétitions et groupes sur plusieurs tours
 
 Opérations (18-19/10, utilisateur, vérifiées en lecture publique) : diagnostics `league-check` des ligues 886 (U17) et 893 (U19) — saisons API 2022 → 2027, classements seulement en 2026 et 2027 ; décision : importer les campagnes 2026 et 2027 (convention U21 : 2026-2027 et 2027-2028). Sauvegarde `belfoot_backup.youth_*` et préparation des fiches (portée `international`, type `hybrid`, slugs `international-886` / `international-893`, **toujours masquées**) ; plan d'import (2026-2027 et 2027-2028 en « Archive résultats ») ; 4 imports (U19 : 119 + 156 matchs ; U17 : 156 + 78). Effet de bord bénéfique de la PR B : la Ligue des nations rafraîchie a reclassé la Belgique A en sélection (`national · senior · men`), désormais suivie par le cron des sélections ; l'utilisateur a conservé son autorisation dans le plan.
