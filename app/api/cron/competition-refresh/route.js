@@ -2,7 +2,7 @@ import { runJob } from "@/lib/jobs";
 import { getAdmin } from "@/lib/supabaseAdmin";
 import { assertImportTargetAllowed } from "@/lib/importPlan";
 import { JOB_CATALOG } from "@/lib/jobCatalog";
-import { refreshTargets } from "@/lib/competitionRefresh";
+import { REFRESH_TIME_BUDGET_MS, refreshTargets } from "@/lib/competitionRefresh";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -55,6 +55,8 @@ export async function GET(request) {
   if (!authorized(request)) return new Response("Unauthorized", { status: 401 });
   const db = getAdmin();
   const now = new Date();
+  const startedAt = Date.now();
+  const outOfTime = () => Date.now() - startedAt > REFRESH_TIME_BUDGET_MS;
   const dryRun = new URL(request.url).searchParams.get("dryRun") === "1";
 
   try {
@@ -164,15 +166,28 @@ export async function GET(request) {
       });
     }
 
+    // État enregistré après chaque réussite (relu juste avant : rien d'autre
+    // dans site_settings n'est écrasé).
+    const persistState = async () => {
+      const { data: fresh } = await db.from("site_settings").select("data").eq("id", 1).maybeSingle();
+      const { error: saveError } = await db.from("site_settings")
+        .update({ data: { ...(fresh?.data || {}), football_competition_refresh_state: refreshState, football_competition_stats_state: statsState } })
+        .eq("id", 1);
+      if (saveError) throw saveError;
+    };
+
     let used = 0;
+    let timeLimited = 0;
     const results = [];
     for (const { competition, windowActive } of pickedResults) {
       if (used + perSyncCalls > reservedCalls) break;
+      if (outOfTime()) { timeLimited = pickedResults.length - results.filter((r) => r.pass === "results").length; break; }
       try {
         const result = await runJob("football.sync", { db, competitionId: competition.id, season: seasonOf[competition.id].label, requestLimit: perSyncCalls, apifootballKey: process.env.APIFOOTBALL_KEY, thesportsdbKey: process.env.THESPORTSDB_KEY });
         used += perSyncCalls;
         refreshState[competition.id] = now.toISOString();
         results.push({ pass: "results", competition: competition.name, season: seasonOf[competition.id].label, windowActive, ok: true, result });
+        await persistState();
       } catch (error) {
         results.push({ pass: "results", competition: competition.name, windowActive, ok: false, error: String(error?.message || error).slice(0, 300) });
       }
@@ -181,6 +196,7 @@ export async function GET(request) {
     let statsUsed = 0;
     for (const { competition } of pickedStats) {
       if (statsUsed + statsPerCall > reservedStatsCalls) break;
+      if (outOfTime()) break;
       const state = statsState[competition.id] || {};
       const startClubIndex = Number(state.clubIndex) || 0;
       try {
@@ -195,26 +211,19 @@ export async function GET(request) {
         if (complete) statsState[competition.id] = { lastStatsAt: now.toISOString(), clubIndex: 0 };
         else statsState[competition.id] = { lastStatsAt: state.lastStatsAt || null, clubIndex: Number(result.progress?.current) || startClubIndex };
         results.push({ pass: "stats", competition: competition.name, ok: true, complete, progress: result?.progress || null });
+        await persistState();
       } catch (error) {
         results.push({ pass: "stats", competition: competition.name, ok: false, error: String(error?.message || error).slice(0, 300) });
       }
     }
 
-    // Persiste les deux états en un seul écrit (sans écraser le reste de site_settings).
-    if (results.some((result) => result.ok)) {
-      const { data: fresh } = await db.from("site_settings").select("data").eq("id", 1).maybeSingle();
-      const { error: saveError } = await db.from("site_settings")
-        .update({ data: { ...(fresh?.data || {}), football_competition_refresh_state: refreshState, football_competition_stats_state: statsState } })
-        .eq("id", 1);
-      if (saveError) throw saveError;
-    }
 
     return Response.json({
       ok: results.length === 0 || results.some((result) => result.ok),
       calendarSeason,
       eligible: comps.length,
       excluded: skipped,
-      results: { due: dueResults.length, refreshed: results.filter((r) => r.pass === "results" && r.ok).length, calls: used },
+      results: { due: dueResults.length, refreshed: results.filter((r) => r.pass === "results" && r.ok).length, calls: used, postponedForTime: timeLimited },
       stats: { due: dueStats.length, advanced: results.filter((r) => r.pass === "stats" && r.ok).length, calls: statsUsed },
       log: results,
     }, { status: results.length === 0 || results.some((result) => result.ok) ? 200 : 500 });

@@ -1,4 +1,6 @@
 import { runJob } from "@/lib/jobs";
+import { assertImportTargetAllowed } from "@/lib/importPlan";
+import { JOB_CATALOG } from "@/lib/jobCatalog";
 import { getAdmin } from "@/lib/supabaseAdmin";
 import { COMPETITION_COLLISION } from "@/modules/football/sync";
 
@@ -120,6 +122,10 @@ export async function GET(request) {
     const callsPerSelection = 5; // fiche + matchs (2 saisons) + effectif, avec marge
     for (const { team, windowActive } of picked) {
       if (used + callsPerSelection > reservedCalls) break;
+      // Sélection suivie mais non autorisée par le plan pour la saison (ex. Red
+      // Flames) : écartée sans job ni appel, et ce n'est pas un échec du cron.
+      try { await assertImportTargetAllowed(db, "football.national-team", { teamExternalId: team.external_id, season }, JOB_CATALOG["football.national-team"]); }
+      catch (error) { results.push({ team: team.name, windowActive, skipped: true, reason: String(error?.message || error).slice(0, 200) }); continue; }
       try {
         const result = await runJob("football.national-team", {
           db,
@@ -143,12 +149,14 @@ export async function GET(request) {
     // rassemblement). On ne touche qu'aux compétitions de sélections, jamais aux clubs.
     const liveToggle = await syncSelectionLiveFlags(db, teamIds, teamIn, now, strategy);
 
+    const attempted = results.filter((result) => !result.skipped);
     return Response.json({
-      ok: results.every((result) => result.ok),
+      ok: attempted.every((result) => result.ok),
       season, window: { from, to },
-      followed: teams.length, due: due.length, heldAfterCollision, refreshed: results.length,
+      followed: teams.length, due: due.length, heldAfterCollision, refreshed: attempted.filter((result) => result.ok).length,
+      skipped: results.filter((result) => result.skipped).length,
       estimatedCalls: used, liveToggle, results,
-    }, { status: results.length === 0 || results.some((result) => result.ok) ? 200 : 500 });
+    }, { status: attempted.length === 0 || attempted.some((result) => result.ok) ? 200 : 500 });
   } catch (error) {
     return Response.json({ ok: false, error: String(error?.message || error).slice(0, 500) }, { status: 500 });
   }
