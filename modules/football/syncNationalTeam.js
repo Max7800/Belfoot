@@ -4,6 +4,13 @@ import { ensureSeason, seasonLabel, seasonYear } from "./season";
 import { frenchNationName } from "@/lib/frenchNations";
 import { resolveNationalMatchSeason } from "./nationalMatchSeasons";
 import { nationalTeamTraits } from "./nationalClassification";
+import { providerIdentityPatch } from "@/lib/playerIdentity";
+
+// Seulement le nom et la photo : la nationalité suit ici sa propre règle (sélection).
+function nameAndPhoto(existing, member) {
+  const { name, photo_url } = providerIdentityPatch(existing, { name: member.name, photo_url: member.photo_url });
+  return { ...(name !== undefined ? { name } : {}), ...(photo_url !== undefined ? { photo_url } : {}) };
+}
 
 const ALLOWED_CATEGORIES = new Set(["senior", "u23", "u21", "u20", "u19", "u18", "u17", "u16", "u15", "women"]);
 const GENDERS = new Set(["men", "women"]);
@@ -184,16 +191,16 @@ export async function syncNationalTeam(db, ctx = {}) {
 
   let callups = 0;
   for (const member of squad) {
-    const { data: existing, error: playerSelectError } = await db.from("players").select("id,locked,club_id,country,tracked,nationality,national_team_id,national_team_locked").eq("source", providerKey).eq("external_id", member.external_id).maybeSingle();
+    const { data: existing, error: playerSelectError } = await db.from("players").select("id,locked,club_id,country,tracked,nationality,national_team_id,national_team_locked,ext").eq("source", providerKey).eq("external_id", member.external_id).maybeSingle();
     if (playerSelectError) throw playerSelectError;
     const playerPatch = {
       source: providerKey,
       external_id: member.external_id,
-      name: member.name,
+      // Nom et photo corrigés à la main protégés (lib/playerIdentity.js).
+      ...nameAndPhoto(existing, member),
       nationality: existing?.nationality || "Belgium",
       ...(category === "senior" && !existing?.national_team_locked ? { national_team_id: nationalTeamId } : {}),
       position: member.position,
-      photo_url: member.photo_url,
       age: member.age,
       active: true,
       tracked: Boolean(existing?.tracked || (existing?.club_id && existing?.country)),

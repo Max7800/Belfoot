@@ -86,6 +86,8 @@ export const FOOTBALL_ENTITIES = {
   },
   players: {
     table: "players", title: "Joueurs", singular: "Joueur", orderBy: "name", hasSource: true, search: true,
+    // Nom et photo corrigés ici : protégés des synchronisations (ext.editorial_fields).
+    editorialFields: ["name", "photo_url"],
     pageSize: 40, grouped: false, groupBy: { field: "club_id", relTable: "clubs", relLabel: "name" },
     quickFilters: [
       { key: "active", label: "Tous les statuts", type: "bool", options: [{ value: "true", label: "Actifs" }, { value: "false", label: "Inactifs" }] },

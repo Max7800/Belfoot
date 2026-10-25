@@ -108,8 +108,8 @@ export async function syncSquads(db, competition, ctx = {}) {
       // Nationalité et date de naissance : jamais effacées par une valeur absente de
       // l'API (l'effectif actuel /players/squads n'en fournit pas), jamais remplacées
       // si elles ont été fixées dans l'administration.
-      const identity = providerIdentityPatch(existing, { nationality: p.nationality, birth_date: p.birth_date });
-      const patch = { source: competition.provider, external_id: p.external_id, name: p.name, ...identity, position: p.position, photo_url: p.photo_url, age: p.age, ...(nationalTeam ? {} : playerSnapshotPatch({ existing, club, competition, season, primaryClub })), synced_at: now };
+      const identity = providerIdentityPatch(existing, { nationality: p.nationality, birth_date: p.birth_date, name: p.name, photo_url: p.photo_url });
+      const patch = { source: competition.provider, external_id: p.external_id, ...identity, position: p.position, age: p.age, ...(nationalTeam ? {} : playerSnapshotPatch({ existing, club, competition, season, primaryClub })), synced_at: now };
       let pid = existing?.id;
       if (existing && !existing.locked) {
         const { error } = await db.from("players").update(patch).eq("id", existing.id);

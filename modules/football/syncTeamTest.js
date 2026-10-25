@@ -83,10 +83,8 @@ export async function syncTeamTest(db, competition, ctx = {}) {
     const patch = {
       source: competition.provider,
       external_id: player.external_id,
-      name: player.name,
-      ...providerIdentityPatch(existing, { nationality: player.nationality, birth_date: player.birth_date }),
+      ...providerIdentityPatch(existing, { nationality: player.nationality, birth_date: player.birth_date, name: player.name, photo_url: player.photo_url }),
       position: player.position,
-      photo_url: player.photo_url,
       age: player.age,
       // Instantané « club actuel » : mêmes règles que les effectifs (championnat
       // national de la saison courante seulement ; aucun pays inventé).
