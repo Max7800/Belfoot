@@ -1,13 +1,14 @@
 "use client";
 import { useState } from "react";
 import { RefreshCw } from "lucide-react";
-import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/lib/auth";
+import { confirmationText, launchJob } from "@/lib/adminJobs";
 
 // Bouton admin DISCRET sur la page d'une compétition : synchronise cette compétition
-// (import complet : matchs + scores + couverture) sans passer par l'admin.
+// pour la saison AFFICHÉE (matchs + scores + couverture) sans passer par l'admin,
+// avec préflight et confirmation comme les autres actions ciblées.
 // Auto-masqué pour les non-admins. Le classement se recalcule au rechargement.
-export default function CompetitionSyncButton({ competition }) {
+export default function CompetitionSyncButton({ competition, season }) {
   const { isAdmin } = useAuth();
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
@@ -15,17 +16,16 @@ export default function CompetitionSyncButton({ competition }) {
   if (!isAdmin || !competition?.id) return null;
 
   const sync = async () => {
+    // Sans saison publiée (premier import), repli sur la saison de la fiche.
+    const target = season || competition.ext?.season || null;
+    if (!target) { setMsg("✗ saison inconnue"); return; }
     setBusy(true); setMsg("");
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const r = await fetch("/api/admin/run-job", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token || ""}` },
-        body: JSON.stringify({ key: "football.sync", competitionId: competition.id, season: competition.ext?.season || null, requestLimit: 30 }),
+      const outcome = await launchJob({ key: "football.sync", competitionId: competition.id, season: target, requestLimit: 30 }, {
+        confirm: (preflight) => window.confirm(confirmationText(`Synchroniser ${competition.name} pour ${preflight.season || target} ?`, preflight, "Matchs, scores et couverture de la saison.")),
       });
-      const txt = await r.text();
-      setMsg(r.ok ? "✓ recharge" : `✗ ${txt.slice(0, 60)}`);
-    } catch (e) { setMsg(`✗ ${e.message}`); }
+      setMsg(outcome.cancelled ? "" : "✓ recharge");
+    } catch (e) { setMsg(`✗ ${String(e.message).slice(0, 80)}`); }
     setBusy(false);
   };
 
