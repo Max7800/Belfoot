@@ -34,6 +34,8 @@ const finished = (id, seasonId, competitionId, hoursAgo) => ({ id, season_id: se
 beforeAll(() => { process.env.CRON_SECRET = SECRET; vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(NOW); });
 afterAll(() => { delete process.env.CRON_SECRET; vi.useRealTimers(); });
 beforeEach(() => { state.runs = []; });
+// Imports et statistiques seulement (le passage de renouvellement est testé à part).
+const importRuns = () => state.runs.filter((r) => r.key !== "football.campaign-rollover");
 
 describe("refreshTargets — règle pure", () => {
   it("saison publique de chaque compétition (active, sinon la plus récente publiée)", () => {
@@ -60,7 +62,7 @@ describe("cron competition-refresh — toutes les compétitions visibles", () =>
     const plan = planFor({ "c-144": allow("2026-2027"), "c-850": { enabled: true, seasons: { "2025-2026": { enabled: true, scope: "base" } } }, "c-5": { enabled: false, seasons: {} } });
     state.db = seed({ competitions: [PRO, U21, NL], seasons: baseSeasons, plan });
     const body = await tick();
-    expect(state.runs.map((r) => r.competitionId)).toEqual(["c-144"]);
+    expect(importRuns().map((r) => r.competitionId)).toEqual(["c-144"]);
     expect(body.excluded.map((e) => e.competition).sort()).toEqual(["UEFA Nations League", "UEFA U21 Qualification"]);
   });
 
@@ -75,14 +77,14 @@ describe("cron competition-refresh — toutes les compétitions visibles", () =>
     const plan = planFor({ "c-144": allow("2025-2026", "complete") });
     state.db = seed({ competitions: [PRO], seasons: [season("s-pro-old", "c-144", "2025-2026", "ready")], plan, matches: [finished("m1", "s-pro-old", "c-144", 30)] });
     await tick();
-    expect(state.runs.map((r) => [r.key, r.season])).toEqual([["football.sync", "2025-2026"], ["football.squads", "2025-2026"]]);
+    expect(importRuns().map((r) => [r.key, r.season])).toEqual([["football.sync", "2025-2026"], ["football.squads", "2025-2026"]]);
   });
 
   it("club au niveau « Archive résultats » : pas de passage statistiques", async () => {
     const plan = planFor({ "c-144": allow("2026-2027", "base") });
     state.db = seed({ competitions: [PRO], seasons: [baseSeasons[0]], plan, matches: [finished("m1", "s-pro", "c-144", 30)] });
     await tick();
-    expect(state.runs.map((r) => r.key)).toEqual(["football.sync"]);
+    expect(importRuns().map((r) => r.key)).toEqual(["football.sync"]);
   });
 
   it("fenêtre de match : seuls les matchs de la saison rafraîchie comptent", async () => {

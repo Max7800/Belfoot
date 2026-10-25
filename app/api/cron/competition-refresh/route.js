@@ -3,6 +3,13 @@ import { getAdmin } from "@/lib/supabaseAdmin";
 import { assertImportTargetAllowed } from "@/lib/importPlan";
 import { JOB_CATALOG } from "@/lib/jobCatalog";
 import { REFRESH_TIME_BUDGET_MS, refreshTargets } from "@/lib/competitionRefresh";
+import { rolloverDue } from "@/lib/campaignRollover";
+
+// Passage 3 (renouvellement des campagnes) : une compétition au plus par passage,
+// une vérification par jour et par compétition, et seulement s'il reste de quoi
+// finir une synchro avant la coupure à 60 s.
+const ROLLOVER_START_BEFORE_MS = 12000;
+const ROLLOVER_CALLS = 6;
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -109,6 +116,7 @@ export async function GET(request) {
     const compName = Object.fromEntries(comps.map((competition) => [competition.id, competition.name]));
     const refreshState = { ...(settings?.data?.football_competition_refresh_state || {}) };
     const statsState = { ...(settings?.data?.football_competition_stats_state || {}) };
+    const rolloverState = { ...(settings?.data?.football_campaign_rollover_state || {}) };
 
     // ── Fenêtre « jour de match » (passage 1) ────────────────────────────────
     const from = new Date(now.getTime() - windowAfter * 3600000).toISOString();
@@ -171,7 +179,7 @@ export async function GET(request) {
     const persistState = async () => {
       const { data: fresh } = await db.from("site_settings").select("data").eq("id", 1).maybeSingle();
       const { error: saveError } = await db.from("site_settings")
-        .update({ data: { ...(fresh?.data || {}), football_competition_refresh_state: refreshState, football_competition_stats_state: statsState } })
+        .update({ data: { ...(fresh?.data || {}), football_competition_refresh_state: refreshState, football_competition_stats_state: statsState, football_campaign_rollover_state: rolloverState } })
         .eq("id", 1);
       if (saveError) throw saveError;
     };
@@ -218,9 +226,31 @@ export async function GET(request) {
     }
 
 
+    // ── Passage 3 : renouvellement automatique des campagnes ────────────────
+    // Jusqu'à « prête » seulement : l'activation reste un clic de l'administrateur.
+    let rollover = null;
+    if (Date.now() - startedAt <= ROLLOVER_START_BEFORE_MS) {
+      const candidate = comps.filter((competition) => rolloverDue(rolloverState[competition.id], now.getTime()))
+        .sort((a, b) => (Date.parse(rolloverState[a.id]?.checkedAt || "") || 0) - (Date.parse(rolloverState[b.id]?.checkedAt || "") || 0))[0];
+      if (candidate) {
+        let outcome;
+        try {
+          const result = await runJob("football.campaign-rollover", { db, competitionId: candidate.id, requestLimit: ROLLOVER_CALLS, apifootballKey: process.env.APIFOOTBALL_KEY });
+          outcome = { ok: true, detail: String(result?.detail || "").slice(0, 300) };
+        } catch (error) {
+          outcome = { ok: false, error: String(error?.message || error).slice(0, 300) };
+        }
+        // Tentative mémorisée même en échec : pas de nouvel essai avant 24 h.
+        rolloverState[candidate.id] = { checkedAt: now.toISOString(), ...outcome };
+        rollover = { competition: candidate.name, ...outcome };
+        await persistState();
+      }
+    }
+
     return Response.json({
       ok: results.length === 0 || results.some((result) => result.ok),
       calendarSeason,
+      rollover,
       eligible: comps.length,
       excluded: skipped,
       results: { due: dueResults.length, refreshed: results.filter((r) => r.pass === "results" && r.ok).length, calls: used, postponedForTime: timeLimited },
