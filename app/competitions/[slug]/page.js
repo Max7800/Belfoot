@@ -408,7 +408,7 @@ export default function CompetitionPage() {
         <div className="flex items-center gap-2">
           <div className="-mx-1 min-w-0 flex-1 overflow-x-auto px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"><div className="flex w-max gap-1">{TABS.map(([k, l]) => <button key={k} onClick={() => setTab(k)} className={`shrink-0 px-3 py-2 text-sm ${tab === k ? "border-b-2 border-accent font-bold text-content" : "text-muted hover:text-content"}`}>{l}</button>)}</div></div>
           {seasons.length > 0 && <select value={seasonLabel} onChange={(e) => { setSeasonLabel(e.target.value); setPhase(null); setRound("all"); }} className="hidden shrink-0 rounded border border-line/10 bg-surface px-2 py-1 text-xs sm:block">{seasons.map((s) => <option key={s.id}>{s.label}</option>)}</select>}
-          <CompetitionSyncButton competition={comp} />
+          <CompetitionSyncButton competition={comp} season={seasonLabel || null} />
         </div>
         {seasons.length > 0 && <select value={seasonLabel} onChange={(e) => { setSeasonLabel(e.target.value); setPhase(null); setRound("all"); }} className="mb-3 mt-2 w-full rounded-xl border border-line/10 bg-surface px-3 py-2 text-sm sm:hidden">{seasons.map((s) => <option key={s.id}>{s.label}</option>)}</select>}
       </div>

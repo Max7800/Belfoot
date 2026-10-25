@@ -86,7 +86,7 @@ describe("branchement", () => {
     expect(read("lib/jobs.js")).toContain("clubId: ctx.clubId || null,");
     const page = read("app/clubs/[id]/page.js");
     expect(page).toContain("const payload = { key: \"football.club-sync\", competitionId: competition.id, clubId: club.id, season, requestLimit: 10 };");
-    expect(page).toMatch(/fetch\("\/api\/admin\/job-preflight"[\s\S]*window\.confirm\(`Synchroniser \$\{club\.name\}/);
+    expect(page).toMatch(/launchJob\(payload, \{[\s\S]*window\.confirm\(confirmationText\(`Synchroniser \$\{club\.name\}/); // préflight + confirmation (lib/adminJobs.js)
     expect(page).toContain("onClick={syncThisClub}");
     expect(page).toContain("onClick={refreshClubCareers}"); // bouton existant conservé
   });

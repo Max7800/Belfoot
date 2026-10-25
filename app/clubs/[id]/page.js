@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { ArrowLeft, Building2, ExternalLink, MapPin, RefreshCw, Shield, Trophy } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
+import { confirmationText, launchJob } from "@/lib/adminJobs";
 import MatchRow from "@/components/football/MatchRow";
 import CollapsibleSection from "@/components/CollapsibleSection";
 import { useClubSections } from "@/lib/clubSections";
@@ -154,21 +155,13 @@ export default function ClubPage() {
     const season = sport?.season?.label;
     if (!competition?.provider || !season) { setCareerStatus("Impossible de déterminer la compétition et la saison de référence."); return; }
     const payload = { key: "football.club-sync", competitionId: competition.id, clubId: club.id, season, requestLimit: 10 };
-    setCareerBusy(true); setCareerStatus("Calcul du coût de la synchronisation…");
+    setCareerBusy(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const headers = { Authorization: `Bearer ${session?.access_token || ""}`, "Content-Type": "application/json" };
-      const preflightResponse = await fetch("/api/admin/job-preflight", { method: "POST", headers, body: JSON.stringify(payload) });
-      const preflight = await preflightResponse.json().catch(() => ({}));
-      if (!preflightResponse.ok) throw new Error(preflight.error || "Préflight impossible");
-      if (!preflight.ok) throw new Error((preflight.blockers || []).join(" · ") || "Synchronisation bloquée");
-      if (!window.confirm(`Synchroniser ${club.name} pour ${season} ?\n\nMatchs de ${competition.name}, effectif et entraîneur.\nCoût maximal estimé : ${preflight.total?.max ?? 9} appels API.`)) { setCareerStatus(""); return; }
-      setCareerStatus("Synchronisation du club en cours…");
-      const response = await fetch("/api/admin/run-job", { method: "POST", headers, body: JSON.stringify(payload) });
-      const text = await response.text();
-      let result = {}; try { result = JSON.parse(text); } catch { result = { detail: text }; }
-      if (!response.ok) throw new Error(result.detail || result.error || text || "Synchronisation échouée");
-      setCareerStatus(`✓ ${result.detail || "Club synchronisé."}`);
+      const outcome = await launchJob(payload, {
+        onStatus: setCareerStatus,
+        confirm: (preflight) => window.confirm(confirmationText(`Synchroniser ${club.name} pour ${season} ?`, preflight, `Matchs de ${competition.name}, effectif et entraîneur.`)),
+      });
+      if (!outcome.cancelled) setCareerStatus(`✓ ${outcome.result.detail || "Club synchronisé."}`);
     } catch (error) {
       setCareerStatus(`✗ ${error.message || String(error)}`);
     } finally {
@@ -189,17 +182,12 @@ export default function ClubPage() {
     const completedNow = new Set(careerCompleted);
     const failures = [];
     try {
-      const { data: { session } } = await supabase.auth.getSession();
       for (let index = 0; index < eligible.length; index++) {
         const player = eligible[index];
         const payload = { key: "football.player-careers", competitionId: sport.competition.id, playerId: player.id, season, includeCareerStats: true, batchSize: 1, requestLimit: 2 };
         try {
-          const preflightResponse = await fetch("/api/admin/job-preflight", { method: "POST", headers: { Authorization: `Bearer ${session?.access_token || ""}`, "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-          const preflight = await preflightResponse.json().catch(() => ({}));
-          if (!preflightResponse.ok || !preflight.ok) throw new Error(preflight.error || (preflight.blockers || []).join(" · ") || "Préflight bloqué");
-          const response = await fetch("/api/admin/run-job", { method: "POST", headers: { Authorization: `Bearer ${session?.access_token || ""}`, "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-          const result = await response.json().catch(() => ({}));
-          if (!response.ok) throw new Error(result.detail || result.error || "Synchronisation échouée");
+          // Lot déjà confirmé ci-dessus : préflight par joueur, sans nouvelle confirmation.
+          await launchJob(payload, { confirm: null });
           completedNow.add(player.id);
           setCareerCompleted(new Set(completedNow));
         } catch (error) {

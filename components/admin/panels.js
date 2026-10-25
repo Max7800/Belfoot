@@ -5,6 +5,7 @@ import siteConfig from "@/config/site";
 import { JOB_CATALOG, jobKeys, JOB_GROUPS, jobsInGroup, jobPipelines } from "@/lib/jobCatalog";
 import { LEASE_MS, PIPELINE_RUN_PUBLIC_COLUMNS, runState } from "@/lib/runLease";
 import { jobSeasonOptions } from "@/lib/importPlan";
+import { adminRequest, preflightSummary } from "@/lib/adminJobs";
 import ImageField from "@/components/ui/ImageField";
 import { CLUB_SECTIONS } from "@/lib/clubSections";
 import { normalizeStatsConfig } from "@/lib/statsSections";
@@ -129,47 +130,12 @@ export function JobsPanel() {
     supabase.from("seasons").select("competition_id,label").order("label", { ascending: false }).then(({ data }) => setAvailableSeasons(data || []));
     supabase.from("site_settings").select("data").eq("id", 1).maybeSingle().then(({ data }) => setImportPlan(data?.data?.football_import_plan || null));
   }, []);
-  const callJob = async (key, budget) => {
-    const { data: { session } } = await supabase.auth.getSession();
-    const r = await fetch("/api/admin/run-job", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token}` },
-      body: JSON.stringify({ key, season, competitionId: compId || null, matchCap, batchSize, requestLimit: budget ?? requestLimit, teamExternalId, nationalCategory, nationalGender: nationalGenderParam }),
-    });
-    const txt = await r.text();
-    if (!r.ok) throw new Error(txt || ("HTTP " + r.status));
-    let d; try { d = JSON.parse(txt); } catch { d = { detail: txt }; }
-    return d;
-  };
-  const callPipeline = async (payload) => {
-    const { data: { session } } = await supabase.auth.getSession();
-    const response = await fetch("/api/admin/run-pipeline", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token}` },
-      body: JSON.stringify({ ...payload, season, competitionId: compId || null, matchCap, batchSize, requestLimit, teamExternalId, nationalCategory, nationalGender: nationalGenderParam }),
-    });
-    const text = await response.text();
-    if (!response.ok) throw new Error(text || `HTTP ${response.status}`);
-    return JSON.parse(text);
-  };
-  const fetchPreflight = async (payload) => {
-    const { data: { session } } = await supabase.auth.getSession();
-    const response = await fetch("/api/admin/job-preflight", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token}` },
-      body: JSON.stringify({ ...payload, season, competitionId: compId || null, matchCap, batchSize, requestLimit, teamExternalId, nationalCategory, nationalGender: nationalGenderParam }),
-    });
-    const text = await response.text();
-    if (!response.ok) throw new Error(text || `HTTP ${response.status}`);
-    return JSON.parse(text);
-  };
-  const preflightText = (result) => {
-    const lines = result.steps.map((step, index) => `${index + 1}. ${step.label} : ${step.min === step.max ? step.max : `${step.min}–${step.max}`} appel(s) — ${step.basis}`);
-    const quota = result.quotaRemaining == null ? "quota inconnu" : `dernier quota connu ${result.quotaRemaining}`;
-    const warnings = result.warnings?.length ? `\nAVERTISSEMENTS :\n- ${result.warnings.join("\n- ")}` : "";
-    const blockers = result.blockers.length ? `\nBLOCAGES :\n- ${result.blockers.join("\n- ")}` : "\n✓ Préflight validé.";
-    return `Cible : ${result.target} · saison ${result.season || "auto"}\n${lines.join("\n")}\nTOTAL : ${result.total.min}–${result.total.max} appel(s) · budget ${result.budget} · ${quota}${warnings}${blockers}`;
-  };
+  // Façade commune (lib/adminJobs.js) : même session, mêmes erreurs, même texte de préflight.
+  const jobParams = () => ({ season, competitionId: compId || null, matchCap, batchSize, requestLimit, teamExternalId, nationalCategory, nationalGender: nationalGenderParam });
+  const callJob = (key, budget) => adminRequest("/api/admin/run-job", { key, ...jobParams(), requestLimit: budget ?? requestLimit });
+  const callPipeline = (payload) => adminRequest("/api/admin/run-pipeline", { ...payload, ...jobParams() });
+  const fetchPreflight = (payload) => adminRequest("/api/admin/job-preflight", { ...payload, ...jobParams() });
+  const preflightText = preflightSummary;
   const run = async (key) => {
     if (JOB_CATALOG[key]?.target === "competition" && !compId) {
       setMsg("✗ Choisis une compétition : les imports globaux sont désactivés pour protéger le quota.");

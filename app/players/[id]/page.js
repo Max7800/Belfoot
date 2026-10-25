@@ -5,6 +5,7 @@ import { ArrowLeft, CalendarDays, Clock3, MapPin, Pencil, RefreshCw, Save, Shiel
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import { confirmationText, launchJob } from "@/lib/adminJobs";
 import { useLabels } from "@/lib/labels";
 import DiscussButton from "@/components/forum/DiscussButton";
 import BackButton from "@/components/BackButton";
@@ -286,21 +287,15 @@ export default function PlayerPage() {
 
   const refreshCareer = async () => {
     if (!view.primaryCompetitionId) { setAdminStatus("Impossible de déterminer la compétition de référence de ce joueur."); return; }
-    setAdminBusy(true); setAdminStatus("Calcul du coût de la synchronisation…");
+    setAdminBusy(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
       const payload = { key: "football.player-careers", competitionId: view.primaryCompetitionId, playerId: id, season: view.primarySeason, includeCareerStats: true, batchSize: 1, requestLimit: 2 };
-      const preflightResponse = await fetch("/api/admin/job-preflight", { method: "POST", headers: { Authorization: `Bearer ${session?.access_token || ""}`, "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-      const preflight = await preflightResponse.json().catch(() => ({}));
-      if (!preflightResponse.ok) throw new Error(preflight.error || "Préflight impossible");
-      if (!preflight.ok) throw new Error((preflight.blockers || []).join(" · ") || "Synchronisation bloquée");
-      if (!window.confirm(`Rafraîchir la carrière et toutes les compétitions jouées par ${state.player.name} en ${view.primarySeason} ?\n\nCoût maximal estimé : ${preflight.total?.max ?? 2} appels API.`)) { setAdminBusy(false); setAdminStatus(""); return; }
-      setAdminStatus("Synchronisation ciblée en cours…");
-      const response = await fetch("/api/admin/run-job", { method: "POST", headers: { Authorization: `Bearer ${session?.access_token || ""}`, "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-      const responseText = await response.text();
-      let result; try { result = JSON.parse(responseText); } catch { result = { detail: responseText }; }
-      if (!response.ok) throw new Error(result.detail || result.error || "La synchronisation a échoué");
-      setAdminStatus(result.detail || "Carrière actualisée.");
+      const outcome = await launchJob(payload, {
+        onStatus: setAdminStatus,
+        confirm: (preflight) => window.confirm(confirmationText(`Rafraîchir la carrière et toutes les compétitions jouées par ${state.player.name} en ${view.primarySeason} ?`, preflight)),
+      });
+      if (outcome.cancelled) return;
+      setAdminStatus(outcome.result.detail || "Carrière actualisée.");
       setRefreshKey((value) => value + 1);
     } catch (error) {
       setAdminStatus(`Erreur : ${error.message}`);

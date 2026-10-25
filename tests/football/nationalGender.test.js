@@ -79,7 +79,9 @@ describe("chaîne d'appel — le genre est transmis jusqu'à la synchro", () => 
   it("admin : genre choisi séparément, « Selon l'API » par défaut, envoyé à chaque lancement", () => {
     const panel = read("components/admin/panels.js");
     expect(panel).toContain("const nationalGenderParam = nationalGender === \"auto\" ? null : nationalGender;");
-    expect((panel.match(/nationalGender: nationalGenderParam \}\)/g) || []).length).toBe(3);
+    // Paramètres communs (façade) : envoyés par le job, le pipeline et le préflight.
+    expect(panel).toContain("const jobParams = () => ({ season, competitionId: compId || null, matchCap, batchSize, requestLimit, teamExternalId, nationalCategory, nationalGender: nationalGenderParam });");
+    expect((panel.match(/adminRequest\("\/api\/admin\/(run-job|run-pipeline|job-preflight)", \{[^}]*\.\.\.jobParams\(\)/g) || []).length).toBe(3);
     expect(panel).not.toContain("<option value=\"women\">Red Flames</option>");
   });
 });
