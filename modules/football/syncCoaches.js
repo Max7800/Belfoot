@@ -20,7 +20,9 @@ export async function syncCoaches(db, competition, ctx = {}) {
   const { data: clubs } = await db.from("clubs").select("id,name,external_id").in("id", clubIds).order("id");
 
   let updated = 0; let protectedCount = 0; let missing = 0;
-  const orderedClubs = clubs || [];
+  // « Synchroniser ce club » : un seul club de la compétition (football.club-sync).
+  const orderedClubs = ctx.onlyClubId ? (clubs || []).filter((club) => club.id === ctx.onlyClubId) : (clubs || []);
+  if (ctx.onlyClubId && !orderedClubs.length) return `${competition.name}: ce club ne joue pas cette saison dans la compétition`;
   const startClubIndex = Math.max(0, Number(ctx.startClubIndex) || 0);
   const defaultBatchSize = ctx.pipelineRunId ? 3 : Math.max(1, orderedClubs.length);
   const maxBatchSize = ctx.pipelineRunId ? 10 : Math.max(1, orderedClubs.length);
