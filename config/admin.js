@@ -36,11 +36,11 @@ export const adminSections = [
     { key: "matchPlayerStats", label: "Performances joueurs" },
   ] },
   { label: "Synchronisation", icon: "refresh", panels: [
+    { key: "sync-overview", label: "Vue d'ensemble (lecture seule)" },
     { key: "import-plan", label: "Plan d'import 2026" },
     { key: "jobs", label: "Jobs et historique" },
     { key: "live-strategy", label: "Stratégie du direct" },
     { key: "providers", label: "Sources de données" },
-    { key: "sync-errors", label: "Erreurs de synchronisation" },
     { key: "system-status", label: "Préparation 2026" },
   ] },
   { label: "Apparence du site", icon: "palette", panels: [
