@@ -146,6 +146,36 @@ export default function ClubPage() {
   const activeMobileSection = visibleSections.find((section) => section.key === mobileSection) || visibleSections[0];
   const clubsHref = sport?.competition ? `${competitionPath(sport.competition)}?tab=clubs` : "/competitions";
 
+  // « Synchroniser ce club » : matchs de la compétition, effectif et entraîneur
+  // du club pour la saison affichée (job football.club-sync), avec préflight
+  // et confirmation comme les autres actions ciblées.
+  const syncThisClub = async () => {
+    const competition = sport?.competition;
+    const season = sport?.season?.label;
+    if (!competition?.provider || !season) { setCareerStatus("Impossible de déterminer la compétition et la saison de référence."); return; }
+    const payload = { key: "football.club-sync", competitionId: competition.id, clubId: club.id, season, requestLimit: 10 };
+    setCareerBusy(true); setCareerStatus("Calcul du coût de la synchronisation…");
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const headers = { Authorization: `Bearer ${session?.access_token || ""}`, "Content-Type": "application/json" };
+      const preflightResponse = await fetch("/api/admin/job-preflight", { method: "POST", headers, body: JSON.stringify(payload) });
+      const preflight = await preflightResponse.json().catch(() => ({}));
+      if (!preflightResponse.ok) throw new Error(preflight.error || "Préflight impossible");
+      if (!preflight.ok) throw new Error((preflight.blockers || []).join(" · ") || "Synchronisation bloquée");
+      if (!window.confirm(`Synchroniser ${club.name} pour ${season} ?\n\nMatchs de ${competition.name}, effectif et entraîneur.\nCoût maximal estimé : ${preflight.total?.max ?? 9} appels API.`)) { setCareerStatus(""); return; }
+      setCareerStatus("Synchronisation du club en cours…");
+      const response = await fetch("/api/admin/run-job", { method: "POST", headers, body: JSON.stringify(payload) });
+      const text = await response.text();
+      let result = {}; try { result = JSON.parse(text); } catch { result = { detail: text }; }
+      if (!response.ok) throw new Error(result.detail || result.error || text || "Synchronisation échouée");
+      setCareerStatus(`✓ ${result.detail || "Club synchronisé."}`);
+    } catch (error) {
+      setCareerStatus(`✗ ${error.message || String(error)}`);
+    } finally {
+      setCareerBusy(false);
+    }
+  };
+
   const refreshClubCareers = async () => {
     const provider = sport?.competition?.provider;
     const season = sport?.season?.label;
@@ -191,7 +221,7 @@ export default function ClubPage() {
         <div className="relative flex items-center gap-3 sm:gap-4">{club.logo_url && <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-black/15 p-2 sm:h-20 sm:w-20"><img src={club.logo_url} className="h-full w-full object-contain" alt="" /></div>}<div className="min-w-0"><div className="text-[10px] font-bold uppercase tracking-[0.22em] text-muted">{club.nickname || club.city || "Club"}</div><h1 className="truncate text-2xl font-black sm:text-4xl">{club.name}</h1>{coach && <div className="mt-1.5 flex items-center gap-2 text-xs text-muted sm:mt-2 sm:text-sm">{coach.photo_url && <img src={coach.photo_url} className="h-6 w-6 rounded-full object-cover" alt="" />}<span className="truncate">Entraîneur : <b className="text-content">{coach.name}</b></span></div>}</div></div>
       </div>
       <div className="mb-5"><DiscussButton refType="club" refId={club.id} title={`Discussion : ${club.name}`} label="Discuter de ce club" categorySlug="football-belge" /></div>
-      {isAdmin && <div className="mb-5 rounded-2xl border border-amber-300/20 bg-amber-300/[0.05] p-4"><div className="flex flex-wrap items-center gap-3"><div className="min-w-0 flex-1"><div className="text-[10px] font-black uppercase tracking-[.18em] text-amber-200">Outil administrateur</div><p className="mt-1 text-xs leading-5 text-muted">Actualise par lots la carrière et toutes les statistiques de la saison pour les joueurs de cet effectif.</p></div><button type="button" onClick={refreshClubCareers} disabled={careerBusy || !sport?.competition?.provider} className="inline-flex items-center gap-2 rounded-xl border border-amber-300/25 bg-amber-300/10 px-3 py-2 text-xs font-bold text-amber-100 disabled:opacity-50"><RefreshCw className={`h-4 w-4 ${careerBusy ? "animate-spin" : ""}`} />Actualiser les joueurs du club</button></div>{careerStatus && <p className="mt-3 rounded-lg border border-line/10 bg-bg/35 px-3 py-2 text-xs text-muted">{careerStatus}</p>}</div>}
+      {isAdmin && <div className="mb-5 rounded-2xl border border-amber-300/20 bg-amber-300/[0.05] p-4"><div className="flex flex-wrap items-center gap-3"><div className="min-w-0 flex-1"><div className="text-[10px] font-black uppercase tracking-[.18em] text-amber-200">Outil administrateur</div><p className="mt-1 text-xs leading-5 text-muted">« Synchroniser ce club » : matchs, effectif et entraîneur de la saison. « Actualiser les joueurs » : carrière et statistiques de chaque joueur de l’effectif, par lots.</p></div><button type="button" onClick={syncThisClub} disabled={careerBusy || !sport?.competition?.provider} className="inline-flex items-center gap-2 rounded-xl border border-accent/30 bg-accent/10 px-3 py-2 text-xs font-bold text-content disabled:opacity-50"><RefreshCw className={`h-4 w-4 ${careerBusy ? "animate-spin" : ""}`} />Synchroniser ce club</button><button type="button" onClick={refreshClubCareers} disabled={careerBusy || !sport?.competition?.provider} className="inline-flex items-center gap-2 rounded-xl border border-amber-300/25 bg-amber-300/10 px-3 py-2 text-xs font-bold text-amber-100 disabled:opacity-50"><RefreshCw className={`h-4 w-4 ${careerBusy ? "animate-spin" : ""}`} />Actualiser les joueurs du club</button></div>{careerStatus && <p className="mt-3 rounded-lg border border-line/10 bg-bg/35 px-3 py-2 text-xs text-muted">{careerStatus}</p>}</div>}
       <div className="sm:hidden">
         <div className="-mx-4 mb-3 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {visibleSections.map((section) => <button key={section.key} onClick={() => setMobileSection(section.key)} className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-bold transition ${activeMobileSection?.key === section.key ? "border-accent bg-accent/15 text-accent" : "border-line/15 bg-surface text-muted"}`}>{section.label}{counts[section.key] != null ? ` · ${counts[section.key]}` : ""}</button>)}

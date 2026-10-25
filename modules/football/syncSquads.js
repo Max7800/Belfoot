@@ -41,7 +41,9 @@ export async function syncSquads(db, competition, ctx = {}) {
   const currentSeason = Number(season) === currentSeasonStart;
   let n = 0;
   let nationalTeamsSkipped = 0;
-  const orderedClubs = clubs || [];
+  // « Synchroniser ce club » : un seul club de la compétition (football.club-sync).
+  const orderedClubs = ctx.onlyClubId ? (clubs || []).filter((club) => club.id === ctx.onlyClubId) : (clubs || []);
+  if (ctx.onlyClubId && !orderedClubs.length) return `${competition.name}: ce club ne joue pas cette saison dans la compétition`;
   const startClubIndex = Math.max(0, Number(ctx.startClubIndex) || 0);
   const defaultBatchSize = ctx.pipelineRunId ? 1 : Math.max(1, orderedClubs.length);
   const maxBatchSize = ctx.pipelineRunId ? 5 : Math.max(1, orderedClubs.length);
