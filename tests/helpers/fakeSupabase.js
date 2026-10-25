@@ -62,7 +62,8 @@ const COLUMN_DEFAULTS = {
   players: { locked: false },
   coaches: { locked: false },
   competitions: { locked: false },
-  seasons: { locked: false },
+  // 0032_season_rollout : import_status default 'draft', public_active default false.
+  seasons: { locked: false, import_status: "draft", public_active: false },
   matches: { locked: false },
 };
 
@@ -93,6 +94,8 @@ export function createFakeSupabase(seed = {}, { maxRows = 1000, rpc = {}, unique
       select(columns, options = {}) {
         if (state.op !== "select") state.returning = true;
         if (options.head && options.count) state.countOnly = true;
+        // Comme PostgREST : `count` accompagne aussi une lecture normale (total avant pagination).
+        else if (options.count) state.withCount = true;
         return builder;
       },
       insert(payload) { state.op = "insert"; state.payload = payload; return builder; },
@@ -196,6 +199,7 @@ export function createFakeSupabase(seed = {}, { maxRows = 1000, rpc = {}, unique
       const data = rows.map((row) => ({ ...row }));
       if (state.mode === "single") return data.length === 1 ? { data: data[0], error: null } : { data: null, error: { message: `single: ${data.length} ligne(s)` } };
       if (state.mode === "maybeSingle") return data.length <= 1 ? { data: data[0] || null, error: null } : { data: null, error: { message: "maybeSingle: plusieurs lignes" } };
+      if (state.op === "select" && state.withCount) return { data, count: table(name).filter(matches).length, error: null };
       return { data: state.op === "select" || state.returning ? data : null, error: null };
     }
 

@@ -13,6 +13,16 @@ Audit complet des synchronisations (lecture seule) puis plan validé avec l'util
 7. **Façade commune et panneau central** : règles partagées (préflight, confirmation, périmètre, budget, journal, erreurs) ; panneau d'abord en lecture seule (historique, diagnostics).
 8. **Garde-fous d'administration** : modifications de `external_id`, suppressions de compétitions et écritures concurrentes de `site_settings` confirmées et auditées.
 
+### Renouvellement automatique des campagnes (25/10)
+
+Décision de l'utilisateur : **automatique jusqu'à « prête »** (l'activation comme saison par défaut reste un clic de l'administrateur).
+- `lib/campaignRollover.js` (règles pures) + job `football.campaign-rollover` : pour une compétition **visible, déjà importée en entier au moins une fois et autorisée dans le plan d'import**, 1 appel `/leagues?id=` ; si l'API annonce une saison « en cours » pas encore importée en entier (libellé `seasonLabel(année API)`, convention U21), la saison est ajoutée au plan et autorisée pour **cette compétition seulement** en « Archive résultats » (niveau de l'administrateur conservé si déjà autorisée), importée (~4 appels), contrôlée (`auditSeasonReadiness`) puis marquée **prête** si les contrôles passent ; jamais activée.
+- Garde-fous : saison présente au plan mais désactivée globalement = choix de l'administrateur, jamais réactivée ; `auto_rollover: false` sur l'entrée d'une compétition la désactive ; compétition masquée, jamais importée en entier, non autorisée ou hors API-Football : aucun appel ; plan relu juste avant l'écriture.
+- Cron `competition-refresh`, passage 3 : une compétition au plus par passage, une vérification par jour et par compétition (la plus ancienne d'abord), seulement si le passage a commencé depuis moins de 12 s (budget de 60 s) ; tentative mémorisée même en échec (`football_campaign_rollover_state`).
+- Coût au repos : ~1 appel par compétition et par jour (10 compétitions visibles).
+- Outil de test : le faux Supabase renvoie désormais `count` sur une lecture normale et pose les valeurs par défaut de `seasons` (0032).
+- Limite : une compétition **nouvelle** (Coupe du monde, Euro…) créée par la synchro des sélections reste masquée et partielle tant qu'elle n'a pas été importée en entier une première fois (décision séparée).
+
 ### Correctif — budget de temps des crons (21/10)
 
 Constat (journaux cron et `job_runs` relevés par l'utilisateur) : depuis la PR B, 10 compétitions éligibles ; à chaque passage du cron `competition-refresh` (toutes les 20 min), 4 à 5 synchros de 10 à 20 s puis coupure par Vercel à 60 s (`timeout` du job). L'état n'étant enregistré qu'en fin de passage, rien n'était sauvegardé : les mêmes compétitions étaient refaites à chaque passage (~16 appels API gaspillés toutes les 20 min), et les dernières de la liste (Pro League, Challenger, U21, U19…) n'étaient plus jamais rafraîchies depuis le 19-20/10. Le cron `national-refresh` répondait 500 à chaque passage : Red Flames suivies mais non autorisées par le plan.
