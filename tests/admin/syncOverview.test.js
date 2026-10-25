@@ -57,7 +57,7 @@ describe("buildSyncOverview", () => {
     expect(overview.competitions.map((row) => row.name)).toEqual(["Challenger", "Euro U21", "Pro League", "Sans saison"]);
     expect(byId(overview.competitions, "c-hidden")).toBeUndefined();
     expect(byId(overview.competitions, "c-pl")).toMatchObject({ season: "2026-2027", allowed: true, status: "ok" });
-    expect(byId(overview.competitions, "c-u21")).toMatchObject({ season: "2027-2028", allowed: true, status: "late", readySeasons: ["2025-2026"] });
+    expect(byId(overview.competitions, "c-u21")).toMatchObject({ season: "2027-2028", allowed: true, status: "late", readySeasons: [] }); // 2025-2026 « prête » = archive consultable, pas à activer
     expect(byId(overview.competitions, "c-off")).toMatchObject({ allowed: false, status: "not-allowed" });
     expect(byId(overview.competitions, "c-empty")).toMatchObject({ season: null, status: "no-season" });
   });
@@ -71,9 +71,26 @@ describe("buildSyncOverview", () => {
     expect(byId((await buildSyncOverview(complete)).competitions, "c-u21").stats).toBeNull(); // même au niveau complet
   });
 
+  it("nouvelle saison prête, plus récente que la saison par défaut : à activer", async () => {
+    const input = base();
+    input.seasons.push({ id: "s7", competition_id: "c-pl", label: "2027-2028", import_status: "ready", public_active: false });
+    const overview = await buildSyncOverview(input);
+    expect(byId(overview.competitions, "c-pl")).toMatchObject({ season: "2026-2027", readySeasons: ["2027-2028"] });
+    expect(overview.alerts).toContainEqual({ level: "action", text: "Pro League : nouvelle saison 2027-2028 prête (déjà consultable), à activer comme saison par défaut depuis le plan d'import." });
+    expect(overview.alerts.some((alert) => alert.text.includes("2025-2026 prête"))).toBe(false); // archive U21
+  });
+
+  it("statistiques figées : jamais rafraîchies ou depuis plus de 7 jours ; lot en cours : pas d'alerte", async () => {
+    const texts = async (statsState) => { const input = base(); input.settings.football_competition_stats_state = statsState; return (await buildSyncOverview(input)).alerts.map((alert) => alert.text); };
+    expect(await texts({})).toContain("Pro League : statistiques joueurs jamais rafraîchies par le cron.");
+    expect(await texts({ "c-pl": { lastStatsAt: hoursAgo(24 * 21), clubIndex: 0 } })).toContain("Pro League : statistiques joueurs non rafraîchies depuis 21 jours.");
+    expect((await texts({ "c-pl": { lastStatsAt: hoursAgo(24 * 6), clubIndex: 0 } })).some((text) => text.includes("statistiques"))).toBe(false);
+    expect((await texts({ "c-pl": { lastStatsAt: null, clubIndex: 6 } })).some((text) => text.includes("statistiques"))).toBe(false);
+  });
+
   it("saison prête mais déjà publique : rien à activer", async () => {
     const input = base();
-    input.seasons.push({ id: "s6", competition_id: "c-pl", label: "2025-2026", import_status: "ready", public_active: true });
+    input.seasons.push({ id: "s6", competition_id: "c-pl", label: "2027-2028", import_status: "ready", public_active: true });
     expect(byId((await buildSyncOverview(input)).competitions, "c-pl").readySeasons).toEqual([]);
   });
 
@@ -104,7 +121,6 @@ describe("buildSyncOverview", () => {
     const texts = overview.alerts.map((alert) => alert.text);
     expect(texts).toContain("football.sync (c-u21) : 3 coupures en 24 h.");
     expect(texts).toContain("Quota API bas : 640 appels restants.");
-    expect(texts).toContain("Euro U21 : saison 2025-2026 prête, à activer depuis le plan d'import.");
     expect(texts).toContain("Euro U21 : dernier renouvellement de campagne en échec (quota).");
     expect(texts.some((text) => text.startsWith("Challenger : saison 2026-2027 non autorisée"))).toBe(true);
     expect(overview.alerts.map((alert) => alert.level)).toEqual([...overview.alerts.map((alert) => alert.level)].sort((a, b) => ["warning", "action", "info"].indexOf(a) - ["warning", "action", "info"].indexOf(b)));

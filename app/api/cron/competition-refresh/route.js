@@ -78,7 +78,9 @@ export async function GET(request) {
     const reservedCalls = clamp(strategy.reserved_calls, perSyncCalls, 2000, DEFAULTS.reserved_calls);
     const statsLookbackDays = clamp(strategy.stats_lookback_days, 1, 120, DEFAULTS.stats_lookback_days);
     const statsClubBatch = clamp(strategy.stats_club_batch, 1, 10, DEFAULTS.stats_club_batch);
-    const statsPerCall = clamp(strategy.stats_per_call, 3, 60, DEFAULTS.stats_per_call);
+    // Budget d'un lot ≥ coût maximal du lot (4 appels par club) : sinon le
+    // préflight de football.squads refuse chaque lot et les stats ne bougent plus.
+    const statsPerCall = clamp(strategy.stats_per_call, statsClubBatch * 4, 60, Math.max(DEFAULTS.stats_per_call, statsClubBatch * 4));
     const maxStatsPerTick = clamp(strategy.max_stats_per_tick, 1, 10, DEFAULTS.max_stats_per_tick);
     const reservedStatsCalls = clamp(strategy.reserved_stats_calls, statsPerCall, 2000, DEFAULTS.reserved_stats_calls);
     const calendarSeason = currentSeasonLabel(now);
