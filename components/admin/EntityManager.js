@@ -6,6 +6,7 @@ import ImageField from "@/components/ui/ImageField";
 import PlayerWorkspace from "@/components/admin/PlayerWorkspace";
 import { slugify } from "@/lib/slugify";
 import { editorialFieldsAfterEdit } from "@/lib/playerIdentity";
+import { auditAdminAction, blockedDeleteText, deleteConfirmationText, deleteImpact, identityChanges, identityConfirmationText, isGuardedDelete, typedConfirmationMatches } from "@/lib/adminGuards";
 import { useSearchParams } from "next/navigation";
 
 const POS = { Goalkeeper: 0, Defender: 1, Midfielder: 2, Attacker: 3 };
@@ -76,11 +77,47 @@ export default function EntityManager({ spec }) {
       row.ext = editorialFieldsAfterEdit(row.ext ?? original.ext, original, row, spec.editorialFields);
     }
     if (spec.slugFrom && !row.slug) row.slug = slugify(row[spec.slugFrom] || "");
+    // Identité fournisseur (ex. provider / external_id d'une compétition) : la
+    // valeur de référence est relue en base, le changement confirmé en tapant
+    // le nom puis journalisé (incident 666 : une ligue étrangère importée dans
+    // une fiche existante).
+    let changes = [];
+    if (spec.identityFields?.length && row.id) {
+      const { data: stored, error: readError } = await supabase.from(table).select(["id", ...spec.identityFields].join(",")).eq("id", row.id).maybeSingle();
+      if (readError) { setStatus("error"); alert(readError.message); return; }
+      changes = identityChanges(stored || {}, row, spec.identityFields);
+      const name = stored ? rowLabel(rows.find((item) => item.id === row.id) || row) : rowLabel(row);
+      if (changes.length && !typedConfirmationMatches(window.prompt(identityConfirmationText(singular, name, changes)), name)) { setStatus("idle"); alert("Nom non confirmé : rien n'a été enregistré."); return; }
+    }
     const { error } = await supabase.from(table).upsert(row);
-    if (error) { setStatus("error"); alert(error.message); } else { setStatus("saved"); setEditing(null); load(); }
+    if (error) { setStatus("error"); alert(error.message); setTimeout(() => setStatus("idle"), 2000); return; }
+    if (changes.length) {
+      const { error: auditError } = await auditAdminAction(supabase, { action: `${table}.identity.update`, table, id: row.id, meta: { changes } });
+      if (auditError) alert(`Enregistré, mais non journalisé : ${auditError.message}\n${JSON.stringify(changes)}`);
+    }
+    setStatus("saved"); setEditing(null); load();
     setTimeout(() => setStatus("idle"), 2000);
   };
-  const remove = async (r) => { if (!confirm("Supprimer ?")) return; await supabase.from(table).delete().eq("id", r.id); load(); };
+  // Suppression : conséquences mesurées (clés étrangères), nom à taper pour les
+  // tables sensibles, résultat vérifié (erreur ou 0 ligne) et copie de la ligne
+  // supprimée dans audit_log.
+  const remove = async (r) => {
+    const name = rowLabel(r);
+    let impactSummary = [];
+    if (isGuardedDelete(table)) {
+      let impact;
+      try { impact = await deleteImpact(supabase, table, r.id); } catch (error) { alert(error.message); return; }
+      if (impact.blocked) { alert(blockedDeleteText(singular, name, impact)); return; }
+      if (!typedConfirmationMatches(window.prompt(deleteConfirmationText(singular, name, impact)), name)) { alert("Nom non confirmé : rien n'a été supprimé."); return; }
+      impactSummary = impact.items.map(({ table: impactTable, column, count }) => ({ table: impactTable, column, count }));
+    } else if (!confirm(`Supprimer « ${name} » ?`)) return;
+    const { data: deleted, error } = await supabase.from(table).delete().eq("id", r.id).select("*");
+    if (error) { alert(`Suppression refusée : ${error.message}`); return; }
+    if (!deleted?.length) { alert("Aucune ligne supprimée (droits insuffisants ou déjà supprimée)."); load(); return; }
+    const { error: auditError } = await auditAdminAction(supabase, { action: `${table}.delete`, table, id: r.id, meta: { row: deleted[0], impact: impactSummary } });
+    if (auditError) alert(`Supprimé, mais non journalisé : ${auditError.message}\nCopie de la ligne : ${JSON.stringify(deleted[0])}`);
+    load();
+  };
   const setV = (k, v) => setEditing((e) => ({ ...e, [k]: v }));
   const relLabelOf = (relTable, id) => (rel[relTable] || []).find((o) => o.id === id)?.label || "Sans club / non associé";
   const rowLabel = (r) => {

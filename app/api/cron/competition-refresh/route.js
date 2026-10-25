@@ -4,6 +4,7 @@ import { assertImportTargetAllowed } from "@/lib/importPlan";
 import { JOB_CATALOG } from "@/lib/jobCatalog";
 import { REFRESH_TIME_BUDGET_MS, refreshTargets } from "@/lib/competitionRefresh";
 import { rolloverDue } from "@/lib/campaignRollover";
+import { updateSiteSettings } from "@/lib/siteSettings";
 
 // Passage 3 (renouvellement des campagnes) : une compétition au plus par passage,
 // une vérification par jour et par compétition, et seulement s'il reste de quoi
@@ -176,15 +177,10 @@ export async function GET(request) {
       });
     }
 
-    // État enregistré après chaque réussite (relu juste avant : rien d'autre
-    // dans site_settings n'est écrasé).
-    const persistState = async () => {
-      const { data: fresh } = await db.from("site_settings").select("data").eq("id", 1).maybeSingle();
-      const { error: saveError } = await db.from("site_settings")
-        .update({ data: { ...(fresh?.data || {}), football_competition_refresh_state: refreshState, football_competition_stats_state: statsState, football_campaign_rollover_state: rolloverState } })
-        .eq("id", 1);
-      if (saveError) throw saveError;
-    };
+    // État enregistré après chaque réussite, écriture conditionnée par la
+    // révision (lib/siteSettings.js) : rien d'autre dans site_settings n'est
+    // écrasé, même si l'admin ou le job de renouvellement écrit en même temps.
+    const persistState = () => updateSiteSettings(db, { football_competition_refresh_state: refreshState, football_competition_stats_state: statsState, football_campaign_rollover_state: rolloverState });
 
     let used = 0;
     let timeLimited = 0;

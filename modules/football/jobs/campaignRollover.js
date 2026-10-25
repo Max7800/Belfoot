@@ -9,6 +9,7 @@ import { getProvider } from "../providers";
 import { requireCompetitionId } from "@/lib/jobScope";
 import { detectNewCampaign, planWithCampaign, rolloverEligibility } from "@/lib/campaignRollover";
 import { auditSeasonReadiness } from "@/lib/seasonReadiness";
+import { updateSiteSettings } from "@/lib/siteSettings";
 import { syncCompetition } from "../syncCompetition";
 
 const campaignRolloverJob = {
@@ -31,14 +32,15 @@ const campaignRolloverJob = {
     const next = planWithCampaign(rawPlan, detection.label, competition.id);
     if (next.skip) return `${competition.name} : campagne ${detection.label} détectée, non préparée (${next.skip}).`;
     if (next.changed) {
-      // Relu juste avant l'écriture : rien d'autre dans site_settings n'est écrasé.
-      const { data: fresh, error: freshError } = await db.from("site_settings").select("data").eq("id", 1).maybeSingle();
-      if (freshError) throw freshError;
-      const latest = fresh?.data?.football_import_plan || {};
-      const merged = planWithCampaign(latest, detection.label, competition.id);
-      if (merged.skip) return `${competition.name} : campagne ${detection.label} détectée, non préparée (${merged.skip}).`;
-      const { error: saveError } = await db.from("site_settings").update({ data: { ...(fresh?.data || {}), football_import_plan: merged.plan } }).eq("id", 1);
-      if (saveError) throw saveError;
+      // Plan relu à chaque tentative et écriture conditionnée par la révision
+      // (lib/siteSettings.js) : rien d'autre dans site_settings n'est écrasé.
+      let skipped = null;
+      await updateSiteSettings(db, (current) => {
+        const merged = planWithCampaign(current.football_import_plan || {}, detection.label, competition.id);
+        skipped = merged.skip || null;
+        return merged.skip ? null : { football_import_plan: merged.plan };
+      });
+      if (skipped) return `${competition.name} : campagne ${detection.label} détectée, non préparée (${skipped}).`;
     }
 
     const imported = await syncCompetition(db, competition, { ...ctx, season: detection.label, mode: "full" });

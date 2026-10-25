@@ -1,4 +1,5 @@
 import { getAdmin } from "@/lib/supabaseAdmin";
+import { updateSiteSettings } from "@/lib/siteSettings";
 
 export const dynamic = "force-dynamic";
 
@@ -57,23 +58,20 @@ export async function POST(request) {
     }
     const patch = cleanTile(body.patch);
     if (!Object.keys(patch).length) return new Response("Modification vide ou invalide.", { status: 400 });
-    const { data: current, error: readError } = await db.from("site_settings").select("data").eq("id", 1).maybeSingle();
-    if (readError) throw readError;
-    const currentTiles = current?.data?.tiles || {};
-    const tiles = {
-      ...currentTiles,
-      [body.scope]: {
-        ...(currentTiles[body.scope] || {}),
-        [body.key]: { ...(currentTiles[body.scope]?.[body.key] || {}), ...patch },
-      },
-    };
-    const { data: saved, error: saveError } = await db.from("site_settings")
-      .update({ data: { ...(current?.data || {}), tiles } })
-      .eq("id", 1)
-      .select("id")
-      .maybeSingle();
-    if (saveError) throw saveError;
-    if (!saved) throw new Error("La ligne site_settings n’a pas été mise à jour.");
+    // Tuiles relues à chaque tentative, écriture conditionnée par la révision
+    // (lib/siteSettings.js) : seule la tuile visée change.
+    let tiles = null;
+    await updateSiteSettings(db, (current) => {
+      const currentTiles = current.tiles || {};
+      tiles = {
+        ...currentTiles,
+        [body.scope]: {
+          ...(currentTiles[body.scope] || {}),
+          [body.key]: { ...(currentTiles[body.scope]?.[body.key] || {}), ...patch },
+        },
+      };
+      return { tiles };
+    });
 
     await db.from("audit_log").insert({
       actor: auth.user.id,

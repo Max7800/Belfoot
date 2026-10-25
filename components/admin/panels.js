@@ -6,6 +6,7 @@ import { JOB_CATALOG, jobKeys, JOB_GROUPS, jobsInGroup, jobPipelines } from "@/l
 import { LEASE_MS, PIPELINE_RUN_PUBLIC_COLUMNS, runState } from "@/lib/runLease";
 import { jobSeasonOptions } from "@/lib/importPlan";
 import { adminRequest, preflightSummary } from "@/lib/adminJobs";
+import { updateSiteSettings } from "@/lib/siteSettings";
 import ImageField from "@/components/ui/ImageField";
 import { CLUB_SECTIONS } from "@/lib/clubSections";
 import { normalizeStatsConfig } from "@/lib/statsSections";
@@ -17,6 +18,12 @@ import { normalizeProposeConfig } from "@/lib/propose";
 import { normalizeRankings } from "@/lib/rankings";
 import { invalidateTilesCache, TILE_SCOPES } from "@/lib/tiles";
 import { COMPETITION_SCOPES, groupCompetitionsByScope } from "@/lib/competitionScopes";
+
+// Écriture sûre de site_settings (lib/siteSettings.js) : ne remplace que les
+// clés données, sans effacer une écriture concurrente (cron, job, autre onglet).
+async function saveSettings(patch) {
+  try { await updateSiteSettings(supabase, patch); return { error: null }; } catch (error) { return { error }; }
+}
 
 function distinctProviderCompetitions(rows = []) {
   const grouped = new Map();
@@ -321,7 +328,7 @@ export function LabelsPanel() {
   const [nk, setNk] = useState(""); const [nv, setNv] = useState("");
   const load = () => supabase.from("site_settings").select("data").eq("id", 1).maybeSingle().then(({ data }) => setLabels((data?.data && data.data.labels) || {}));
   useEffect(() => { load(); }, []);
-  const persist = async (obj) => { const { data } = await supabase.from("site_settings").select("data").eq("id", 1).maybeSingle(); await supabase.from("site_settings").update({ data: { ...(data?.data || {}), labels: obj } }).eq("id", 1); setLabels(obj); };
+  const persist = async (obj) => { const { error } = await saveSettings({ labels: obj }); if (error) { alert(`Textes non enregistrés : ${error.message}`); return; } setLabels(obj); };
   const setVal = (k, v) => setLabels((o) => ({ ...o, [k]: v }));
   const add = () => { if (!nk.trim()) return; persist({ ...labels, [nk.trim()]: nv }); setNk(""); setNv(""); };
   const del = (k) => { const o = { ...labels }; delete o[k]; persist(o); };
@@ -411,7 +418,7 @@ export function ClubSectionsPanel() {
     const conf = (data?.data && data.data.club_sections) || {};
     setItems(CLUB_SECTIONS.map((s, i) => ({ ...s, label: conf[s.key]?.label || s.label, enabled: conf[s.key]?.enabled !== false, order: conf[s.key]?.order ?? i })).sort((a, b) => a.order - b.order));
   }); }, []);
-  const persist = async (next) => { const arr = next.map((s, i) => ({ ...s, order: i })); setItems(arr); const { data } = await supabase.from("site_settings").select("data").eq("id", 1).maybeSingle(); const obj = Object.fromEntries(arr.map((s) => [s.key, { enabled: s.enabled, order: s.order, label: s.label }])); await supabase.from("site_settings").update({ data: { ...(data?.data || {}), club_sections: obj } }).eq("id", 1); };
+  const persist = async (next) => { const arr = next.map((s, i) => ({ ...s, order: i })); setItems(arr); const obj = Object.fromEntries(arr.map((s) => [s.key, { enabled: s.enabled, order: s.order, label: s.label }])); const { error } = await saveSettings({ club_sections: obj }); if (error) alert(`Sections non enregistrées : ${error.message}`); };
   const toggle = (i) => persist(items.map((s, j) => (j === i ? { ...s, enabled: !s.enabled } : s)));
   const move = (i, d) => { const j = i + d; if (j < 0 || j >= items.length) return; const a = [...items]; [a[i], a[j]] = [a[j], a[i]]; persist(a); };
   return (
@@ -457,9 +464,8 @@ export function HomePanel() {
   const move = (index, direction) => setDraft((current) => { const next = [...current.sections]; const target = index + direction; if (target < 0 || target >= next.length) return current; [next[index], next[target]] = [next[target], next[index]]; return { ...current, sections: next }; });
   const save = async () => {
     setStatus("saving");
-    const { data } = await supabase.from("site_settings").select("data").eq("id", 1).maybeSingle();
     const sections = Object.fromEntries(draft.sections.map((section, index) => [section.key, { enabled: section.enabled, order: index, label: section.label, subtitle: section.subtitle, action: section.action, ...(section.key === "live" ? { max_matches: section.max_matches, empty_mode: section.empty_mode, background_color: section.background_color, border_color: section.border_color } : {}) }]));
-    const { error } = await supabase.from("site_settings").update({ data: { ...(data?.data || {}), home: { hero: draft.hero, competition_carousel: draft.competition_carousel, form_spotlight: draft.form_spotlight, sections } } }).eq("id", 1);
+    const { error } = await saveSettings({ home: { hero: draft.hero, competition_carousel: draft.competition_carousel, form_spotlight: draft.form_spotlight, sections } });
     setStatus(error ? "error" : "saved");
   };
   return (
@@ -496,9 +502,8 @@ export function BelgiansAbroadPanel() {
   const move = (index, direction) => setDraft((current) => { const next = [...current.sections]; const target = index + direction; if (target < 0 || target >= next.length) return current; [next[index], next[target]] = [next[target], next[index]]; return { ...current, sections: next }; });
   const save = async () => {
     setStatus("saving");
-    const { data } = await supabase.from("site_settings").select("data").eq("id", 1).maybeSingle();
     const sections = Object.fromEntries(draft.sections.map((section, index) => [section.key, { enabled: section.enabled, order: index, label: section.label, subtitle: section.subtitle, action: section.action, accent: section.accent }]));
-    const { error } = await supabase.from("site_settings").update({ data: { ...(data?.data || {}), belgians_abroad: { hero: draft.hero, sections } } }).eq("id", 1);
+    const { error } = await saveSettings({ belgians_abroad: { hero: draft.hero, sections } });
     setStatus(error ? "error" : "saved");
   };
   return (
@@ -528,8 +533,7 @@ export function CompetitionHubPanel() {
   const update = (key, value) => setDraft((current) => ({ ...current, [key]: value }));
   const save = async () => {
     setStatus("saving");
-    const { data } = await supabase.from("site_settings").select("data").eq("id", 1).maybeSingle();
-    const { error } = await supabase.from("site_settings").update({ data: { ...(data?.data || {}), competition_hub: draft } }).eq("id", 1);
+    const { error } = await saveSettings({ competition_hub: draft });
     setStatus(error ? "error" : "saved");
   };
   return (
@@ -556,9 +560,8 @@ export function NationalTeamsPanel() {
   const move = (index, direction) => setDraft((current) => { const next = [...current.sections]; const target = index + direction; if (target < 0 || target >= next.length) return current; [next[index], next[target]] = [next[target], next[index]]; return { ...current, sections: next }; });
   const save = async () => {
     setStatus("saving");
-    const { data } = await supabase.from("site_settings").select("data").eq("id", 1).maybeSingle();
     const sections = Object.fromEntries(draft.sections.map((section, index) => [section.key, { enabled: section.enabled, order: index, label: section.label, subtitle: section.subtitle, accent: section.accent }]));
-    const { error } = await supabase.from("site_settings").update({ data: { ...(data?.data || {}), national_teams: { hero: draft.hero, labels: draft.labels, sections } } }).eq("id", 1);
+    const { error } = await saveSettings({ national_teams: { hero: draft.hero, labels: draft.labels, sections } });
     setStatus(error ? "error" : "saved");
   };
   return <div>
@@ -605,8 +608,8 @@ export function StatsSectionsPanel() {
     setStatus("saving");
     const storedSections = Object.fromEntries(draft.sections.map((section, index) => [section.key, { enabled: section.enabled, order: index, label: section.label, accent: section.accent }]));
     const nextAll = { ...allConfig, [competitionId]: { title: draft.title, subtitle: draft.subtitle, sections: storedSections } };
-    const { data } = await supabase.from("site_settings").select("data").eq("id", 1).maybeSingle();
-    const { error } = await supabase.from("site_settings").update({ data: { ...(data?.data || {}), competition_stats: nextAll } }).eq("id", 1);
+    // Fusion par compétition : la configuration des AUTRES compétitions est relue en base.
+    const { error } = await saveSettings((current) => ({ competition_stats: { ...(current.competition_stats || {}), [competitionId]: nextAll[competitionId] } }));
     if (error) setStatus("error"); else { setAllConfig(nextAll); setDraft(normalizeStatsConfig(nextAll[competitionId])); setStatus("saved"); }
   };
 
@@ -652,8 +655,7 @@ export function ProposePanel() {
   const save = async () => {
     setStatus("saving");
     const types = Object.fromEntries(cfg.types.map((t, i) => [t.key, { enabled: t.enabled, order: i, label: t.label }]));
-    const { data } = await supabase.from("site_settings").select("data").eq("id", 1).maybeSingle();
-    const { error } = await supabase.from("site_settings").update({ data: { ...(data?.data || {}), propose: { hub: cfg.hub, types } } }).eq("id", 1);
+    const { error } = await saveSettings({ propose: { hub: cfg.hub, types } });
     setStatus(error ? "error" : "saved");
   };
   return (
@@ -698,8 +700,7 @@ export function RankingsPanel() {
   const setUefa = (k, v) => setCfg((c) => ({ ...c, uefa: { ...c.uefa, [k]: v } }));
   const save = async () => {
     setStatus("saving");
-    const { data } = await supabase.from("site_settings").select("data").eq("id", 1).maybeSingle();
-    const { error } = await supabase.from("site_settings").update({ data: { ...(data?.data || {}), rankings: cfg } }).eq("id", 1);
+    const { error } = await saveSettings({ rankings: cfg });
     setStatus(error ? "error" : "saved");
   };
   return (

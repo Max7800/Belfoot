@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, CheckCircle2, Database, LockKeyhole, RefreshCw, Search } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import {
@@ -18,6 +18,7 @@ import {
 } from "@/lib/importPlan";
 import { COMPETITION_SCOPES, groupCompetitionsByScope, resolveCompetitionScope, competitionCountry } from "@/lib/competitionScopes";
 import RelinkPanel from "@/components/admin/RelinkPanel";
+import { updateSiteSettings } from "@/lib/siteSettings";
 
 const groupLabel = Object.fromEntries(IMPORT_GROUPS.map((group) => [group.key, group.label]));
 const scopeOptions = Object.entries(IMPORT_SCOPES);
@@ -101,6 +102,9 @@ export default function ImportPlanPanel() {
   const [duplicateAuditStatus, setDuplicateAuditStatus] = useState("idle");
   const [activationSeason, setActivationSeason] = useState("all");
   const [readinessBusy, setReadinessBusy] = useState({});
+  // Plan tel que lu en base à l'ouverture : l'enregistrement est refusé s'il a
+  // changé entre-temps (renouvellement de campagne, autre onglet).
+  const loadedPlan = useRef(null);
 
   const load = useCallback(async () => {
     setStatus("loading"); setMessage("");
@@ -114,6 +118,7 @@ export default function ImportPlanPanel() {
     if (error) { setStatus("error"); setMessage(error.message); return; }
     const rawCompetitionRows = competitionResult.data || [];
     const nationalRows = nationalResult.data || [];
+    loadedPlan.current = settingsResult.data?.data?.football_import_plan ?? null;
     const stored = normalizeImportPlan(settingsResult.data?.data?.football_import_plan);
     const resetArchiveScopes = stored.version < 3;
     const resetSeasonEstimates = stored.version < 4;
@@ -170,12 +175,17 @@ export default function ImportPlanPanel() {
 
   const save = async () => {
     setStatus("saving"); setMessage("");
-    const { data } = await supabase.from("site_settings").select("data").eq("id", 1).maybeSingle();
     const storedPlan = { ...plan, version: 4 };
     delete storedPlan.legacySeason;
-    const { error } = await supabase.from("site_settings").update({ data: { ...(data?.data || {}), football_import_plan: storedPlan } }).eq("id", 1);
-    setStatus(error ? "error" : "saved");
-    setMessage(error?.message || "Plan historique et whitelist enregistrés. Aucun appel API n’a été lancé.");
+    try {
+      await updateSiteSettings(supabase, { football_import_plan: storedPlan }, { expected: { football_import_plan: loadedPlan.current } });
+      loadedPlan.current = storedPlan;
+      setStatus("saved");
+      setMessage("Plan historique et whitelist enregistrés. Aucun appel API n’a été lancé.");
+    } catch (error) {
+      setStatus("error");
+      setMessage(error.message || String(error));
+    }
   };
   const markReady = async (season) => {
     setStatus("saving"); setMessage("");
