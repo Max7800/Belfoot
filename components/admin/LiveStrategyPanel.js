@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Radio, Save } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
+import { updateSiteSettings } from "@/lib/siteSettings";
 
 const DEFAULT_STRATEGY = {
   idle_seconds: 300,
@@ -21,6 +22,7 @@ export default function LiveStrategyPanel() {
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
   const [windowPlan, setWindowPlan] = useState({ matches: 0, competitions: 0, calls: 0 });
+  const loadedStrategy = useRef(null); // valeur en base à l'ouverture (refus si modifiée entre-temps)
 
   useEffect(() => { (async () => {
     const [competitionResult, settingsResult] = await Promise.all([
@@ -28,6 +30,7 @@ export default function LiveStrategyPanel() {
       supabase.from("site_settings").select("data").eq("id", 1).maybeSingle(),
     ]);
     setCompetitions(competitionResult.data || []);
+    loadedStrategy.current = settingsResult.data?.data?.football_live_strategy ?? null;
     setStrategy({ ...DEFAULT_STRATEGY, ...(settingsResult.data?.data?.football_live_strategy || {}) });
   })(); }, []);
 
@@ -61,9 +64,13 @@ export default function LiveStrategyPanel() {
   }, [enabledIds, strategy.max_concurrent_matches, strategy.window_after_minutes, strategy.window_before_minutes]);
   const save = async () => {
     setSaving(true); setMessage("");
-    const { data } = await supabase.from("site_settings").select("data").eq("id", 1).maybeSingle();
-    const { error } = await supabase.from("site_settings").update({ data: { ...(data?.data || {}), football_live_strategy: strategy } }).eq("id", 1);
-    setMessage(error?.message || "Stratégie enregistrée. Elle documente les limites ; le cron devra être activé séparément sur Vercel.");
+    try {
+      await updateSiteSettings(supabase, { football_live_strategy: strategy }, { expected: { football_live_strategy: loadedStrategy.current } });
+      loadedStrategy.current = strategy;
+      setMessage("Stratégie enregistrée. Elle documente les limites ; le cron devra être activé séparément sur Vercel.");
+    } catch (error) {
+      setMessage(error.message || String(error));
+    }
     setSaving(false);
   };
 

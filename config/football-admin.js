@@ -4,6 +4,8 @@ import { COMPETITION_SCOPES } from "@/lib/competitionScopes";
 export const FOOTBALL_ENTITIES = {
   competitions: {
     table: "competitions", title: "Compétitions", singular: "Compétition", orderBy: "position", hasSource: true, slugFrom: "name",
+    // Changement confirmé en tapant le nom et journalisé (EntityManager, lib/adminGuards.js).
+    identityFields: ["provider", "external_id"],
     fields: [
       { key: "name", label: "Nom", type: "text" },
       { key: "position", label: "Ordre (0 = en premier)", type: "number" },
