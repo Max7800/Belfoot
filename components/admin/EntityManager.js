@@ -5,6 +5,7 @@ import SaveStatus from "@/components/ui/SaveStatus";
 import ImageField from "@/components/ui/ImageField";
 import PlayerWorkspace from "@/components/admin/PlayerWorkspace";
 import { slugify } from "@/lib/slugify";
+import { editorialFieldsAfterEdit } from "@/lib/playerIdentity";
 import { useSearchParams } from "next/navigation";
 
 const POS = { Goalkeeper: 0, Defender: 1, Midfielder: 2, Attacker: 3 };
@@ -68,6 +69,12 @@ export default function EntityManager({ spec }) {
   const save = async () => {
     setStatus("saving");
     const row = { ...editing };
+    // Champs éditoriaux (ex. nom et photo des joueurs) : une correction manuelle
+    // est marquée dans ext pour ne plus être écrasée par les synchronisations.
+    if (spec.editorialFields?.length && row.id) {
+      const original = rows.find((item) => item.id === row.id) || {};
+      row.ext = editorialFieldsAfterEdit(row.ext ?? original.ext, original, row, spec.editorialFields);
+    }
     if (spec.slugFrom && !row.slug) row.slug = slugify(row[spec.slugFrom] || "");
     const { error } = await supabase.from(table).upsert(row);
     if (error) { setStatus("error"); alert(error.message); } else { setStatus("saved"); setEditing(null); load(); }
