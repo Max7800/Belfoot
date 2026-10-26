@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Icône d'onglet provisoire de Belfoot (à remplacer par le logo officiel). -->
+  <rect width="64" height="64" rx="14" fill="#0f172a"/>
+  <text x="32" y="44" text-anchor="middle" font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif" font-size="38" font-weight="900" fill="#ffffff">B</text>
+  <rect x="14" y="50" width="12" height="5" rx="1.5" fill="#000000" stroke="#334155" stroke-width="0.8"/>
+  <rect x="26" y="50" width="12" height="5" fill="#facc15"/>
+  <rect x="38" y="50" width="12" height="5" rx="1.5" fill="#ef4444"/>
+</svg>

@@ -13,6 +13,18 @@ Audit complet des synchronisations (lecture seule) puis plan validé avec l'util
 7. **Façade commune et panneau central** — **panneau en lecture seule TERMINÉ** (PR #26, merge `8ecc122`, voir « PR 7a ») ; **correctif statistiques TERMINÉ** (PR #27, merge `87869bf`, premiers lots vérifiés en production le 25/10 à 20:00 UTC) ; **façade TERMINÉE** (PR #28, merge `c59fa20`, voir « PR 7b »).
 8. **Garde-fous d'administration — TERMINÉE** (PR #29, merge `d7dd058`, voir « PR 8 ») : modifications de `external_id`, suppressions de compétitions et écritures concurrentes de `site_settings` confirmées et auditées.
 
+### Contrôle qualité du site public (26/10)
+
+- Navigation réelle de la production (Edge sans interface, lecture seule, scratchpad `crawl/`) : 26 pages publiques en ordinateur et mobile (390 px) — aucune erreur JavaScript, aucun texte « undefined / NaN / [object Object] / Invalid Date », recherche joueurs et clubs fonctionnelle.
+- Corrigés :
+  - **Jargon d'administration visible par les visiteurs** (≈ 20 textes : « job plafonné », « migration SQL 0027 », « après la synchronisation », « à compléter dans l'administration », « Import en préparation »…) → textes neutres ; l'indication technique reste visible pour un administrateur connecté via `components/AdminHint.js`.
+  - **Page de match** : textes vides selon l'état (à venir / en direct / terminé) ; date du coup d'envoi plus affichée deux fois pour un match à venir.
+  - **Page Diables Rouges, mobile** : débordement horizontal de 15 px (4 tuiles « Classement FIFA ») → tuiles 2 × 2 sous 640 px et colonnes `min-w-0` (mesuré 405 → 390 px).
+  - **Console** : directive CSP `upgrade-insecure-requests` retirée de la politique Report-Only (ignorée et signalée en erreur sur chaque page ; HSTS impose déjà le HTTPS).
+  - **Icône d'onglet** : `app/icon.svg` provisoire (`/favicon.ico` répondait 404) — à remplacer par le logo officiel.
+- Constats laissés à l'administrateur : titre de la page Diables saisi dans l'admin « RED DEVIL'S » (le défaut du code est « Les Diables Rouges ») ; les compétitions ne sont pas cherchables (recherche limitée aux actualités, clubs, joueurs) ; aucune violation CSP relevée en Report-Only, passage en mode bloquant envisageable.
+- Tests : `tests/football/publicPolish.test.js` (10 ; 6 échouent sur l'ancien code).
+
 ### Compétitions surveillées (26/10)
 
 - Besoin : les prochaines échéances (qualifications Euro 2028 [960], phase finale Euro U21 2027 [38], qualifications Coupe du monde 2030 [32], Euro 2028 [4]) sont des fiches masquées jamais importées ; le renouvellement automatique (PR #23) ne traitait que les compétitions visibles déjà importées en entier.

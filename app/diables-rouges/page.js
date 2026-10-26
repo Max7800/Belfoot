@@ -11,6 +11,7 @@ import { groupByPosition } from "@/lib/positions";
 import { matchStatusMeta } from "@/lib/matchStatus";
 import { nationalityBadges } from "@/lib/nationalities";
 import { categoryLabel, isBelgianNationalTeam, isSeniorMenTeam, pickNationalTabs } from "@/lib/nationalCategories";
+import AdminHint from "@/components/AdminHint";
 
 const COUNTRY_CODES = {
   Belgium: "be", Belgique: "be", France: "fr", Netherlands: "nl", "Pays-Bas": "nl", Germany: "de", Allemagne: "de", England: "gb-eng", Angleterre: "gb-eng", Spain: "es", Espagne: "es", Italy: "it", Italie: "it", Portugal: "pt", Croatia: "hr", Croatie: "hr", Denmark: "dk", Danemark: "dk", Sweden: "se", Suède: "se", Norway: "no", Norvège: "no", Finland: "fi", Finlande: "fi", Switzerland: "ch", Suisse: "ch", Austria: "at", Autriche: "at", Poland: "pl", Pologne: "pl", Ukraine: "ua", Scotland: "gb-sct", Écosse: "gb-sct", Wales: "gb-wls", "Pays de Galles": "gb-wls", Ireland: "ie", Irlande: "ie", Greece: "gr", Grèce: "gr", Turkey: "tr", Turquie: "tr", Romania: "ro", Roumanie: "ro", Hungary: "hu", Hongrie: "hu", Serbia: "rs", Serbie: "rs", Albania: "al", Albanie: "al", Slovakia: "sk", Slovaquie: "sk", Slovenia: "si", Slovénie: "si", Czechia: "cz", Tchéquie: "cz", "Czech Republic": "cz", Luxembourg: "lu", Kazakhstan: "kz", Kosovo: "xk", Morocco: "ma", Maroc: "ma", Brazil: "br", Brésil: "br", Argentina: "ar", Argentine: "ar", Uruguay: "uy", Colombia: "co", Colombie: "co", Mexico: "mx", Mexique: "mx", USA: "us", "États-Unis": "us", Canada: "ca", Japan: "jp", Japon: "jp", Senegal: "sn", Sénégal: "sn", Nigeria: "ng", Algeria: "dz", Algérie: "dz", Egypt: "eg", Égypte: "eg", Australia: "au", Australie: "au", Iran: "ir", Korea: "kr", "Corée du Sud": "kr",
@@ -60,7 +61,7 @@ function TeamVisual({ club, large = false }) {
 }
 
 function FeaturedMatch({ match, clubs, competitions }) {
-  if (!match) return <div className="rounded-3xl border border-dashed border-white/15 bg-black/10 p-8 text-center text-sm text-slate-300">Le prochain rendez-vous apparaîtra après la synchronisation du calendrier.</div>;
+  if (!match) return <div className="rounded-3xl border border-dashed border-white/15 bg-black/10 p-8 text-center text-sm text-slate-300">Le prochain rendez-vous sera annoncé dès la publication du calendrier.</div>;
   const home = clubs[match.home_club_id] || {};
   const away = clubs[match.away_club_id] || {};
   const status = matchStatusMeta(match);
@@ -256,7 +257,7 @@ export default function NationalTeamsPage() {
   const displayedResults = results.slice(0, 6);
   const otherUpcoming = upcoming.filter((match) => match.id !== featured?.id).slice(0, 2);
 
-  if (schemaMissing) return <div className="mx-auto max-w-3xl rounded-3xl border border-amber-400/20 bg-amber-400/5 p-8 text-center"><Shield className="mx-auto h-10 w-10 text-amber-300" /><h1 className="mt-3 text-2xl font-black">Le module Sélections est prêt</h1><p className="mt-2 text-sm leading-6 text-muted">Il reste à appliquer la migration SQL 0027, puis à lancer « Synchroniser une sélection » dans l'administration.</p></div>;
+  if (schemaMissing) return <div className="mx-auto max-w-3xl rounded-3xl border border-amber-400/20 bg-amber-400/5 p-8 text-center"><Shield className="mx-auto h-10 w-10 text-amber-300" /><h1 className="mt-3 text-2xl font-black">Les sélections arrivent bientôt</h1><p className="mt-2 text-sm leading-6 text-muted">Calendrier, résultats et joueurs des sélections belges seront affichés ici.<AdminHint>appliquer la migration SQL 0027, puis lancer « Synchroniser une sélection » dans l’administration.</AdminHint></p></div>;
 
   const heroStyle = { backgroundColor: config.hero.background_color, borderColor: config.hero.border_color };
   return <div className="space-y-8">
@@ -270,12 +271,12 @@ export default function NationalTeamsPage() {
     </section>
 
     {loading ? <div className="h-72 animate-pulse rounded-3xl bg-surface" /> : teams.length === 0 ? <div className="rounded-3xl border border-dashed border-line/20 p-10 text-center"><div className="text-5xl">🇧🇪</div><h2 className="mt-4 text-xl font-black">Les sélections sont prêtes à être reliées</h2><p className="mt-2 text-sm text-muted">Lance la synchronisation ciblée depuis l’administration avec l’identifiant API-Football de la Belgique.</p></div> : <div className="grid items-start gap-4 lg:grid-cols-12">
-      <div className="order-1 space-y-4 lg:col-span-8">
+      <div className="order-1 min-w-0 space-y-4 lg:col-span-8">
         <ModuleCard>
           <PanelHeader icon={CalendarDays} title={config.labels.featured} />
           <FeaturedMatch match={featured} clubs={clubs} competitions={competitions} />
         </ModuleCard>
-        <div className={`grid gap-2 ${statTiles.length === 4 ? "grid-cols-4" : "grid-cols-3"}`}>
+        <div className={`grid gap-2 ${statTiles.length === 4 ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-3"}`}>
           {statTiles.map(([value, label, color]) => <div key={label} className="rounded-2xl border border-line/10 bg-surface/60 px-2 py-4 text-center sm:py-5"><b className={`block text-xl sm:text-2xl ${color}`}>{value}</b><span className="mt-1 block text-[8px] font-bold uppercase tracking-wider text-muted sm:text-[9px]">{label}</span></div>)}
         </div>
       {preMatchSession && <Link href={`/onze?match=${featured.id}`} className="group flex flex-col gap-4 overflow-hidden rounded-2xl border border-red-400/25 bg-gradient-to-r from-red-950/60 via-surface to-amber-950/25 p-5 transition hover:border-red-400/55 sm:flex-row sm:items-center">
@@ -286,7 +287,7 @@ export default function NationalTeamsPage() {
 
       {sectionConfig.results?.enabled && <ModuleCard>
         <PanelHeader icon={Trophy} title={sectionConfig.results.label} subtitle={sectionConfig.results.subtitle} accent={sectionConfig.results.accent} action={results.length > 4 ? config.labels.show_all_results : null} actionHref={`/diables-rouges/matchs?equipe=${selectedId}`} />
-        {results.length ? <div className="grid gap-3 sm:grid-cols-2">{displayedResults.map((match, index) => <SmallMatch key={match.id} match={match} clubs={clubs} competitions={competitions} className={index >= 4 ? "hidden sm:block" : "block"} />)}</div> : <p className="text-sm text-muted">Aucun résultat importé.</p>}
+        {results.length ? <div className="grid gap-3 sm:grid-cols-2">{displayedResults.map((match, index) => <SmallMatch key={match.id} match={match} clubs={clubs} competitions={competitions} className={index >= 4 ? "hidden sm:block" : "block"} />)}</div> : <p className="text-sm text-muted">Aucun résultat pour le moment.</p>}
       </ModuleCard>}
 
       {sectionConfig.squad?.enabled && <ModuleCard>
@@ -294,11 +295,11 @@ export default function NationalTeamsPage() {
         {squad.length ? <>
           <div className="sm:hidden"><SquadNamesPreview rows={squad} accent={sectionConfig.squad.accent} /></div>
           <SquadPreview rows={squad} accent={sectionConfig.squad.accent} className="hidden sm:grid" />
-        </> : <p className="text-sm text-muted">La sélection apparaîtra après sa synchronisation.</p>}
+        </> : <p className="text-sm text-muted">La liste des joueurs n’est pas encore disponible.</p>}
       </ModuleCard>}
       </div>
 
-      <aside className="order-5 space-y-4 lg:order-2 lg:col-span-4">
+      <aside className="order-5 min-w-0 space-y-4 lg:order-2 lg:col-span-4">
         <NationalGroupStandings teamId={selectedId} matches={matches} competitions={competitions} />
         {showFifa && rankings.fifa.length > 0 && <ModuleCard>
           <PanelHeader icon={Trophy} title={config.labels.fifa} />
