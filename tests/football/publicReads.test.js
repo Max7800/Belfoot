@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { readAll } from "@/lib/readAll";
+import { readAll, readChunks } from "@/lib/readAll";
 import { loadMatchStatsForMatches, loadPlayerStatsForPlayers } from "@/lib/publicFootballData";
 import { createFakeSupabase } from "../helpers/fakeSupabase";
 
@@ -29,6 +29,30 @@ describe("readAll : lecture complète malgré le plafond silencieux", () => {
     expect(guarded.data).toBeNull();
     expect(guarded.error.message).toMatch(/plus de 6 lignes/);
   });
+  it("dépassement du délai d'exécution (57014) : page réessayée ; autre erreur : pas de nouvel essai", async () => {
+    let calls = 0;
+    const flaky = { order: () => flaky, range: async () => (++calls < 3 ? { data: null, error: { code: "57014", message: "canceling statement due to statement timeout" } } : { data: [{ id: 1 }], error: null }) };
+    expect(await readAll(() => flaky, { retryDelayMs: 1 })).toEqual({ data: [{ id: 1 }], error: null });
+    expect(calls).toBe(3);
+    let permanent = 0;
+    const denied = { order: () => denied, range: async () => { permanent++; return { data: null, error: { code: "42501", message: "permission denied" } }; } };
+    expect((await readAll(() => denied, { retryDelayMs: 1 })).error.code).toBe("42501");
+    expect(permanent).toBe(1);
+    let stuck = 0;
+    const always = { order: () => always, range: async () => { stuck++; return { data: null, error: { code: "57014", message: "timeout" } }; } };
+    expect((await readAll(() => always, { retryDelayMs: 1 })).error.code).toBe("57014");
+    expect(stuck).toBe(3); // 1 essai + 2 nouveaux essais, puis l'erreur remonte
+  });
+  it("readChunks : au plus 3 paquets en vol, toutes les lignes, erreur remontée", async () => {
+    let inFlight = 0; let peak = 0;
+    const query = (ids) => { const q = { order: () => q, range: async () => { inFlight++; peak = Math.max(peak, inFlight); await new Promise((r) => setTimeout(r, 5)); inFlight--; return { data: ids.map((id) => ({ id })), error: null }; } }; return q; };
+    const chunks = Array.from({ length: 8 }, (_, i) => [`a${i}`, `b${i}`]);
+    const { data } = await readChunks(chunks, query);
+    expect(data).toHaveLength(16);
+    expect(peak).toBeLessThanOrEqual(3);
+    const failing = () => { const q = { order: () => q, range: async () => ({ data: null, error: { code: "XX000", message: "panne" } }) }; return q; };
+    expect(await readChunks(chunks, failing)).toEqual({ data: null, error: { code: "XX000", message: "panne" } });
+  });
   it("lecteurs par paquets : toutes les performances et statistiques, même au-delà du plafond", async () => {
     const perfs = rowsOf(2500, (i) => ({ match_id: `m${i % 10}`, player_id: `p${i}` }));
     const stats = rowsOf(1200, (i) => ({ player_id: `p${i % 3}` }));
@@ -50,7 +74,7 @@ describe("pages publiques : lectures des tables volumineuses toujours complètes
       lines.forEach((line, index) => {
         if (!/from\("(player_team_seasons|player_season_stats|match_player_stats)"\)/.test(line)) return;
         const context = [lines[index - 1] || "", line, lines[index + 1] || "", lines[index + 2] || ""].join(" ");
-        if (/readAll\(/.test(context) || BOUNDED.some((pattern) => pattern.test(context))) return;
+        if (/read(All|Chunks)\(/.test(context) || BOUNDED.some((pattern) => pattern.test(context))) return;
         offenders.push(`${file}:${index + 1}`);
       });
     }
