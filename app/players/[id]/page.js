@@ -16,6 +16,7 @@ import { competitionHrefs } from "@/lib/competitionLinks";
 import { NATIONAL_TEAM_CATALOG, isNationalSelectionClub, nationalityBadges, ratingTone } from "@/lib/nationalities";
 import { useAuth } from "@/lib/auth";
 import AdminHint from "@/components/AdminHint";
+import { careerStints, resolveCurrentClubId } from "@/lib/playerCareer";
 
 const POSITION_LABELS = { Goalkeeper: "Gardien", GK: "Gardien", Defender: "Défenseur", DEF: "Défenseur", Midfielder: "Milieu", MID: "Milieu", Attacker: "Attaquant", FWD: "Attaquant" };
 const FINISHED = new Set(["finished"]);
@@ -74,21 +75,6 @@ function CompetitionStats({ stats, competitions, clubs, competitionLinks = {} })
   </>;
 }
 
-function compactCareer(memberships) {
-  const stints = new Map();
-  memberships.forEach((membership) => {
-    const key = membership.club_id || membership.id;
-    const start = Number(membership.season_start_year) || year(membership.season);
-    const current = stints.get(key) || { ...membership, seasons: [], start, end: start, is_primary: false };
-    current.seasons.push(membership);
-    current.start = Math.min(current.start || start, start || current.start);
-    current.end = Math.max(current.end || start, start || current.end);
-    current.is_primary = current.is_primary || membership.is_primary || membership.active;
-    stints.set(key, current);
-  });
-  return [...stints.values()].sort((a, b) => Number(b.is_primary) - Number(a.is_primary) || (b.end || 0) - (a.end || 0));
-}
-
 export default function PlayerPage() {
   const { id } = useParams();
   const L = useLabels();
@@ -109,10 +95,11 @@ export default function PlayerPage() {
 
     const membershipResult = await supabase.from("player_team_seasons").select("*").eq("player_id", id).order("season_start_year", { ascending: false, nullsFirst: false });
     const memberships = membershipResult.error ? [] : (membershipResult.data || []);
-    const primaryMembership = memberships.find((row) => row.active && row.is_primary)
-      || memberships.find((row) => row.active)
-      || memberships[0];
-    const currentClubId = primaryMembership?.club_id || player.club_id || null;
+    // Club actuel : jamais une sélection (lib/playerCareer.js) — il faut donc
+    // connaître le type des équipes des affectations avant de choisir.
+    const teamIds = [...new Set([...memberships.map((row) => row.club_id), player.club_id].filter(Boolean))];
+    const { data: teamRows } = teamIds.length ? await supabase.from("clubs").select("id,name,team_type,national_category,ext").in("id", teamIds) : { data: [] };
+    const currentClubId = resolveCurrentClubId({ player, memberships, clubsById: Object.fromEntries((teamRows || []).map((row) => [row.id, row])) });
     const relevantTeamIds = [...new Set([currentClubId, player.national_team_id].filter(Boolean))];
 
     const [clubResult, nationalTeamResult, statsResult, performancesResult, clubMatchesResult] = await Promise.all([
@@ -214,7 +201,7 @@ export default function PlayerPage() {
     // championnat national — jamais « World » écrit par une coupe d'Europe.
     const league = resolvePlayerLeague({ player: { ...(state.player || {}), club_id: state.currentClubId || state.player?.club_id }, statRows: state.stats, competitionsById: state.competitions });
     const country = resolvePlayerCountry({ player: state.player, club: state.club, league: league.competition });
-    return { latestSeason, totals, country, upcoming, performanceRows, clubMemberships, careerStints: compactCareer(clubMemberships), international, primaryCompetitionId, primarySeason: primaryStat?.season || (latestSeason ? `${latestSeason}-${latestSeason + 1}` : "2026-2027"), ratingCompetition: state.competitions[primaryCompetitionId]?.name || "Compétition principale" };
+    return { latestSeason, totals, country, upcoming, performanceRows, clubMemberships, careerStints: careerStints(clubMemberships, state.currentClubId), international, primaryCompetitionId, primarySeason: primaryStat?.season || (latestSeason ? `${latestSeason}-${latestSeason + 1}` : "2026-2027"), ratingCompetition: state.competitions[primaryCompetitionId]?.name || "Compétition principale" };
   }, [state]);
 
   const openEditor = async () => {
@@ -342,7 +329,7 @@ export default function PlayerPage() {
       <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(300px,.8fr)_minmax(0,1.7fr)]">
         <div className="space-y-5">
           <section><div className="mb-3 flex items-center gap-2"><CalendarDays className="h-5 w-5 text-accent" /><h2 className="text-lg font-black">Prochains matchs</h2></div>{view.upcoming.length ? <div className="space-y-3">{view.upcoming.map((match) => <MatchCard key={match.id} match={match} clubs={state.clubs} competitions={state.competitions} competitionLinks={competitionLinks} playerTeamIds={[state.currentClubId, p.national_team_id].filter(Boolean)} />)}</div> : <div className="rounded-2xl border border-dashed border-line/15 bg-surface/40 p-5 text-sm leading-6 text-muted">Aucun prochain match connu pour son club ou sa sélection.</div>}</section>
-          <section><div className="mb-3 flex items-center gap-2"><Shield className="h-5 w-5 text-accent" /><h2 className="text-lg font-black">Parcours en club</h2></div>{view.careerStints.length ? <><div className="space-y-2">{view.careerStints.slice(0, showFullCareer ? undefined : 4).map((stint) => { const club = state.clubs[stint.club_id] || (state.club?.id === stint.club_id ? state.club : null); const range = stint.start === stint.end ? (stint.seasons[0]?.season || stint.start) : `${stint.start} — ${stint.end + 1}`; return <Link key={stint.club_id || stint.id} href={`/clubs/${stint.club_id}`} className="flex items-center gap-3 rounded-2xl border border-line/10 bg-surface/60 p-3 transition hover:border-accent/40"><ClubMark club={club} size="h-9 w-9" /><div className="min-w-0 flex-1"><div className="truncate text-sm font-black">{club?.name || "Club à préciser"}</div><div className="text-[11px] text-muted">{range}{stint.seasons.length > 1 ? ` · ${stint.seasons.length} saisons` : ""}</div></div>{stint.is_primary && <span className="rounded-full bg-accent/10 px-2 py-1 text-[9px] font-bold uppercase text-accent">actuel</span>}</Link>; })}</div>{view.careerStints.length > 4 && <button type="button" onClick={() => setShowFullCareer((current) => !current)} className="mt-3 w-full rounded-xl border border-line/15 px-3 py-2 text-xs font-bold text-muted transition hover:border-accent/40 hover:text-content">{showFullCareer ? "Réduire l’historique" : `Voir les ${view.careerStints.length - 4} autres clubs`}</button>}</> : <div className="rounded-2xl border border-dashed border-line/15 bg-surface/40 p-5 text-sm text-muted">Historique des clubs pas encore disponible.<AdminHint>complété par les imports de carrière ou manuellement dans l’administration.</AdminHint></div>}</section>
+          <section><div className="mb-3 flex items-center gap-2"><Shield className="h-5 w-5 text-accent" /><h2 className="text-lg font-black">Parcours en club</h2></div>{view.careerStints.length ? <><div className="space-y-2">{view.careerStints.slice(0, showFullCareer ? undefined : 4).map((stint) => { const club = state.clubs[stint.club_id] || (state.club?.id === stint.club_id ? state.club : null); const range = stint.start === stint.end ? (stint.seasons[0]?.season || stint.start) : `${stint.start} — ${stint.end + 1}`; return <Link key={stint.club_id || stint.id} href={`/clubs/${stint.club_id}`} className="flex items-center gap-3 rounded-2xl border border-line/10 bg-surface/60 p-3 transition hover:border-accent/40"><ClubMark club={club} size="h-9 w-9" /><div className="min-w-0 flex-1"><div className="truncate text-sm font-black">{club?.name || "Club à préciser"}</div><div className="text-[11px] text-muted">{range}{stint.seasons.length > 1 ? ` · ${stint.seasons.length} saisons` : ""}</div></div>{stint.is_current && <span className="rounded-full bg-accent/10 px-2 py-1 text-[9px] font-bold uppercase text-accent">actuel</span>}</Link>; })}</div>{view.careerStints.length > 4 && <button type="button" onClick={() => setShowFullCareer((current) => !current)} className="mt-3 w-full rounded-xl border border-line/15 px-3 py-2 text-xs font-bold text-muted transition hover:border-accent/40 hover:text-content">{showFullCareer ? "Réduire l’historique" : `Voir les ${view.careerStints.length - 4} autres clubs`}</button>}</> : <div className="rounded-2xl border border-dashed border-line/15 bg-surface/40 p-5 text-sm text-muted">Historique des clubs pas encore disponible.<AdminHint>complété par les imports de carrière ou manuellement dans l’administration.</AdminHint></div>}</section>
         </div>
 
         <div className="space-y-8">
