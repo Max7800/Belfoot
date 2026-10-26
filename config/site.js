@@ -4,7 +4,13 @@
 export const siteConfig = {
   name: "Belfoot",
   shortName: "Belfoot",
-  domain: "a-definir.be",          // <- domaine à venir
+  // Adresse du site : lib/siteUrl.js (fournie par Vercel, aucun domaine en dur).
+  // Le domaine sera pris quand le site sera totalement autonome.
+  domain: null,
+  // Indexation par les moteurs de recherche : FERMÉE tant que le site n'a pas
+  // son domaine (pages « noindex », pas de sitemap annoncé). Passer à true le
+  // jour du domaine.
+  seo: { indexable: false },
   description: "Actu du foot belge : JPL, D1B, divisions inférieures, Coupe, Belges expatriés et grandes ligues européennes.",
   locale: "fr",
 

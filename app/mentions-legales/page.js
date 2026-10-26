@@ -2,7 +2,7 @@ import { buildMetadata } from "@/lib/seo";
 
 // Base rédigée à faire relire (je ne suis pas juriste). Les [À COMPLÉTER] sont
 // à remplir : éditeur, contact, adresse.
-export const metadata = buildMetadata({ title: "Mentions légales · Belfoot", description: "Mentions légales du site Belfoot.", path: "/mentions-legales" });
+export const metadata = buildMetadata({ title: "Mentions légales", description: "Mentions légales du site Belfoot.", path: "/mentions-legales" });
 
 export default function MentionsLegalesPage() {
   return (
