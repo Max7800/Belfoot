@@ -13,6 +13,12 @@ Audit complet des synchronisations (lecture seule) puis plan validé avec l'util
 7. **Façade commune et panneau central** — **panneau en lecture seule TERMINÉ** (PR #26, merge `8ecc122`, voir « PR 7a ») ; **correctif statistiques TERMINÉ** (PR #27, merge `87869bf`, premiers lots vérifiés en production le 25/10 à 20:00 UTC) ; **façade TERMINÉE** (PR #28, merge `c59fa20`, voir « PR 7b »).
 8. **Garde-fous d'administration — TERMINÉE** (PR #29, merge `d7dd058`, voir « PR 8 ») : modifications de `external_id`, suppressions de compétitions et écritures concurrentes de `site_settings` confirmées et auditées.
 
+### Renouvellement des campagnes privé par les statistiques (26/10) — PR #33, merge `f3cdbad`
+
+- Constat (lecture seule en production, 26/10 ~15:00 UTC) : aucun renouvellement depuis le 25/10 17:00 alors que les 10 compétitions étaient dues. Depuis la PR #27, le passage statistiques avance des lots à chaque passage (≈ 10–30 s ; C4 135/165, C3 51/76 clubs) avant le renouvellement, qui ne démarre que dans les 12 premières secondes : il n'était plus jamais lancé — y compris pour les compétitions surveillées (PR #32).
+- Correctif : renouvellement placé après les résultats et AVANT les statistiques (1 appel le plus souvent) ; les statistiques reprennent leur lot au passage suivant.
+- Test : `tests/jobs/campaignRollover.test.js` « des lots de statistiques longs ne privent plus le renouvellement » (échoue avec l'ancien ordre).
+
 ### Contrôle qualité du site public (26/10)
 
 - Navigation réelle de la production (Edge sans interface, lecture seule, scratchpad `crawl/`) : 26 pages publiques en ordinateur et mobile (390 px) — aucune erreur JavaScript, aucun texte « undefined / NaN / [object Object] / Invalid Date », recherche joueurs et clubs fonctionnelle.

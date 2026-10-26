@@ -6,7 +6,8 @@ import { REFRESH_TIME_BUDGET_MS, refreshTargets } from "@/lib/competitionRefresh
 import { rolloverDue, watchedCompetitionIds } from "@/lib/campaignRollover";
 import { updateSiteSettings } from "@/lib/siteSettings";
 
-// Passage 3 (renouvellement des campagnes) : une compétition au plus par passage,
+// Renouvellement des campagnes (après les résultats, avant les statistiques) :
+// une compétition au plus par passage,
 // une vérification par jour et par compétition, et seulement s'il reste de quoi
 // finir une synchro avant la coupure à 60 s.
 const ROLLOVER_START_BEFORE_MS = 12000;
@@ -201,33 +202,12 @@ export async function GET(request) {
       }
     }
 
-    let statsUsed = 0;
-    for (const { competition } of pickedStats) {
-      if (statsUsed + statsPerCall > reservedStatsCalls) break;
-      if (outOfTime()) break;
-      const state = statsState[competition.id] || {};
-      const startClubIndex = Number(state.clubIndex) || 0;
-      try {
-        const result = await runJob("football.squads", {
-          db, competitionId: competition.id, season: seasonOf[competition.id].label,
-          clubBatchSize: statsClubBatch, requestLimit: statsPerCall,
-          resumeState: { competitionIndex: 0, clubIndex: startClubIndex },
-          apifootballKey: process.env.APIFOOTBALL_KEY,
-        });
-        statsUsed += statsPerCall;
-        const complete = typeof result !== "object" || result.complete !== false;
-        if (complete) statsState[competition.id] = { lastStatsAt: now.toISOString(), clubIndex: 0 };
-        else statsState[competition.id] = { lastStatsAt: state.lastStatsAt || null, clubIndex: Number(result.progress?.current) || startClubIndex };
-        results.push({ pass: "stats", competition: competition.name, ok: true, complete, progress: result?.progress || null });
-        await persistState();
-      } catch (error) {
-        results.push({ pass: "stats", competition: competition.name, ok: false, error: String(error?.message || error).slice(0, 300) });
-      }
-    }
-
-
-    // ── Passage 3 : renouvellement automatique des campagnes ────────────────
+    // ── Renouvellement automatique des campagnes (AVANT les statistiques) ───
     // Jusqu'à « prête » seulement : l'activation reste un clic de l'administrateur.
+    // Placé avant le passage statistiques : celui-ci traite des lots à chaque
+    // passage (≈ 10–30 s) et dépassait le seuil de démarrage ; le renouvellement
+    // n'était plus jamais lancé (constaté le 26/10/2026). Les statistiques, elles,
+    // reprennent leur lot au passage suivant.
     let rollover = null;
     if (Date.now() - startedAt <= ROLLOVER_START_BEFORE_MS) {
       // Compétitions visibles suivies + compétitions SURVEILLÉES (même masquées,
@@ -257,6 +237,31 @@ export async function GET(request) {
         await persistState();
       }
     }
+
+    let statsUsed = 0;
+    for (const { competition } of pickedStats) {
+      if (statsUsed + statsPerCall > reservedStatsCalls) break;
+      if (outOfTime()) break;
+      const state = statsState[competition.id] || {};
+      const startClubIndex = Number(state.clubIndex) || 0;
+      try {
+        const result = await runJob("football.squads", {
+          db, competitionId: competition.id, season: seasonOf[competition.id].label,
+          clubBatchSize: statsClubBatch, requestLimit: statsPerCall,
+          resumeState: { competitionIndex: 0, clubIndex: startClubIndex },
+          apifootballKey: process.env.APIFOOTBALL_KEY,
+        });
+        statsUsed += statsPerCall;
+        const complete = typeof result !== "object" || result.complete !== false;
+        if (complete) statsState[competition.id] = { lastStatsAt: now.toISOString(), clubIndex: 0 };
+        else statsState[competition.id] = { lastStatsAt: state.lastStatsAt || null, clubIndex: Number(result.progress?.current) || startClubIndex };
+        results.push({ pass: "stats", competition: competition.name, ok: true, complete, progress: result?.progress || null });
+        await persistState();
+      } catch (error) {
+        results.push({ pass: "stats", competition: competition.name, ok: false, error: String(error?.message || error).slice(0, 300) });
+      }
+    }
+
 
     return Response.json({
       ok: results.length === 0 || results.some((result) => result.ok),
