@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import StandingsTable from "./StandingsTable";
 import { nationsLeagueGroupLabel } from "@/lib/nationsLeague";
+import AdminHint from "@/components/AdminHint";
 
 function DivisionSwitch({ divisions, value, onChange }) {
   return <div className="flex flex-wrap gap-1.5">{divisions.map((division) => <button key={division} type="button" onClick={() => onChange(division)} className={`rounded-full border px-3 py-1 text-[11px] font-black uppercase tracking-wider transition ${value === division ? "border-accent bg-accent/15 text-accent" : "border-line/15 bg-surface2 text-muted hover:text-content"}`}>Ligue {division}</button>)}</div>;
@@ -41,7 +42,7 @@ export default function NationsLeagueStandings({ groups, clubs, division, onDivi
       })}</div>
     </div>}
     {shown.length > 1 && <div className="flex justify-center gap-1.5">{shown.map((group, index) => <button key={group.label || index} type="button" onClick={() => setGroupIndex(index)} aria-label={`Afficher le groupe ${index + 1}`} className={`h-1.5 rounded-full transition ${index === groupIndex ? "w-5 bg-accent" : "w-1.5 bg-white/20 hover:bg-white/40"}`} />)}</div>}
-    {selectedGroup?.official === false && <p className="text-[10px] leading-4 text-amber-200/80">Groupe reconstitué depuis les matchs. Une nouvelle synchronisation de base enregistrera les groupes officiels.</p>}
+    {selectedGroup?.official === false && <p className="text-[10px] leading-4 text-amber-200/80">Groupe calculé à partir des matchs joués.<AdminHint>une synchronisation de base enregistrera les groupes officiels.</AdminHint></p>}
   </div>;
   }
 

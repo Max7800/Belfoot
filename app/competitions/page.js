@@ -10,6 +10,7 @@ import { competitionPath } from "@/lib/competitionRoutes";
 import { useCompetitionHub } from "@/lib/competitionHub";
 import { useLabels } from "@/lib/labels";
 import { supabase } from "@/lib/supabaseClient";
+import AdminHint from "@/components/AdminHint";
 
 const FLAG = { Belgium: "🇧🇪", France: "🇫🇷", England: "🏴", Spain: "🇪🇸", Italy: "🇮🇹", Germany: "🇩🇪", Netherlands: "🇳🇱", Portugal: "🇵🇹" };
 const safeColor = (value, fallback) => /^#[0-9a-f]{6}$/i.test(value || "") ? value : fallback;
@@ -144,7 +145,7 @@ function CompetitionsContent() {
           {portal !== "national" && <div className="mb-3"><h2 className="text-lg font-black">{section.title}</h2><p className="mt-1 text-xs text-muted">{section.subtitle}</p></div>}
           <div className="grid gap-4 lg:grid-cols-2">{section.rows.map((competition, index) => <CompetitionCard key={competition.id} competition={competition} index={index} L={L} />)}</div>
         </section>)}
-        {!loading && !error && sections.every((section) => section.rows.length === 0) && <div className="rounded-3xl border border-dashed border-line/20 bg-surface/50 p-10 text-center"><Globe2 className="mx-auto h-8 w-8 text-muted" /><h2 className="mt-3 text-lg font-black">Aucune compétition dans cette catégorie</h2><p className="mt-1 text-sm text-muted">Crée-la dans l’administration puis choisis sa portée dans le champ « Portail ».</p></div>}
+        {!loading && !error && sections.every((section) => section.rows.length === 0) && <div className="rounded-3xl border border-dashed border-line/20 bg-surface/50 p-10 text-center"><Globe2 className="mx-auto h-8 w-8 text-muted" /><h2 className="mt-3 text-lg font-black">Aucune compétition dans cette catégorie</h2><p className="mt-1 text-sm text-muted">Revenez bientôt.<AdminHint>crée-la dans l’administration puis choisis sa portée dans le champ « Portail ».</AdminHint></p></div>}
       </div>
     </div>
   );

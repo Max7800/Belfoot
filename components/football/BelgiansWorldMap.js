@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { ComposableMap, Geographies, Geography, ZoomableGroup, Marker } from "react-simple-maps";
 import { geoCentroid, geoArea } from "d3-geo";
+import { UNKNOWN_COUNTRY } from "@/lib/belgiansAbroad";
 
 // Ancre de la pastille : centroïde du PLUS GRAND polygone du pays, pas le centroïde
 // global. Sinon les territoires d'outre-mer (France+Guyane, Espagne+Canaries,
@@ -55,7 +56,7 @@ export default function BelgiansWorldMap({ players = [] }) {
     const map = {};
     for (const p of players) {
       const raw = p?.country;
-      if (!raw || raw === "À renseigner") continue;
+      if (!raw || raw === UNKNOWN_COUNTRY) continue;
       const name = geoName(raw);
       (map[name] ||= { label: raw, list: [] }).list.push(p);
     }
@@ -83,7 +84,7 @@ export default function BelgiansWorldMap({ players = [] }) {
       <div className="mb-2 text-[11px] text-muted">👆 Clique sur un <span className="font-bold text-accent">pastille rouge</span> (ou le pays surligné) pour voir les Belges qui y jouent.</div>
 
       <div className="relative overflow-hidden rounded-xl bg-[#0b1220]">
-        <style>{`.rsm-svg,.rsm-geographies,.rsm-geography,.rsm-zoomable-group,.rsm-svg *{outline:none!important;}.rsm-svg:focus,.rsm-zoomable-group:focus{outline:none!important;}@keyframes bfHalo{0%,100%{opacity:.12}50%{opacity:.4}}.bf-halo{animation:bfHalo 2.2s ease-in-out infinite;}.bf-badge{transition:transform .12s ease;transform-box:fill-box;transform-origin:center;}.bf-badge:hover{transform:scale(1.25);}`}</style>
+        <style>{`.rsm-svg,.rsm-geographies,.rsm-geography,.rsm-zoomable-group,.rsm-svg *{outline:none!important;}.rsm-svg:focus,.rsm-zoomable-group:focus{outline:none!important;}@keyframes bfHalo{0%,100%{opacity:.12}50%{opacity:.4}}.bf-halo{animation:bfHalo 2.2s ease-in-out infinite;}.bf-badge{transition:transform .12s ease;transform-box:fill-box;transform-origin:center;}.bf-badge:hover{transform:scale(1.25);}.bf-geo{outline:none;}.bf-geo:hover{fill:rgba(255,255,255,0.07);stroke:rgba(255,255,255,0.25);stroke-width:.5;}.bf-geo-active{cursor:pointer;}.bf-geo-active:hover,.bf-geo-active:active{fill:#e30613;}`}</style>
         <ComposableMap projection="geoMercator" projectionConfig={{ scale: 130 }} style={{ width: "100%", height: "auto", outline: "none" }}>
           <ZoomableGroup center={view.center} zoom={view.zoom} maxZoom={8}>
             <Geographies geography={GEO_URL}>
@@ -100,11 +101,13 @@ export default function BelgiansWorldMap({ players = [] }) {
                         onMouseEnter={() => n && setTooltip({ name: entry.label, count: n })}
                         onMouseLeave={() => setTooltip(null)}
                         onClick={() => n && setSelected((s) => (s === name ? null : name))}
-                        style={{
-                          default: { fill: fillFor(n), stroke: "rgba(255,255,255,0.1)", strokeWidth: 0.4, outline: "none" },
-                          hover: { fill: n ? "#e30613" : "rgba(255,255,255,0.07)", outline: "none", cursor: n ? "pointer" : "default", stroke: "rgba(255,255,255,0.25)", strokeWidth: 0.5 },
-                          pressed: { fill: "#e30613", outline: "none" },
-                        }}
+                        // react-simple-maps 5 : Geography reçoit des attributs SVG ordinaires
+                        // (l'objet { default, hover, pressed } de la v3 était ignoré : pays
+                        // tous noirs, sans couleur ni survol). Survol / clic en CSS (.bf-geo).
+                        fill={fillFor(n)}
+                        stroke="rgba(255,255,255,0.1)"
+                        strokeWidth={0.4}
+                        className={n ? "bf-geo bf-geo-active" : "bf-geo"}
                       />
                     );
                   })}
@@ -122,7 +125,7 @@ export default function BelgiansWorldMap({ players = [] }) {
                         onMouseEnter={() => setTooltip({ name: entry.label, count: n })}
                         onMouseLeave={() => setTooltip(null)}
                         onClick={() => setSelected((s) => (s === name ? null : name))}
-                        style={{ default: { cursor: "pointer" }, hover: { cursor: "pointer" }, pressed: { cursor: "pointer" } }}
+                        style={{ cursor: "pointer" }}
                       >
                         <circle className="bf-halo" r={badgeR + 2} fill="#e30613" style={{ pointerEvents: "none" }} />
                         <g className="bf-badge">

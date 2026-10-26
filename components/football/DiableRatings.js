@@ -90,7 +90,7 @@ export default function DiableRatings({ match, squad, title = "Notez les Diables
             </div>
           );
         })}
-        {squad.length === 0 && <p className="py-3 text-sm text-muted">L'effectif de cette sélection apparaîtra ici après synchronisation.</p>}
+        {squad.length === 0 && <p className="py-3 text-sm text-muted">L’effectif de cette sélection n’est pas encore disponible.</p>}
       </div>
       {compact && squad.length > compactLimit && <button type="button" onClick={() => setExpanded((value) => !value)} className="mt-3 w-full rounded-xl border border-line/10 px-3 py-2 text-xs font-bold text-muted transition hover:border-red-400/30 hover:text-white">{expanded ? showLessLabel : `${showAllLabel} (${squad.length})`}</button>}
     </div>

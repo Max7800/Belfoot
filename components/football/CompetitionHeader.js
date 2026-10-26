@@ -1,5 +1,6 @@
 "use client";
 import { formatCompetitionName, isEuropeanClubCompetition } from "@/lib/competitionType";
+import { frenchNationName } from "@/lib/frenchNations";
 
 // Header overlay : bannière décorative, contenu dynamique. Générique (aucune compé en dur).
 const FLAG = { Belgium: "🇧🇪", France: "🇫🇷", England: "🏴", Spain: "🇪🇸", Italy: "🇮🇹", Germany: "🇩🇪", Netherlands: "🇳🇱", Portugal: "🇵🇹" };
@@ -10,7 +11,8 @@ export default function CompetitionHeader({ comp, seasonLabel, kicker }) {
   const flagUrl = european || international ? null : comp.ext?.country_flag;
   const flagEmoji = european || international ? null : FLAG[comp.ext?.country];
   const title = formatCompetitionName(comp.header_title?.trim() || comp.name);
-  const automaticSubtitle = [international ? "Sélections internationales" : european ? "Europe" : comp.ext?.country, seasonLabel].filter(Boolean).join(" · ");
+  // Pays de l'API en anglais (« Belgium ») → français (« Belgique »).
+  const automaticSubtitle = [international ? "Sélections internationales" : european ? "Europe" : frenchNationName(comp.ext?.country), seasonLabel].filter(Boolean).join(" · ");
   const subtitle = comp.header_subtitle?.trim() || automaticSubtitle;
   return (
     <div className="relative -mx-4 mb-6 overflow-hidden sm:mx-0 sm:rounded-2xl">

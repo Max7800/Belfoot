@@ -33,10 +33,10 @@ function StatRow({ label, field, unit, home, away }) {
   );
 }
 
-export default function MatchTeamStats({ homeClub, awayClub, rows = [], compact = false }) {
+export default function MatchTeamStats({ homeClub, awayClub, rows = [], compact = false, empty = "Statistiques collectives pas encore disponibles." }) {
   const home = rows.find((row) => row.club_id === homeClub?.id);
   const away = rows.find((row) => row.club_id === awayClub?.id);
-  if (!home && !away) return <div className="rounded-2xl border border-dashed border-line/15 p-5 text-center text-sm text-muted">Les statistiques collectives apparaîtront après la synchronisation du match.</div>;
+  if (!home && !away) return <div className="rounded-2xl border border-dashed border-line/15 p-5 text-center text-sm text-muted">{empty}</div>;
   const groups = compact ? [{ label: null, rows: GROUPS[0].rows.slice(0, 4) }] : GROUPS;
   return (
     <div className="overflow-hidden rounded-2xl border border-line/10 bg-gradient-to-b from-surface to-bg/40">

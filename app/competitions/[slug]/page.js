@@ -32,6 +32,7 @@ import { PUBLIC_PLAYER_FIELDS, PUBLIC_PLAYER_STATS_FIELDS, loadClubsForMatches, 
 import { playerAge } from "@/lib/playerAge";
 import { preferAssignedPlayerStats } from "@/lib/playerStats";
 import { nationalityBadges } from "@/lib/nationalities";
+import AdminHint from "@/components/AdminHint";
 
 const POS = { Goalkeeper: 0, Defender: 1, Midfielder: 2, Attacker: 3 };
 const VARIANTS = {
@@ -415,14 +416,14 @@ export default function CompetitionPage() {
 
       <SeasonNotice unpublished={unpublishedSeasons} season={activeSeason} matchCount={matches.length} loading={seasonLoading} error={dataError} />
       {dataError && <p className="mb-5 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">Impossible de charger les données de cette saison : {dataError}</p>}
-      {partialCompetition && <p className="mb-5 rounded-xl border border-amber-400/30 bg-amber-400/10 p-3 text-sm leading-6 text-amber-100"><b>Données partielles.</b> Seuls les matchs de la sélection belge suivie sont importés pour le moment. Le classement et le tableau complets apparaîtront après la synchronisation de base de cette compétition.</p>}
+      {partialCompetition && <p className="mb-5 rounded-xl border border-amber-400/30 bg-amber-400/10 p-3 text-sm leading-6 text-amber-100"><b>Données partielles.</b> Seuls les matchs de la sélection belge sont disponibles pour le moment ; le classement et le tableau complets arriveront prochainement.<AdminHint>lancer la synchronisation de base de cette compétition.</AdminHint></p>}
       {seasonLoading && <div className="h-72 animate-pulse rounded-3xl bg-surface" />}
 
       {!seasonLoading && tab === "overview" && (
         <div className="space-y-6">
           <div className="grid gap-4 lg:grid-cols-3">
             {partialCompetition ? (
-              <Card title="Import en préparation">
+              <Card title="Classement à venir">
                 <div className="flex h-full flex-col justify-center rounded-xl border border-amber-400/20 bg-amber-400/5 p-4">
                   <div className="text-lg font-black text-amber-200">Vue volontairement limitée</div>
                   <p className="mt-2 text-xs leading-5 text-muted">Belfoot affiche les matchs déjà connus, sans fabriquer de classement à partir d'un sous-ensemble incomplet.</p>
@@ -560,7 +561,7 @@ export default function CompetitionPage() {
       )}
 
       {!seasonLoading && tab === "classement" && (partialCompetition
-        ? <div className="rounded-2xl border border-amber-400/25 bg-amber-400/5 p-6 text-center"><div className="font-black text-amber-200">Classement indisponible pendant l’import partiel</div><p className="mt-2 text-sm text-muted">Lance la synchronisation complète et contrôlée de la compétition depuis l’administration pour afficher toutes les équipes et tous les matchs.</p></div>
+        ? <div className="rounded-2xl border border-amber-400/25 bg-amber-400/5 p-6 text-center"><div className="font-black text-amber-200">Classement indisponible pour le moment</div><p className="mt-2 text-sm text-muted">Il sera affiché dès que toutes les équipes et tous les matchs seront disponibles.<AdminHint>lancer la synchronisation complète et contrôlée depuis l’administration.</AdminHint></p></div>
         : isNationsLeague && nationsGroups.length
         ? <div className="space-y-7"><NationsLeagueStandings groups={nationsGroups} clubs={clubsMap} division={nationsDivision} onDivisionChange={setNationsDivision} />{knockoutPhases.length > 0 && <section><h2 className="mb-3 text-sm font-black uppercase tracking-wider text-muted">Phase finale et barrages</h2><CupRounds highlight={(clubId) => europeanClubCompetition && isBelgianClubCountry(clubsMap[clubId]?.ext?.country)} matches={seasonMatches} clubs={clubsMap} phases={knockoutPhases} activePhase={knockoutPhases.includes(curPhase) ? curPhase : knockoutPhases[0]} onPhaseChange={(next) => { setPhase(next); setRound("all"); }} L={L} /></section>}</div>
         : isCup
