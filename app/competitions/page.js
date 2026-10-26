@@ -11,6 +11,7 @@ import { useCompetitionHub } from "@/lib/competitionHub";
 import { useLabels } from "@/lib/labels";
 import { supabase } from "@/lib/supabaseClient";
 import AdminHint from "@/components/AdminHint";
+import { readAll } from "@/lib/readAll";
 
 const FLAG = { Belgium: "🇧🇪", France: "🇫🇷", England: "🏴", Spain: "🇪🇸", Italy: "🇮🇹", Germany: "🇩🇪", Netherlands: "🇳🇱", Portugal: "🇵🇹" };
 const safeColor = (value, fallback) => /^#[0-9a-f]{6}$/i.test(value || "") ? value : fallback;
@@ -82,7 +83,7 @@ function CompetitionsContent() {
   useEffect(() => { (async () => {
     const [competitionsResult, matchesResult] = await Promise.all([
       supabase.from("competitions").select("*").order("name"),
-      supabase.from("matches").select("competition_id,phase,round_raw"),
+      readAll(() => supabase.from("matches").select("id,competition_id,phase,round_raw")),
     ]);
     if (competitionsResult.error) throw competitionsResult.error;
     const byCompetition = {};

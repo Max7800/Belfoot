@@ -33,6 +33,7 @@ import { playerAge } from "@/lib/playerAge";
 import { preferAssignedPlayerStats } from "@/lib/playerStats";
 import { nationalityBadges } from "@/lib/nationalities";
 import AdminHint from "@/components/AdminHint";
+import { readAll } from "@/lib/readAll";
 
 const POS = { Goalkeeper: 0, Defender: 1, Midfielder: 2, Attacker: 3 };
 const VARIANTS = {
@@ -146,20 +147,22 @@ export default function CompetitionPage() {
     setSeasonLoading(true); setDataError(""); setMatches([]); setClubsMap({}); setPlayers([]); setPlayerStats([]); setPlayerMemberships([]); setTransfers([]); setMatchPlayerStats([]); setPhase(null); setRound("all");
     const seasonMatches = await loadSeasonMatches(supabase, comp.id, activeSeason?.id);
     const clubMap = await loadClubsForMatches(supabase, seasonMatches);
-    let statsQuery = supabase.from("player_season_stats").select(PUBLIC_PLAYER_STATS_FIELDS).eq("competition_id", comp.id);
     const activeYear = seasonKey(activeSeason?.label);
-    if (activeYear) statsQuery = statsQuery.ilike("season", `${activeYear}%`);
-    const statsResult = await statsQuery;
+    // Lectures complètes (lib/readAll.js) : plus de 1 000 lignes en coupe d'Europe.
+    const statsResult = await readAll(() => {
+      const query = supabase.from("player_season_stats").select(PUBLIC_PLAYER_STATS_FIELDS).eq("competition_id", comp.id);
+      return activeYear ? query.ilike("season", `${activeYear}%`) : query;
+    });
     if (statsResult.error) throw statsResult.error;
     const statsRows = preferAssignedPlayerStats(statsResult.data || []);
     const clubIds = Object.keys(clubMap);
     let membershipRows = [];
     if (activeYear && clubIds.length) {
-      const membershipResult = await supabase.from("player_team_seasons")
-        .select("player_id,club_id,position,shirt_number,squad_role,membership_type,is_primary,active,season_start_year")
+      const membershipResult = await readAll(() => supabase.from("player_team_seasons")
+        .select("id,player_id,club_id,position,shirt_number,squad_role,membership_type,is_primary,active,season_start_year")
         .eq("season_start_year", Number(activeYear))
         .eq("active", true)
-        .in("club_id", clubIds);
+        .in("club_id", clubIds));
       if (membershipResult.error) throw membershipResult.error;
       membershipRows = membershipResult.data || [];
     }
@@ -169,7 +172,7 @@ export default function CompetitionPage() {
     ].filter(Boolean))];
     let playerRows = playerIds.length ? await loadPlayersByIds(supabase, playerIds) : [];
     if (!playerRows.length && clubIds.length) {
-      const fallback = await supabase.from("players").select(PUBLIC_PLAYER_FIELDS).in("club_id", clubIds).order("name");
+      const fallback = await readAll(() => supabase.from("players").select(PUBLIC_PLAYER_FIELDS).in("club_id", clubIds).order("name"));
       if (fallback.error) throw fallback.error;
       playerRows = fallback.data || [];
     }

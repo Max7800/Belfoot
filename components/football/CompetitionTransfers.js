@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { seasonYear } from "@/modules/football/season";
+import { readAll } from "@/lib/readAll";
 
 // API-Football range le montant dans "type" : "€ 20.5M", "€ 500K", "Loan", "Free", "N/A"…
 function parseFee(type) {
@@ -44,18 +45,19 @@ export default function CompetitionTransfers({ competition }) {
     (async () => {
       const { data: seasonRows } = await supabase.from("seasons").select("id,label").eq("competition_id", competition.id);
       const seasonRow = (seasonRows || []).find((s) => Number(seasonYear(s.label)) === year);
-      let mq = supabase.from("matches").select("home_club_id,away_club_id").eq("competition_id", competition.id);
-      if (seasonRow?.id) mq = mq.eq("season_id", seasonRow.id);
-      const { data: matches } = await mq;
+      const { data: matches } = await readAll(() => {
+        const query = supabase.from("matches").select("id,home_club_id,away_club_id").eq("competition_id", competition.id);
+        return seasonRow?.id ? query.eq("season_id", seasonRow.id) : query;
+      });
       const ids = new Set((matches || []).flatMap((m) => [m.home_club_id, m.away_club_id]).filter(Boolean));
       setClubIds(ids);
       if (!ids.size) { setRows([]); setClubs([]); setPhotos({}); setLoading(false); return; }
       const idList = [...ids].join(",");
-      const { data } = await supabase.from("player_transfers")
+      const { data } = await readAll(() => supabase.from("player_transfers")
         .select("id,player_id,player_name,from_club_id,to_club_id,from_club_name,to_club_name,transfer_date,transfer_type")
         .eq("season_start_year", year)
         .or(`from_club_id.in.(${idList}),to_club_id.in.(${idList})`)
-        .order("transfer_date", { ascending: false });
+        .order("transfer_date", { ascending: false }));
       const list = data || [];
       setRows(list);
       const { data: clubRows } = await supabase.from("clubs").select("id,name").in("id", [...ids]).order("name");
