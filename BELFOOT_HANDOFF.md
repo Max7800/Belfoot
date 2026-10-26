@@ -13,6 +13,12 @@ Audit complet des synchronisations (lecture seule) puis plan validé avec l'util
 7. **Façade commune et panneau central** — **panneau en lecture seule TERMINÉ** (PR #26, merge `8ecc122`, voir « PR 7a ») ; **correctif statistiques TERMINÉ** (PR #27, merge `87869bf`, premiers lots vérifiés en production le 25/10 à 20:00 UTC) ; **façade TERMINÉE** (PR #28, merge `c59fa20`, voir « PR 7b »).
 8. **Garde-fous d'administration — TERMINÉE** (PR #29, merge `d7dd058`, voir « PR 8 ») : modifications de `external_id`, suppressions de compétitions et écritures concurrentes de `site_settings` confirmées et auditées.
 
+### Recherche : compétitions (26/10)
+
+- La recherche publique ne trouvait que les actualités, clubs et joueurs (« pro league » : aucun résultat). Nouveau type **Compétitions** (`modules/football/search.js`, `matchingCompetitions`) : compétitions VISIBLES seulement, sans accents (`lib/textMatch.js`, partagé avec les préférences d'affichage de l'admin), sur le nom, le titre du bandeau et le slug (« jupiler » → Pro League) ; portée en sous-titre ; lien par `competitionHref` (homonymes gérés comme partout) ; au plus 10, les masquées ne prennent jamais la place des visibles.
+- Vérifié sur les 74 fiches de production (lecture seule) : « pro league » → Challenger Pro League + Pro League (pas la Pro League saoudienne masquée), « conference » → Conférence League, « u21 », « nations » trouvés.
+- Tests : `tests/football/competitionSearch.test.js` (8) ; mutations 9/9.
+
 ### Compétitions surveillées (26/10)
 
 - Besoin : les prochaines échéances (qualifications Euro 2028 [960], phase finale Euro U21 2027 [38], qualifications Coupe du monde 2030 [32], Euro 2028 [4]) sont des fiches masquées jamais importées ; le renouvellement automatique (PR #23) ne traitait que les compétitions visibles déjà importées en entier.
