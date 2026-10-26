@@ -19,6 +19,26 @@ Audit complet des synchronisations (lecture seule) puis plan validé avec l'util
 - Vérifié sur les 74 fiches de production (lecture seule) : « pro league » → Challenger Pro League + Pro League (pas la Pro League saoudienne masquée), « conference » → Conférence League, « u21 », « nations » trouvés.
 - Tests : `tests/football/competitionSearch.test.js` (8) ; mutations 9/9.
 
+### Renouvellement des campagnes privé par les statistiques (26/10) — PR #33, merge `f3cdbad`
+
+- Constat (lecture seule en production, 26/10 ~15:00 UTC) : aucun renouvellement depuis le 25/10 17:00 alors que les 10 compétitions étaient dues. Depuis la PR #27, le passage statistiques avance des lots à chaque passage (≈ 10–30 s ; C4 135/165, C3 51/76 clubs) avant le renouvellement, qui ne démarre que dans les 12 premières secondes : il n'était plus jamais lancé — y compris pour les compétitions surveillées (PR #32).
+- Correctif : renouvellement placé après les résultats et AVANT les statistiques (1 appel le plus souvent) ; les statistiques reprennent leur lot au passage suivant.
+- Test : `tests/jobs/campaignRollover.test.js` « des lots de statistiques longs ne privent plus le renouvellement » (échoue avec l'ancien ordre).
+
+### Contrôle qualité du site public (26/10) — PR #34, merge `d943edf`
+
+- Navigation réelle de la production (Edge sans interface, lecture seule, scratchpad `crawl/`) : 26 pages publiques en ordinateur et mobile (390 px) — aucune erreur JavaScript, aucun texte « undefined / NaN / [object Object] / Invalid Date », recherche joueurs et clubs fonctionnelle.
+- Corrigés :
+  - **Jargon d'administration visible par les visiteurs** (≈ 20 textes : « job plafonné », « migration SQL 0027 », « après la synchronisation », « à compléter dans l'administration », « Import en préparation »…) → textes neutres ; l'indication technique reste visible pour un administrateur connecté via `components/AdminHint.js`.
+  - **Page de match** : textes vides selon l'état (à venir / en direct / terminé) ; date du coup d'envoi plus affichée deux fois pour un match à venir.
+  - **Page Diables Rouges, mobile** : débordement horizontal de 15 px (4 tuiles « Classement FIFA ») → tuiles 2 × 2 sous 640 px et colonnes `min-w-0` (mesuré 405 → 390 px).
+  - **Console** : directive CSP `upgrade-insecure-requests` retirée de la politique Report-Only (ignorée et signalée en erreur sur chaque page ; HSTS impose déjà le HTTPS).
+  - **Icône d'onglet** : `app/icon.svg` provisoire (`/favicon.ico` répondait 404) — à remplacer par le logo officiel.
+  - **Carte du monde des Belges** : pays tous noirs, sans couleur ni survol depuis sa création — composant écrit pour l'API de react-simple-maps 3 (`style={{ default, hover, pressed }}`) alors que le projet utilise la v5 (attributs SVG ordinaires) ; couleurs en attributs `fill`/`stroke`, survol et clic en CSS (`.bf-geo`). Vérifié sur un aperçu local branché en lecture seule sur la production (clé publique).
+  - **Libellés « inconnu »** : « À renseigner », « Championnat à renseigner », « Club à renseigner » → « Pays / Championnat / Club non précisé », constantes partagées (`lib/belgiansAbroad.js`) — la carte ignore exactement le pays inconnu affiché ; en-tête de compétition : pays en français (`frenchNationName`, « Belgium » → « Belgique »).
+- Constats laissés à l'administrateur : titre de la page Diables saisi dans l'admin « RED DEVIL'S » (le défaut du code est « Les Diables Rouges ») ; compétitions non cherchables → corrigé (« Recherche : compétitions » ci-dessus) ; aucune violation CSP relevée en Report-Only, passage en mode bloquant envisageable.
+- Tests : `tests/football/publicPolish.test.js` (10 ; 6 échouent sur l'ancien code).
+
 ### Compétitions surveillées (26/10)
 
 - Besoin : les prochaines échéances (qualifications Euro 2028 [960], phase finale Euro U21 2027 [38], qualifications Coupe du monde 2030 [32], Euro 2028 [4]) sont des fiches masquées jamais importées ; le renouvellement automatique (PR #23) ne traitait que les compétitions visibles déjà importées en entier.

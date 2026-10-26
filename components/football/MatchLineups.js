@@ -38,7 +38,7 @@ function TeamCard({ club, lineup, rows, starterLabel, benchLabel, labels }) {
       </header>
       <div className="p-2">
         <div className="px-2 pb-1 pt-1 text-[10px] font-black uppercase tracking-[0.18em] text-muted">{starterLabel}</div>
-        <div>{starters.map((row) => <PlayerRow key={row.id} row={row} />)}{starters.length === 0 && <p className="px-2 py-3 text-xs text-muted">{labels?.startersEmpty || "Aucun titulaire importé."}</p>}</div>
+        <div>{starters.map((row) => <PlayerRow key={row.id} row={row} />)}{starters.length === 0 && <p className="px-2 py-3 text-xs text-muted">{labels?.startersEmpty || "Composition non disponible."}</p>}</div>
         {bench.length > 0 && <><div className="mt-2 border-t border-line/10 px-2 pb-1 pt-3 text-[10px] font-black uppercase tracking-[0.18em] text-muted">{benchLabel}</div><div>{bench.map((row) => <PlayerRow key={row.id} row={row} muted />)}</div></>}
       </div>
     </section>

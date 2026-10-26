@@ -16,7 +16,7 @@ function TeamPlayers({ club, rows }) {
       const body = <><span className="w-6 shrink-0 text-center text-[11px] font-bold text-muted">{row.number ?? "–"}</span><span className="min-w-0 flex-1"><b className="block truncate text-xs">{row.player_name || "Joueur"}</b><span className="text-[10px] text-muted">{row.position || "–"} · {row.minutes ?? 0} min</span></span><span className="hidden gap-2 text-[10px] text-muted sm:flex">{!!row.goals && <b>⚽ {row.goals}</b>}{!!row.assists && <b>A {row.assists}</b>}{!!row.saves && <b>🧤 {row.saves}</b>}</span><b className={`w-9 rounded-md px-1 py-1 text-center text-xs tabular-nums ${row.rating != null ? ratingTone(Number(row.rating)) : "bg-white/[0.06] text-muted"}`}>{row.rating != null ? Number(row.rating).toFixed(1) : "–"}</b></>;
       const cls = "flex items-center gap-2 px-3 py-2 transition hover:bg-white/[0.025]";
       return row.player_id ? <Link href={`/players/${row.player_id}`} key={row.id} className={cls}>{body}</Link> : <div key={row.id} className={cls}>{body}</div>;
-    })}{ordered.length === 0 && <p className="p-4 text-sm text-muted">Aucune performance importée.</p>}</div>
+    })}{ordered.length === 0 && <p className="p-4 text-sm text-muted">Performances pas encore disponibles.</p>}</div>
   </section>;
 }
 

@@ -10,7 +10,9 @@ const contentSecurityPolicy = [
   "base-uri 'self'",
   "form-action 'self'",
   "frame-ancestors 'none'",
-  "upgrade-insecure-requests",
+  // « upgrade-insecure-requests » est ignorée (et signalée en erreur dans la
+  // console de chaque page) en mode Report-Only ; HSTS impose déjà le HTTPS.
+  // À rajouter le jour où la politique passe en mode bloquant.
 ].join("; ");
 
 const securityHeaders = [

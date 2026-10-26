@@ -125,7 +125,7 @@ describe("page Diables — classement FIFA et ordre des blocs", () => {
   });
   it("la tuile FIFA disparaît pour les jeunes, sans case vide (3 colonnes)", () => {
     expect(source).toContain("...(showFifa ? [[fifaRank, config.labels.stats_fifa, \"text-amber-300\"]] : [])");
-    expect(source).toContain("statTiles.length === 4 ? \"grid-cols-4\" : \"grid-cols-3\"");
+    expect(source).toContain("statTiles.length === 4 ? \"grid-cols-2 sm:grid-cols-4\" : \"grid-cols-3\""); // 2 × 2 sur mobile (débordement à 390 px)
     expect(source.indexOf("const statTiles")).toBeGreaterThan(source.indexOf("const record = useMemo")); // déclaré après « record »
   });
   it("titre : « Red Flames » pour l'équipe A féminine, pas celui des Diables", () => {
