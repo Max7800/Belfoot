@@ -13,6 +13,16 @@ Audit complet des synchronisations (lecture seule) puis plan validé avec l'util
 7. **Façade commune et panneau central** — **panneau en lecture seule TERMINÉ** (PR #26, merge `8ecc122`, voir « PR 7a ») ; **correctif statistiques TERMINÉ** (PR #27, merge `87869bf`, premiers lots vérifiés en production le 25/10 à 20:00 UTC) ; **façade TERMINÉE** (PR #28, merge `c59fa20`, voir « PR 7b »).
 8. **Garde-fous d'administration — TERMINÉE** (PR #29, merge `d7dd058`, voir « PR 8 ») : modifications de `external_id`, suppressions de compétitions et écritures concurrentes de `site_settings` confirmées et auditées.
 
+### Compétitions surveillées (26/10)
+
+- Besoin : les prochaines échéances (qualifications Euro 2028 [960], phase finale Euro U21 2027 [38], qualifications Coupe du monde 2030 [32], Euro 2028 [4]) sont des fiches masquées jamais importées ; le renouvellement automatique (PR #23) ne traitait que les compétitions visibles déjà importées en entier.
+- Case **« Surveiller »** par compétition dans le Plan d'import (`config.watch`, active seulement si « Autoriser ») : le passage 3 du cron `competition-refresh` vérifie aussi les compétitions surveillées (même masquées, même sans saison publiée), 1 appel par jour ; nouvelle campagne → plan, import « Archive résultats », contrôles, **prête en restant masquée**. Publication = geste de l'administrateur (rendre visible, puis activer depuis « Saisons »). Conseil : niveau « Archive résultats » pour les saisons d'une compétition surveillée (sinon les contrôles exigent compositions et statistiques).
+- **Défaut corrigé (PR #23)** : un import complet sans aucun match marquait la campagne « importée en entier » ; une saison annoncée par l'API avant son calendrier n'était alors plus jamais réessayée. Une campagne n'est désormais « à jour » qu'avec au moins un match ; sinon statut « en attente » et nouvel essai toutes les 72 h (`WAITING_RETRY_HOURS`).
+- **Défaut corrigé** : `hydrateCompetitionConfig` effaçait `auto_rollover: false` (et tout réglage inconnu) à chaque enregistrement du plan depuis le panneau ; `watch` et `auto_rollover` sont conservés.
+- Résultat structuré du job (`meta.status` : ineligible, no-campaign, up-to-date, not-prepared, waiting, incomplete, ready), transmis par `runJob` (`meta`) et enregistré dans `football_campaign_rollover_state`. Le cron garde le passage de renouvellement même sans compétition visible à rafraîchir si des compétitions sont surveillées.
+- Vue d'ensemble : section « Compétitions surveillées » ; alertes « PRÊTE, compétition non publiée — à publier », « calendrier pas encore publié », « contrôles incomplets », « surveillée mais non autorisée ».
+- Tests : `tests/jobs/competitionWatch.test.js` (18), `tests/jobs/campaignRollover.test.js` (24, dont le scénario « importée vide puis calendrier publié ») ; mutations 16/16.
+
 ### Pages Synchronisation réorganisées (26/10)
 
 - L'ancienne page « Plan d'import » empilait plan, audit des doublons, entretien des données et activation des saisons (outil de reliaison introuvable sous 70 compétitions dépliées). Elle devient trois pages du menu Synchronisation, sans changement de comportement :
