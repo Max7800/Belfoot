@@ -1,5 +1,5 @@
 import { getProvider } from "./providers";
-import { upsertExternal, ensureCompetitions, CompetitionCollisionError } from "./sync";
+import { upsertExternal, ensureCompetitions, CompetitionCollisionError, storedClubName } from "./sync";
 import { squadRoleForClub, upsertPlayerMembership } from "./playerMemberships";
 import { isNationalSelectionClub } from "@/lib/nationalities";
 import { classifyNationalTeams } from "./nationalClassification";
@@ -20,7 +20,7 @@ async function ensureExternalReferences(db, table, source, rows) {
   const { data: existing, error: existingError } = await db.from(table).select("external_id").eq("source", source).in("external_id", uniqueRows.map((row) => String(row.external_id)));
   if (existingError) throw existingError;
   const known = new Set((existing || []).map((row) => String(row.external_id)));
-  const missing = uniqueRows.filter((row) => !known.has(String(row.external_id))).map((row) => ({ ...row, source }));
+  const missing = uniqueRows.filter((row) => !known.has(String(row.external_id))).map((row) => ({ ...row, source, ...(row.name !== undefined ? { name: storedClubName(table, row.name) } : {}) }));
   if (missing.length) {
     const { error } = await db.from(table).insert(missing);
     if (error) throw new Error(`${table}: ${error.message}`);

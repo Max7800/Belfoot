@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Trophy } from "lucide-react";
 import MatchRow from "./MatchRow";
 import { isMatchFinished } from "@/lib/matchStatus";
+import { phaseLabel } from "@/lib/phaseLabels";
 
 const STAGES = [
   { rank: 0, test: /(knockout(?: round)? play-?offs?|barrages?)/i, label: "Barrages" },
@@ -134,8 +135,8 @@ export default function CupRounds({ matches, clubs, phases, activePhase, onPhase
 
     <div className="mt-5 border-t border-line/10 pt-5">
       <h2 className="mb-3 text-sm font-black uppercase tracking-wider text-muted">Tous les tours</h2>
-      {showPhaseSelector && phases.length > 1 && <div className="mb-4 flex gap-1 overflow-x-auto pb-1 [scrollbar-width:none]">{phases.map((phase) => <button key={phase} onClick={() => onPhaseChange?.(phase)} className={`shrink-0 rounded-full border px-3 py-1 text-xs ${selected === phase ? "border-accent bg-accent/10 text-accent" : "border-line/20 text-muted"}`}>{phase}</button>)}</div>}
-      {selected && <h3 className="mb-3 text-lg font-black">{selected}</h3>}
+      {showPhaseSelector && phases.length > 1 && <div className="mb-4 flex gap-1 overflow-x-auto pb-1 [scrollbar-width:none]">{phases.map((phase) => <button key={phase} onClick={() => onPhaseChange?.(phase)} className={`shrink-0 rounded-full border px-3 py-1 text-xs ${selected === phase ? "border-accent bg-accent/10 text-accent" : "border-line/20 text-muted"}`}>{phaseLabel(phase)}</button>)}</div>}
+      {selected && <h3 className="mb-3 text-lg font-black">{phaseLabel(selected)}</h3>}
       <div className="grid gap-2 lg:grid-cols-2">{rows.map((match) => <MatchRow key={match.id} m={match} clubs={clubs} href={`/matchs/${match.id}`} />)}</div>
       {rows.length === 0 && <p className="text-muted">{L("empty.matches", "Aucun match.")}</p>}
     </div>

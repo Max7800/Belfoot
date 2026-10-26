@@ -21,7 +21,7 @@ import { competitionPhases, formatCompetitionName, getCompetitionType, isEuropea
 import { competitionPath, resolveCompetitionRoute } from "@/lib/competitionRoutes";
 import { useLabels } from "@/lib/labels";
 import { useTiles } from "@/lib/tiles";
-import { zoneAt, zonesForPhase } from "@/lib/standingsZones";
+import { zoneAt, zonesForPhase, legendZones } from "@/lib/standingsZones";
 import { useStatsSections } from "@/lib/statsSections";
 import { publicSeasonState } from "@/lib/publicSeasons";
 import { useCompetitionMatchUpdates } from "@/lib/useCompetitionMatchUpdates";
@@ -34,6 +34,9 @@ import { preferAssignedPlayerStats } from "@/lib/playerStats";
 import { nationalityBadges } from "@/lib/nationalities";
 import AdminHint from "@/components/AdminHint";
 import { readAll } from "@/lib/readAll";
+import { positionLabel } from "@/lib/positions";
+import { phaseLabel } from "@/lib/phaseLabels";
+import { transferTypeLabel } from "@/lib/transferLabels";
 
 const POS = { Goalkeeper: 0, Defender: 1, Midfielder: 2, Attacker: 3 };
 const VARIANTS = {
@@ -334,7 +337,7 @@ export default function CompetitionPage() {
           {x ? (
             <div className="mt-2 flex items-center gap-3">
               <img src={x.p.photo_url || ""} className="h-14 w-14 rounded-full object-cover ring-2" style={{ "--tw-ring-color": accent }} alt="" />
-              <span className="min-w-0"><b className={`block truncate ${overName}`}>{x.p.name}</b><span className={`flex items-center gap-1 text-xs ${overSub}`}>{clubsMap[playerClubId(x.p)]?.logo_url && <img src={clubsMap[playerClubId(x.p)].logo_url} className="h-3.5 w-3.5 object-contain" alt="" />}{clubName(playerClubId(x.p))}</span>{meta && <span className={`block text-[11px] ${overSub2}`}>{meta(x.st)}</span>}</span>
+              <span className="min-w-0 flex-1"><b className={`line-clamp-2 leading-tight [overflow-wrap:anywhere] ${overName}`} title={x.p.name}>{x.p.name}</b><span className={`flex min-w-0 items-center gap-1 text-xs ${overSub}`}>{clubsMap[playerClubId(x.p)]?.logo_url && <img src={clubsMap[playerClubId(x.p)].logo_url} className="h-3.5 w-3.5 object-contain" alt="" />}{clubName(playerClubId(x.p))}</span>{meta && <span className={`block text-[11px] ${overSub2}`}>{meta(x.st)}</span>}</span>
               <b className="ml-auto text-2xl" style={{ color: bg ? "#fff" : accent, textShadow: bg ? `0 1px 6px ${accent}, 0 1px 3px rgba(0,0,0,0.8)` : "none" }}>{unit}</b>
             </div>
           ) : <p className={`mt-2 text-sm ${overSub}`}>—</p>}
@@ -344,7 +347,7 @@ export default function CompetitionPage() {
   };
 
   const FormDots = ({ res }) => <span className="hidden gap-0.5 sm:flex">{res.map((r, i) => <span key={i} className={`h-2 w-2 rounded-full ${r === "V" ? "bg-green-400" : r === "N" ? "bg-white/25" : "bg-red-400"}`} title={r} />)}</span>;
-  const PhaseChips = () => phases.length > 1 ? <><select value={curPhase || ""} onChange={(event) => { setPhase(event.target.value); setRound("all"); }} className="mb-4 w-full rounded-xl border border-line/10 bg-surface px-3 py-2 text-sm sm:hidden">{phases.map((ph) => <option key={ph}>{ph}</option>)}</select><div className="mb-4 hidden flex-wrap gap-1 sm:flex">{phases.map((ph) => <button key={ph} onClick={() => { setPhase(ph); setRound("all"); }} className={`rounded-full border px-3 py-1 text-xs ${curPhase === ph ? "border-accent bg-accent/10 text-accent" : "border-line/20 text-muted"}`}>{ph}</button>)}</div></> : null;
+  const PhaseChips = () => phases.length > 1 ? <><select value={curPhase || ""} onChange={(event) => { setPhase(event.target.value); setRound("all"); }} className="mb-4 w-full rounded-xl border border-line/10 bg-surface px-3 py-2 text-sm sm:hidden">{phases.map((ph) => <option key={ph} value={ph}>{phaseLabel(ph)}</option>)}</select><div className="mb-4 hidden flex-wrap gap-1 sm:flex">{phases.map((ph) => <button key={ph} onClick={() => { setPhase(ph); setRound("all"); }} className={`rounded-full border px-3 py-1 text-xs ${curPhase === ph ? "border-accent bg-accent/10 text-accent" : "border-line/20 text-muted"}`}>{phaseLabel(ph)}</button>)}</div></> : null;
 
   function TopCategory({ title, id, rows, fmt, meta, accent = "#ef4444" }) {
     if (!rows.length) return <div id={id} className="h-full rounded-2xl border border-line/10 bg-gradient-to-b from-surface to-bg/35 p-4"><h3 className="mb-2 font-bold" style={{ color: accent }}>{title}</h3><p className="text-sm text-muted">—</p></div>;
@@ -443,7 +446,7 @@ export default function CompetitionPage() {
             ) : phaseIsKnockout ? (
               <Card title={L("cup.currentRound", "Tour sélectionné")} onSee={() => setTab("classement")}>
                 <div className="flex h-full flex-col justify-center rounded-xl border border-accent/15 bg-accent/5 p-4">
-                  <div className="text-2xl font-black">{curPhase || "—"}</div>
+                  <div className="text-2xl font-black">{phaseLabel(curPhase) || "—"}</div>
                   <div className="mt-2 flex gap-4 text-xs text-muted"><span><b className="text-content">{phaseMatches.length}</b> matchs</span><span><b className="text-content">{phaseFinished.length}</b> terminés</span></div>
                   <p className="mt-3 text-xs text-muted">{L("cup.noPointsShort", "Format à élimination directe, sans classement à points.")}</p>
                 </div>
@@ -490,7 +493,7 @@ export default function CompetitionPage() {
                       </div>
                     )}
                   </div>
-                  {europeanClubCompetition ? <div className="mt-3 rounded-lg border border-amber-300/15 bg-amber-300/[0.05] px-2.5 py-2 text-[10px] text-muted"><b className="text-amber-200">9–24</b> disputent les barrages. Le classement complet reste disponible dans l’onglet dédié.</div> : zones.length > 0 && <div className="mt-3 flex flex-wrap gap-x-2 gap-y-1 border-t border-line/10 pt-2 text-[10px] text-muted">{zones.map((z, i) => <span key={i} className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full" style={{ background: z.color }} />{z.label}</span>)}</div>}
+                  {europeanClubCompetition ? <div className="mt-3 rounded-lg border border-amber-300/15 bg-amber-300/[0.05] px-2.5 py-2 text-[10px] text-muted"><b className="text-amber-200">9–24</b> disputent les barrages. Le classement complet reste disponible dans l’onglet dédié.</div> : zones.length > 0 && <div className="mt-3 flex flex-wrap gap-x-2 gap-y-1 border-t border-line/10 pt-2 text-[10px] text-muted">{legendZones(zones).map((z, i) => <span key={i} className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full" style={{ background: z.color }} />{z.label}</span>)}</div>}
                 </div>
               </Card>
             )}
@@ -508,7 +511,7 @@ export default function CompetitionPage() {
             <div className="grid gap-3 sm:grid-cols-3">
               <LeaderCard title={L("comp.topscorer", "Meilleur buteur")} x={topScorer} unit={topScorer?.st.goals} onClick={() => goStats("buteurs")} variant="topscorer" />
               <LeaderCard title={L("comp.topassist", "Meilleur passeur")} x={topAssist} unit={topAssist?.st.assists} onClick={() => goStats("passeurs")} variant="topassist" />
-              <LeaderCard title={L("comp.cleansheets", "Clean sheets")} x={topCS} unit={topCS?.v} onClick={() => goStats("cleansheets")} variant="cleansheet" />
+              <LeaderCard title={L("comp.cleansheets", "Matchs sans encaisser")} x={topCS} unit={topCS?.v} onClick={() => goStats("cleansheets")} variant="cleansheet" />
             </div>
             {!withStats.length && <p className="mt-2 rounded-xl border border-dashed border-line/15 bg-surface/30 px-3 py-2 text-xs text-muted">Les fonds personnalisés restent visibles. Les noms et chiffres apparaîtront après l’import des effectifs et des statistiques.</p>}
           </div>
@@ -519,7 +522,7 @@ export default function CompetitionPage() {
               {transfers.map((transfer) => <Link key={transfer.id} href={transfer.player_id ? `/players/${transfer.player_id}` : "#"} className="rounded-2xl border border-line/10 bg-gradient-to-b from-surface to-bg/40 p-3 transition hover:border-accent/40">
                 <div className="truncate text-sm font-black">{transfer.player_name}</div>
                 <div className="mt-2 flex items-center gap-1 text-[11px] text-muted"><span className="min-w-0 flex-1 truncate">{transfer.from_club_name || "Libre"}</span><span className="shrink-0 text-accent">→</span><span className="min-w-0 flex-1 truncate text-right text-content">{transfer.to_club_name || "Libre"}</span></div>
-                <div className="mt-2 flex items-center justify-between gap-2 border-t border-line/10 pt-2 text-[10px] text-muted"><span>{new Date(`${transfer.transfer_date}T12:00:00`).toLocaleDateString("fr-BE", { day: "numeric", month: "short" })}</span>{transfer.transfer_type && <span className="max-w-[60%] truncate rounded-full bg-white/[0.05] px-2 py-0.5">{transfer.transfer_type}</span>}</div>
+                <div className="mt-2 flex items-center justify-between gap-2 border-t border-line/10 pt-2 text-[10px] text-muted"><span>{new Date(`${transfer.transfer_date}T12:00:00`).toLocaleDateString("fr-BE", { day: "numeric", month: "short" })}</span>{transferTypeLabel(transfer.transfer_type) && <span className="max-w-[60%] truncate rounded-full bg-white/[0.05] px-2 py-0.5">{transferTypeLabel(transfer.transfer_type)}</span>}</div>
               </Link>)}
             </div>
           </div>}
@@ -599,7 +602,7 @@ export default function CompetitionPage() {
               <div className="mb-3 flex items-center gap-3"><button onClick={() => setSelClub(null)} className="text-sm text-muted hover:text-content">← {isInternational ? "Sélections" : L("nav.clubs", "Clubs")}</button><span className="flex items-center gap-2 font-bold">{clubsMap[selClub]?.logo_url && <img src={clubsMap[selClub].logo_url} className="h-6 w-6 object-contain" alt="" />}{clubName(selClub)}</span></div>
               <div className="mb-4 flex flex-wrap gap-1">{["all", "Goalkeeper", "Defender", "Midfielder", "Attacker"].map((pf) => <button key={pf} onClick={() => setPosFilter(pf)} className={`rounded-full border px-3 py-1 text-xs ${posFilter === pf ? "border-accent bg-accent/10 text-accent" : "border-line/20 text-muted"}`}>{POS_LABEL[pf]}</button>)}</div>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-                {shown.map((p) => { const age = playerAge(p); const membership = membershipByPlayer.get(p.id); const nationalities = nationalityBadges(p.nationality); return <Link key={p.id} href={`/players/${p.id}`} className="rounded-2xl border border-line/10 bg-surface p-3 text-center transition hover:border-accent/40"><img src={p.photo_url || ""} className="mx-auto h-16 w-16 rounded-full object-cover" alt="" /><div className="mt-2 truncate text-sm font-bold">{p.name}</div><div className="text-xs text-muted">{[membership?.position || p.position, age ? `${age} ans` : null].filter(Boolean).join(" · ")}</div>{nationalities.length > 0 && <div className="mt-1 flex justify-center gap-1">{nationalities.map((nationality) => nationality.flagUrl ? <img key={`${nationality.code}-${nationality.label}`} src={nationality.flagUrl} title={nationality.label} alt={nationality.label} className="h-3 w-4 rounded-[2px] object-cover" /> : <span key={nationality.label} title={nationality.label}>🌍</span>)}</div>}</Link>; })}
+                {shown.map((p) => { const age = playerAge(p); const membership = membershipByPlayer.get(p.id); const nationalities = nationalityBadges(p.nationality); return <Link key={p.id} href={`/players/${p.id}`} className="rounded-2xl border border-line/10 bg-surface p-3 text-center transition hover:border-accent/40"><img src={p.photo_url || ""} className="mx-auto h-16 w-16 rounded-full object-cover" alt="" /><div className="mt-2 truncate text-sm font-bold">{p.name}</div><div className="text-xs text-muted">{[positionLabel(membership?.position || p.position), age ? `${age} ans` : null].filter(Boolean).join(" · ")}</div>{nationalities.length > 0 && <div className="mt-1 flex justify-center gap-1">{nationalities.map((nationality) => nationality.flagUrl ? <img key={`${nationality.code}-${nationality.label}`} src={nationality.flagUrl} title={nationality.label} alt={nationality.label} className="h-3 w-4 rounded-[2px] object-cover" /> : <span key={nationality.label} title={nationality.label}>🌍</span>)}</div>}</Link>; })}
                 {shown.length === 0 && <p className="text-muted">{L("empty.players", "Aucun joueur.")}</p>}
               </div>
             </div>
@@ -612,7 +615,7 @@ export default function CompetitionPage() {
           <PhaseChips />
           <div className="relative overflow-hidden rounded-3xl border border-line/10 bg-gradient-to-r from-surface to-bg/40 px-5 py-6 sm:px-7">
             <div className="absolute -right-12 -top-20 h-48 w-48 rounded-full bg-accent/10 blur-3xl" />
-            <div className="relative"><div className="text-[10px] font-bold uppercase tracking-[0.24em] text-accent">{seasonLabel}{curPhase ? ` · ${curPhase}` : ""}</div><h2 className="mt-1 text-2xl font-black sm:text-3xl">{statsConfig.title}</h2>{statsConfig.subtitle && <p className="mt-2 max-w-2xl text-sm text-muted">{statsConfig.subtitle}</p>}</div>
+            <div className="relative"><div className="text-[10px] font-bold uppercase tracking-[0.24em] text-accent">{seasonLabel}{curPhase ? ` · ${phaseLabel(curPhase)}` : ""}</div><h2 className="mt-1 text-2xl font-black sm:text-3xl">{statsConfig.title}</h2>{statsConfig.subtitle && <p className="mt-2 max-w-2xl text-sm text-muted">{statsConfig.subtitle}</p>}</div>
           </div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {statsConfig.sections.filter((section) => section.enabled).map((section) => <StatsBlock key={section.key} section={section} />)}

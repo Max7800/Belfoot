@@ -4,6 +4,7 @@ import { registerProvider } from "@/modules/football/providers";
 import { createFakeSupabase } from "../helpers/fakeSupabase";
 import { rawFixture } from "../helpers/apiFootballFixtures";
 import { runJob } from "@/lib/jobs";
+import { frenchTeamName } from "@/lib/frenchNations";
 
 // La vraie route du cron national-refresh, branchée sur un faux Supabase :
 // aucun réseau, aucun service réel (getAdmin est remplacé).
@@ -18,6 +19,8 @@ const MINUTE = 60000;
 const HOUR = 60 * MINUTE;
 const MIGRATIONS = [["core", "0004_job_execution_guardrails"], ["football", "0028_followed_national_teams"], ["football", "0036_competition_scope"], ["football", "0038_player_national_team"], ["football", "0032_season_rollout"]].map(([module, version]) => ({ module, version }));
 const TEAMS = { 8183: "Belgium U21", 1777: "Belgium W" };
+// Après une synchro réussie, la sélection est stockée sous son nom français.
+const isU21 = (item) => item.team === TEAMS[8183] || item.team === frenchTeamName(TEAMS[8183]);
 const calls = { 8183: 0, 1777: 0 };
 
 // Belgium U21 joue en ligue 850, dont le slug est occupé par la fiche 666 :
@@ -67,7 +70,7 @@ describe("cron national-refresh — collision persistante", () => {
     // Passage 1 : les deux sélections sont dues. U21 échoue en collision, W réussit.
     const first = await tick(T0);
     expect(first.results.map((item) => [item.team, item.ok])).toEqual(expect.arrayContaining([[TEAMS[8183], false], [TEAMS[1777], true]]));
-    expect(first.results.find((item) => item.team === TEAMS[8183]).error).toContain("Collision de compétitions");
+    expect(first.results.find(isU21).error).toContain("Collision de compétitions");
     const collisionRuns = () => state.db.rows("job_runs").filter((run) => run.target_key === "team:8183" && run.params?.error_code === "COMPETITION_COLLISION");
     expect(collisionRuns()).toHaveLength(1);
     expect(state.db.rows("matches").filter((match) => match.external_id === "1350300")).toHaveLength(0);
@@ -75,7 +78,7 @@ describe("cron national-refresh — collision persistante", () => {
     // Huit heures de passages toutes les 15 min : la collision n'est jamais relancée.
     for (let at = T0 + 15 * MINUTE; at <= T0 + 8 * HOUR; at += 15 * MINUTE) {
       const result = await tick(at);
-      expect(result.results.find((item) => item.team === TEAMS[8183])).toBeUndefined();
+      expect(result.results.find(isU21)).toBeUndefined();
       expect(result.heldAfterCollision).toBe(1);
     }
     expect(calls[8183]).toBe(1);
@@ -90,7 +93,7 @@ describe("cron national-refresh — collision persistante", () => {
 
     // À l'intervalle normal (20 h hors rassemblement), la collision est retentée une fois.
     const later = await tick(T0 + 20 * HOUR + MINUTE);
-    expect(later.results.find((item) => item.team === TEAMS[8183])).toMatchObject({ ok: false });
+    expect(later.results.find(isU21)).toMatchObject({ ok: false });
     expect(calls[8183]).toBe(2);
     expect(collisionRuns()).toHaveLength(2);
   });
@@ -107,7 +110,7 @@ describe("cron national-refresh — collision persistante", () => {
     });
     await tick(T0);
     const next = await tick(T0 + 15 * MINUTE);
-    expect(next.results.find((item) => item.team === TEAMS[8183])).toMatchObject({ ok: false, error: expect.stringContaining("API indisponible") });
+    expect(next.results.find(isU21)).toMatchObject({ ok: false, error: expect.stringContaining("API indisponible") });
     expect(next.heldAfterCollision).toBe(0);
     expect(calls[8183]).toBe(2);
   });
@@ -120,20 +123,20 @@ describe("cron national-refresh — seuil en rassemblement, synchro manuelle, si
     state.db.rows("matches").push({ id: "m-proche", source: P, external_id: "777", competition_id: "c-3e49", home_club_id: "t-u21", away_club_id: null, kickoff: new Date(T0 + 24 * HOUR).toISOString(), status: "scheduled", locked: false });
 
     const first = await tick(T0);
-    expect(first.results.find((item) => item.team === TEAMS[8183])).toMatchObject({ ok: false, windowActive: true });
+    expect(first.results.find(isU21)).toMatchObject({ ok: false, windowActive: true });
     expect(calls[8183]).toBe(1);
 
     // Passages toutes les 15 min jusqu'à 3 h 45 : retenue par la collision.
     for (let at = T0 + 15 * MINUTE; at < T0 + 4 * HOUR; at += 15 * MINUTE) {
       const result = await tick(at);
-      expect(result.results.find((item) => item.team === TEAMS[8183])).toBeUndefined();
+      expect(result.results.find(isU21)).toBeUndefined();
       expect(result.heldAfterCollision).toBe(1);
     }
     expect(calls[8183]).toBe(1);
 
     // À 4 h exactement après la collision : relancée (seuil de rassemblement, pas 20 h).
     const atThreshold = await tick(T0 + 4 * HOUR);
-    expect(atThreshold.results.find((item) => item.team === TEAMS[8183])).toMatchObject({ ok: false, windowActive: true });
+    expect(atThreshold.results.find(isU21)).toMatchObject({ ok: false, windowActive: true });
     expect(atThreshold.heldAfterCollision).toBe(0);
     expect(calls[8183]).toBe(2);
   });
@@ -156,14 +159,14 @@ describe("cron national-refresh — seuil en rassemblement, synchro manuelle, si
     // La collision de T0 reste dans job_runs, mais n'est plus comptée comme retenue.
     const soon = await tick(T0 + HOUR + 15 * MINUTE);
     expect(soon.heldAfterCollision).toBe(0);
-    expect(soon.results.find((item) => item.team === TEAMS[8183])).toBeUndefined();
+    expect(soon.results.find(isU21)).toBeUndefined();
 
     // Rythme normal : 20 h après la synchro manuelle (et non après la collision).
     const before = await tick(T0 + 21 * HOUR - MINUTE);
-    expect(before.results.find((item) => item.team === TEAMS[8183])).toBeUndefined();
+    expect(before.results.find(isU21)).toBeUndefined();
     expect(before.heldAfterCollision).toBe(0);
     const normal = await tick(T0 + 21 * HOUR);
-    expect(normal.results.find((item) => item.team === TEAMS[8183])).toMatchObject({ ok: true });
+    expect(normal.results.find(isU21)).toMatchObject({ ok: true });
     expect(calls[8183]).toBe(3);
   });
 

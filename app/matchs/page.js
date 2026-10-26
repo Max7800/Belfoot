@@ -8,6 +8,7 @@ import SeasonCalendar from "@/components/football/SeasonCalendar";
 import { loadClubsForMatches, loadPublicSeasonState, loadSeasonMatches } from "@/lib/publicFootballData";
 import { useCompetitionMatchUpdates } from "@/lib/useCompetitionMatchUpdates";
 import SeasonNotice from "@/components/football/SeasonNotice";
+import { phaseLabel } from "@/lib/phaseLabels";
 
 export default function MatchsPage() {
   const [comps, setComps] = useState([]); const [cid, setCid] = useState("");
@@ -56,8 +57,8 @@ export default function MatchsPage() {
         </div>
       </div>
       <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center">
-        {phases.length > 1 && <select value={cur || ""} onChange={(e) => { setPhase(e.target.value); setRound("all"); }} className="w-full rounded-xl border border-line/10 bg-surface px-3 py-2 text-sm sm:hidden">{phases.map((p) => <option key={p}>{p}</option>)}</select>}
-        {phases.length > 1 && <div className="hidden flex-wrap gap-2 sm:flex">{phases.map((p) => <button key={p} onClick={() => { setPhase(p); setRound("all"); }} className={`rounded-full border px-3 py-1 text-xs ${cur === p ? "border-accent bg-accent/10 text-accent" : "border-line/20 text-muted"}`}>{p}</button>)}</div>}
+        {phases.length > 1 && <select value={cur || ""} onChange={(e) => { setPhase(e.target.value); setRound("all"); }} className="w-full rounded-xl border border-line/10 bg-surface px-3 py-2 text-sm sm:hidden">{phases.map((p) => <option key={p} value={p}>{phaseLabel(p)}</option>)}</select>}
+        {phases.length > 1 && <div className="hidden flex-wrap gap-2 sm:flex">{phases.map((p) => <button key={p} onClick={() => { setPhase(p); setRound("all"); }} className={`rounded-full border px-3 py-1 text-xs ${cur === p ? "border-accent bg-accent/10 text-accent" : "border-line/20 text-muted"}`}>{phaseLabel(p)}</button>)}</div>}
         {seasons.length > 0 && <select value={seasonLabel} onChange={(e) => { setSeasonLabel(e.target.value); setPhase(null); setRound("all"); }} className="w-full rounded-xl border border-line/10 bg-surface px-3 py-2 text-sm sm:ml-auto sm:w-auto">{seasons.map((season) => <option key={season.id}>{season.label}</option>)}</select>}
       </div>
       <div className="mb-4 flex sm:justify-end"><div className="inline-flex w-full rounded-xl border border-line/10 bg-surface p-1 sm:w-auto"><button onClick={() => chooseView("calendar")} className={`order-1 flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold sm:order-2 sm:flex-none sm:py-1.5 ${view === "calendar" ? "bg-accent text-white" : "text-muted hover:text-content"}`}><CalendarDays className="h-3.5 w-3.5" />Calendrier</button><button onClick={() => chooseView("list")} className={`order-2 flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold sm:order-1 sm:flex-none sm:py-1.5 ${view === "list" ? "bg-accent text-white" : "text-muted hover:text-content"}`}><List className="h-3.5 w-3.5" />Liste</button></div></div>

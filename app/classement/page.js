@@ -15,6 +15,7 @@ import { useLabels } from "@/lib/labels";
 import { competitionPath } from "@/lib/competitionRoutes";
 import { zonesForPhase } from "@/lib/standingsZones";
 import { loadClubsForMatches, loadPublicSeasonState, loadSeasonMatches } from "@/lib/publicFootballData";
+import { phaseLabel } from "@/lib/phaseLabels";
 
 export default function ClassementPage() {
   const L = useLabels();
@@ -75,7 +76,7 @@ export default function ClassementPage() {
         </div>
       ) : (
         <>
-          {phases.length > 1 && <div className="mb-4 flex flex-wrap gap-1">{phases.map((p) => <button key={p} onClick={() => setPhase(p)} className={`rounded-full border px-3 py-1 text-xs ${cur === p ? "border-accent bg-accent/10 text-accent" : "border-line/20 text-muted"}`}>{p}</button>)}</div>}
+          {phases.length > 1 && <div className="mb-4 flex flex-wrap gap-1">{phases.map((p) => <button key={p} onClick={() => setPhase(p)} className={`rounded-full border px-3 py-1 text-xs ${cur === p ? "border-accent bg-accent/10 text-accent" : "border-line/20 text-muted"}`}>{phaseLabel(p)}</button>)}</div>}
           {type === "hybrid" && phaseIsKnockout
             ? <CupRounds matches={seasonMatches} clubs={clubs} phases={phases.filter(isKnockoutPhase)} activePhase={cur} onPhaseChange={setPhase} showPhaseSelector={false} L={L} />
             : groups.length ? <GroupStandings groups={groups} clubs={clubs} entityLabel={comp?.competition_scope === "international" ? "Sélection" : null} L={L} /> : <StandingsTable standings={standings} clubs={clubs} zones={zones} L={L} />}

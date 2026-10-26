@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { zoneAt } from "@/lib/standingsZones";
+import { legendZones, zoneAt } from "@/lib/standingsZones";
 
 export default function StandingsTable({ standings, clubs, zones = [], L = (k, d) => d, entityLabel = null, highlight = () => false }) {
   const zoneFor = (pos) => zoneAt(zones, pos);
@@ -32,7 +32,7 @@ export default function StandingsTable({ standings, clubs, zones = [], L = (k, d
       </div>
       {zones?.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-3 text-xs text-muted">
-          {zones.map((z, i) => <span key={i} className="flex items-center gap-1"><span className="inline-block h-3 w-3 rounded" style={{ background: z.color }} />{z.label}</span>)}
+          {legendZones(zones).map((z, i) => <span key={i} className="flex items-center gap-1"><span className="inline-block h-3 w-3 rounded" style={{ background: z.color }} />{z.label}</span>)}
         </div>
       )}
     </div>
