@@ -89,7 +89,8 @@ describe("job football.campaign-rollover", () => {
 
   it("nouvelle campagne : plan, import, contrôles et « prête » — jamais activée", async () => {
     const db = seed();
-    const detail = await rolloverJob.run({ db, competitionId: "c-850" });
+    const { detail, meta } = await rolloverJob.run({ db, competitionId: "c-850" });
+    expect(meta).toEqual({ status: "ready", label: "2029-2030", hidden: false });
     expect(calls).toEqual(["leagues", "fixtures:2029-2030"]);
     const season = db.rows("seasons").find((s) => s.label === "2029-2030");
     expect(season).toMatchObject({ import_status: "ready", public_active: false });
@@ -105,30 +106,79 @@ describe("job football.campaign-rollover", () => {
     registerProvider({ key: "apifootball", async fetchLeagueSeasons() { calls.push("leagues"); return LEAGUE(2027); }, async fetchMatches() { calls.push("fixtures"); return []; } });
     const db = seed();
     const before = JSON.stringify(db.rows("site_settings"));
-    expect(await rolloverJob.run({ db, competitionId: "c-850" })).toMatch(/déjà importée/);
+    db.rows("matches").push({ id: "m-27", competition_id: "c-850", season_id: "s-27", source: "apifootball", external_id: "27" });
+    const outcome = await rolloverJob.run({ db, competitionId: "c-850" });
+    expect(outcome.detail).toMatch(/déjà importée/);
+    expect(outcome.meta.status).toBe("up-to-date");
     expect(calls).toEqual(["leagues"]);
     expect(JSON.stringify(db.rows("site_settings"))).toBe(before);
   });
 
   it("compétition non éligible : aucun appel API", async () => {
     const db = seed(PLAN, { public_visible: false });
-    expect(await rolloverJob.run({ db, competitionId: "c-850" })).toMatch(/aucun appel API/);
+    const outcome = await rolloverJob.run({ db, competitionId: "c-850" });
+    expect(outcome.detail).toBe("UEFA U21 Qualification : compétition masquée (cocher « Surveiller » dans le plan d'import pour suivre ses nouvelles campagnes) — aucun appel API.");
+    expect(outcome.meta.status).toBe("ineligible");
     expect(calls).toEqual([]);
   });
 
   it("saison désactivée par l'administrateur : détectée mais non préparée, rien importé", async () => {
     const plan = { ...PLAN, seasons: [...PLAN.seasons, { label: "2029-2030", role: "added", enabled: false }] };
     const db = seed(plan);
-    expect(await rolloverJob.run({ db, competitionId: "c-850" })).toMatch(/non préparée/);
+    const outcome = await rolloverJob.run({ db, competitionId: "c-850" });
+    expect(outcome.detail).toMatch(/non préparée/);
+    expect(outcome.meta.status).toBe("not-prepared");
     expect(calls).toEqual(["leagues"]);
     expect(db.rows("seasons").some((s) => s.label === "2029-2030")).toBe(false);
   });
 
-  it("contrôles incomplets : importée mais pas marquée prête", async () => {
+  it("contrôles incomplets (ligue : calendrier plus court que prévu) : importée mais pas marquée prête", async () => {
+    const db = seed(PLAN, { competition_type: "league", ext: { ...U21.ext, providerType: "League" } });
+    const outcome = await rolloverJob.run({ db, competitionId: "c-850" });
+    expect(outcome.meta.status).toBe("incomplete");
+    expect(outcome.detail).toContain("contrôles incomplets (Calendrier importé (2 / 250 attendus)");
+    expect(db.rows("seasons").find((s) => s.label === "2029-2030")?.import_status).not.toBe("ready");
+  });
+
+  it("saison annoncée sans calendrier : « en attente », pas de contrôle ni de « prête »", async () => {
     registerProvider({ key: "apifootball", async fetchLeagueSeasons() { return LEAGUE(2029); }, async fetchMatches() { return []; } });
     const db = seed();
-    expect(await rolloverJob.run({ db, competitionId: "c-850" })).toMatch(/contrôles incomplets/);
+    const outcome = await rolloverJob.run({ db, competitionId: "c-850" });
+    expect(outcome.meta).toMatchObject({ status: "waiting", label: "2029-2030" });
+    expect(outcome.detail).toMatch(/aucun match publié — nouvel essai dans 72 h/);
     expect(db.rows("seasons").find((s) => s.label === "2029-2030")?.import_status).not.toBe("ready");
+  });
+
+  it("DÉFAUT CORRIGÉ : campagne importée vide puis calendrier publié → réimportée et prête", async () => {
+    let fixtures = [];
+    registerProvider({ key: "apifootball", async fetchLeagueSeasons() { calls.push("leagues"); return LEAGUE(2029); }, async fetchMatches(_c, ctx) { calls.push(`fixtures:${ctx.season}`); return fixtures; } });
+    const db = seed();
+    expect((await rolloverJob.run({ db, competitionId: "c-850" })).meta.status).toBe("waiting");
+    expect(db.rows("competitions")[0].ext.full_competition_seasons["2029-2030"]).toBeTruthy(); // marquée « importée en entier »… mais vide
+    fixtures = [fixture(1, "1", "2"), fixture(2, "2", "3")];
+    calls = [];
+    const second = await rolloverJob.run({ db, competitionId: "c-850" });
+    expect(second.meta.status).toBe("ready"); // avant : « déjà importée », plus jamais réessayée
+    expect(calls).toEqual(["leagues", "fixtures:2029-2030"]);
+    expect(db.rows("seasons").find((s) => s.label === "2029-2030")).toMatchObject({ import_status: "ready", public_active: false });
+  });
+
+  it("compétition SURVEILLÉE masquée, jamais importée : importée, prête, toujours masquée", async () => {
+    const plan = { ...PLAN, competitions: { ...PLAN.competitions, "c-850": { ...PLAN.competitions["c-850"], watch: true } } };
+    const db = seed(plan, { public_visible: false, ext: { providerType: "Cup" } });
+    const outcome = await rolloverJob.run({ db, competitionId: "c-850" });
+    expect(outcome.meta).toEqual({ status: "ready", label: "2029-2030", hidden: true });
+    expect(outcome.detail).toMatch(/compétition encore MASQUÉE : à publier/);
+    expect(db.rows("competitions")[0].public_visible).toBe(false); // jamais publiée automatiquement
+    expect(db.rows("seasons").find((s) => s.label === "2029-2030")).toMatchObject({ import_status: "ready", public_active: false });
+  });
+
+  it("surveillée mais non autorisée : inéligible, aucun appel API", async () => {
+    const plan = { ...PLAN, competitions: { ...PLAN.competitions, "c-850": { ...PLAN.competitions["c-850"], enabled: false, watch: true } } };
+    const outcome = await rolloverJob.run({ db: seed(plan, { public_visible: false }), competitionId: "c-850" });
+    expect(outcome.meta.status).toBe("ineligible");
+    expect(outcome.detail).toMatch(/non autorisée/);
+    expect(calls).toEqual([]);
   });
 
   it("garde d'import : compétition autorisée obligatoire", async () => {

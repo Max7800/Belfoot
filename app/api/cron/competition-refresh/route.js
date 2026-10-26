@@ -3,7 +3,7 @@ import { getAdmin } from "@/lib/supabaseAdmin";
 import { assertImportTargetAllowed } from "@/lib/importPlan";
 import { JOB_CATALOG } from "@/lib/jobCatalog";
 import { REFRESH_TIME_BUDGET_MS, refreshTargets } from "@/lib/competitionRefresh";
-import { rolloverDue } from "@/lib/campaignRollover";
+import { rolloverDue, watchedCompetitionIds } from "@/lib/campaignRollover";
 import { updateSiteSettings } from "@/lib/siteSettings";
 
 // Passage 3 (renouvellement des campagnes) : une compétition au plus par passage,
@@ -111,7 +111,9 @@ export async function GET(request) {
       allowed.push({ ...target, statsAllowed });
     }
     const comps = allowed.map((target) => target.competition);
-    if (!comps.length) return Response.json({ ok: true, skipped: true, reason: "Aucune compétition éligible", estimatedCalls: 0, excluded: skipped });
+    // Sans compétition visible à rafraîchir, le passage de renouvellement reste
+    // nécessaire si des compétitions sont SURVEILLÉES.
+    if (!comps.length && !watchedCompetitionIds(settings?.data?.football_import_plan).length) return Response.json({ ok: true, skipped: true, reason: "Aucune compétition éligible", estimatedCalls: 0, excluded: skipped });
     const seasonOf = Object.fromEntries(allowed.map((target) => [target.competition.id, target.season]));
     const statsAllowedFor = new Set(allowed.filter((target) => target.statsAllowed).map((target) => target.competition.id));
 
@@ -228,17 +230,28 @@ export async function GET(request) {
     // Jusqu'à « prête » seulement : l'activation reste un clic de l'administrateur.
     let rollover = null;
     if (Date.now() - startedAt <= ROLLOVER_START_BEFORE_MS) {
-      const candidate = comps.filter((competition) => rolloverDue(rolloverState[competition.id], now.getTime()))
+      // Compétitions visibles suivies + compétitions SURVEILLÉES (même masquées,
+      // même sans saison publiée) : nouvelles campagnes importées jusqu'à « prête ».
+      const followedIds = new Set(comps.map((competition) => competition.id));
+      const watchedIds = watchedCompetitionIds(settings?.data?.football_import_plan).filter((id) => !followedIds.has(id));
+      let watched = [];
+      if (watchedIds.length) {
+        const { data: watchedRows, error: watchedError } = await db.from("competitions").select("id,name,provider,external_id,public_visible").in("id", watchedIds);
+        if (watchedError) throw watchedError;
+        watched = (watchedRows || []).filter((competition) => competition.provider);
+      }
+      const candidate = [...comps, ...watched].filter((competition) => rolloverDue(rolloverState[competition.id], now.getTime()))
         .sort((a, b) => (Date.parse(rolloverState[a.id]?.checkedAt || "") || 0) - (Date.parse(rolloverState[b.id]?.checkedAt || "") || 0))[0];
       if (candidate) {
         let outcome;
         try {
           const result = await runJob("football.campaign-rollover", { db, competitionId: candidate.id, requestLimit: ROLLOVER_CALLS, apifootballKey: process.env.APIFOOTBALL_KEY });
-          outcome = { ok: true, detail: String(result?.detail || "").slice(0, 300) };
+          outcome = { ok: true, status: result?.meta?.status || null, label: result?.meta?.label || null, detail: String(result?.detail || "").slice(0, 300) };
         } catch (error) {
           outcome = { ok: false, error: String(error?.message || error).slice(0, 300) };
         }
-        // Tentative mémorisée même en échec : pas de nouvel essai avant 24 h.
+        // Tentative mémorisée même en échec : pas de nouvel essai avant 24 h
+        // (72 h si le calendrier de la campagne était attendu).
         rolloverState[candidate.id] = { checkedAt: now.toISOString(), ...outcome };
         rollover = { competition: candidate.name, ...outcome };
         await persistState();

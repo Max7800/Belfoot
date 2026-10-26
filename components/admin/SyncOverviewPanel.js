@@ -61,6 +61,13 @@ export default function SyncOverviewPanel() {
       </section>
 
       <section>
+        <h2 className="mb-2 text-sm font-black uppercase tracking-wider text-muted">Compétitions surveillées</h2>
+        {overview.watched.length ? <div className="overflow-x-auto rounded-2xl border border-line/10"><table className="w-full min-w-[640px] text-sm"><thead className="bg-surface2 text-left text-[11px] uppercase tracking-wider text-muted"><tr><th className="p-3">Compétition</th><th className="p-3">Publication</th><th className="p-3">Dernière vérification</th><th className="p-3">Prête à publier</th></tr></thead><tbody>
+          {overview.watched.map((row) => <tr key={row.id} className="border-t border-line/10"><td className="p-3 font-semibold">{row.name}{!row.enabled && <span className="ml-2 text-xs text-amber-300">non autorisée</span>}</td><td className="p-3 text-xs">{row.visible ? "visible" : "non publiée"}</td><td className="p-3 text-xs text-muted">{row.rollover ? `${when(row.rollover.checkedAt)} · ${row.rollover.ok ? (row.rollover.detail || "ok") : `échec : ${row.rollover.error || ""}`}` : "pas encore vérifiée"}</td><td className="p-3 text-xs">{row.readySeasons.join(", ") || "—"}</td></tr>)}
+        </tbody></table></div> : <p className="text-sm text-muted">Aucune. Coche « Surveiller » sur une compétition autorisée du plan d’import pour que ses nouvelles campagnes soient importées automatiquement (sans publication).</p>}
+      </section>
+
+      <section>
         <h2 className="mb-2 text-sm font-black uppercase tracking-wider text-muted">Sélections suivies</h2>
         <div className="overflow-x-auto rounded-2xl border border-line/10"><table className="w-full min-w-[520px] text-sm"><thead className="bg-surface2 text-left text-[11px] uppercase tracking-wider text-muted"><tr><th className="p-3">Sélection</th><th className="p-3">Catégorie</th><th className="p-3">Dernière synchro</th><th className="p-3">État</th></tr></thead><tbody>
           {overview.nationalTeams.map((row) => <tr key={row.id} className="border-t border-line/10"><td className="p-3 font-semibold">{row.name}</td><td className="p-3">{row.category || "—"} · {row.gender === "women" ? "femmes" : "hommes"}</td><td className="p-3">{when(row.lastSync)} <span className="text-muted">({age(row.ageHours)})</span></td><td className={`p-3 font-bold ${STATUS[row.status]?.[1] || ""}`}>{STATUS[row.status]?.[0] || row.status}</td></tr>)}
