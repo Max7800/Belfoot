@@ -8,10 +8,11 @@ const files = (dir) => fs.readdirSync(dir, { withFileTypes: true }).flatMap((ent
 // Pages et composants vus par les visiteurs (administration et API exclues).
 const PUBLIC_FILES = [...files("app"), ...files("components/football")].map((file) => file.replace(/\\/g, "/")).filter((file) => !file.startsWith("app/admin/") && !file.startsWith("app/api/"));
 // Le texte réservé à l'administrateur (<AdminHint>) n'est pas vu par les visiteurs.
-const visitorText = (source) => source.replace(/<AdminHint>[\s\S]*?<\/AdminHint>/g, "");
+// Les commentaires de code (lignes « // ») ne sont pas affichés non plus.
+const visitorText = (source) => source.replace(/<AdminHint>[\s\S]*?<\/AdminHint>/g, "").replace(/^\s*\/\/.*$/gm, "");
 
 describe("textes publics sans jargon d'administration", () => {
-  const FORBIDDEN = ["migration SQL", "job plafonné", "Aucun titulaire importé", "Aucune performance importée", "Aucun résultat importé", "apparaîtront après la synchronisation", "apparaîtra après sa synchronisation", "à compléter dans l'administration", "Crée-la dans l’administration", "Import en préparation", "pendant l’import partiel", "compétition étrangère synchronisée", "imports de carrière ou manuellement", "après une synchronisation ciblée", "Une nouvelle synchronisation de base enregistrera", "Lance la synchronisation complète"];
+  const FORBIDDEN = ["migration SQL", "job plafonné", "Aucun titulaire importé", "Aucune performance importée", "Aucun résultat importé", "apparaîtront après la synchronisation", "apparaîtra après sa synchronisation", "à compléter dans l'administration", "Crée-la dans l’administration", "Import en préparation", "pendant l’import partiel", "compétition étrangère synchronisée", "imports de carrière ou manuellement", "après une synchronisation ciblée", "Une nouvelle synchronisation de base enregistrera", "Lance la synchronisation complète", "à renseigner", "À renseigner", "Le suivi international est prêt"];
   it("aucune formule technique visible par un visiteur", () => {
     const found = [];
     for (const file of PUBLIC_FILES) {
@@ -35,6 +36,27 @@ describe("textes publics sans jargon d'administration", () => {
       const source = read(file);
       if (source.includes("<AdminHint>")) expect(source, file).toContain('import AdminHint from "@/components/AdminHint";');
     }
+  });
+});
+
+describe("Belges à l'étranger et en-têtes", () => {
+  it("libellés « inconnu » partagés : la carte ignore exactement le pays inconnu affiché", () => {
+    expect(read("lib/belgiansAbroad.js")).toContain('export const UNKNOWN_COUNTRY = "Pays non précisé";');
+    expect(read("components/football/BelgiansWorldMap.js")).toContain("if (!raw || raw === UNKNOWN_COUNTRY) continue;");
+    const page = read("app/belges-a-l-etranger/page.js");
+    expect(page).toContain("|| UNKNOWN_COUNTRY;");
+    expect(page).toContain("league.name || UNKNOWN_COMPETITION;");
+  });
+  it("carte du monde : styles au format react-simple-maps 5 (avant : pays tous noirs)", () => {
+    const map = read("components/football/BelgiansWorldMap.js");
+    expect(map).not.toMatch(/style=\{\{\s*default:/); // ancienne API (v3), ignorée par la v5
+    expect(map).toContain("fill={fillFor(n)}");
+    expect(map).toContain('className={n ? "bf-geo bf-geo-active" : "bf-geo"}');
+    expect(map).toContain(".bf-geo-active:hover,.bf-geo-active:active{fill:#e30613;}");
+    expect(read("package.json")).toMatch(/"react-simple-maps": "\^5\./);
+  });
+  it("en-tête de compétition : pays en français (« Belgium » → « Belgique »)", () => {
+    expect(read("components/football/CompetitionHeader.js")).toContain('european ? "Europe" : frenchNationName(comp.ext?.country), seasonLabel]');
   });
 });
 

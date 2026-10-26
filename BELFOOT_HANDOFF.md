@@ -22,6 +22,8 @@ Audit complet des synchronisations (lecture seule) puis plan validé avec l'util
   - **Page Diables Rouges, mobile** : débordement horizontal de 15 px (4 tuiles « Classement FIFA ») → tuiles 2 × 2 sous 640 px et colonnes `min-w-0` (mesuré 405 → 390 px).
   - **Console** : directive CSP `upgrade-insecure-requests` retirée de la politique Report-Only (ignorée et signalée en erreur sur chaque page ; HSTS impose déjà le HTTPS).
   - **Icône d'onglet** : `app/icon.svg` provisoire (`/favicon.ico` répondait 404) — à remplacer par le logo officiel.
+  - **Carte du monde des Belges** : pays tous noirs, sans couleur ni survol depuis sa création — composant écrit pour l'API de react-simple-maps 3 (`style={{ default, hover, pressed }}`) alors que le projet utilise la v5 (attributs SVG ordinaires) ; couleurs en attributs `fill`/`stroke`, survol et clic en CSS (`.bf-geo`). Vérifié sur un aperçu local branché en lecture seule sur la production (clé publique).
+  - **Libellés « inconnu »** : « À renseigner », « Championnat à renseigner », « Club à renseigner » → « Pays / Championnat / Club non précisé », constantes partagées (`lib/belgiansAbroad.js`) — la carte ignore exactement le pays inconnu affiché ; en-tête de compétition : pays en français (`frenchNationName`, « Belgium » → « Belgique »).
 - Constats laissés à l'administrateur : titre de la page Diables saisi dans l'admin « RED DEVIL'S » (le défaut du code est « Les Diables Rouges ») ; les compétitions ne sont pas cherchables (recherche limitée aux actualités, clubs, joueurs) ; aucune violation CSP relevée en Report-Only, passage en mode bloquant envisageable.
 - Tests : `tests/football/publicPolish.test.js` (10 ; 6 échouent sur l'ancien code).
 
