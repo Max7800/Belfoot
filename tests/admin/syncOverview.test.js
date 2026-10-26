@@ -76,7 +76,7 @@ describe("buildSyncOverview", () => {
     input.seasons.push({ id: "s7", competition_id: "c-pl", label: "2027-2028", import_status: "ready", public_active: false });
     const overview = await buildSyncOverview(input);
     expect(byId(overview.competitions, "c-pl")).toMatchObject({ season: "2026-2027", readySeasons: ["2027-2028"] });
-    expect(overview.alerts).toContainEqual({ level: "action", text: "Pro League : nouvelle saison 2027-2028 prête (déjà consultable), à activer comme saison par défaut depuis le plan d'import." });
+    expect(overview.alerts).toContainEqual({ level: "action", text: "Pro League : nouvelle saison 2027-2028 prête (déjà consultable), à activer comme saison par défaut depuis la page Saisons." });
     expect(overview.alerts.some((alert) => alert.text.includes("2025-2026 prête"))).toBe(false); // archive U21
   });
 
