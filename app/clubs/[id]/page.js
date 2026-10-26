@@ -15,6 +15,7 @@ import DiscussButton from "@/components/forum/DiscussButton";
 import { playerAge } from "@/lib/playerAge";
 import { useAuth } from "@/lib/auth";
 import AdminHint from "@/components/AdminHint";
+import { readAll } from "@/lib/readAll";
 
 const POS = { Goalkeeper: 0, Defender: 1, Midfielder: 2, Attacker: 3 };
 const ROLE_LABELS = { first_team: "Équipe première", reserve: "Réserve", u23: "U23", youth: "Jeunes", women: "Équipe féminine", unknown: "Groupe à préciser" };
@@ -73,8 +74,8 @@ export default function ClubPage() {
     const contextMatch = requestedContext?.match || [...contexts.values()].sort((a, b) => b.latest - a.latest || b.count - a.count)[0]?.match;
     const [clubResult, playerResult, membershipResult, coachResult, linkedResult] = await Promise.all([
       ids.length ? supabase.from("clubs").select("id,name,logo_url").in("id", ids) : Promise.resolve({ data: [] }),
-      supabase.from("players").select("*").eq("club_id", id).order("name"),
-      supabase.from("player_team_seasons").select("*").eq("club_id", id).eq("active", true).order("season_start_year", { ascending: false, nullsFirst: false }),
+      readAll(() => supabase.from("players").select("*").eq("club_id", id).order("name")),
+      readAll(() => supabase.from("player_team_seasons").select("*").eq("club_id", id).eq("active", true).order("season_start_year", { ascending: false, nullsFirst: false })),
       supabase.from("coaches").select("*").eq("club_id", id),
       supabase.from("clubs").select("id,name,logo_url,team_type,parent_club_id").or(`parent_club_id.eq.${id},id.eq.${c.parent_club_id || "00000000-0000-0000-0000-000000000000"}${c.parent_club_id ? `,parent_club_id.eq.${c.parent_club_id}` : ""}`),
     ]);
@@ -84,7 +85,7 @@ export default function ClubPage() {
     let rosterPlayers = playerResult.data || [];
     if (membershipRows.length) {
       const playerIds = [...new Set(membershipRows.map((row) => row.player_id))];
-      const { data: relatedPlayers, error } = await supabase.from("players").select("*").in("id", playerIds).order("name");
+      const { data: relatedPlayers, error } = await readAll(() => supabase.from("players").select("*").in("id", playerIds).order("name"));
       if (!error) rosterPlayers = relatedPlayers || [];
     }
     setMemberships(membershipRows);
@@ -94,7 +95,7 @@ export default function ClubPage() {
       const [competitionResult, seasonResult, allMatchesResult] = await Promise.all([
         supabase.from("competitions").select("*").eq("id", contextMatch.competition_id).maybeSingle(),
         supabase.from("seasons").select("*").eq("id", contextMatch.season_id).maybeSingle(),
-        supabase.from("matches").select("*").eq("competition_id", contextMatch.competition_id).eq("season_id", contextMatch.season_id),
+        readAll(() => supabase.from("matches").select("*").eq("competition_id", contextMatch.competition_id).eq("season_id", contextMatch.season_id)),
       ]);
       const competition = competitionResult.data; const allMatches = allMatchesResult.data || [];
       const type = getCompetitionType(competition, allMatches);

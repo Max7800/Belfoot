@@ -12,6 +12,7 @@ import { matchStatusMeta } from "@/lib/matchStatus";
 import { nationalityBadges } from "@/lib/nationalities";
 import { categoryLabel, isBelgianNationalTeam, isSeniorMenTeam, pickNationalTabs } from "@/lib/nationalCategories";
 import AdminHint from "@/components/AdminHint";
+import { readAll } from "@/lib/readAll";
 
 const COUNTRY_CODES = {
   Belgium: "be", Belgique: "be", France: "fr", Netherlands: "nl", "Pays-Bas": "nl", Germany: "de", Allemagne: "de", England: "gb-eng", Angleterre: "gb-eng", Spain: "es", Espagne: "es", Italy: "it", Italie: "it", Portugal: "pt", Croatia: "hr", Croatie: "hr", Denmark: "dk", Danemark: "dk", Sweden: "se", Suède: "se", Norway: "no", Norvège: "no", Finland: "fi", Finlande: "fi", Switzerland: "ch", Suisse: "ch", Austria: "at", Autriche: "at", Poland: "pl", Pologne: "pl", Ukraine: "ua", Scotland: "gb-sct", Écosse: "gb-sct", Wales: "gb-wls", "Pays de Galles": "gb-wls", Ireland: "ie", Irlande: "ie", Greece: "gr", Grèce: "gr", Turkey: "tr", Turquie: "tr", Romania: "ro", Roumanie: "ro", Hungary: "hu", Hongrie: "hu", Serbia: "rs", Serbie: "rs", Albania: "al", Albanie: "al", Slovakia: "sk", Slovaquie: "sk", Slovenia: "si", Slovénie: "si", Czechia: "cz", Tchéquie: "cz", "Czech Republic": "cz", Luxembourg: "lu", Kazakhstan: "kz", Kosovo: "xk", Morocco: "ma", Maroc: "ma", Brazil: "br", Brésil: "br", Argentina: "ar", Argentine: "ar", Uruguay: "uy", Colombia: "co", Colombie: "co", Mexico: "mx", Mexique: "mx", USA: "us", "États-Unis": "us", Canada: "ca", Japan: "jp", Japon: "jp", Senegal: "sn", Sénégal: "sn", Nigeria: "ng", Algeria: "dz", Algérie: "dz", Egypt: "eg", Égypte: "eg", Australia: "au", Australie: "au", Iran: "ir", Korea: "kr", "Corée du Sud": "kr",
@@ -141,7 +142,7 @@ export default function NationalTeamsPage() {
     (async () => {
       const fields = "id,name,short_name,logo_url,national_category,national_gender,fifa_ranking,national_followed,ext";
       const [nationalResult, legacyResult] = await Promise.all([
-        supabase.from("clubs").select(fields).eq("team_type", "national"),
+        readAll(() => supabase.from("clubs").select(fields).eq("team_type", "national")),
         supabase.from("clubs").select(fields).or("name.ilike.Belgium%,name.ilike.Belgique%,name.ilike.%Diables%,name.ilike.%Flames%"),
       ]);
       const error = nationalResult.error || legacyResult.error;

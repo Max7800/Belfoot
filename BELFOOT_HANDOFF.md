@@ -13,6 +13,14 @@ Audit complet des synchronisations (lecture seule) puis plan validé avec l'util
 7. **Façade commune et panneau central** — **panneau en lecture seule TERMINÉ** (PR #26, merge `8ecc122`, voir « PR 7a ») ; **correctif statistiques TERMINÉ** (PR #27, merge `87869bf`, premiers lots vérifiés en production le 25/10 à 20:00 UTC) ; **façade TERMINÉE** (PR #28, merge `c59fa20`, voir « PR 7b »).
 8. **Garde-fous d'administration — TERMINÉE** (PR #29, merge `d7dd058`, voir « PR 8 ») : modifications de `external_id`, suppressions de compétitions et écritures concurrentes de `site_settings` confirmées et auditées.
 
+### Audit visiteur (26/10) — lectures publiques complètes (PR A)
+
+- **Constat** : Supabase plafonne chaque lecture à 1 000 lignes sans erreur. Pages de compétition : stats de saison lues à 1 000 sur 1 723 (C1) / 1 754 (C4) / 1 180 (Ligue des nations) ; performances par match lues par paquets de 150 matchs, chaque paquet tronqué (jusqu'à 4 100 lignes, Pro League comprise) ; affectations des coupes d'Europe 1 000 sur 2 504 (C1) / 2 375 (C3) / 4 853 (C4) (« 1000 joueurs ») ; portail des compétitions : type deviné sur 1 000 matchs seulement ; fiche club « Belgium » : 1 513 joueurs.
+- **Correctif** : `lib/readAll.js` (pages de 1 000 = plafond Supabase par défaut, ordre stable par `id`, même forme `{ data, error }`, plafond de sécurité 50 000) appliqué aux lectures à risque : page compétition, portail, fiche club, Diables, transferts de compétition, lecteurs par paquets (`lib/publicFootballData.js`), vote de la semaine. Un test parcourt les pages publiques : toute lecture de `player_team_seasons` / `player_season_stats` / `match_player_stats` passe par `readAll` ou est bornée (une entité, une limite).
+- Si le plafond Supabase (« Max rows ») est un jour modifié, ajuster `READ_PAGE_SIZE`.
+- Vérifié sur aperçu local branché en lecture seule sur la production : C1 2 504 joueurs, C3 2 375, C4 4 853 (au lieu de 1 000). Tests : `tests/football/publicReads.test.js` (6 ; 3 échouent sur l'ancien code).
+- Suite de l'audit : règles d'affichage (club actuel ≠ sélection, un seul « ACTUEL », français), nettoyage SQL (club_id → sélection 1 513, pays « World » 1 718, affectations, doublons de transferts, 36 noms mal encodés), enrichissements des pages club et joueur.
+
 ### Titres, aperçus de partage et adresse du site (26/10)
 
 - **Constat** : toutes les pages s'appelaient « Belfoot » (pages rendues côté navigateur, sans métadonnées) ; `robots.txt` et le sitemap annonçaient le domaine factice « a-definir.be » (`siteConfig.domain`), et les canoniques des pages légales aussi ; titres des pages légales en double (« … · Belfoot · Belfoot »).
