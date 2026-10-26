@@ -1,15 +1,11 @@
 import siteConfig from "@/config/site";
+import { absoluteUrl, siteOrigin } from "@/lib/siteUrl";
 
-const BASE = `https://${siteConfig.domain}`;
-
+// Indexation fermée (siteConfig.seo.indexable) : l'exploration reste permise
+// pour que les robots lisent la consigne « noindex » des pages ; aucun sitemap
+// n'est annoncé. Ouverte : sitemap et hôte annoncés.
 export default function robots() {
-  return {
-    rules: {
-      userAgent: "*",
-      allow: "/",
-      disallow: ["/admin", "/api", "/compte", "/reset", "/login", "/auth"],
-    },
-    sitemap: `${BASE}/sitemap.xml`,
-    host: BASE,
-  };
+  const rules = { userAgent: "*", allow: "/", disallow: ["/admin", "/api", "/compte", "/reset", "/login", "/auth"] };
+  if (!siteConfig.seo?.indexable) return { rules };
+  return { rules, sitemap: absoluteUrl("/sitemap.xml"), host: siteOrigin() };
 }

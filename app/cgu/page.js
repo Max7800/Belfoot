@@ -1,7 +1,7 @@
 import { buildMetadata } from "@/lib/seo";
 
 // Base rédigée à faire relire (je ne suis pas juriste). [À COMPLÉTER] = juridiction.
-export const metadata = buildMetadata({ title: "Conditions d'utilisation · Belfoot", description: "Conditions générales d'utilisation de Belfoot.", path: "/cgu" });
+export const metadata = buildMetadata({ title: "Conditions d'utilisation", description: "Conditions générales d'utilisation de Belfoot.", path: "/cgu" });
 
 export default function CguPage() {
   return (

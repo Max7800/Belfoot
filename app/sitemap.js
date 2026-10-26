@@ -1,9 +1,10 @@
 import siteConfig from "@/config/site";
 import { supabase } from "@/lib/supabaseClient";
 import { competitionPath } from "@/lib/competitionRoutes";
+import { absoluteUrl } from "@/lib/siteUrl";
 
-const BASE = `https://${siteConfig.domain}`;
-const abs = (p) => `${BASE}${p}`;
+// Adresses absolues depuis la source unique (lib/siteUrl.js).
+const abs = (p) => absoluteUrl(p);
 
 // Sitemap dynamique : se remplit tout seul avec le contenu publié + les entités.
 // Tolérant : si une table manque ou est vide, on garde au moins les routes statiques.

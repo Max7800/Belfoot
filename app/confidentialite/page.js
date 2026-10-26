@@ -1,7 +1,7 @@
 import { buildMetadata } from "@/lib/seo";
 
 // Base RGPD à faire relire (je ne suis pas juriste). [À COMPLÉTER] = éditeur, contact, âge minimum.
-export const metadata = buildMetadata({ title: "Politique de confidentialité · Belfoot", description: "Comment Belfoot traite vos données personnelles (RGPD).", path: "/confidentialite" });
+export const metadata = buildMetadata({ title: "Politique de confidentialité", description: "Comment Belfoot traite vos données personnelles (RGPD).", path: "/confidentialite" });
 
 export default function ConfidentialitePage() {
   return (
