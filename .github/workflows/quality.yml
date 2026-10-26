@@ -17,10 +17,11 @@ jobs:
       NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
       NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder
     steps:
+      # v7 : actions sur Node 24 (Node 20 déprécié sur les runners GitHub, avertissement du 25/10/2026).
       - name: Recuperer le depot
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Installer Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           # Vitest 5 exige Node ^22.12 (ou ^24) ; Next 16 accepte >=20.9.
           node-version: 22
