@@ -13,6 +13,17 @@ Audit complet des synchronisations (lecture seule) puis plan validé avec l'util
 7. **Façade commune et panneau central** — **panneau en lecture seule TERMINÉ** (PR #26, merge `8ecc122`, voir « PR 7a ») ; **correctif statistiques TERMINÉ** (PR #27, merge `87869bf`, premiers lots vérifiés en production le 25/10 à 20:00 UTC) ; **façade TERMINÉE** (PR #28, merge `c59fa20`, voir « PR 7b »).
 8. **Garde-fous d'administration — TERMINÉE** (PR #29, merge `d7dd058`, voir « PR 8 ») : modifications de `external_id`, suppressions de compétitions et écritures concurrentes de `site_settings` confirmées et auditées.
 
+### Pages Synchronisation réorganisées (26/10)
+
+- L'ancienne page « Plan d'import » empilait plan, audit des doublons, entretien des données et activation des saisons (outil de reliaison introuvable sous 70 compétitions dépliées). Elle devient trois pages du menu Synchronisation, sans changement de comportement :
+  - **Plan d'import** (`ImportPlanPanel`) : saisons et budget, compétitions et sélections autorisées, ordre quotidien ;
+  - **Saisons (activation)** (`SeasonActivationPanel`, clé `season-activation`) : contrôles et activation publique ;
+  - **Entretien des données** (`DataMaintenancePanel`, clé `data-maintenance`) : reliaison sans appel API, audit des doublons, inventaire et archivage d'une saison.
+- Affichage (préférences de ce navigateur, `lib/adminViewPrefs.js`, jamais écrites dans le plan) : catégories et pays repliables (état mémorisé, Belgique ouverte par défaut), recherche sans accents, « Autorisées seulement », « À traiter seulement », bouton **masquer** sur chaque compétition / sélection (partagé entre Plan et Saisons) avec « Afficher les masquées (N) » ; les masquées encore autorisées sont signalées (elles restent importées).
+- Corrigés : compétitions chargées sans `ext` (la catégorie « Étranger » rangeait tout sous « Autre pays ») ; un changement de saison dans l'archivage (choix ou filtre) efface désormais rapport et simulation, pour qu'un archivage ne vise jamais une autre saison que celle analysée.
+- Textes « à activer depuis le plan d'import » → « depuis la page Saisons » (vue d'ensemble, renouvellement de campagne).
+- Tests : `tests/admin/importPlanSplit.test.js` (13 : chaque action une seule fois et à sa place, confirmations conservées, JSX valide, préférences robustes) ; mutations 12/12.
+
 ### PR 8 — garde-fous d'administration (25/10)
 
 **Écritures concurrentes de `site_settings`** (`lib/siteSettings.js`)

@@ -37,10 +37,12 @@ export const adminSections = [
   ] },
   { label: "Synchronisation", icon: "refresh", panels: [
     { key: "sync-overview", label: "Vue d'ensemble (lecture seule)" },
-    { key: "import-plan", label: "Plan d'import 2026" },
+    { key: "import-plan", label: "Plan d'import" },
+    { key: "season-activation", label: "Saisons (activation)" },
     { key: "jobs", label: "Jobs et historique" },
     { key: "live-strategy", label: "Stratégie du direct" },
     { key: "providers", label: "Sources de données" },
+    { key: "data-maintenance", label: "Entretien des données" },
     { key: "system-status", label: "Préparation 2026" },
   ] },
   { label: "Apparence du site", icon: "palette", panels: [

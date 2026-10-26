@@ -57,7 +57,7 @@ const campaignRolloverJob = {
       const { error: readyError } = await db.from("seasons").update({ import_status: "ready" }).eq("id", season.id).eq("public_active", false);
       if (readyError) throw readyError;
     }
-    return `${competition.name} : campagne ${detection.label} importée et PRÊTE — à activer depuis le plan d'import. ${imported}`;
+    return `${competition.name} : campagne ${detection.label} importée et PRÊTE — à activer depuis la page Saisons. ${imported}`;
   },
 };
 
