@@ -1,5 +1,11 @@
 // Upsert de données externes SANS écraser l'éditorial ni une saisie manuelle (locked).
 // `db` = client Supabase service-role (côté serveur uniquement).
+import { frenchTeamName } from "@/lib/frenchNations";
+
+// Sélections nommées en français à l'écriture (« Spain U21 » → « Espagne U21 »),
+// quel que soit le job : l'API renvoie les noms anglais à chaque passage et
+// écrasait le nom français posé par syncNationalTeam.
+export const storedClubName = (table, name) => (table === "clubs" && typeof name === "string" ? frenchTeamName(name) : name);
 function chunks(values, size) {
   const out = [];
   for (let index = 0; index < values.length; index += size) out.push(values.slice(index, index + size));
@@ -90,6 +96,7 @@ export async function upsertExternal(db, table, source, rows, ownedFields = [], 
     if (!existing || extMode === "replace") patch.ext = incomingExt;
     else if (extMode === "merge") patch.ext = mergeExt(existing.ext, incomingExt);
     for (const f of ownedFields) if (r[f] !== undefined) patch[f] = r[f];
+    if (patch.name !== undefined) patch.name = storedClubName(table, patch.name);
     if (existing) updates.push({ id: existing.id, externalId: r.external_id, patch });
     else inserts.push(patch);
   }

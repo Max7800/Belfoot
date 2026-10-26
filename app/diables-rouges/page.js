@@ -7,7 +7,7 @@ import { useNationalTeamsConfig } from "@/lib/nationalTeams";
 import { useRankings } from "@/lib/rankings";
 import DiableRatings from "@/components/football/DiableRatings";
 import NationalGroupStandings from "@/components/football/NationalGroupStandings";
-import { groupByPosition } from "@/lib/positions";
+import { groupByPosition, positionLabel } from "@/lib/positions";
 import { matchStatusMeta } from "@/lib/matchStatus";
 import { nationalityBadges } from "@/lib/nationalities";
 import { categoryLabel, isBelgianNationalTeam, isSeniorMenTeam, pickNationalTabs } from "@/lib/nationalCategories";
@@ -107,7 +107,7 @@ function SquadPreview({ rows, accent, className = "" }) {
     <header className="flex items-center justify-between border-b border-line/10 bg-white/[0.025] px-3 py-2.5"><span className="flex items-center gap-2"><span className="h-4 w-1 rounded-full" style={{ backgroundColor: accent }} /><b className="text-[10px] uppercase tracking-wider text-slate-300">{group.label}</b></span><span className="text-[10px] font-bold text-muted">{group.rows.length}</span></header>
     <div className="divide-y divide-line/10">{group.rows.slice(0, 3).map((row) => <Link key={row.id} href={`/players/${row.player.id}`} className="group flex min-w-0 items-center gap-2.5 px-3 py-2.5 transition hover:bg-white/[0.025]">
       <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full border border-white/10 bg-surface2">{row.player.photo_url ? <img src={row.player.photo_url} alt="" className="h-full w-full object-cover object-top" /> : <Users className="m-2.5 h-5 w-5 text-muted" />}</div>
-      <span className="min-w-0 flex-1"><b className="block truncate text-xs group-hover:text-amber-300">{row.player.name}</b><span className="block truncate text-[10px] text-muted">{row.club?.name || row.position || row.player.position || "Joueur"}</span></span><ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-600 transition group-hover:translate-x-0.5 group-hover:text-amber-300" />
+      <span className="min-w-0 flex-1"><b className="block truncate text-xs group-hover:text-amber-300">{row.player.name}</b><span className="block truncate text-[10px] text-muted">{row.club?.name || positionLabel(row.position || row.player.position) || "Joueur"}</span></span><ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-600 transition group-hover:translate-x-0.5 group-hover:text-amber-300" />
     </Link>)}</div>
   </section>)}</div>;
 }

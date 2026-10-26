@@ -1,6 +1,7 @@
 "use client";
 import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 import MatchRow from "./MatchRow";
+import { phaseLabel } from "@/lib/phaseLabels";
 
 function toTime(value) {
   const time = value ? new Date(value).getTime() : NaN;
@@ -22,7 +23,7 @@ export default function SeasonCalendar({ matches = [], clubs = {}, selectedRound
   const grouped = new Map();
   for (const match of matches) {
     const key = match.round_number != null ? String(match.round_number) : (match.round_raw || match.phase || "Tour");
-    const group = grouped.get(key) || { key, number: match.round_number, label: match.round_number != null ? `${roundWord} ${match.round_number}` : (match.round_raw || match.phase || "Tour"), matches: [] };
+    const group = grouped.get(key) || { key, number: match.round_number, label: match.round_number != null ? `${roundWord} ${match.round_number}` : phaseLabel(match.round_raw || match.phase || "Tour"), matches: [] };
     group.matches.push(match); grouped.set(key, group);
   }
   const groups = [...grouped.values()].sort((a, b) => {
