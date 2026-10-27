@@ -21,13 +21,13 @@ function StatRow({ label, field, unit, home, away }) {
   return (
     <div className="py-2.5">
       <div className="mb-1.5 grid grid-cols-[3.25rem_1fr_3.25rem] items-center gap-2 text-xs">
-        <b className={homeValue != null && homeValue > awayValue ? "text-white" : "text-muted"}>{display(homeValue, unit)}</b>
+        <b className={homeValue != null && homeValue > awayValue ? "text-accent" : "text-muted"}>{display(homeValue, unit)}</b>
         <span className="text-center text-[11px] font-semibold text-muted">{label}</span>
-        <b className={`text-right ${awayValue != null && awayValue > homeValue ? "text-white" : "text-muted"}`}>{display(awayValue, unit)}</b>
+        <b className={`text-right ${awayValue != null && awayValue > homeValue ? "text-amber-300" : "text-muted"}`}>{display(awayValue, unit)}</b>
       </div>
       <div className="grid grid-cols-2 gap-1">
-        <div className="flex h-1.5 justify-end overflow-hidden rounded-l-full bg-white/[0.05]"><span className="h-full rounded-full bg-red-500" style={{ width: `${Math.min(100, homeWidth)}%` }} /></div>
-        <div className="h-1.5 overflow-hidden rounded-r-full bg-white/[0.05]"><span className="block h-full rounded-full bg-sky-400" style={{ width: `${Math.min(100, awayWidth)}%` }} /></div>
+        <div className="flex h-1.5 justify-end overflow-hidden rounded-l-full bg-white/[0.05]"><span className="h-full rounded-full bg-accent" style={{ width: `${Math.min(100, homeWidth)}%` }} /></div>
+        <div className="h-1.5 overflow-hidden rounded-r-full bg-white/[0.05]"><span className="block h-full rounded-full bg-amber-400" style={{ width: `${Math.min(100, awayWidth)}%` }} /></div>
       </div>
     </div>
   );

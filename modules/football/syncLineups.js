@@ -182,7 +182,11 @@ export async function syncLineups(db, competition, ctx = {}) {
     for (const row of lineups.flatMap((team) => team.players || [])) merged.set(`${row.team_ext}:${row.player_ext}`, row);
     for (const row of stats) {
       const key = `${row.team_ext}:${row.player_ext}`;
-      merged.set(key, { ...(merged.get(key) || {}), ...row });
+      const lineup = merged.get(key);
+      // La composition officielle fait foi pour titulaire / remplaçant et la
+      // place sur le terrain : les statistiques joueurs marquent parfois tout
+      // l’effectif « non remplaçant » (constat du 27/10/2026).
+      merged.set(key, lineup ? { ...lineup, ...row, starter: lineup.starter, substitute: lineup.substitute, grid: lineup.grid ?? row.grid } : row);
     }
     const { data: lockedPlayers } = await db.from("match_player_stats").select("player_external_id").eq("match_id", match.id).eq("locked", true);
     const lockedPlayerIds = new Set((lockedPlayers || []).map((row) => row.player_external_id));
