@@ -36,7 +36,7 @@ import AdminHint from "@/components/AdminHint";
 import { readAll } from "@/lib/readAll";
 import { positionLabel } from "@/lib/positions";
 import { phaseLabel } from "@/lib/phaseLabels";
-import { transferTypeLabel } from "@/lib/transferLabels";
+import { dedupeTransfers, transferTypeLabel } from "@/lib/transferLabels";
 
 const POS = { Goalkeeper: 0, Defender: 1, Midfielder: 2, Attacker: 3 };
 const VARIANTS = {
@@ -184,7 +184,7 @@ export default function CompetitionPage() {
       ? await supabase.from("player_transfers").select("id,player_id,player_name,from_club_id,to_club_id,from_club_name,to_club_name,transfer_date,transfer_type").eq("season_start_year", Number(activeYear)).order("transfer_date", { ascending: false }).limit(100)
       : { data: [] };
     const competitionClubIds = new Set(clubIds);
-    const transferRows = transferResult.error ? [] : (transferResult.data || []).filter((transfer) => competitionClubIds.has(transfer.from_club_id) || competitionClubIds.has(transfer.to_club_id)).slice(0, 5);
+    const transferRows = transferResult.error ? [] : dedupeTransfers((transferResult.data || []).filter((transfer) => competitionClubIds.has(transfer.from_club_id) || competitionClubIds.has(transfer.to_club_id))).slice(0, 5);
     if (!alive) return;
     setMatches(seasonMatches); setClubsMap(clubMap); setPlayers(playerRows); setPlayerStats(statsRows); setPlayerMemberships(membershipRows); setTransfers(transferRows); setMatchPlayerStats(exactMatchStats); setSeasonLoading(false);
   })().catch((loadError) => { if (alive) { setSeasonLoading(false); setDataError(loadError.message || String(loadError)); } }); return () => { alive = false; }; }, [comp?.id, activeSeason, seasons.length]);

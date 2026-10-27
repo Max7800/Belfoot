@@ -2,11 +2,23 @@ import { getProvider } from "./providers";
 import { upsertExternal, ensureCompetitions, CompetitionCollisionError, storedClubName } from "./sync";
 import { squadRoleForClub, upsertPlayerMembership } from "./playerMemberships";
 import { isNationalSelectionClub } from "@/lib/nationalities";
+import { isNationName } from "@/lib/frenchNations";
 import { classifyNationalTeams } from "./nationalClassification";
 import { isLeaseLost } from "@/lib/runLease";
 
+// Sélection : indicateur de l'API, ou nom exact d'un pays (« Japan », « Brazil
+// U17 ») — l'historique de carrière ne fournit pas toujours l'indicateur, et
+// 55 sélections avaient été créées comme clubs (constat du 27/10/2026).
+const AGE = /\bU\s?(\d{2})\b/i;
+const isNationalReference = (team) => team?.national === true || isNationName(team?.name);
+const nationalCategory = (team) => {
+  if (!isNationalReference(team)) return null;
+  const age = AGE.exec(team.name || "")?.[1];
+  return age ? `u${age}` : "senior";
+};
+
 function inferredTeamType(name, national = false) {
-  if (national) return "national";
+  if (national || isNationName(name)) return "national";
   const value = String(name || "").toLowerCase();
   if (/\b(u23|jong|futures|nxt|reserve|réserve)\b/.test(value)) return "u23";
   if (/\b(u\d{2}|youth|academy|jeunes?)\b/.test(value)) return "youth";
@@ -68,6 +80,7 @@ export async function syncPlayerCareers(db, competition, ctx = {}) {
         name: row.team.name,
         logo_url: row.team.logo_url,
         team_type: inferredTeamType(row.team.name, row.team.national),
+        national_category: nationalCategory(row.team),
         ext: row.ext || {},
       })));
       // Une sélection déjà présente mais typée comme un club est reclassée.
@@ -102,7 +115,7 @@ export async function syncPlayerCareers(db, competition, ctx = {}) {
           name: row.team.name,
           logo_url: row.team.logo_url,
           team_type: inferredTeamType(row.team.name, row.team.national),
-          national_category: row.team.national ? (/\bU\s?(\d{2})\b/i.exec(row.team.name)?.[1] ? `u${/\bU\s?(\d{2})\b/i.exec(row.team.name)[1]}` : "senior") : null,
+          national_category: nationalCategory(row.team),
           ext: { country: row.team.country, national: row.team.national, imported_for: "player-career" },
         })));
         await classifyNationalTeams(db, competition.provider, seasonStats.map((row) => row.team));

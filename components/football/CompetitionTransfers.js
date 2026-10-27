@@ -5,6 +5,7 @@ import { ArrowRight } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { seasonYear } from "@/modules/football/season";
 import { readAll } from "@/lib/readAll";
+import { dedupeTransfers } from "@/lib/transferLabels";
 
 // API-Football range le montant dans "type" : "€ 20.5M", "€ 500K", "Loan", "Free", "N/A"…
 function parseFee(type) {
@@ -58,7 +59,7 @@ export default function CompetitionTransfers({ competition }) {
         .eq("season_start_year", year)
         .or(`from_club_id.in.(${idList}),to_club_id.in.(${idList})`)
         .order("transfer_date", { ascending: false }));
-      const list = data || [];
+      const list = dedupeTransfers(data || []);
       setRows(list);
       const { data: clubRows } = await supabase.from("clubs").select("id,name").in("id", [...ids]).order("name");
       setClubs(clubRows || []);
