@@ -69,7 +69,9 @@ describe("page de match", () => {
     expect(read("components/football/MatchTeamStats.js")).toContain('text-sm text-muted">{empty}</div>;');
   });
   it("match à venir : la date n'est plus affichée deux fois", () => {
-    expect(page).toContain('{m.kickoff && status.key !== "scheduled" && <div className="mt-1 max-w-28 text-[10px] text-muted">');
+    // Date et heure une seule fois, au-dessus du score ; la pastille de statut dit « À venir ».
+    expect(page).toContain('{status.key === "scheduled" ? "À venir" : status.label}');
+    expect(page.split('toLocaleString("fr-BE"')).toHaveLength(2);
   });
 });
 

@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { Radio, RefreshCw } from "lucide-react";
+import { BarChart3, Clock3, LayoutList, MapPin, Radio, RefreshCw, Shirt, UserRound, Users } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { useLabels } from "@/lib/labels";
 import MatchLineups from "@/components/football/MatchLineups";
@@ -12,29 +12,42 @@ import DiableRatings from "@/components/football/DiableRatings";
 import { isMatchLive, matchStatusMeta } from "@/lib/matchStatus";
 import { competitionPath } from "@/lib/competitionRoutes";
 import DiscussButton from "@/components/forum/DiscussButton";
+import { eventDetailLabel } from "@/lib/matchLineup";
+import { phaseLabel } from "@/lib/phaseLabels";
+import { repairMojibake } from "@/lib/mojibake";
 
 const eventIcon = (type) => ({ goal: "⚽", yellow: "🟨", red: "🟥", sub: "🔁" }[type] || "•");
 
-function EventList({ events, players, clubs, empty, limit }) {
+// Frise des faits du match (esprit widget API-Sports) : minute au centre,
+// faits de l’équipe à domicile à gauche, de l’extérieur à droite.
+function EventList({ events, players, clubs, homeId, empty, limit }) {
   const shown = limit ? events.slice(-limit).reverse() : events;
   if (!shown.length) return <p className="rounded-2xl border border-dashed border-line/15 p-5 text-center text-sm text-muted">{empty}</p>;
   return <div className="divide-y divide-line/10 overflow-hidden rounded-2xl border border-line/10 bg-surface/45">{shown.map((event, index) => {
-    const name = event.player_name || players[event.player_id]?.name || "—";
+    const name = repairMojibake(event.player_name || players[event.player_id]?.name) || "—";
+    const assist = repairMojibake(event.assist_name);
+    const detail = eventDetailLabel(event.detail);
     let line = name;
     let sub = null;
     if (event.type === "goal") {
-      if (event.detail && !/normal/i.test(event.detail)) line += ` (${event.detail})`;
-      if (event.assist_name) sub = `Passe : ${event.assist_name}`;
-    } else if ((event.type === "yellow" || event.type === "red") && event.detail) sub = event.detail;
+      if (detail) line += ` (${detail})`;
+      if (assist) sub = `Passe : ${assist}`;
+    } else if (event.type === "yellow" || event.type === "red") sub = detail;
     else if (event.type === "sub") {
       line = `${name} ↓`;
-      if (event.assist_name) sub = `${event.assist_name} ↑`;
+      if (assist) sub = `${assist} ↑`;
     }
-    return <div key={event.id || index} className="flex items-start gap-2 px-3 py-2 text-sm">
-      <span className="w-8 shrink-0 text-right font-semibold tabular-nums text-muted">{event.minute != null ? `${event.minute}'` : ""}</span>
-      <span className="shrink-0">{eventIcon(event.type)}</span>
-      <span className="min-w-0 flex-1"><span className="font-medium">{line}</span>{sub && <span className="block text-xs text-muted">{sub}</span>}</span>
-      {clubs[event.club_id]?.logo_url && <img src={clubs[event.club_id].logo_url} className="h-4 w-4 shrink-0 object-contain" alt="" />}
+    const home = Boolean(event.club_id) && event.club_id === homeId;
+    const minute = event.minute != null ? `${event.minute}${event.extra_minute ? `+${event.extra_minute}` : ""}’` : "";
+    const fact = <span className={`flex min-w-0 items-start gap-2 ${home ? "flex-row-reverse text-right" : ""}`}>
+      <span className="shrink-0">{/missed penalty/i.test(event.detail || "") ? "❌" : eventIcon(event.type)}</span>
+      <span className="min-w-0"><span className="block truncate font-medium">{line}</span>{sub && <span className="block truncate text-xs text-muted">{sub}</span>}</span>
+      {clubs[event.club_id]?.logo_url && <img src={clubs[event.club_id].logo_url} className="mt-0.5 h-4 w-4 shrink-0 object-contain sm:hidden" alt="" />}
+    </span>;
+    return <div key={event.id || index} className="grid grid-cols-[1fr_3rem_1fr] items-center gap-2 px-3 py-2 text-sm">
+      <div className="min-w-0">{home && fact}</div>
+      <span className="justify-self-center rounded-full bg-white/[0.06] px-2 py-0.5 text-[11px] font-bold tabular-nums text-muted">{minute}</span>
+      <div className="min-w-0">{!home && fact}</div>
     </div>;
   })}</div>;
 }
@@ -120,9 +133,13 @@ export default function MatchPage() {
   const away = clubs[m.away_club_id] || {};
   const status = matchStatusMeta(m);
   const tabs = [
-    ["summary", "Résumé"], ["events", "Événements", events.length], ["lineups", "Compos", lineups.length],
-    ["stats", "Stats", teamStats.length], ["players", "Joueurs", matchPlayerStats.length],
+    ["summary", "Résumé", 0, LayoutList], ["events", "Événements", events.length, Clock3], ["lineups", "Compos", lineups.length, Shirt],
+    ["stats", "Stats", teamStats.length, BarChart3], ["players", "Joueurs", matchPlayerStats.length, Users],
   ];
+  const kickoffLabel = m.kickoff ? new Date(m.kickoff).toLocaleString("fr-BE", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }).replace(" ", " · ") : null;
+  const roundLabel = m.round_raw ? phaseLabel(m.round_raw) : m.matchday ? `Journée ${m.matchday}` : null;
+  const venue = [m.ext?.venue_name, m.ext?.venue_city].filter(Boolean).join(", ") || null;
+  const referee = m.ext?.referee ? repairMojibake(String(m.ext.referee).split(",")[0]) : null;
   // Textes publics selon l'état du match (jamais de jargon d'administration).
   const emptyEvents = status.key === "scheduled" ? "Les faits du match apparaîtront pendant la rencontre."
     : status.live ? "Aucun fait de match pour l’instant."
@@ -132,24 +149,25 @@ export default function MatchPage() {
   return <div className="mx-auto max-w-5xl">
     <div className="mb-2 flex items-center justify-center gap-2 text-xs uppercase tracking-wider text-muted">
       {comp ? <Link href={competitionPath(comp)} className="inline-flex items-center gap-1.5 rounded-full border border-line/15 bg-surface px-3 py-1 font-bold text-content transition hover:border-accent/40 hover:text-accent">{comp.logo_url && <img src={comp.logo_url} className="h-4 w-4 object-contain" alt="" />}{comp.name}<span aria-hidden>→</span></Link> : null}
-      {m.matchday ? <span>Journée {m.matchday}</span> : null}
+      {roundLabel ? <span className="font-bold">{roundLabel}</span> : null}
     </div>
     <div className={`mb-3 flex items-center justify-center gap-3 rounded-3xl border bg-gradient-to-br from-surface via-surface2 to-bg px-3 py-6 shadow-[0_24px_70px_-42px_rgba(0,0,0,0.9)] sm:gap-6 sm:px-6 sm:py-8 ${status.live ? "border-red-500/30" : "border-line/10"}`}>
       {m.home_club_id ? <Link href={`/clubs/${m.home_club_id}`} className="flex min-w-0 flex-1 flex-col items-center gap-2 transition hover:opacity-80">{home.logo_url && <img src={home.logo_url} className="h-14 w-14 object-contain sm:h-20 sm:w-20" alt="" />}<span className="text-center text-sm font-bold hover:text-accent sm:text-base">{home.name}</span></Link> : <div className="flex min-w-0 flex-1 flex-col items-center gap-2">{home.logo_url && <img src={home.logo_url} className="h-14 w-14 object-contain sm:h-20 sm:w-20" alt="" />}<span className="text-center text-sm font-bold sm:text-base">{home.name}</span></div>}
-      <div className="shrink-0 text-center"><div className="text-3xl font-black tabular-nums sm:text-4xl">{m.home_score ?? "-"} : {m.away_score ?? "-"}</div><div className={`mt-1 text-xs font-bold ${status.live ? "text-red-400" : "text-muted"}`}>{status.live && <span className="mr-1 animate-pulse">●</span>}{status.label}</div>{m.kickoff && status.key !== "scheduled" && <div className="mt-1 max-w-28 text-[10px] text-muted">{new Date(m.kickoff).toLocaleString("fr-BE", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</div>}</div>
+      <div className="shrink-0 text-center">{kickoffLabel && <div className="mb-1 text-[11px] font-semibold tabular-nums text-muted">{kickoffLabel}</div>}<div className="text-3xl font-black tabular-nums sm:text-5xl">{status.key === "scheduled" ? "– : –" : `${m.home_score ?? "-"} : ${m.away_score ?? "-"}`}</div><div className={`mt-2 inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase tracking-[0.14em] ${status.live ? "bg-red-500/15 text-red-400" : status.key === "finished" ? "bg-accent/15 text-accent" : "bg-white/[0.06] text-muted"}`}>{status.live && <span className="animate-pulse">●</span>}{status.key === "scheduled" ? "À venir" : status.label}</div></div>
       {m.away_club_id ? <Link href={`/clubs/${m.away_club_id}`} className="flex min-w-0 flex-1 flex-col items-center gap-2 transition hover:opacity-80">{away.logo_url && <img src={away.logo_url} className="h-14 w-14 object-contain sm:h-20 sm:w-20" alt="" />}<span className="text-center text-sm font-bold hover:text-accent sm:text-base">{away.name}</span></Link> : <div className="flex min-w-0 flex-1 flex-col items-center gap-2">{away.logo_url && <img src={away.logo_url} className="h-14 w-14 object-contain sm:h-20 sm:w-20" alt="" />}<span className="text-center text-sm font-bold sm:text-base">{away.name}</span></div>}
     </div>
 
+    {(venue || referee) && <div className="mb-2 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-[11px] text-muted">{venue && <span className="inline-flex items-center gap-1"><MapPin size={12} />{venue}</span>}{referee && <span className="inline-flex items-center gap-1"><UserRound size={12} />{referee}</span>}</div>}
     <div className="mb-5 flex flex-wrap items-center justify-center gap-2 text-[10px] text-muted"><span className={`h-1.5 w-1.5 rounded-full ${realtime === "connected" ? "bg-green-400" : realtime === "fallback" ? "bg-amber-400" : "bg-muted"}`} />{realtime === "connected" ? "Direct connecté" : realtime === "fallback" ? "Actualisation automatique" : "Connexion…"}{lastUpdated && <span>· {lastUpdated.toLocaleTimeString("fr-BE", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</span>}<button type="button" onClick={() => { refreshScore(); refreshEvents(); }} aria-label="Actualiser le match" className="rounded p-1 hover:bg-surface"><RefreshCw size={11} /></button><DiscussButton refType="match" refId={id} title={`Discussion : ${home.name || "?"} - ${away.name || "?"}`} label="Discuter" /></div>
 
-    <nav className="mb-5 flex gap-1 overflow-x-auto rounded-2xl border border-line/10 bg-surface/70 p-1" aria-label="Contenu du match">{tabs.map(([key, label, count]) => <button key={key} type="button" onClick={() => setActiveTab(key)} className={`flex shrink-0 items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold transition sm:flex-1 sm:justify-center ${activeTab === key ? "bg-white text-slate-950" : "text-muted hover:bg-white/[0.05] hover:text-white"}`}>{label}{count > 0 && <span className={`rounded-full px-1.5 py-0.5 text-[9px] ${activeTab === key ? "bg-slate-900/10" : "bg-white/[0.07]"}`}>{count}</span>}</button>)}</nav>
+    <nav className="mb-5 flex overflow-x-auto rounded-2xl border border-line/10 bg-surface/70" aria-label="Contenu du match">{tabs.map(([key, label, count, Icon]) => <button key={key} type="button" onClick={() => setActiveTab(key)} aria-current={activeTab === key ? "page" : undefined} className={`flex shrink-0 items-center gap-1.5 border-b-2 px-4 py-3 text-[11px] font-black uppercase tracking-[0.12em] transition sm:flex-1 sm:justify-center ${activeTab === key ? "border-accent bg-accent/10 text-accent" : "border-transparent text-muted hover:bg-white/[0.04] hover:text-content"}`}><Icon size={14} aria-hidden />{label}{count > 0 && <span className="rounded-full bg-white/[0.07] px-1.5 py-0.5 text-[9px] tracking-normal">{count}</span>}</button>)}</nav>
 
     {activeTab === "summary" && <div className="grid gap-5 lg:grid-cols-[1.1fr_.9fr]">
       <section><h2 className="mb-3 text-sm font-black uppercase tracking-wider">Le match en chiffres</h2><MatchTeamStats homeClub={home} awayClub={away} rows={teamStats} compact empty={emptyTeamStats} /></section>
-      <section><h2 className="mb-3 flex items-center gap-2 text-sm font-black uppercase tracking-wider">{status.live && <Radio size={14} className="text-red-400" />}Temps forts</h2><EventList events={events} players={players} clubs={clubs} empty={emptyEvents} limit={6} /></section>
+      <section><h2 className="mb-3 flex items-center gap-2 text-sm font-black uppercase tracking-wider">{status.live && <Radio size={14} className="text-red-400" />}Temps forts</h2><EventList events={events} players={players} clubs={clubs} homeId={m.home_club_id} empty={emptyEvents} limit={6} /></section>
       {diableSquad.length > 0 && <section className="lg:col-span-2"><DiableRatings match={m} squad={diableSquad} title="Notes des Diables de ce match" /></section>}
     </div>}
-    {activeTab === "events" && <section><h2 className="mb-3 flex items-center gap-2 text-sm font-black uppercase tracking-wider">{status.live && <Radio size={14} className="text-red-400" />}{L("match.events", "Faits du match")}</h2><EventList events={events} players={players} clubs={clubs} empty={emptyEvents} /></section>}
+    {activeTab === "events" && <section><h2 className="mb-3 flex items-center gap-2 text-sm font-black uppercase tracking-wider">{status.live && <Radio size={14} className="text-red-400" />}{L("match.events", "Faits du match")}</h2><EventList events={events} players={players} clubs={clubs} homeId={m.home_club_id} empty={emptyEvents} /></section>}
     {activeTab === "lineups" && <section><div className="mb-3"><h2 className="text-lg font-black">{L("match.lineups", "Compositions")}</h2><p className="text-xs text-muted">{L("match.lineups.subtitle", "Titulaires, formations et remplaçants")}</p></div><MatchLineups homeClub={home} awayClub={away} lineups={lineups} rows={matchPlayerStats} labels={{ starters: L("match.starters", "Titulaires"), bench: L("match.bench", "Remplaçants"), formationEmpty: L("match.formation.empty", "Formation non renseignée"), startersEmpty: L("match.starters.empty", status.key === "scheduled" ? "Composition pas encore annoncée." : "Composition non disponible."), home: L("match.home", "Domicile"), away: L("match.away", "Extérieur") }} /></section>}
     {activeTab === "stats" && <section><h2 className="mb-3 text-lg font-black">Statistiques collectives</h2><MatchTeamStats homeClub={home} awayClub={away} rows={teamStats} empty={emptyTeamStats} /></section>}
     {activeTab === "players" && <section><div className="mb-3"><h2 className="text-lg font-black">Performances des joueurs</h2><p className="text-xs text-muted">Minutes, note et actions décisives enregistrées pour ce match.</p></div><MatchPlayerRatings homeClub={home} awayClub={away} rows={matchPlayerStats} /></section>}
