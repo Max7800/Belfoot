@@ -2,7 +2,8 @@
 // 1 appel pour lire les saisons de la ligue, puis, seulement si une nouvelle
 // campagne « en cours » n'est pas encore importée (ou importée sans aucun
 // match) : autorisation dans le plan pour CETTE compétition, import complet
-// « Archive résultats » (~4 appels), contrôles de publication et marquage
+// au niveau choisi pour la compétition (« Archive résultats » par défaut,
+// ~4 appels), contrôles de publication et marquage
 // « prête ». Jamais d'activation ni de publication : la saison par défaut et la
 // visibilité d'une compétition surveillée restent des choix de l'administrateur.
 //
@@ -49,6 +50,8 @@ const campaignRolloverJob = {
     const detection = detectNewCampaign({ competition, league, importedMatches });
     if (!detection.label) return result("no-campaign", `${competition.name} : ${detection.skip}.`);
     if (detection.upToDate) return result("up-to-date", `${competition.name} : ${detection.skip}.`, { label: detection.label });
+    // Campagne terminée encore annoncée « en cours » : rien à importer.
+    if (detection.ended) return result("no-campaign", `${competition.name} : ${detection.skip}.`, { label: detection.label });
 
     const next = planWithCampaign(rawPlan, detection.label, competition.id);
     if (next.skip) return result("not-prepared", `${competition.name} : campagne ${detection.label} détectée, non préparée (${next.skip}).`, { label: detection.label });

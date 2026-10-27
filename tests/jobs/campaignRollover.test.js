@@ -102,6 +102,17 @@ describe("job football.campaign-rollover", () => {
     expect(detail).toMatch(/PRÊTE/);
   });
 
+  it("campagne annoncée « en cours » mais terminée : un seul appel, ni plan ni import", async () => {
+    registerProvider({ key: "apifootball", async fetchLeagueSeasons() { calls.push("leagues"); return { seasons: [{ year: 2029, end: "2020-06-30", current: true }] }; }, async fetchMatches() { calls.push("fixtures"); return []; } });
+    const db = seed();
+    const before = JSON.stringify(db.rows("site_settings"));
+    const outcome = await rolloverJob.run({ db, competitionId: "c-850" });
+    expect(outcome.meta).toMatchObject({ status: "no-campaign", label: "2029-2030" });
+    expect(outcome.detail).toMatch(/terminée le 2020-06-30/);
+    expect(calls).toEqual(["leagues"]);
+    expect(JSON.stringify(db.rows("site_settings"))).toBe(before);
+  });
+
   it("campagne déjà importée : un seul appel, aucune écriture", async () => {
     registerProvider({ key: "apifootball", async fetchLeagueSeasons() { calls.push("leagues"); return LEAGUE(2027); }, async fetchMatches() { calls.push("fixtures"); return []; } });
     const db = seed();
