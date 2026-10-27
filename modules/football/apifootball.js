@@ -1,6 +1,7 @@
 import { registerProvider } from "./providers";
 import { seasonYear } from "./season";
 import { repairMojibake } from "@/lib/mojibake";
+import { pickCurrentCoach } from "@/lib/coachPick";
 
 const BASE = "https://v3.football.api-sports.io";
 function mapStatus(short) {
@@ -374,13 +375,16 @@ const provider = {
     }
     return { season: y, ...a };
   },
-  // API-Football utilise historiquement la route `/coachs`. On ne conserve que
-  // l'entraîneur dont la carrière dans ce club n'a pas de date de fin.
+  // API-Football utilise historiquement la route `/coachs`. Entraîneur actuel :
+  // mandat ouvert dans ce club, le plus récent (lib/coachPick.js) ; { vacant }
+  // si l'API ne connaît plus aucun mandat ouvert ; null si elle ne sait rien.
   async fetchCurrentCoach(club, ctx = {}) {
     if (!club?.external_id) return null;
     const rows = await api(`/coachs?team=${club.external_id}`, ctx);
-    const current = rows.find((coach) => (coach.career || []).some((career) => String(career.team?.id) === String(club.external_id) && !career.end)) || rows[0];
-    if (!current?.id) return null;
+    const pick = pickCurrentCoach(rows, club.external_id);
+    if (pick.status === "vacant") return { vacant: true };
+    if (pick.status !== "current") return null;
+    const current = pick.coach;
     return {
       external_id: String(current.id),
       name: current.name || [current.firstname, current.lastname].filter(Boolean).join(" ") || "Entraîneur",

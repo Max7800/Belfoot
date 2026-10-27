@@ -3,7 +3,7 @@ import { getAdmin } from "@/lib/supabaseAdmin";
 import { assertImportTargetAllowed } from "@/lib/importPlan";
 import { JOB_CATALOG } from "@/lib/jobCatalog";
 import { REFRESH_TIME_BUDGET_MS, refreshTargets } from "@/lib/competitionRefresh";
-import { rolloverDue, watchedCompetitionIds } from "@/lib/campaignRollover";
+import { coachRefreshCandidate, rolloverDue, watchedCompetitionIds } from "@/lib/campaignRollover";
 import { updateSiteSettings } from "@/lib/siteSettings";
 
 // Renouvellement des campagnes (après les résultats, avant les statistiques) :
@@ -12,6 +12,9 @@ import { updateSiteSettings } from "@/lib/siteSettings";
 // finir une synchro avant la coupure à 60 s.
 const ROLLOVER_START_BEFORE_MS = 12000;
 const ROLLOVER_CALLS = 6;
+// Entraîneurs (après les statistiques) : un lot de clubs par passage, une
+// vérification par semaine et par compétition de clubs.
+const COACH_CLUB_BATCH = 4;
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -123,6 +126,7 @@ export async function GET(request) {
     const refreshState = { ...(settings?.data?.football_competition_refresh_state || {}) };
     const statsState = { ...(settings?.data?.football_competition_stats_state || {}) };
     const rolloverState = { ...(settings?.data?.football_campaign_rollover_state || {}) };
+    const coachState = { ...(settings?.data?.football_coach_refresh_state || {}) };
 
     // ── Fenêtre « jour de match » (passage 1) ────────────────────────────────
     const from = new Date(now.getTime() - windowAfter * 3600000).toISOString();
@@ -183,7 +187,7 @@ export async function GET(request) {
     // État enregistré après chaque réussite, écriture conditionnée par la
     // révision (lib/siteSettings.js) : rien d'autre dans site_settings n'est
     // écrasé, même si l'admin ou le job de renouvellement écrit en même temps.
-    const persistState = () => updateSiteSettings(db, { football_competition_refresh_state: refreshState, football_competition_stats_state: statsState, football_campaign_rollover_state: rolloverState });
+    const persistState = () => updateSiteSettings(db, { football_competition_refresh_state: refreshState, football_competition_stats_state: statsState, football_campaign_rollover_state: rolloverState, football_coach_refresh_state: coachState });
 
     let used = 0;
     let timeLimited = 0;
@@ -262,9 +266,36 @@ export async function GET(request) {
       }
     }
 
+    // ── Entraîneurs : compétitions de clubs autorisées, une par passage ─────
+    let coaches = null;
+    const coachCandidate = outOfTime() ? null : coachRefreshCandidate([...statsAllowedFor], coachState, now.getTime());
+    if (coachCandidate) {
+      const competition = comps.find((item) => item.id === coachCandidate);
+      const state = coachState[coachCandidate] || {};
+      const ctx = { competitionId: coachCandidate, season: seasonOf[coachCandidate].label };
+      try {
+        await assertImportTargetAllowed(db, "football.coaches", ctx, JOB_CATALOG["football.coaches"]);
+        const result = await runJob("football.coaches", {
+          db, ...ctx, clubBatchSize: COACH_CLUB_BATCH, requestLimit: COACH_CLUB_BATCH + 1,
+          resumeState: { competitionIndex: 0, clubIndex: Number(state.clubIndex) || 0 },
+          apifootballKey: process.env.APIFOOTBALL_KEY,
+        });
+        const complete = typeof result !== "object" || result.complete !== false;
+        coachState[coachCandidate] = complete
+          ? { checkedAt: now.toISOString(), clubIndex: 0 }
+          : { checkedAt: state.checkedAt || null, clubIndex: Number(result.progress?.current) || 0 };
+        coaches = { competition: competition?.name, ok: true, complete, detail: String(result?.detail || result || "").slice(0, 300) };
+      } catch (error) {
+        // Échec mémorisé : pas de nouvel essai avant la semaine suivante.
+        coachState[coachCandidate] = { checkedAt: now.toISOString(), clubIndex: 0, error: String(error?.message || error).slice(0, 200) };
+        coaches = { competition: competition?.name, ok: false, error: String(error?.message || error).slice(0, 300) };
+      }
+      await persistState();
+    }
 
     return Response.json({
       ok: results.length === 0 || results.some((result) => result.ok),
+      coaches,
       calendarSeason,
       rollover,
       eligible: comps.length,

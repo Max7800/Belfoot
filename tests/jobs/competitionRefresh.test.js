@@ -4,9 +4,9 @@ import { refreshSeasonFor, refreshTargets } from "@/lib/competitionRefresh";
 
 // La vraie route du cron competition-refresh, sur un faux Supabase. runJob est
 // remplacé : on vérifie QUELS jobs seraient lancés, avec quelle saison.
-const state = vi.hoisted(() => ({ db: null, runs: [] }));
+const state = vi.hoisted(() => ({ db: null, runs: [], coachResult: null }));
 vi.mock("@/lib/supabaseAdmin", () => ({ getAdmin: () => state.db }));
-vi.mock("@/lib/jobs", () => ({ runJob: async (key, ctx) => { state.runs.push({ key, competitionId: ctx.competitionId, season: ctx.season }); return key === "football.squads" ? { complete: true } : "ok"; } }));
+vi.mock("@/lib/jobs", () => ({ runJob: async (key, ctx) => { state.runs.push({ key, competitionId: ctx.competitionId, season: ctx.season, resumeState: ctx.resumeState }); return key === "football.squads" ? { complete: true } : key === "football.coaches" && state.coachResult ? state.coachResult : "ok"; } }));
 const { GET } = await import("@/app/api/cron/competition-refresh/route");
 
 const SECRET = "secret-de-test";
@@ -17,10 +17,10 @@ const season = (id, competitionId, label, status = "active", extra = {}) => ({ i
 const planFor = (entries) => ({ version: 4, seasons: [{ label: "2024-2025", enabled: false }, { label: "2025-2026", enabled: true }, { label: "2026-2027", enabled: true }, { label: "2027-2028", role: "added", enabled: true }], competitions: entries });
 const allow = (label, scope = "complete") => ({ enabled: true, seasons: { [label]: { enabled: true, scope } } });
 
-function seed({ competitions, seasons, plan, matches = [], refreshState = {} }) {
+function seed({ competitions, seasons, plan, matches = [], refreshState = {}, coachState }) {
   return createFakeSupabase({
     competitions, seasons, matches,
-    site_settings: [{ id: 1, data: { football_import_plan: plan, football_competition_refresh_state: refreshState } }],
+    site_settings: [{ id: 1, data: { football_import_plan: plan, football_competition_refresh_state: refreshState, ...(coachState ? { football_coach_refresh_state: coachState } : {}) } }],
   });
 }
 const PRO = comp("c-144", "Pro League", "belgique");
@@ -33,9 +33,10 @@ const finished = (id, seasonId, competitionId, hoursAgo) => ({ id, season_id: se
 
 beforeAll(() => { process.env.CRON_SECRET = SECRET; vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(NOW); });
 afterAll(() => { delete process.env.CRON_SECRET; vi.useRealTimers(); });
-beforeEach(() => { state.runs = []; });
-// Imports et statistiques seulement (le passage de renouvellement est testé à part).
-const importRuns = () => state.runs.filter((r) => r.key !== "football.campaign-rollover");
+beforeEach(() => { state.runs = []; state.coachResult = null; });
+// Imports et statistiques seulement (renouvellement et entraîneurs testés à part).
+const importRuns = () => state.runs.filter((r) => r.key !== "football.campaign-rollover" && r.key !== "football.coaches");
+const coachRuns = () => state.runs.filter((r) => r.key === "football.coaches");
 
 describe("refreshTargets — règle pure", () => {
   it("saison publique de chaque compétition (active, sinon la plus récente publiée)", () => {
@@ -117,5 +118,43 @@ describe("cron competition-refresh — toutes les compétitions visibles", () =>
     await tick();
     expect(state.db.rows("site_settings")[0].data.football_competition_refresh_state["c-850"]).toBe(new Date(NOW).toISOString());
     expect(state.db.rows("site_settings")[0].data.football_import_plan).toEqual(basePlan); // le reste des réglages est conservé
+  });
+});
+
+describe("cron competition-refresh — entraîneurs chaque semaine", () => {
+  // Constat du 27/10/2026 : « N. Hayen » restait l'entraîneur de Club Brugge,
+  // les entraîneurs n'étant mis à jour que par un job manuel.
+  it("compétition de clubs autorisée : entraîneurs vérifiés, date enregistrée ; sélections jamais", async () => {
+    state.db = seed({ competitions: [PRO, U21, NL], seasons: baseSeasons, plan: basePlan });
+    await tick();
+    expect(coachRuns().map((r) => [r.competitionId, r.season, r.resumeState.clubIndex])).toEqual([["c-144", "2026-2027", 0]]);
+    expect(state.db.rows("site_settings")[0].data.football_coach_refresh_state["c-144"]).toMatchObject({ checkedAt: new Date(NOW).toISOString(), clubIndex: 0 });
+    // Pro League à jour : les compétitions de sélections ne prennent jamais le relais.
+    state.runs = [];
+    state.db = seed({ competitions: [PRO, U21, NL], seasons: baseSeasons, plan: basePlan, coachState: { "c-144": { checkedAt: new Date(NOW - H).toISOString(), clubIndex: 0 }, "c-850": { checkedAt: new Date(NOW - H).toISOString(), clubIndex: 0 } } });
+    await tick();
+    expect(coachRuns()).toEqual([]);
+  });
+  it("vérifiés il y a moins de 7 jours : pas de nouvel appel ; 7 jours passés : nouvelle vérification", async () => {
+    state.db = seed({ competitions: [PRO], seasons: baseSeasons, plan: basePlan, coachState: { "c-144": { checkedAt: new Date(NOW - 6 * 24 * H).toISOString(), clubIndex: 0 } } });
+    await tick();
+    expect(coachRuns()).toEqual([]);
+    state.db = seed({ competitions: [PRO], seasons: baseSeasons, plan: basePlan, coachState: { "c-144": { checkedAt: new Date(NOW - 7 * 24 * H).toISOString(), clubIndex: 0 } } });
+    await tick();
+    expect(coachRuns()).toHaveLength(1);
+  });
+  it("lot partiel : reprise au club suivant au passage suivant, même avant la semaine", async () => {
+    state.coachResult = { complete: false, progress: { current: 4, total: 16 }, detail: "4/16" };
+    state.db = seed({ competitions: [PRO], seasons: baseSeasons, plan: basePlan, coachState: { "c-144": { checkedAt: new Date(NOW - 2 * 24 * H).toISOString(), clubIndex: 0 } } });
+    await tick();
+    expect(coachRuns()).toEqual([]);
+    state.db = seed({ competitions: [PRO], seasons: baseSeasons, plan: basePlan, coachState: { "c-144": { checkedAt: new Date(NOW - 8 * 24 * H).toISOString(), clubIndex: 0 } } });
+    await tick();
+    const saved = state.db.rows("site_settings")[0].data.football_coach_refresh_state["c-144"];
+    expect(saved.clubIndex).toBe(4);
+    state.runs = []; state.coachResult = null;
+    await tick();
+    expect(coachRuns().map((r) => r.resumeState.clubIndex)).toEqual([4]);
+    expect(state.db.rows("site_settings")[0].data.football_coach_refresh_state["c-144"]).toMatchObject({ clubIndex: 0, checkedAt: new Date(NOW).toISOString() });
   });
 });
