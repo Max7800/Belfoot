@@ -34,10 +34,21 @@ function Players({ home, away }) {
   </div>;
 }
 
-export default function MatchLineups({ homeClub, awayClub, lineups = [], rows = [], labels = {} }) {
+export default function MatchLineups({ homeClub, awayClub, lineups = [], rows = [], labels = {}, pitchOnly = false, onOpen }) {
   const lineupFor = (club) => lineups.find((row) => row.club_id === club?.id) || null;
   const home = teamLineup({ rows: rows.filter((row) => row.club_id === homeClub?.id), lineup: lineupFor(homeClub) });
   const away = teamLineup({ rows: rows.filter((row) => row.club_id === awayClub?.id), lineup: lineupFor(awayClub) });
+  // Résumé : terrain seul (rien si l'API n'a pas placé les joueurs) et lien vers l'onglet.
+  if (pitchOnly) {
+    if (!home.lines.length && !away.lines.length) return null;
+    return <section>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-sm font-black uppercase tracking-wider">{labels.title || "Compositions"}{(home.formation || away.formation) && <span className="ml-2 text-xs font-bold normal-case tracking-normal"><span className="text-accent">{home.formation || "–"}</span><span className="text-muted"> · </span><span className="text-amber-300">{away.formation || "–"}</span></span>}</h2>
+        {onOpen && <button type="button" onClick={onOpen} className="rounded-full border border-line/15 px-3 py-1 text-xs font-bold text-muted transition hover:border-accent/40 hover:text-accent">{labels.open || "Voir les compositions complètes"} →</button>}
+      </div>
+      <LineupPitch home={home} away={away} />
+    </section>;
+  }
   if (!home.starters.length && !away.starters.length) return <div className="rounded-2xl border border-dashed border-line/15 p-5 text-center text-sm text-muted">{labels.startersEmpty || "Composition non disponible."}</div>;
   return <div className="space-y-4">
     <LineupPitch home={home} away={away} />
