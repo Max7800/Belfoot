@@ -225,6 +225,7 @@ const provider = {
           external_id: String(x.player.id), name: x.player.name, nationality: x.player.nationality,
           position: st?.games?.position || null, photo_url: x.player.photo || null,
           age: x.player.age ?? null, birth_date: x.player.birth?.date || null,
+          birth_country: x.player.birth?.country || null, birth_place: x.player.birth?.place || null,
           stats: st ? {
             appearances: st.games?.appearences || 0, lineups: st.games?.lineups || 0, minutes: st.games?.minutes || 0,
             goals: st.goals?.total || 0, assists: st.goals?.assists || 0,
@@ -330,6 +331,8 @@ const provider = {
         photo_url: row.player?.photo || null,
         age: row.player?.age ?? null,
         birth_date: row.player?.birth?.date || null,
+        birth_country: row.player?.birth?.country || null,
+        birth_place: row.player?.birth?.place || null,
       },
       team: {
         external_id: stat.team?.id ? String(stat.team.id) : null,
