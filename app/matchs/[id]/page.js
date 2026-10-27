@@ -12,7 +12,7 @@ import DiableRatings from "@/components/football/DiableRatings";
 import { isMatchLive, matchStatusMeta } from "@/lib/matchStatus";
 import { competitionPath } from "@/lib/competitionRoutes";
 import DiscussButton from "@/components/forum/DiscussButton";
-import { eventDetailLabel } from "@/lib/matchLineup";
+import { eventDetailLabel, findMatchPlayer } from "@/lib/matchLineup";
 import { phaseLabel } from "@/lib/phaseLabels";
 import { repairMojibake } from "@/lib/mojibake";
 
@@ -20,22 +20,31 @@ const eventIcon = (type) => ({ goal: "⚽", yellow: "🟨", red: "🟥", sub: "�
 
 // Frise des faits du match (esprit widget API-Sports) : minute au centre,
 // faits de l’équipe à domicile à gauche, de l’extérieur à droite.
-function EventList({ events, players, clubs, homeId, empty, limit }) {
+// Nom de joueur cliquable quand la fiche est connue (identifiant de l'événement,
+// sinon retrouvé parmi les joueurs du match : passeur, joueur entrant).
+function PlayerName({ name, playerId, rows, className = "" }) {
+  const id = playerId || findMatchPlayer(name, rows);
+  return id ? <Link href={`/players/${id}`} className={`${className} hover:text-accent hover:underline`}>{name}</Link> : <span className={className}>{name}</span>;
+}
+
+function EventList({ events, players, clubs, homeId, rows = [], empty, limit }) {
   const shown = limit ? events.slice(-limit).reverse() : events;
   if (!shown.length) return <p className="rounded-2xl border border-dashed border-line/15 p-5 text-center text-sm text-muted">{empty}</p>;
   return <div className="divide-y divide-line/10 overflow-hidden rounded-2xl border border-line/10 bg-surface/45">{shown.map((event, index) => {
     const name = repairMojibake(event.player_name || players[event.player_id]?.name) || "—";
     const assist = repairMojibake(event.assist_name);
     const detail = eventDetailLabel(event.detail);
-    let line = name;
+    const player = <PlayerName name={name} playerId={event.player_id} rows={rows} />;
+    const assistLink = assist ? <PlayerName name={assist} rows={rows} /> : null;
+    let line = player;
     let sub = null;
     if (event.type === "goal") {
-      if (detail) line += ` (${detail})`;
-      if (assist) sub = `Passe : ${assist}`;
+      line = <>{player}{detail ? ` (${detail})` : ""}</>;
+      if (assistLink) sub = <>Passe : {assistLink}</>;
     } else if (event.type === "yellow" || event.type === "red") sub = detail;
     else if (event.type === "sub") {
-      line = `${name} ↓`;
-      if (assist) sub = `${assist} ↑`;
+      line = <>{player} ↓</>;
+      if (assistLink) sub = <>{assistLink} ↑</>;
     }
     const home = Boolean(event.club_id) && event.club_id === homeId;
     const minute = event.minute != null ? `${event.minute}${event.extra_minute ? `+${event.extra_minute}` : ""}’` : "";
@@ -164,10 +173,11 @@ export default function MatchPage() {
 
     {activeTab === "summary" && <div className="grid gap-5 lg:grid-cols-[1.1fr_.9fr]">
       <section><h2 className="mb-3 text-sm font-black uppercase tracking-wider">Le match en chiffres</h2><MatchTeamStats homeClub={home} awayClub={away} rows={teamStats} compact empty={emptyTeamStats} /></section>
-      <section><h2 className="mb-3 flex items-center gap-2 text-sm font-black uppercase tracking-wider">{status.live && <Radio size={14} className="text-red-400" />}Temps forts</h2><EventList events={events} players={players} clubs={clubs} homeId={m.home_club_id} empty={emptyEvents} limit={6} /></section>
+      <section><h2 className="mb-3 flex items-center gap-2 text-sm font-black uppercase tracking-wider">{status.live && <Radio size={14} className="text-red-400" />}Temps forts</h2><EventList events={events} players={players} clubs={clubs} homeId={m.home_club_id} rows={matchPlayerStats} empty={emptyEvents} limit={6} /></section>
+      <div className="lg:col-span-2"><MatchLineups homeClub={home} awayClub={away} lineups={lineups} rows={matchPlayerStats} pitchOnly onOpen={() => setActiveTab("lineups")} labels={{ title: L("match.lineups", "Compositions"), open: "Voir les compositions complètes" }} /></div>
       {diableSquad.length > 0 && <section className="lg:col-span-2"><DiableRatings match={m} squad={diableSquad} title="Notes des Diables de ce match" /></section>}
     </div>}
-    {activeTab === "events" && <section><h2 className="mb-3 flex items-center gap-2 text-sm font-black uppercase tracking-wider">{status.live && <Radio size={14} className="text-red-400" />}{L("match.events", "Faits du match")}</h2><EventList events={events} players={players} clubs={clubs} homeId={m.home_club_id} empty={emptyEvents} /></section>}
+    {activeTab === "events" && <section><h2 className="mb-3 flex items-center gap-2 text-sm font-black uppercase tracking-wider">{status.live && <Radio size={14} className="text-red-400" />}{L("match.events", "Faits du match")}</h2><EventList events={events} players={players} clubs={clubs} homeId={m.home_club_id} rows={matchPlayerStats} empty={emptyEvents} /></section>}
     {activeTab === "lineups" && <section><div className="mb-3"><h2 className="text-lg font-black">{L("match.lineups", "Compositions")}</h2><p className="text-xs text-muted">{L("match.lineups.subtitle", "Titulaires, formations et remplaçants")}</p></div><MatchLineups homeClub={home} awayClub={away} lineups={lineups} rows={matchPlayerStats} labels={{ starters: L("match.starters", "Titulaires"), bench: L("match.bench", "Remplaçants"), formationEmpty: L("match.formation.empty", "Formation non renseignée"), startersEmpty: L("match.starters.empty", status.key === "scheduled" ? "Composition pas encore annoncée." : "Composition non disponible."), home: L("match.home", "Domicile"), away: L("match.away", "Extérieur") }} /></section>}
     {activeTab === "stats" && <section><h2 className="mb-3 text-lg font-black">Statistiques collectives</h2><MatchTeamStats homeClub={home} awayClub={away} rows={teamStats} empty={emptyTeamStats} /></section>}
     {activeTab === "players" && <section><div className="mb-3"><h2 className="text-lg font-black">Performances des joueurs</h2><p className="text-xs text-muted">Minutes, note et actions décisives enregistrées pour ce match.</p></div><MatchPlayerRatings homeClub={home} awayClub={away} rows={matchPlayerStats} /></section>}

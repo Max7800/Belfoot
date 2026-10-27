@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { eventDetailLabel, positionLetter, ratingBadge, teamLineup } from "@/lib/matchLineup";
+import { eventDetailLabel, findMatchPlayer, positionLetter, ratingBadge, teamLineup } from "@/lib/matchLineup";
 import { registerProvider } from "@/modules/football/providers";
 import { syncLineups } from "@/modules/football/syncLineups";
 import { createFakeSupabase } from "../helpers/fakeSupabase";
@@ -72,5 +72,39 @@ describe("synchro : la composition officielle fait foi pour les titulaires", () 
     expect(byExternal["1"]).toMatchObject({ starter: true, substitute: false, grid: "5:1", minutes: 90, rating: 7.1 });
     expect(byExternal["2"]).toMatchObject({ starter: false, substitute: true, minutes: 12, rating: 6.4 });
     expect(byExternal["3"]).toMatchObject({ starter: false, substitute: true });
+  });
+});
+
+describe("joueur d'un fait de match retrouvé par son nom", () => {
+  const rows = [
+    { player_id: "boteli", player_name: "Winsley Boteli Mokango" },
+    { player_id: "chouaref", player_name: "Ylyas Chouaref" },
+    { player_id: "djordjevic", player_name: "Luka Đorđević" },
+    { player_id: "sakuta", player_name: "Maksim Sakuta" },
+    { player_id: "sakuta2", player_name: "Igor Sakuta" },
+    { player_id: null, player_name: "Sans Fiche" },
+    { player_id: "lah", player_name: "J. LÃ¤hteenmÃ¤ki" },
+  ];
+  it("nom abrégé de l'API : initiale + nom de famille", () => {
+    expect(findMatchPlayer("W. Boteli", rows)).toBe("boteli");
+    expect(findMatchPlayer("I. Chouaref", rows)).toBeNull(); // initiale différente : pas de lien au hasard
+    expect(findMatchPlayer("Y. Chouaref", rows)).toBe("chouaref");
+  });
+  it("nom complet, accents et casse ignorés, nom abîmé réparé", () => {
+    expect(findMatchPlayer("ylyas chouaref", rows)).toBe("chouaref");
+    expect(findMatchPlayer("L. Đorđević", rows)).toBe("djordjevic");
+    expect(findMatchPlayer("J. Lähteenmäki", rows)).toBe("lah");
+  });
+  it("ambigu, sans fiche ou inconnu : pas de lien", () => {
+    expect(findMatchPlayer("Sakuta", rows)).toBeNull();
+    expect(findMatchPlayer("M. Sakuta", rows)).toBe("sakuta");
+    expect(findMatchPlayer("Sans Fiche", rows)).toBeNull();
+    expect(findMatchPlayer("A. Inconnu", rows)).toBeNull();
+    expect(findMatchPlayer("", rows)).toBeNull();
+    expect(findMatchPlayer("M.", rows)).toBeNull();
+  });
+  it("homonyme sans fiche ignoré ; nom exact préféré à un nom plus long", () => {
+    expect(findMatchPlayer("Igor Sakuta", [{ player_id: null, player_name: "Igor Sakuta" }, { player_id: "igor", player_name: "Igor Sakuta" }])).toBe("igor");
+    expect(findMatchPlayer("Igor Sakuta", [{ player_id: "junior", player_name: "Igor Sakuta Junior" }, { player_id: "igor", player_name: "Igor Sakuta" }])).toBe("igor");
   });
 });

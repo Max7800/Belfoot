@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { Star } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
@@ -68,7 +69,7 @@ export default function DiableRatings({ match, squad, title = "Notez les Diables
       {leaderPlayer && (
         <div className="mb-3 flex items-center gap-3 rounded-xl border border-amber-400/25 bg-amber-400/5 p-3">
           {leaderPlayer.photo_url ? <img src={leaderPlayer.photo_url} className="h-10 w-10 rounded-full object-cover" alt="" /> : <Star className="h-8 w-8 text-amber-300" />}
-          <div><div className="text-[11px] font-black uppercase tracking-wider text-amber-300">Diable du match des lecteurs</div><div className="text-sm font-bold">{leaderPlayer.name} <span className="text-xs text-muted">· {motmLeader.votes} vote{motmLeader.votes > 1 ? "s" : ""}</span></div></div>
+          <div><div className="text-[11px] font-black uppercase tracking-wider text-amber-300">Diable du match des lecteurs</div><div className="text-sm font-bold"><Link href={`/players/${leaderPlayer.id}`} className="hover:text-accent hover:underline">{leaderPlayer.name}</Link> <span className="text-xs text-muted">· {motmLeader.votes} vote{motmLeader.votes > 1 ? "s" : ""}</span></div></div>
         </div>
       )}
 
@@ -80,7 +81,7 @@ export default function DiableRatings({ match, squad, title = "Notez les Diables
           const agg = avgs[p.id];
           return (
             <div key={p.id} className="flex items-center gap-2 py-2 text-sm">
-              <span className="min-w-0 flex-1 truncate font-semibold">{p.name}</span>
+              <Link href={`/players/${p.id}`} className="min-w-0 flex-1 truncate font-semibold hover:text-accent hover:underline">{p.name}</Link>
               {agg && <span className="flex-shrink-0 text-xs text-muted" title={`${agg.votes} note(s)`}>moy. <b className="text-amber-300">{agg.avg_rating}</b></span>}
               <button onClick={() => pickMotm(p.id)} disabled={!open || !userId} title="Diable du match" className={`flex-shrink-0 rounded p-1 disabled:opacity-40 ${myMotm === p.id ? "text-amber-300" : "text-muted hover:text-amber-300"}`}><Star className="h-4 w-4" fill={myMotm === p.id ? "currentColor" : "none"} /></button>
               <select value={myRatings[p.id] ?? ""} onChange={(e) => rate(p.id, Number(e.target.value))} disabled={!open || !userId} className="flex-shrink-0 rounded border border-line/10 bg-surface2 px-2 py-1 text-sm disabled:opacity-40">
