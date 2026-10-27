@@ -15,6 +15,16 @@ const ROLLOVER_CALLS = 6;
 // Entraîneurs (après les statistiques) : un lot de clubs par passage, une
 // vérification par semaine et par compétition de clubs.
 const COACH_CLUB_BATCH = 4;
+// Détails d'après-match (compositions, statistiques joueurs et collectives,
+// faits) : jusqu'ici importés seulement à la main — plus rien depuis début
+// octobre 2026 sur toutes les compétitions. Un lot = un match détaillé
+// (~3 appels) + ses faits ; pas de nouveau lot au-delà de 25 s.
+const DETAIL_STEPS = 6;
+const DETAIL_START_BEFORE_MS = 25000;
+// Placé après les statistiques : au moins un lot par passage s’il reste du temps.
+const DETAIL_FIRST_START_BEFORE_MS = 28000;
+const DETAIL_CALLS = 4;
+const EVENTS_PER_STEP = 2;
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -127,6 +137,7 @@ export async function GET(request) {
     const statsState = { ...(settings?.data?.football_competition_stats_state || {}) };
     const rolloverState = { ...(settings?.data?.football_campaign_rollover_state || {}) };
     const coachState = { ...(settings?.data?.football_coach_refresh_state || {}) };
+    const detailState = { ...(settings?.data?.football_match_details_state || {}) };
 
     // ── Fenêtre « jour de match » (passage 1) ────────────────────────────────
     const from = new Date(now.getTime() - windowAfter * 3600000).toISOString();
@@ -187,7 +198,7 @@ export async function GET(request) {
     // État enregistré après chaque réussite, écriture conditionnée par la
     // révision (lib/siteSettings.js) : rien d'autre dans site_settings n'est
     // écrasé, même si l'admin ou le job de renouvellement écrit en même temps.
-    const persistState = () => updateSiteSettings(db, { football_competition_refresh_state: refreshState, football_competition_stats_state: statsState, football_campaign_rollover_state: rolloverState, football_coach_refresh_state: coachState });
+    const persistState = () => updateSiteSettings(db, { football_competition_refresh_state: refreshState, football_competition_stats_state: statsState, football_campaign_rollover_state: rolloverState, football_coach_refresh_state: coachState, football_match_details_state: detailState });
 
     let used = 0;
     let timeLimited = 0;
@@ -266,6 +277,37 @@ export async function GET(request) {
       }
     }
 
+    // ── Détails après match (après les statistiques, qui gardent leur priorité) ──
+    const details = [];
+    const detailCandidates = [];
+    for (const competition of comps) {
+      const state = detailState[competition.id] || {};
+      const doneAt = Date.parse(state.doneAt || "") || 0;
+      // À jour : on ne repasse qu'après un nouveau match terminé.
+      if (doneAt && !(latestFinished[competition.id] > doneAt)) continue;
+      try { await assertImportTargetAllowed(db, "football.lineups", { competitionId: competition.id, season: seasonOf[competition.id].label }, JOB_CATALOG["football.lineups"]); }
+      catch { continue; }
+      detailCandidates.push(competition);
+    }
+    detailCandidates.sort((a, b) => (Date.parse(detailState[a.id]?.attemptAt || "") || 0) - (Date.parse(detailState[b.id]?.attemptAt || "") || 0));
+    for (let step = 0; step < DETAIL_STEPS && detailCandidates.length && Date.now() - startedAt <= (step === 0 ? DETAIL_FIRST_START_BEFORE_MS : DETAIL_START_BEFORE_MS); step++) {
+      const competition = detailCandidates.shift();
+      const ctx = { db, competitionId: competition.id, season: seasonOf[competition.id].label, drain: true, apifootballKey: process.env.APIFOOTBALL_KEY };
+      let complete = false;
+      try {
+        const lineups = await runJob("football.lineups", { ...ctx, requestLimit: DETAIL_CALLS });
+        const events = await runJob("football.events", { ...ctx, eventsCap: EVENTS_PER_STEP, requestLimit: EVENTS_PER_STEP + 1 });
+        complete = [lineups, events].every((result) => typeof result !== "object" || result.complete !== false);
+        details.push({ competition: competition.name, ok: true, complete });
+      } catch (error) {
+        details.push({ competition: competition.name, ok: false, error: String(error?.message || error).slice(0, 200) });
+      }
+      detailState[competition.id] = { attemptAt: now.toISOString(), doneAt: complete ? now.toISOString() : detailState[competition.id]?.doneAt || null };
+      // Encore des matchs à détailler : la compétition repasse en fin de file.
+      if (!complete && details.at(-1).ok) detailCandidates.push(competition);
+      await persistState();
+    }
+
     // ── Entraîneurs : compétitions de clubs autorisées, une par passage ─────
     let coaches = null;
     const coachCandidate = outOfTime() ? null : coachRefreshCandidate([...statsAllowedFor], coachState, now.getTime());
@@ -296,6 +338,7 @@ export async function GET(request) {
     return Response.json({
       ok: results.length === 0 || results.some((result) => result.ok),
       coaches,
+      details,
       calendarSeason,
       rollover,
       eligible: comps.length,
