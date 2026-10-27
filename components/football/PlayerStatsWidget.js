@@ -2,23 +2,11 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { competitionTabs, displaySeason, matchDetails, share } from "@/lib/playerSeasonWidget";
+import StatRing from "./StatRing";
 
 // Statistiques d'un joueur par compétition (esprit widget API-Sports) :
 // pastilles de compétitions, anneau de note, chiffres clés, puis détail des
 // matchs importés en « Saison complète » (tirs, passes, duels, dribbles…).
-function Ring({ value, label, tone = "rgb(var(--accent))", size = 64, text }) {
-  const radius = 15.5;
-  const circumference = 2 * Math.PI * radius;
-  const filled = value == null ? 0 : Math.max(0, Math.min(100, value));
-  return <div className="flex flex-col items-center gap-1">
-    <span className="relative inline-flex" style={{ width: size, height: size }}>
-      <svg viewBox="0 0 36 36" className="h-full w-full -rotate-90" aria-hidden><circle cx="18" cy="18" r={radius} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="3" /><circle cx="18" cy="18" r={radius} fill="none" stroke={tone} strokeWidth="3" strokeLinecap="round" strokeDasharray={`${(filled / 100) * circumference} ${circumference}`} /></svg>
-      <b className="absolute inset-0 flex items-center justify-center text-sm tabular-nums">{text ?? (value == null ? "–" : `${value}%`)}</b>
-    </span>
-    {label && <span className="text-center text-[10px] font-semibold uppercase tracking-wider text-muted">{label}</span>}
-  </div>;
-}
-
 const ratingColor = (rating) => (rating == null ? "rgba(255,255,255,0.2)" : rating >= 7.5 ? "#34d399" : rating >= 7 ? "#a3e635" : rating >= 6.5 ? "#fcd34d" : rating >= 6 ? "#fbbf24" : "#f87171");
 
 function Tile({ value, label, sub }) {
@@ -29,7 +17,7 @@ function Card({ title, ring, ringLabel, rows }) {
   return <section className="rounded-2xl border border-line/10 bg-bg/35 p-3">
     <h4 className="mb-2 text-[11px] font-black uppercase tracking-[0.16em] text-muted">{title}</h4>
     <div className="flex items-center gap-3">
-      {ring !== undefined && <Ring value={ring} label={ringLabel} size={56} />}
+      {ring !== undefined && <StatRing value={ring} label={ringLabel} size={56} />}
       <dl className="min-w-0 flex-1 space-y-1 text-xs">{rows.map(([label, value]) => <div key={label} className="flex items-center justify-between gap-2"><dt className="truncate text-muted">{label}</dt><dd className="font-bold tabular-nums">{value}</dd></div>)}</dl>
     </div>
   </section>;
@@ -60,7 +48,7 @@ export default function PlayerStatsWidget({ stats = [], performances = [], match
         <div className="min-w-0"><div className="truncate text-sm font-black">{href ? <Link href={href} className="hover:text-accent">{competition?.name}</Link> : competition?.name || "Compétition"}</div><div className="truncate text-[11px] text-muted">{[clubNames, tab.seasons.map((season) => displaySeason(season, competition)).join(", ")].filter(Boolean).join(" · ")}</div></div>
       </div>
       <div className="grid gap-3 sm:grid-cols-[auto_1fr] sm:items-center">
-        <div className="flex justify-center sm:px-3"><Ring value={tab.rating == null ? null : Math.min(100, (tab.rating / 10) * 100)} text={tab.rating == null ? "–" : tab.rating.toFixed(1)} label="Note moyenne" tone={ratingColor(tab.rating)} size={84} /></div>
+        <div className="flex justify-center sm:px-3"><StatRing value={tab.rating == null ? null : Math.min(100, (tab.rating / 10) * 100)} text={tab.rating == null ? "–" : tab.rating.toFixed(1)} label="Note moyenne" tone={ratingColor(tab.rating)} size={84} /></div>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
           <Tile value={tab.appearances} label="Matchs" sub={`${tab.lineups} titulaire${tab.lineups > 1 ? "s" : ""}`} />
           <Tile value={tab.minutes} label="Minutes" sub={tab.appearances ? `${Math.round(tab.minutes / tab.appearances)} / match` : null} />
