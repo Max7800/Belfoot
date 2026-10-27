@@ -135,7 +135,7 @@ export default function BelgiansAbroadPage() {
       const domesticBelgianClub = playerStats.some((row) => row.club_id === player.club_id && isBelgian(data.competitions[row.competition_id]?.ext?.country));
       // Championnat et pays : statistiques du club actuel, puis championnat du club,
       // puis instantané s'il est valide — jamais « World » ni une coupe d'Europe.
-      const league = resolvePlayerLeague({ player, statRows: playerStats, competitionsById: data.competitions, clubLeagues });
+      const league = resolvePlayerLeague({ player, statRows: playerStats, competitionsById: data.competitions, clubLeagues, club });
       const resolvedCountry = resolvePlayerCountry({ player, club, league: league.competition }) || UNKNOWN_COUNTRY;
       const resolvedCompetition = league.name || UNKNOWN_COMPETITION;
       return { player, club, nationalTeam: data.clubs[player.national_team_id], watch: belgianWatchStatus(player, data.clubs[player.national_team_id]), country: resolvedCountry, competition: resolvedCompetition, competitionData: league.competition, totals: latestTotals(playerStats), domesticBelgianClub };
@@ -147,7 +147,7 @@ export default function BelgiansAbroadPage() {
     const concernsPlayer = (item, match) => [item.player.club_id, item.player.national_team_id].filter(Boolean).some((teamId) => teamId === match.home_club_id || teamId === match.away_club_id);
     const watched = data.matches.filter((match) => match.kickoff && match.status !== "finished" && new Date(match.kickoff) >= now && enriched.some((item) => concernsPlayer(item, match))).sort((a, b) => new Date(a.kickoff) - new Date(b.kickoff)).slice(0, 6).map((match) => ({ match, players: enriched.filter((item) => concernsPlayer(item, match)) }));
 
-    const performances = data.performances.map((performance) => ({ performance, item: playerMap[performance.player_id], match: matchMap[performance.match_id] })).filter((row) => row.item && row.match?.kickoff).sort((a, b) => new Date(b.match.kickoff) - new Date(a.match.kickoff));
+    const performances = data.performances.map((performance) => ({ performance, item: playerMap[performance.player_id], match: matchMap[performance.match_id] })).filter((row) => row.item && row.match?.kickoff && Number(row.performance.minutes) > 0 && data.clubs[row.performance.club_id]?.team_type !== "national").sort((a, b) => new Date(b.match.kickoff) - new Date(a.match.kickoff));
     const byPlayer = {};
     for (const row of performances) if ((byPlayer[row.item.player.id] ||= []).length < 5) byPlayer[row.item.player.id].push(row);
     const form = enriched.map((item) => {
@@ -160,8 +160,9 @@ export default function BelgiansAbroadPage() {
     }).sort((a, b) => b.score - a.score || a.player.name.localeCompare(b.player.name, "fr"));
 
     const leagues = Object.values(enriched.reduce((groups, item) => {
-      const key = item.competition || "Autres championnats";
-      if (!groups[key]) groups[key] = { name: key, country: item.country, logo: item.competitionData?.logo_url || "", count: 0 };
+      const known = item.competition && item.competition !== UNKNOWN_COMPETITION;
+      const key = known ? item.competition : `?${item.country}`;
+      if (!groups[key]) groups[key] = { key, name: known ? item.competition : item.country === UNKNOWN_COUNTRY ? "Pays à préciser" : frenchNationName(item.country), filter: item.competition, country: item.country, logo: item.competitionData?.logo_url || "", count: 0, unknownLeague: !known };
       groups[key].count += 1;
       return groups;
     }, {})).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, "fr"));
@@ -180,8 +181,9 @@ export default function BelgiansAbroadPage() {
   const heroStyle = config.hero.image_url ? { backgroundImage: `url(${config.hero.image_url})` } : undefined;
   const formItems = view.form.filter((item) => item.player.id !== view.featured?.player.id).slice(0, 4);
 
-  const selectLeague = (name) => {
-    setCompetition(name);
+  // Championnat non suivi : filtre par pays (tous les clubs de ce pays).
+  const selectLeague = (name, unknownCountry = null) => {
+    if (unknownCountry) { setCompetition("all"); setCountry(unknownCountry); } else setCompetition(name);
     setTimeout(() => document.getElementById("all-players")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
   };
 
@@ -190,7 +192,7 @@ export default function BelgiansAbroadPage() {
 
     form: formItems.length ? <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">{formItems.map((item) => <Link key={item.player.id} href={`/players/${item.player.id}`} className="group overflow-hidden rounded-2xl border border-line/10 bg-gradient-to-b from-surface to-bg/60 p-3 text-center transition hover:-translate-y-0.5 hover:border-orange-400/40"><PlayerPhoto player={item.player} className="mx-auto h-14 w-14" /><div className="mt-2 truncate text-sm font-black group-hover:text-orange-300">{item.player.name}</div><div className="truncate text-[10px] text-muted">{item.club?.name || UNKNOWN_CLUB}</div><div className="mt-3 flex justify-center gap-3 text-xs"><span><b className="block text-base">{item.goals}</b>buts</span><span><b className="block text-base">{item.assists}</b>passes</span>{item.rating && <span><b className={`block rounded-md px-1.5 py-0.5 ${ratingTone(item.rating)}`}>{item.rating.toFixed(1)}</b>note</span>}</div><div className="mt-2"><RatingPills ratings={item.ratings} /></div></Link>)}</div> : <EmptyBlock>Les statistiques existantes alimenteront automatiquement ce classement de forme.</EmptyBlock>,
 
-    leagues: view.leagues.length ? <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">{view.leagues.map((league, index) => <button key={league.name} onClick={() => selectLeague(league.name)} className="group rounded-2xl border border-line/10 bg-gradient-to-br from-surface to-bg/50 p-3.5 text-left transition hover:-translate-y-0.5 hover:border-sky-400/40">{league.logo ? <img src={league.logo} className="h-8 w-8 object-contain" alt="" /> : <Globe2 className={`h-7 w-7 ${index % 2 ? "text-violet-400" : "text-sky-400"}`} />}<div className="mt-3 truncate text-sm font-black">{league.name}</div><div className="mt-1 truncate text-[11px] text-muted">{countryFlag(league.country)} {frenchNationName(league.country)}</div><div className="mt-2 text-lg font-black">{league.count}<span className="ml-1 text-[10px] font-normal text-muted">Belge{league.count > 1 ? "s" : ""} suivi{league.count > 1 ? "s" : ""}</span></div></button>)}</div> : <EmptyBlock>Les championnats apparaîtront ici dès que le pays et la compétition des joueurs suivis seront renseignés.</EmptyBlock>,
+    leagues: view.leagues.length ? <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">{view.leagues.map((league, index) => <button key={league.key} onClick={() => selectLeague(league.filter, league.unknownLeague ? league.country : null)} className="group rounded-2xl border border-line/10 bg-gradient-to-br from-surface to-bg/50 p-3.5 text-left transition hover:-translate-y-0.5 hover:border-sky-400/40">{league.logo ? <img src={league.logo} className="h-8 w-8 object-contain" alt="" /> : <Globe2 className={`h-7 w-7 ${index % 2 ? "text-violet-400" : "text-sky-400"}`} />}<div className="mt-3 truncate text-sm font-black">{league.name}</div><div className="mt-1 truncate text-[11px] text-muted">{league.unknownLeague ? "Championnat non suivi par Belfoot" : <>{countryFlag(league.country)} {frenchNationName(league.country)}</>}</div><div className="mt-2 text-lg font-black">{league.count}<span className="ml-1 text-[10px] font-normal text-muted">Belge{league.count > 1 ? "s" : ""} suivi{league.count > 1 ? "s" : ""}</span></div></button>)}</div> : <EmptyBlock>Les championnats apparaîtront ici dès que le pays et la compétition des joueurs suivis seront renseignés.</EmptyBlock>,
 
     recap: view.performances.length ? <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{view.performances.map(({ performance, item, match }) => { const opponentId = item.player.club_id === match.home_club_id ? match.away_club_id : match.home_club_id; const opponent = data.clubs[opponentId]; return <Link key={performance.id} href={`/matchs/${match.id}`} className="rounded-2xl border border-line/10 bg-surface/70 p-4 transition hover:border-violet-400/40"><div className="flex items-center gap-3"><PlayerPhoto player={item.player} className="h-12 w-12" /><div className="min-w-0"><div className="truncate text-sm font-black">{item.player.name}</div><div className="truncate text-[10px] text-muted">vs {opponent?.name || "adversaire"} · {new Date(match.kickoff).toLocaleDateString("fr-BE", { day: "numeric", month: "short" })}</div></div>{performance.rating && <b className="ml-auto rounded-lg bg-violet-400/15 px-2 py-1 text-sm text-violet-300">{Number(performance.rating).toFixed(1)}</b>}</div><div className="mt-3 flex gap-3 border-t border-line/10 pt-3 text-[11px] text-muted"><span><b className="text-content">{performance.minutes || 0}</b> min</span><span><b className="text-content">{performance.goals || 0}</b> but{Number(performance.goals) > 1 ? "s" : ""}</span><span><b className="text-content">{performance.assists || 0}</b> passe{Number(performance.assists) > 1 ? "s" : ""}</span></div></Link>; })}</div> : <EmptyBlock>Ce récap est prêt. Il s'alimentera avec les compositions et performances, sans appel supplémentaire depuis la page publique.</EmptyBlock>,
 
