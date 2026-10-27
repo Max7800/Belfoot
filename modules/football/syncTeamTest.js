@@ -3,7 +3,7 @@ import { loadByExternalIds, upsertExternal } from "./sync";
 import { classifyNationalTeams } from "./nationalClassification";
 import { ensureSeason, seasonLabel, seasonYear } from "./season";
 import { clearUnassignedPlayerStats, upsertPlayerMembership } from "./playerMemberships";
-import { providerIdentityPatch } from "@/lib/playerIdentity";
+import { birthExtPatch, providerIdentityPatch } from "@/lib/playerIdentity";
 import { playerSnapshotPatch } from "@/lib/playerSnapshot";
 
 function parseRound(raw) {
@@ -84,6 +84,7 @@ export async function syncTeamTest(db, competition, ctx = {}) {
       source: competition.provider,
       external_id: player.external_id,
       ...providerIdentityPatch(existing, { nationality: player.nationality, birth_date: player.birth_date, name: player.name, photo_url: player.photo_url }),
+      ...birthExtPatch(existing, player),
       position: player.position,
       age: player.age,
       // Instantané « club actuel » : mêmes règles que les effectifs (championnat

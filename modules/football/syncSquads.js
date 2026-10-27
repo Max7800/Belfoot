@@ -1,7 +1,7 @@
 import { getProvider } from "./providers";
 import { clearUnassignedPlayerStats, upsertPlayerMembership } from "./playerMemberships";
 import { loadCompetitionSeasonClubIds } from "./seasonClubs";
-import { providerIdentityPatch } from "@/lib/playerIdentity";
+import { birthExtPatch, providerIdentityPatch } from "@/lib/playerIdentity";
 import { playerSnapshotPatch } from "@/lib/playerSnapshot";
 import { isNationalTeam } from "./nationalClassification";
 
@@ -77,6 +77,8 @@ export async function syncSquads(db, competition, ctx = {}) {
         stats: seasonPlayer?.stats || null,
         nationality: seasonPlayer?.nationality || player.nationality || null,
         birth_date: seasonPlayer?.birth_date || player.birth_date || null,
+        birth_country: seasonPlayer?.birth_country || player.birth_country || null,
+        birth_place: seasonPlayer?.birth_place || player.birth_place || null,
       }];
     })).values()];
     const externalIds = players.map((player) => player.external_id);
@@ -111,7 +113,7 @@ export async function syncSquads(db, competition, ctx = {}) {
       // l'API (l'effectif actuel /players/squads n'en fournit pas), jamais remplacées
       // si elles ont été fixées dans l'administration.
       const identity = providerIdentityPatch(existing, { nationality: p.nationality, birth_date: p.birth_date, name: p.name, photo_url: p.photo_url });
-      const patch = { source: competition.provider, external_id: p.external_id, ...identity, position: p.position, age: p.age, ...(nationalTeam ? {} : playerSnapshotPatch({ existing, club, competition, season, primaryClub })), synced_at: now };
+      const patch = { source: competition.provider, external_id: p.external_id, ...identity, ...birthExtPatch(existing, p), position: p.position, age: p.age, ...(nationalTeam ? {} : playerSnapshotPatch({ existing, club, competition, season, primaryClub })), synced_at: now };
       let pid = existing?.id;
       if (existing && !existing.locked) {
         const { error } = await db.from("players").update(patch).eq("id", existing.id);
