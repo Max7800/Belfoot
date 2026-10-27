@@ -256,7 +256,24 @@ describe("cron competition-refresh — passage de renouvellement", () => {
     });
     cron.durationMs = 15000; // un lot de statistiques de 15 s
     await tick();
-    expect(cron.runs.map((run) => run.key)).toEqual(["football.campaign-rollover", "football.squads", "football.coaches"]); // renouvellement d'abord, statistiques ensuite, entraîneurs en dernier
+    expect(cron.runs.map((run) => run.key)).toEqual(["football.campaign-rollover", "football.squads", "football.coaches"]); // renouvellement d'abord, statistiques ensuite ; plus de temps pour les détails (après les statistiques)
+  });
+
+  it("statistiques prioritaires, puis au moins un lot de détails après match s'il reste du temps", async () => {
+    // Cas réel du 26/10 : chaque passage avançait les statistiques (lots de
+    // 10–30 s) avant le renouvellement, qui dépassait alors son seuil de
+    // démarrage (12 s) et n'était plus jamais lancé.
+    const club = { id: "c", name: "Pro League", provider: "apifootball", external_id: "144", public_visible: true, competition_scope: "belgique" };
+    const clubPlan = { ...plan, competitions: { c: { enabled: true, seasons: { "2026-2027": { enabled: true, scope: "complete" } } } } };
+    cron.db = createFakeSupabase({
+      competitions: [club],
+      seasons: [{ id: "s-c", competition_id: "c", label: "2026-2027", import_status: "active", public_active: true }],
+      matches: [{ id: "m1", competition_id: "c", season_id: "s-c", status: "finished", kickoff: new Date(NOW - 3 * 3600000).toISOString() }],
+      site_settings: [{ id: 1, data: { football_import_plan: clubPlan, football_competition_refresh_state: { c: new Date(NOW - 3600000).toISOString() } } }],
+    });
+    cron.durationMs = 13000; // lots de 13 s : les statistiques finissent à 26 s (entre 25 et 28 s)
+    await tick();
+    expect(cron.runs.map((run) => run.key)).toEqual(["football.campaign-rollover", "football.squads", "football.lineups", "football.events"]);
   });
 
   it("budget de temps déjà entamé : pas de renouvellement dans ce passage", async () => {
