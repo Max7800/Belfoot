@@ -16,7 +16,7 @@ const SECRET = "secret-de-test";
 const NOW = new Date("2026-10-25T12:00:00Z").getTime();
 const H = 3600000;
 const CLUBS = Array.from({ length: 18 }, (_, index) => ({ id: `k-${String(index).padStart(2, "0")}`, name: `Club ${index}`, external_id: String(100 + index), source: "apifootball", team_type: "first_team" }));
-const MIGRATIONS = [...new Map(["football.squads", "football.coaches", "football.sync"].flatMap((key) => requiredMigrationsForJob(key, "2026-2027")).map((item) => [`${item.module}/${item.version}`, item])).values()];
+const MIGRATIONS = [...new Map(["football.squads", "football.coaches", "football.sync", "football.lineups", "football.events"].flatMap((key) => requiredMigrationsForJob(key, "2026-2027")).map((item) => [`${item.module}/${item.version}`, item])).values()];
 const plan = { version: 4, seasons: [{ label: "2026-2027", enabled: true }], competitions: { "c-144": { enabled: true, expected_clubs: 18, seasons: { "2026-2027": { enabled: true, scope: "complete", expected_clubs: 18 } } } } };
 const matches = CLUBS.slice(0, 9).map((club, index) => ({ id: `m-${index}`, competition_id: "c-144", season_id: "s-26", home_club_id: club.id, away_club_id: CLUBS[17 - index].id, status: "finished", external_id: String(index), kickoff: new Date(NOW - (index + 2) * H).toISOString() }));
 const seed = (strategy = null) => createFakeSupabase({
@@ -76,5 +76,25 @@ describe("cron competition-refresh — passage statistiques", () => {
     const stats = state.runs.find((run) => run.key === "football.squads");
     expect(stats.ctx).toMatchObject({ clubBatchSize: 10, requestLimit: 40 });
     expect((await preflightJobs(state.db, { key: "football.squads", ...stats.ctx, db: undefined })).blockers).toEqual([]);
+  });
+});
+
+describe("cron competition-refresh — passage détails après match", () => {
+  // Constat du 27/10/2026 (lendemain de la mise en ligne) : le préflight estimait
+  // 3 matchs par défaut (9 appels) contre un budget de lot de 4 et refusait
+  // chaque lot, sans aucun appel API.
+  it("les lots compositions et faits envoyés par le cron passent le vrai préflight", async () => {
+    state.db = seed();
+    await tick();
+    for (const key of ["football.lineups", "football.events"]) {
+      const run = state.runs.find((item) => item.key === key);
+      expect(run, key).toBeTruthy();
+      const result = await preflightJobs(state.db, { key, ...run.ctx, db: undefined });
+      expect(result.blockers, key).toEqual([]);
+    }
+  });
+  it("sans plafond de matchs, le même budget serait refusé (témoin)", async () => {
+    const result = await preflightJobs(seed(), { key: "football.lineups", competitionId: "c-144", season: "2026-2027", requestLimit: 4 });
+    expect(result.blockers).toContain("Le coût maximal estimé (9) dépasse le budget strict (4).");
   });
 });

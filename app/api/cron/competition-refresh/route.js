@@ -295,8 +295,10 @@ export async function GET(request) {
       const ctx = { db, competitionId: competition.id, season: seasonOf[competition.id].label, drain: true, apifootballKey: process.env.APIFOOTBALL_KEY };
       let complete = false;
       try {
-        const lineups = await runJob("football.lineups", { ...ctx, requestLimit: DETAIL_CALLS });
-        const events = await runJob("football.events", { ...ctx, eventsCap: EVENTS_PER_STEP, requestLimit: EVENTS_PER_STEP + 1 });
+        // matchCap : le préflight estime le coût sur ce plafond (3 matchs par défaut,
+        // soit 9 appels > budget du lot : chaque lot était refusé avant tout appel).
+        const lineups = await runJob("football.lineups", { ...ctx, matchCap: 1, requestLimit: DETAIL_CALLS });
+        const events = await runJob("football.events", { ...ctx, matchCap: EVENTS_PER_STEP, eventsCap: EVENTS_PER_STEP, requestLimit: EVENTS_PER_STEP + 1 });
         complete = [lineups, events].every((result) => typeof result !== "object" || result.complete !== false);
         details.push({ competition: competition.name, ok: true, complete });
       } catch (error) {
