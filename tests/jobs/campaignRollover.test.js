@@ -256,7 +256,7 @@ describe("cron competition-refresh — passage de renouvellement", () => {
     });
     cron.durationMs = 15000; // un lot de statistiques de 15 s
     await tick();
-    expect(cron.runs.map((run) => run.key)).toEqual(["football.campaign-rollover", "football.squads"]); // renouvellement d'abord, statistiques ensuite
+    expect(cron.runs.map((run) => run.key)).toEqual(["football.campaign-rollover", "football.squads", "football.coaches"]); // renouvellement d'abord, statistiques ensuite, entraîneurs en dernier
   });
 
   it("budget de temps déjà entamé : pas de renouvellement dans ce passage", async () => {
