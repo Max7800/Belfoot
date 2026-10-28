@@ -33,6 +33,9 @@ describe("suivi des Belges à l'étranger : cadence", () => {
     expect(dueLeague(targets, { 88: { fixturesAt: new Date(NOW - 2 * H).toISOString() } }, NOW.getTime()).id).toBe("253");
     expect(dueLeague(targets, { 88: { fixturesAt: new Date(NOW - 25 * H).toISOString() }, 253: { fixturesAt: new Date(NOW - 30 * H).toISOString() } }, NOW.getTime()).id).toBe("253"); // deux dus : le plus ancien
     expect(dueLeague(targets, { 88: { fixturesAt: new Date(NOW - 2 * H).toISOString() }, 253: { fixturesAt: new Date(NOW - 19 * H).toISOString() } }, NOW.getTime())).toBeNull();
+    // Programme en échec : retenté après 2 h (au lieu de 20 h).
+    expect(dueLeague(targets, { 88: { fixturesAt: new Date(NOW - 2 * H).toISOString(), error: "API" }, 253: { fixturesAt: new Date(NOW - 19 * H).toISOString() } }, NOW.getTime()).id).toBe("88");
+    expect(dueLeague(targets, { 88: { fixturesAt: new Date(NOW - H).toISOString(), error: "API" }, 253: { fixturesAt: new Date(NOW - 19 * H).toISOString() } }, NOW.getTime())).toBeNull();
   });
 });
 
