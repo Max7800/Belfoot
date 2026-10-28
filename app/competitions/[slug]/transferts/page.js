@@ -19,7 +19,7 @@ export default function CompetitionTransfersPage() {
   if (!comp) return <p className="py-8 text-center text-sm text-muted">Compétition introuvable.</p>;
 
   return (
-    <div className="mx-auto max-w-2xl space-y-4">
+    <div className="mx-auto max-w-6xl space-y-4">
       <Link href={competitionPath(comp)} className="inline-flex items-center gap-1 text-sm text-muted hover:text-content"><ArrowLeft className="h-4 w-4" />{comp.name}</Link>
       <h1 className="text-2xl font-black">Transferts · {comp.name}</h1>
       <CompetitionTransfers competition={comp} />
