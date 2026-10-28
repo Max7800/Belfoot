@@ -83,8 +83,10 @@ describe("pages publiques : lectures des tables volumineuses toujours complètes
   it("lectures signalées par l'audit du 26/10 : toutes passées en lecture complète", () => {
     const read = (file) => fs.readFileSync(file, "utf8");
     const competition = read("app/competitions/[slug]/page.js");
-    expect(competition).toContain("const statsResult = await readAll(() => {");
-    expect(competition).toContain('const membershipResult = await readAll(() => supabase.from("player_team_seasons")');
+    // Lectures complètes, regroupées en vagues parallèles (perf du 28/10).
+    expect(competition).toContain("const [statsResult, membershipResult, transferResult] = await Promise.all([\n      readAll(() => {\n        const query = supabase.from(\"player_season_stats\")".replace(/\n/g, competition.includes("\r\n") ? "\r\n" : "\n"));
+    expect(competition).toContain('readAll(() => supabase.from("player_team_seasons")');
+    expect(competition).toContain("const [loadedPlayers, exactMatchStats] = await Promise.all([");
     expect(read("app/competitions/page.js")).toContain('readAll(() => supabase.from("matches").select("id,competition_id,phase,round_raw")),');
     const club = read("app/clubs/[id]/page.js");
     expect(club).toContain('readAll(() => supabase.from("players").select("*").eq("club_id", id).order("name")),');

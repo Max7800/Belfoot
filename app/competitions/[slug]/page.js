@@ -152,37 +152,43 @@ export default function CompetitionPage() {
     const clubMap = await loadClubsForMatches(supabase, seasonMatches);
     const activeYear = seasonKey(activeSeason?.label);
     // Lectures complètes (lib/readAll.js) : plus de 1 000 lignes en coupe d'Europe.
-    const statsResult = await readAll(() => {
-      const query = supabase.from("player_season_stats").select(PUBLIC_PLAYER_STATS_FIELDS).eq("competition_id", comp.id);
-      return activeYear ? query.ilike("season", `${activeYear}%`) : query;
-    });
-    if (statsResult.error) throw statsResult.error;
-    const statsRows = preferAssignedPlayerStats(statsResult.data || []);
+    // Deux vagues au lieu de cinq lectures en série (11 s sur la Ligue des
+    // champions le 28/10/2026) : stats de saison, effectifs et transferts
+    // ensemble, puis joueurs et performances de match ensemble. Pas plus : une
+    // rafale plus large faisait dépasser le délai d'exécution de la base (26/10).
     const clubIds = Object.keys(clubMap);
-    let membershipRows = [];
-    if (activeYear && clubIds.length) {
-      const membershipResult = await readAll(() => supabase.from("player_team_seasons")
+    const [statsResult, membershipResult, transferResult] = await Promise.all([
+      readAll(() => {
+        const query = supabase.from("player_season_stats").select(PUBLIC_PLAYER_STATS_FIELDS).eq("competition_id", comp.id);
+        return activeYear ? query.ilike("season", `${activeYear}%`) : query;
+      }),
+      activeYear && clubIds.length ? readAll(() => supabase.from("player_team_seasons")
         .select("id,player_id,club_id,position,shirt_number,squad_role,membership_type,is_primary,active,season_start_year")
         .eq("season_start_year", Number(activeYear))
         .eq("active", true)
-        .in("club_id", clubIds));
-      if (membershipResult.error) throw membershipResult.error;
-      membershipRows = membershipResult.data || [];
-    }
+        .in("club_id", clubIds)) : Promise.resolve({ data: [], error: null }),
+      activeYear
+        ? supabase.from("player_transfers").select("id,player_id,player_name,from_club_id,to_club_id,from_club_name,to_club_name,transfer_date,transfer_type").eq("season_start_year", Number(activeYear)).order("transfer_date", { ascending: false }).limit(100)
+        : Promise.resolve({ data: [] }),
+    ]);
+    if (statsResult.error) throw statsResult.error;
+    if (membershipResult.error) throw membershipResult.error;
+    const statsRows = preferAssignedPlayerStats(statsResult.data || []);
+    const membershipRows = membershipResult.data || [];
     const playerIds = [...new Set([
       ...statsRows.map((row) => row.player_id),
       ...membershipRows.map((row) => row.player_id),
     ].filter(Boolean))];
-    let playerRows = playerIds.length ? await loadPlayersByIds(supabase, playerIds) : [];
+    const [loadedPlayers, exactMatchStats] = await Promise.all([
+      playerIds.length ? loadPlayersByIds(supabase, playerIds) : Promise.resolve([]),
+      loadMatchStatsForMatches(supabase, seasonMatches.map((match) => match.id)),
+    ]);
+    let playerRows = loadedPlayers;
     if (!playerRows.length && clubIds.length) {
       const fallback = await readAll(() => supabase.from("players").select(PUBLIC_PLAYER_FIELDS).in("club_id", clubIds).order("name"));
       if (fallback.error) throw fallback.error;
       playerRows = fallback.data || [];
     }
-    const exactMatchStats = await loadMatchStatsForMatches(supabase, seasonMatches.map((match) => match.id));
-    const transferResult = activeYear
-      ? await supabase.from("player_transfers").select("id,player_id,player_name,from_club_id,to_club_id,from_club_name,to_club_name,transfer_date,transfer_type").eq("season_start_year", Number(activeYear)).order("transfer_date", { ascending: false }).limit(100)
-      : { data: [] };
     const competitionClubIds = new Set(clubIds);
     const transferRows = transferResult.error ? [] : dedupeTransfers((transferResult.data || []).filter((transfer) => competitionClubIds.has(transfer.from_club_id) || competitionClubIds.has(transfer.to_club_id))).slice(0, 5);
     if (!alive) return;
