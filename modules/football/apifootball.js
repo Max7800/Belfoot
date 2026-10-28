@@ -1,6 +1,6 @@
 import { registerProvider } from "./providers";
 import { seasonYear } from "./season";
-import { repairMojibake } from "@/lib/mojibake";
+import { repairText } from "@/lib/mojibake";
 import { pickCurrentCoach } from "@/lib/coachPick";
 
 const BASE = "https://v3.football.api-sports.io";
@@ -64,8 +64,9 @@ async function apiFull(path, ctx = {}) {
       const text = await response.text();
       let json;
       // Noms « mojibake » renvoyés par l'API (« CvetkoviÄ ») réparés à la lecture :
-      // tous les jobs écrivent ainsi le nom correct (lib/mojibake.js).
-      try { json = text ? JSON.parse(text, (_key, value) => (typeof value === "string" ? repairMojibake(value) : value)) : {}; }
+      // tous les jobs écrivent ainsi le nom correct (lib/mojibake.js). Entités HTML
+      // (« D. O&apos;Shea ») décodées de la même façon.
+      try { json = text ? JSON.parse(text, (_key, value) => (typeof value === "string" ? repairText(value) : value)) : {}; }
       catch { throw new Error(`API-Football: réponse invalide (HTTP ${response.status})`); }
 
       const providerErrors = json.errors && (Array.isArray(json.errors) ? json.errors.length : Object.keys(json.errors).length);
