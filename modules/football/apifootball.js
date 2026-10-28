@@ -79,8 +79,12 @@ async function apiFull(path, ctx = {}) {
       return json;
     } catch (error) {
       const timedOut = error?.name === "AbortError";
-      lastError = timedOut ? new Error(`API-Football: délai dépassé après ${timeoutMs / 1000}s`) : error;
-      const retryable = timedOut || error?.retryable;
+      // Connexion coupée avant toute réponse (« fetch failed », balayage arrêté le
+      // 28/10/2026 à 21 h 23) : passagère, réessayée comme un délai dépassé.
+      const network = error instanceof TypeError && /fetch failed/i.test(error.message || "");
+      lastError = timedOut ? new Error(`API-Football: délai dépassé après ${timeoutMs / 1000}s`)
+        : network ? new Error(`API-Football: connexion impossible (${error.cause?.code || error.message})`) : error;
+      const retryable = timedOut || network || error?.retryable;
       if (!retryable || attempt >= maxAttempts) throw lastError;
       await wait(350 * attempt);
     } finally {
