@@ -62,6 +62,25 @@ export const hasBelgianLink = (player) => hasBelgianNationality(player?.national
 
 const youthTeam = (name) => /\b(u\d{2}|ii|b|jong|reserves?|youth|academy)\b/i.test(String(name || ""));
 
+// Ce que le balayage d'un championnat peut écrire sur une fiche (28/10/2026 :
+// M. Godts affiché à l'Ajax — 1 match d'Eredivisie avant son transfert — alors que
+// son affectation active de la saison est le PSG).
+//  - club : pas si une affectation active de la saison désigne un autre club ;
+//  - chiffres de championnat : jamais ceux d'un autre club par-dessus ceux du club
+//    actif ; sans club actif, même saison, on garde le championnat le plus joué.
+// Sans club actif, le club suit les chiffres gardés (jamais un club et les chiffres d'un autre).
+export function scanWrites({ current = null, clubId = null, stats = {}, seasonLabel, activeClubId = null }) {
+  const previous = current?.ext?.league_stats;
+  let updateStats = true;
+  if (previous && previous.season === seasonLabel && previous.club_id !== clubId) {
+    updateStats = activeClubId
+      ? previous.club_id !== activeClubId || clubId === activeClubId
+      : (Number(stats.appearances) || 0) >= (Number(previous.appearances) || 0);
+  }
+  const updateClub = activeClubId ? !clubId || activeClubId === clubId : updateStats;
+  return { updateClub, updateStats };
+}
+
 async function savePlayers(db, providerKey, league, season, found, now) {
   if (!found.length) return { saved: 0, created: 0 };
   const teams = [...new Map(found.filter((player) => player.team).map((player) => [player.team.external_id, player.team])).values()];
@@ -72,20 +91,33 @@ async function savePlayers(db, providerKey, league, season, found, now) {
   const existing = await loadByExternalIds(db, "players", providerKey, found.map((player) => player.external_id), "id,external_id,locked,club_id,nationality,country,competition,ext");
   const competition = { name: league.name, competition_scope: "etranger", competition_type: "league", ext: { country: league.country, providerType: "League" } };
   const seasonLabel = `${season}-${season + 1}`;
+  // Affectations actives de la saison (effectifs importés), sélections écartées.
+  const playerIds = [...existing.values()].map((row) => row.id);
+  const { data: activeRows, error: activeError } = playerIds.length
+    ? await db.from("player_team_seasons").select("player_id,club_id").in("player_id", playerIds).eq("active", true).eq("season_start_year", season)
+    : { data: [], error: null };
+  if (activeError) throw activeError;
+  const activeClubIds = [...new Set((activeRows || []).map((row) => row.club_id))];
+  const { data: activeClubs, error: activeClubsError } = activeClubIds.length ? await db.from("clubs").select("id,team_type").in("id", activeClubIds) : { data: [], error: null };
+  if (activeClubsError) throw activeClubsError;
+  const nationalIds = new Set((activeClubs || []).filter((row) => row.team_type === "national").map((row) => row.id));
+  const activeClubOf = new Map((activeRows || []).filter((row) => !nationalIds.has(row.club_id)).map((row) => [row.player_id, row.club_id]));
   let saved = 0; let created = 0;
   for (const player of found) {
     const current = existing.get(player.external_id) || null;
     if (current?.locked) continue;
     const club = player.team ? clubs.get(player.team.external_id) : null;
     const birth = birthExtPatch(current, player).ext?.birth || current?.ext?.birth;
+    const writes = scanWrites({ current, clubId: club?.id || null, stats: player.stats, seasonLabel, activeClubId: current ? activeClubOf.get(current.id) || null : null });
+    const leagueStats = { season: seasonLabel, league: league.name, league_id: league.id, league_logo: league.logo || null, country: league.country, club_id: club?.id || null, ...player.stats };
     const patch = {
       source: providerKey,
       external_id: player.external_id,
       ...providerIdentityPatch(current, { nationality: player.nationality, birth_date: player.birth_date, name: player.name, photo_url: player.photo_url }),
       ...(player.position ? { position: player.position } : {}),
       ...(player.age != null ? { age: player.age } : {}),
-      ...(club ? playerSnapshotPatch({ existing: current, club, competition, season: seasonLabel, primaryClub: !youthTeam(player.team?.name) && club.team_type !== "national", now }) : {}),
-      ext: { ...(current?.ext || {}), ...(birth ? { birth } : {}), league_stats: { season: seasonLabel, league: league.name, league_id: league.id, league_logo: league.logo || null, country: league.country, club_id: club?.id || null, ...player.stats } },
+      ...(club && writes.updateClub ? playerSnapshotPatch({ existing: current, club, competition, season: seasonLabel, primaryClub: !youthTeam(player.team?.name) && club.team_type !== "national", now }) : {}),
+      ext: { ...(current?.ext || {}), ...(birth ? { birth } : {}), ...(writes.updateStats ? { league_stats: leagueStats } : {}) },
       tracked: true,
       active: true,
       synced_at: now.toISOString(),
