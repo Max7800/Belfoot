@@ -31,7 +31,8 @@ describe("saisons d'un passage en club", () => {
   });
   it("fiche joueur : saisons affichées sous chaque club du parcours", () => {
     const page = fs.readFileSync("app/players/[id]/page.js", "utf8");
-    expect(page).toContain("const seasons = stintSeasons(stint, state.stats);");
+    expect(page).toContain("const allSeasons = stintSeasons(stint, state.stats);");
+    expect(page).toContain("const seasons = openStints.has(stintKey) ? allSeasons : allSeasons.slice(0, VISIBLE_LINES);");
     expect(page).toContain("{seasons.map((line) => <Fragment key={line.year}>");
   });
 });
