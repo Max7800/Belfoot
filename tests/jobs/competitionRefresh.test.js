@@ -6,7 +6,7 @@ import { refreshSeasonFor, refreshTargets } from "@/lib/competitionRefresh";
 // remplacé : on vérifie QUELS jobs seraient lancés, avec quelle saison.
 const state = vi.hoisted(() => ({ db: null, runs: [], coachResult: null, detailResults: {} }));
 vi.mock("@/lib/supabaseAdmin", () => ({ getAdmin: () => state.db }));
-vi.mock("@/lib/jobs", () => ({ runJob: async (key, ctx) => { state.runs.push({ key, competitionId: ctx.competitionId, season: ctx.season, resumeState: ctx.resumeState }); if (state.detailResults[key]) return state.detailResults[key]; return key === "football.squads" ? { complete: true } : key === "football.coaches" && state.coachResult ? state.coachResult : "ok"; } }));
+vi.mock("@/lib/jobs", () => ({ runJob: async (key, ctx) => { state.runs.push({ key, competitionId: ctx.competitionId, season: ctx.season, resumeState: ctx.resumeState, globalScope: ctx.globalScope, requestLimit: ctx.requestLimit, deadline: ctx.deadline }); if (state.detailResults[key]) return state.detailResults[key]; return key === "football.squads" ? { complete: true } : key === "football.coaches" && state.coachResult ? state.coachResult : "ok"; } }));
 const { GET } = await import("@/app/api/cron/competition-refresh/route");
 
 const SECRET = "secret-de-test";
@@ -35,7 +35,7 @@ beforeAll(() => { process.env.CRON_SECRET = SECRET; vi.useFakeTimers({ toFake: [
 afterAll(() => { delete process.env.CRON_SECRET; vi.useRealTimers(); });
 beforeEach(() => { state.runs = []; state.coachResult = null; state.detailResults = {}; });
 // Imports et statistiques seulement (renouvellement et entraîneurs testés à part).
-const PASS_KEYS = new Set(["football.campaign-rollover", "football.coaches", "football.lineups", "football.events"]);
+const PASS_KEYS = new Set(["football.campaign-rollover", "football.coaches", "football.lineups", "football.events", "football.abroad-follow"]);
 const importRuns = () => state.runs.filter((r) => !PASS_KEYS.has(r.key));
 const detailRuns = () => state.runs.filter((r) => r.key === "football.lineups" || r.key === "football.events").map((r) => [r.key, r.competitionId]);
 const coachRuns = () => state.runs.filter((r) => r.key === "football.coaches");
@@ -196,5 +196,15 @@ describe("cron competition-refresh — détails après match", () => {
     const body = await tick();
     expect(detailRuns().filter(([key]) => key === "football.lineups")).toHaveLength(1);
     expect(body.details).toEqual([{ competition: "Pro League", ok: false, error: "API indisponible" }]);
+  });
+});
+
+describe("cron competition-refresh — suivi des Belges à l'étranger", () => {
+  it("lancé en dernier, périmètre global, 12 appels, échéance à 45 s", async () => {
+    state.db = seed({ competitions: [PRO], seasons: baseSeasons, plan: basePlan });
+    await tick();
+    const abroad = state.runs.filter((run) => run.key === "football.abroad-follow");
+    expect(abroad).toEqual([expect.objectContaining({ globalScope: true, requestLimit: 12, deadline: NOW + 45000 })]);
+    expect(state.runs.at(-1).key).toBe("football.abroad-follow");
   });
 });

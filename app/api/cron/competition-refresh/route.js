@@ -25,6 +25,11 @@ const DETAIL_START_BEFORE_MS = 25000;
 const DETAIL_FIRST_START_BEFORE_MS = 28000;
 const DETAIL_CALLS = 4;
 const EVENTS_PER_STEP = 2;
+// Belges à l'étranger (programme, feuilles de match, balayage) : en dernier,
+// un passage borné à 12 appels, démarré au plus tard à 30 s, arrêté à 45 s.
+const ABROAD_START_BEFORE_MS = 30000;
+const ABROAD_DEADLINE_MS = 45000;
+const ABROAD_CALLS = 12;
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -337,9 +342,21 @@ export async function GET(request) {
       await persistState();
     }
 
+    // ── Belges à l'étranger : suivi match par match (job global) ───────────
+    let abroad = null;
+    if (Date.now() - startedAt <= ABROAD_START_BEFORE_MS) {
+      try {
+        const result = await runJob("football.abroad-follow", { db, globalScope: true, requestLimit: ABROAD_CALLS, deadline: startedAt + ABROAD_DEADLINE_MS, apifootballKey: process.env.APIFOOTBALL_KEY });
+        abroad = { ok: true, detail: String(result?.detail || "").slice(0, 300) };
+      } catch (error) {
+        abroad = { ok: false, error: String(error?.message || error).slice(0, 300) };
+      }
+    }
+
     return Response.json({
       ok: results.length === 0 || results.some((result) => result.ok),
       coaches,
+      abroad,
       details,
       calendarSeason,
       rollover,

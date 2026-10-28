@@ -4,7 +4,7 @@ import { classifyNationalTeams, isNationalTeamsCompetition } from "./nationalCla
 import { ensureSeason, seasonLabel, seasonYear } from "./season";
 import { isLeaseLost } from "@/lib/runLease";
 
-function parseRound(raw) {
+export function parseRound(raw) {
   if (!raw) return { round_raw: null, phase: null, round_number: null };
   const str = String(raw).trim();
   const parts = str.split(" - ");
@@ -47,7 +47,7 @@ async function relinkNullClubMatches(db, competition, seasonId) {
   }
   return fixed;
 }
-function resolveMatches(matches, competitionId, seasonId, map) {
+export function resolveMatches(matches, competitionId, seasonId, map) {
   return matches.map((m) => {
     const pr = parseRound(m.round);
     const homeId = map[m.home_ext];
