@@ -11,6 +11,9 @@ import { syncCareerSeasonStats } from "./syncPlayerCareers";
 import { isLeaseLost } from "@/lib/runLease";
 
 export const PAST_SEASONS = 5;
+// Fonction Vercel coupée à 60 s : pas de nouvelle saison au-delà de 35 s (un lot de
+// 5 joueurs × 5 saisons dépassait la limite, FUNCTION_INVOCATION_TIMEOUT le 28/10/2026).
+export const SEASON_STATS_TIME_MS = 35000;
 
 // Saisons passées, de la plus ancienne à la plus récente : « 2021 » … « 2025 » en octobre 2026.
 export function pastSeasons(now = new Date(), count = PAST_SEASONS) {
@@ -35,6 +38,7 @@ export async function syncBelgianSeasonStats(db, ctx = {}) {
   const seasons = ctx.seasons || pastSeasons(ctx.now || new Date());
   const batchSize = Math.max(1, Math.min(Number(ctx.batchSize) || 5, 10));
   const callLimit = Math.max(1, Number(ctx.requestLimit) || batchSize * seasons.length);
+  const deadline = Number(ctx.deadline) || Date.now() + SEASON_STATS_TIME_MS;
   const remainingQuery = () => db.from("players").select("id", { count: "exact", head: true })
     .eq("tracked", true).eq("active", true).not("ext->league_stats", "is", null).is("ext->past_stats_done_at", null);
 
@@ -62,7 +66,7 @@ export async function syncBelgianSeasonStats(db, ctx = {}) {
     const todo = ext.past_stats_plan.filter((season) => !done[season]);
     let stopped = false;
     for (const season of todo) {
-      if (calls >= callLimit) { stopped = true; break; }
+      if (calls >= callLimit || Date.now() >= deadline) { stopped = true; break; }
       calls++;
       try {
         lines += await syncCareerSeasonStats(db, provider, competition, player, { ...ctx, season });
