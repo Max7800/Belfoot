@@ -14,6 +14,7 @@ import dynamic from "next/dynamic";
 import AdminHint from "@/components/AdminHint";
 import { positionLabel } from "@/lib/positions";
 import { frenchNationName } from "@/lib/frenchNations";
+import { birthPlaceLabel } from "@/lib/frenchPlaces";
 const BelgiansWorldMap = dynamic(() => import("@/components/football/BelgiansWorldMap"), { ssr: false, loading: () => <div className="rounded-2xl border border-line/10 bg-surface/60 p-8 text-center text-sm text-muted">Chargement de la carte…</div> });
 
 const FLAGS = { England: "🏴", France: "🇫🇷", Germany: "🇩🇪", Italy: "🇮🇹", Spain: "🇪🇸", Netherlands: "🇳🇱", Portugal: "🇵🇹", Scotland: "🏴", Turkey: "🇹🇷", Austria: "🇦🇹", Switzerland: "🇨🇭", Greece: "🇬🇷", USA: "🇺🇸", Belgium: "🇧🇪" };
@@ -48,7 +49,7 @@ function RankingBoard({ board }) {
 // Carte « Sous d'autres couleurs » : sélection choisie, club, lieu de naissance.
 function OtherColorsCard({ item }) {
   const nation = item.nationalTeam?.name || nationalityList(item.player.nationality).find((value) => !hasBelgianNationality(value)) || null;
-  const birthPlace = item.player.birth?.place || item.player.ext?.birth?.place || null;
+  const birthPlace = birthPlaceLabel(item.player.birth || item.player.ext?.birth);
   return <Link href={`/players/${item.player.id}`} className="group flex items-center gap-3 rounded-2xl border border-cyan-300/20 bg-gradient-to-r from-cyan-300/[0.07] via-surface to-surface p-3 transition hover:border-cyan-300/50">
     <PlayerPhoto player={item.player} className="h-14 w-14" />
     <span className="min-w-0 flex-1">
