@@ -26,6 +26,104 @@ function inferredTeamType(name, national = false) {
   return "first_team";
 }
 
+// Statistiques d'une saison (ctx.season) toutes compétitions d'un joueur : clubs,
+// compétitions et saisons créés au besoin, affectations, lignes de stats (une
+// ligne verrouillée n'est jamais modifiée). Renvoie le nombre de lignes écrites.
+export async function syncCareerSeasonStats(db, provider, competition, player, ctx = {}) {
+  let statLines = 0;
+  const seasonStats = await provider.fetchPlayerCareerSeason(player, ctx);
+  await ensureExternalReferences(db, "clubs", competition.provider, seasonStats.map((row) => ({
+    external_id: row.team.external_id,
+    name: row.team.name,
+    logo_url: row.team.logo_url,
+    team_type: inferredTeamType(row.team.name, row.team.national),
+    national_category: nationalCategory(row.team),
+    ext: { country: row.team.country, national: row.team.national, imported_for: "player-career" },
+  })));
+  await classifyNationalTeams(db, competition.provider, seasonStats.map((row) => row.team));
+  const compMap = await ensureCompetitions(db, competition.provider, seasonStats.map((row) => ({
+    external_id: row.competition.external_id,
+    name: row.competition.name,
+    logo_url: row.competition.logo_url,
+    competition_type: row.competition.type,
+    ext: { country: row.competition.country, country_flag: row.competition.flag_url, imported_for: "player-career" },
+  })));
+
+  const teamExternalIds = [...new Set(seasonStats.map((row) => row.team.external_id))];
+  const { data: statClubs, error: statClubsError } = teamExternalIds.length
+    ? await db.from("clubs").select("id,name,external_id,team_type,national_category,ext").eq("source", competition.provider).in("external_id", teamExternalIds)
+    : { data: [] };
+  if (statClubsError) throw statClubsError;
+  const statClubMap = Object.fromEntries((statClubs || []).map((club) => [String(club.external_id), club]));
+  const statCompetitions = [...compMap.values()];
+  const statCompetitionMap = Object.fromEntries(statCompetitions.map((item) => [String(item.external_id), item]));
+  const seasonYear = String(seasonStats[0]?.season || String(ctx.season || "").match(/\d{4}/)?.[0] || "");
+  const seasonLabel = seasonYear ? `${seasonYear}-${Number(seasonYear) + 1}` : String(ctx.season || "");
+  const statCompetitionIds = (statCompetitions || []).map((item) => item.id);
+  const { data: existingSeasons, error: existingSeasonsError } = statCompetitionIds.length
+    ? await db.from("seasons").select("id,competition_id").in("competition_id", statCompetitionIds).eq("label", seasonLabel)
+    : { data: [], error: null };
+  if (existingSeasonsError) throw existingSeasonsError;
+  const competitionsWithSeason = new Set((existingSeasons || []).map((row) => row.competition_id));
+  const seasonRows = (statCompetitions || []).filter((item) => !competitionsWithSeason.has(item.id)).map((item) => ({
+    external_id: `${item.external_id}:${seasonYear}`,
+    competition_id: item.id,
+    label: seasonLabel,
+  }));
+  await upsertExternal(db, "seasons", competition.provider, seasonRows, ["competition_id", "label"]);
+  const { data: storedSeasons, error: storedSeasonsError } = statCompetitionIds.length
+    ? await db.from("seasons").select("id,competition_id").in("competition_id", statCompetitionIds).eq("label", seasonLabel)
+    : { data: [], error: null };
+  if (storedSeasonsError) throw storedSeasonsError;
+  const storedSeasonMap = Object.fromEntries((storedSeasons || []).map((row) => [row.competition_id, row.id]));
+  const { data: existingStats, error: existingStatsError } = await db.from("player_season_stats")
+    .select("id,club_id,competition_id,locked")
+    .eq("player_id", player.id)
+    .eq("season", seasonYear);
+  if (existingStatsError) throw existingStatsError;
+  const existingStatsMap = new Map((existingStats || []).map((row) => [`${row.club_id}:${row.competition_id}`, row]));
+  const now = new Date().toISOString();
+  for (const row of seasonStats) {
+    const club = statClubMap[row.team.external_id];
+    const statCompetition = statCompetitionMap[row.competition.external_id];
+    if (!club || !statCompetition) continue;
+    if (!row.team.national && !isNationalSelectionClub(club, row.player.nationality || player.nationality)) {
+      await upsertPlayerMembership(db, {
+        playerId: player.id,
+        club,
+        season: seasonLabel,
+        source: competition.provider,
+        externalId: player.external_id,
+        position: row.player.position,
+        squadRole: squadRoleForClub(club),
+        isPrimary: club.team_type === "first_team",
+        active: false,
+        ext: { imported_for: "player-career-stats" },
+      });
+    }
+    const existingStat = existingStatsMap.get(`${club.id}:${statCompetition.id}`);
+    if (existingStat?.locked) continue;
+    const statsPatch = {
+      player_id: player.id,
+      club_id: club.id,
+      competition_id: statCompetition.id,
+      season_id: storedSeasonMap[statCompetition.id] || null,
+      season: row.season,
+      ...row.stats,
+      source: competition.provider,
+      external_id: player.external_id,
+      ext: row.ext || {},
+      synced_at: now,
+    };
+    const { error: statsError } = existingStat
+      ? await db.from("player_season_stats").update(statsPatch).eq("id", existingStat.id)
+      : await db.from("player_season_stats").insert(statsPatch);
+    if (statsError) throw new Error(`${player.name}: statistiques ${row.competition.name}: ${statsError.message}`);
+    statLines++;
+  }
+  return statLines;
+}
+
 export async function syncPlayerCareers(db, competition, ctx = {}) {
   const provider = getProvider(competition.provider);
   if (!provider?.fetchPlayerCareer) throw new Error(`${competition.name}: historiques de carrière non supportés`);
@@ -101,98 +199,7 @@ export async function syncPlayerCareers(db, competition, ctx = {}) {
         });
         memberships++;
       }
-      if (ctx.includeCareerStats && provider.fetchPlayerCareerSeason) {
-        const seasonStats = await provider.fetchPlayerCareerSeason(player, ctx);
-        await ensureExternalReferences(db, "clubs", competition.provider, seasonStats.map((row) => ({
-          external_id: row.team.external_id,
-          name: row.team.name,
-          logo_url: row.team.logo_url,
-          team_type: inferredTeamType(row.team.name, row.team.national),
-          national_category: nationalCategory(row.team),
-          ext: { country: row.team.country, national: row.team.national, imported_for: "player-career" },
-        })));
-        await classifyNationalTeams(db, competition.provider, seasonStats.map((row) => row.team));
-        const compMap = await ensureCompetitions(db, competition.provider, seasonStats.map((row) => ({
-          external_id: row.competition.external_id,
-          name: row.competition.name,
-          logo_url: row.competition.logo_url,
-          competition_type: row.competition.type,
-          ext: { country: row.competition.country, country_flag: row.competition.flag_url, imported_for: "player-career" },
-        })));
-
-        const teamExternalIds = [...new Set(seasonStats.map((row) => row.team.external_id))];
-        const { data: statClubs, error: statClubsError } = teamExternalIds.length
-          ? await db.from("clubs").select("id,name,external_id,team_type,national_category,ext").eq("source", competition.provider).in("external_id", teamExternalIds)
-          : { data: [] };
-        if (statClubsError) throw statClubsError;
-        const statClubMap = Object.fromEntries((statClubs || []).map((club) => [String(club.external_id), club]));
-        const statCompetitions = [...compMap.values()];
-        const statCompetitionMap = Object.fromEntries(statCompetitions.map((item) => [String(item.external_id), item]));
-        const seasonYear = String(seasonStats[0]?.season || String(ctx.season || "").match(/\d{4}/)?.[0] || "");
-        const seasonLabel = seasonYear ? `${seasonYear}-${Number(seasonYear) + 1}` : String(ctx.season || "");
-        const statCompetitionIds = (statCompetitions || []).map((item) => item.id);
-        const { data: existingSeasons, error: existingSeasonsError } = statCompetitionIds.length
-          ? await db.from("seasons").select("id,competition_id").in("competition_id", statCompetitionIds).eq("label", seasonLabel)
-          : { data: [], error: null };
-        if (existingSeasonsError) throw existingSeasonsError;
-        const competitionsWithSeason = new Set((existingSeasons || []).map((row) => row.competition_id));
-        const seasonRows = (statCompetitions || []).filter((item) => !competitionsWithSeason.has(item.id)).map((item) => ({
-          external_id: `${item.external_id}:${seasonYear}`,
-          competition_id: item.id,
-          label: seasonLabel,
-        }));
-        await upsertExternal(db, "seasons", competition.provider, seasonRows, ["competition_id", "label"]);
-        const { data: storedSeasons, error: storedSeasonsError } = statCompetitionIds.length
-          ? await db.from("seasons").select("id,competition_id").in("competition_id", statCompetitionIds).eq("label", seasonLabel)
-          : { data: [], error: null };
-        if (storedSeasonsError) throw storedSeasonsError;
-        const storedSeasonMap = Object.fromEntries((storedSeasons || []).map((row) => [row.competition_id, row.id]));
-        const { data: existingStats, error: existingStatsError } = await db.from("player_season_stats")
-          .select("id,club_id,competition_id,locked")
-          .eq("player_id", player.id)
-          .eq("season", seasonYear);
-        if (existingStatsError) throw existingStatsError;
-        const existingStatsMap = new Map((existingStats || []).map((row) => [`${row.club_id}:${row.competition_id}`, row]));
-        const now = new Date().toISOString();
-        for (const row of seasonStats) {
-          const club = statClubMap[row.team.external_id];
-          const statCompetition = statCompetitionMap[row.competition.external_id];
-          if (!club || !statCompetition) continue;
-          if (!row.team.national && !isNationalSelectionClub(club, row.player.nationality || player.nationality)) {
-            await upsertPlayerMembership(db, {
-              playerId: player.id,
-              club,
-              season: seasonLabel,
-              source: competition.provider,
-              externalId: player.external_id,
-              position: row.player.position,
-              squadRole: squadRoleForClub(club),
-              isPrimary: club.team_type === "first_team",
-              active: false,
-              ext: { imported_for: "player-career-stats" },
-            });
-          }
-          const existingStat = existingStatsMap.get(`${club.id}:${statCompetition.id}`);
-          if (existingStat?.locked) continue;
-          const statsPatch = {
-            player_id: player.id,
-            club_id: club.id,
-            competition_id: statCompetition.id,
-            season_id: storedSeasonMap[statCompetition.id] || null,
-            season: row.season,
-            ...row.stats,
-            source: competition.provider,
-            external_id: player.external_id,
-            ext: row.ext || {},
-            synced_at: now,
-          };
-          const { error: statsError } = existingStat
-            ? await db.from("player_season_stats").update(statsPatch).eq("id", existingStat.id)
-            : await db.from("player_season_stats").insert(statsPatch);
-          if (statsError) throw new Error(`${player.name}: statistiques ${row.competition.name}: ${statsError.message}`);
-          statLines++;
-        }
-      }
+      if (ctx.includeCareerStats && provider.fetchPlayerCareerSeason) statLines += await syncCareerSeasonStats(db, provider, competition, player, ctx);
       const completedAt = new Date().toISOString();
       const seasonKey = String(ctx.season || "").match(/\d{4}/)?.[0];
       const completedExt = ctx.includeCareerStats && seasonKey
