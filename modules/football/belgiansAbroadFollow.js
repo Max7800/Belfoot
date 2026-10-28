@@ -102,10 +102,20 @@ export async function followBelgiansAbroad(db, ctx = {}) {
   // 1. Programme d'un championnat.
   const target = dueLeague(targets, state.leagues, now.getTime());
   if (target && Date.now() < deadline) {
-    const result = await importFixtures(db, provider, target, now, ctx);
-    // Compétition mémorisée : elle peut exister avant le suivi (créée par les carrières).
-    state.leagues = { ...state.leagues, [target.id]: { fixturesAt: now.toISOString(), matches: result.imported, competitionId: result.competitionId || state.leagues[target.id]?.competitionId || null } };
-    notes.push(`${target.name} : ${result.imported} match(s) de Belges`);
+    try {
+      const result = await importFixtures(db, provider, target, now, ctx);
+      // Compétition mémorisée : elle peut exister avant le suivi (créée par les carrières).
+      state.leagues = { ...state.leagues, [target.id]: { fixturesAt: now.toISOString(), matches: result.imported, competitionId: result.competitionId || state.leagues[target.id]?.competitionId || null } };
+      notes.push(`${target.name} : ${result.imported} match(s) de Belges`);
+    } catch (error) {
+      if (isLeaseLost(error)) throw error;
+      // Programme refusé par l'API (constaté le 28/10/2026 : « Free plans do not
+      // have access to this season ») : noté avec la requête, reporté au
+      // lendemain, sans bloquer les feuilles de match ni le balayage.
+      const message = `${target.name} (${target.id}, saison ${scanSeason(target, now)}) : ${String(error?.message || error).slice(0, 160)}`;
+      state.leagues = { ...state.leagues, [target.id]: { ...(state.leagues[target.id] || {}), fixturesAt: now.toISOString(), error: message } };
+      notes.push(`programme en échec — ${message}`);
+    }
   }
 
   // 2. Feuilles des matchs terminés des Belges (compétitions masquées du suivi).
