@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import { describe, expect, it } from "vitest";
-import { clubLabel, decodeEntities, isPlayerNamedClub, matchesTransferQuery, summarizeTransfers, transferDirection, transferKind } from "@/lib/transfersView";
+import { clubLabel, isPlayerNamedClub, matchesTransferQuery, summarizeTransfers, transferDirection, transferKind } from "@/lib/transfersView";
+import { decodeEntities } from "@/lib/mojibake";
 import { transferTypeLabel } from "@/lib/transferLabels";
 
 // Audit de la page Transferts du 28/10/2026 (784 transferts 2026).
