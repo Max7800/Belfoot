@@ -100,3 +100,24 @@ describe("tâche planifiée : budget du suivi accepté par le vrai préflight", 
     expect(result.total.max).toBe(12);
   });
 });
+
+describe("suivi des Belges : programme refusé par l'API", () => {
+  it("noté avec la requête, reporté, et le reste du passage continue", async () => {
+    const calls = [];
+    registerProvider({
+      key: "apifootball",
+      async fetchMatchesWindow() { calls.push("window"); throw new Error("API-Football: {\"plan\":\"Free plans do not have access to this season, try from 2022 to 2024.\"}"); },
+      async fetchLeaguePlayersPage() { calls.push("scan"); return { players: [], pages: 1 }; },
+    });
+    const db = createFakeSupabase({
+      clubs: [{ id: "k-ajax", source: "apifootball", external_id: "194", name: "Ajax", locked: false, ext: {} }],
+      players: [{ id: "p-1", source: "apifootball", external_id: "1", name: "Belge", nationality: "Belgium", club_id: "k-ajax", tracked: true, active: true, locked: false, ext: { league_stats: stats() } }],
+      site_settings: [{ id: 1, data: { football_abroad_follow_state: { scan: { leagueIndex: 2, page: 1, cycleStartedAt: "2026-10-27T00:00:00Z", cycleCompletedAt: null } } } }],
+    });
+    const result = await followBelgiansAbroad(db, { now: NOW, leagues: [{ id: "88", name: "Eredivisie", country: "Netherlands" }, { id: "1", name: "A", country: "X" }, { id: "2", name: "B", country: "Y" }] });
+    expect(calls).toEqual(["window", "scan"]); // le balayage continue malgré l'échec
+    const state = db.rows("site_settings")[0].data.football_abroad_follow_state;
+    expect(state.leagues["88"]).toMatchObject({ fixturesAt: NOW.toISOString(), error: expect.stringContaining("Eredivisie (88, saison 2026) : API-Football") });
+    expect(result.detail).toContain("programme en échec — Eredivisie (88, saison 2026)");
+  });
+});
