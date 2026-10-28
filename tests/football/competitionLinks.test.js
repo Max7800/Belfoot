@@ -112,15 +112,15 @@ describe("fiche joueur — câblage des liens de compétition", () => {
     expect(nested).toEqual([]);
   });
 
-  it("le nom de compétition passe par CompetitionName aux trois endroits (carte de match, stats mobile, stats bureau)", () => {
+  it("le nom de compétition passe par CompetitionName aux deux endroits (carte de match, saisons : une seule mise en page depuis le 28/10)", () => {
     const uses = [];
     walk(ast, (node) => { if (elementName(node) === "CompetitionName") uses.push(attr(node, "fallback")?.value?.value); });
-    expect(uses.sort()).toEqual(["Match", "Non attribuée", "Non attribuée"]);
+    expect(uses.sort()).toEqual(["Match", "Non attribuée"]);
   });
 
   it("le lien n'est donné que pour une compétition chargée, par son identifiant", () => {
     expect(source).toContain("href={competition ? competitionLinks[String(match.competition_id)] : null}");
-    expect((source.match(/href=\{competitions\[stat\.competition_id\] \? competitionLinks\[String\(stat\.competition_id\)\] : null\}/g) || []).length).toBe(2);
+    expect((source.match(/href=\{competitions\[stat\.competition_id\] \? competitionLinks\[String\(stat\.competition_id\)\] : null\}/g) || []).length).toBe(1);
   });
 
   it("la carte de match reste cliquable vers le match, avec un libellé accessible", () => {
