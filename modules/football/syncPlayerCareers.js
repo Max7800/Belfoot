@@ -1,5 +1,5 @@
 import { getProvider } from "./providers";
-import { upsertExternal, ensureCompetitions, CompetitionCollisionError, storedClubName } from "./sync";
+import { upsertExternal, ensureCompetitions, ensureExternalReferences, CompetitionCollisionError } from "./sync";
 import { squadRoleForClub, upsertPlayerMembership } from "./playerMemberships";
 import { isNationalSelectionClub } from "@/lib/nationalities";
 import { isNationName } from "@/lib/frenchNations";
@@ -24,19 +24,6 @@ function inferredTeamType(name, national = false) {
   if (/\b(u\d{2}|youth|academy|jeunes?)\b/.test(value)) return "youth";
   if (/\b(women|féminin|feminin|dames)\b/.test(value)) return "women";
   return "first_team";
-}
-
-async function ensureExternalReferences(db, table, source, rows) {
-  const uniqueRows = [...new Map((rows || []).filter((row) => row.external_id).map((row) => [String(row.external_id), row])).values()];
-  if (!uniqueRows.length) return;
-  const { data: existing, error: existingError } = await db.from(table).select("external_id").eq("source", source).in("external_id", uniqueRows.map((row) => String(row.external_id)));
-  if (existingError) throw existingError;
-  const known = new Set((existing || []).map((row) => String(row.external_id)));
-  const missing = uniqueRows.filter((row) => !known.has(String(row.external_id))).map((row) => ({ ...row, source, ...(row.name !== undefined ? { name: storedClubName(table, row.name) } : {}) }));
-  if (missing.length) {
-    const { error } = await db.from(table).insert(missing);
-    if (error) throw new Error(`${table}: ${error.message}`);
-  }
 }
 
 export async function syncPlayerCareers(db, competition, ctx = {}) {

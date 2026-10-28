@@ -86,7 +86,7 @@ const DYNAMIC_DEFAULTS = {
 // { competitions: [["source", "external_id"], ["slug"]] } : une insertion qui
 // en violerait un échoue ENTIÈREMENT avec le code Postgres 23505, comme un
 // INSERT multiple réel (une clé à null n'entre pas dans l'index).
-export function createFakeSupabase(seed = {}, { maxRows = 1000, rpc = {}, uniqueIndexes = {} } = {}) {
+export function createFakeSupabase(seed = {}, { maxRows = 1000, rpc = {}, uniqueIndexes = {}, notNull = {} } = {}) {
   const tables = {};
   const rpcCalls = [];
   let nextId = 1;
@@ -193,6 +193,9 @@ export function createFakeSupabase(seed = {}, { maxRows = 1000, rpc = {}, unique
         const payloads = Array.isArray(state.payload) ? state.payload : [state.payload];
         const violation = uniqueViolation(payloads);
         if (violation) return { data: null, error: violation };
+        // Colonnes NOT NULL déclarées (ex. clubs.name) : même erreur que Postgres (23502).
+        const missingColumn = (notNull[name] || []).find((column) => payloads.some((payload) => payload[column] === null || payload[column] === undefined));
+        if (missingColumn) return { data: null, error: { code: "23502", message: `null value in column "${missingColumn}" of relation "${name}" violates not-null constraint` } };
         rows = insertRows(payloads);
       } else if (state.op === "update") {
         rows = table(name).filter(matches);

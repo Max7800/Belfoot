@@ -6,6 +6,21 @@ import { frenchTeamName } from "@/lib/frenchNations";
 // quel que soit le job : l'API renvoie les noms anglais à chaque passage et
 // écrasait le nom français posé par syncNationalTeam.
 export const storedClubName = (table, name) => (table === "clubs" && typeof name === "string" ? frenchTeamName(name) : name);
+
+// Références manquantes (clubs…) insérées avec leurs champs ; celles qui existent
+// déjà ne sont jamais modifiées (un nom français posé à la main est conservé).
+export async function ensureExternalReferences(db, table, source, rows) {
+  const uniqueRows = [...new Map((rows || []).filter((row) => row.external_id).map((row) => [String(row.external_id), row])).values()];
+  if (!uniqueRows.length) return;
+  const { data: existing, error: existingError } = await db.from(table).select("external_id").eq("source", source).in("external_id", uniqueRows.map((row) => String(row.external_id)));
+  if (existingError) throw existingError;
+  const known = new Set((existing || []).map((row) => String(row.external_id)));
+  const missing = uniqueRows.filter((row) => !known.has(String(row.external_id))).map((row) => ({ ...row, source, ...(row.name !== undefined ? { name: storedClubName(table, row.name) } : {}) }));
+  if (missing.length) {
+    const { error } = await db.from(table).insert(missing);
+    if (error) throw new Error(`${table}: ${error.message}`);
+  }
+}
 function chunks(values, size) {
   const out = [];
   for (let index = 0; index < values.length; index += size) out.push(values.slice(index, index + size));
