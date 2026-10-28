@@ -63,11 +63,21 @@ describe("belgianWatchStatus — nationalité ≠ sélection représentée", () 
     expect(belgianWatchStatus({ nationality: "Belgium" }, BELGIUM)).toBe("belgium");
   });
 
-  it("Belge représentant une autre sélection : binational à suivre, toujours suivi", () => {
+  it("Belge représentant une autre sélection : « Sous d'autres couleurs », toujours suivi", () => {
     const player = { nationality: "Belgium, Morocco" };
-    expect(belgianWatchStatus(player, MOROCCO)).toBe("binational");
-    expect(belgianWatchStatus({ nationality: "Belgium" }, MOROCCO)).toBe("binational");
+    expect(belgianWatchStatus(player, MOROCCO)).toBe("other_colors");
+    expect(belgianWatchStatus({ nationality: "Belgium" }, MOROCCO)).toBe("other_colors");
     expect(isBelgianFollowed(player)).toBe(true);
+  });
+
+  it("né en Belgique (pays de naissance conservé) : suivi même sans nationalité belge", () => {
+    // El Khannouss : « Morocco » pour l'API, né à Genk.
+    expect(belgianWatchStatus({ nationality: "Morocco", ext: { birth: { country: "Belgium", place: "Genk" } } })).toBe("other_colors");
+    expect(belgianWatchStatus({ nationality: "Morocco", birth: { country: "Belgium" } })).toBe("other_colors"); // alias PostgREST
+    expect(belgianWatchStatus({ nationality: "", ext: { birth: { country: "Belgium" } } })).toBe("binational"); // nationalité inconnue : à suivre
+    expect(belgianWatchStatus({ nationality: "Belgium", ext: { birth: { country: "Belgium" } } })).toBe("belgian");
+    expect(belgianWatchStatus({ nationality: "Morocco", ext: { birth: { country: "Morocco" } } })).toBeNull();
+    expect(isBelgianFollowed({ nationality: "Greece", ext: { birth: { country: "Belgium" } } })).toBe(true);
   });
 
   it("plusieurs nationalités connues sans sélection : binational", () => {
