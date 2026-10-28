@@ -200,11 +200,14 @@ describe("cron competition-refresh — détails après match", () => {
 });
 
 describe("cron competition-refresh — suivi des Belges à l'étranger", () => {
-  it("lancé en dernier, périmètre global, 12 appels, échéance à 45 s", async () => {
+  it("lancé après les détails et avant les entraîneurs, périmètre global, 12 appels, échéance à 48 s", async () => {
     state.db = seed({ competitions: [PRO], seasons: baseSeasons, plan: basePlan });
     await tick();
     const abroad = state.runs.filter((run) => run.key === "football.abroad-follow");
-    expect(abroad).toEqual([expect.objectContaining({ globalScope: true, requestLimit: 12, deadline: NOW + 45000 })]);
-    expect(state.runs.at(-1).key).toBe("football.abroad-follow");
+    expect(abroad).toEqual([expect.objectContaining({ globalScope: true, requestLimit: 12, deadline: NOW + 48000 })]);
+    const keys = state.runs.map((run) => run.key);
+    expect(keys.indexOf("football.abroad-follow")).toBeGreaterThan(keys.lastIndexOf("football.events"));
+    expect(keys.indexOf("football.abroad-follow")).toBeLessThan(keys.indexOf("football.coaches"));
+    expect(state.db.rows("site_settings")[0].data.football_abroad_follow_last).toMatchObject({ ok: true });
   });
 });

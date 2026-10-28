@@ -20,15 +20,15 @@ const COACH_CLUB_BATCH = 4;
 // octobre 2026 sur toutes les compétitions. Un lot = un match détaillé
 // (~3 appels) + ses faits ; pas de nouveau lot au-delà de 25 s.
 const DETAIL_STEPS = 6;
-const DETAIL_START_BEFORE_MS = 25000;
+const DETAIL_START_BEFORE_MS = 20000;
 // Placé après les statistiques : au moins un lot par passage s’il reste du temps.
-const DETAIL_FIRST_START_BEFORE_MS = 28000;
+const DETAIL_FIRST_START_BEFORE_MS = 24000;
 const DETAIL_CALLS = 4;
 const EVENTS_PER_STEP = 2;
-// Belges à l'étranger (programme, feuilles de match, balayage) : en dernier,
-// un passage borné à 12 appels, démarré au plus tard à 30 s, arrêté à 45 s.
-const ABROAD_START_BEFORE_MS = 30000;
-const ABROAD_DEADLINE_MS = 45000;
+// Belges à l'étranger (programme, feuilles de match, balayage) : après les
+// détails, un passage borné à 12 appels, démarré au plus tard à 32 s, arrêté à 48 s.
+const ABROAD_START_BEFORE_MS = 32000;
+const ABROAD_DEADLINE_MS = 48000;
 const ABROAD_CALLS = 12;
 
 export const dynamic = "force-dynamic";
@@ -315,6 +315,21 @@ export async function GET(request) {
       await persistState();
     }
 
+    // ── Belges à l'étranger : suivi match par match (job global), avant les
+    // entraîneurs (une vérification par semaine leur suffit) : sinon le
+    // rattrapage des détails ne lui laissait jamais de créneau (28/10/2026).
+    let abroad = null;
+    if (Date.now() - startedAt <= ABROAD_START_BEFORE_MS) {
+      try {
+        const result = await runJob("football.abroad-follow", { db, globalScope: true, requestLimit: ABROAD_CALLS, deadline: startedAt + ABROAD_DEADLINE_MS, apifootballKey: process.env.APIFOOTBALL_KEY });
+        abroad = { ok: true, detail: String(result?.detail || "").slice(0, 300) };
+      } catch (error) {
+        abroad = { ok: false, error: String(error?.message || error).slice(0, 300) };
+      }
+    } else abroad = { ok: false, skipped: "temps du passage épuisé" };
+    // Dernier passage lisible sans l'historique des jobs (réservé à l'admin).
+    await updateSiteSettings(db, { football_abroad_follow_last: { at: new Date().toISOString(), elapsedMs: Date.now() - startedAt, ...abroad } });
+
     // ── Entraîneurs : compétitions de clubs autorisées, une par passage ─────
     let coaches = null;
     const coachCandidate = outOfTime() ? null : coachRefreshCandidate([...statsAllowedFor], coachState, now.getTime());
@@ -340,17 +355,6 @@ export async function GET(request) {
         coaches = { competition: competition?.name, ok: false, error: String(error?.message || error).slice(0, 300) };
       }
       await persistState();
-    }
-
-    // ── Belges à l'étranger : suivi match par match (job global) ───────────
-    let abroad = null;
-    if (Date.now() - startedAt <= ABROAD_START_BEFORE_MS) {
-      try {
-        const result = await runJob("football.abroad-follow", { db, globalScope: true, requestLimit: ABROAD_CALLS, deadline: startedAt + ABROAD_DEADLINE_MS, apifootballKey: process.env.APIFOOTBALL_KEY });
-        abroad = { ok: true, detail: String(result?.detail || "").slice(0, 300) };
-      } catch (error) {
-        abroad = { ok: false, error: String(error?.message || error).slice(0, 300) };
-      }
     }
 
     return Response.json({
