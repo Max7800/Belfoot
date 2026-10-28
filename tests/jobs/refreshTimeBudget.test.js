@@ -105,3 +105,15 @@ describe("national-refresh — sélection non autorisée par le plan", () => {
     expect(body).toMatchObject({ ok: false, refreshed: 0, skipped: 1 });
   });
 });
+
+describe("competition-refresh ?pass=details — démarrage des lots", () => {
+  // Lot = compositions + faits ; 5 s chacun ici, soit 10 s par lot (mesuré à ~10 s en production).
+  const completePlan = (n) => ({ ...plan(n), competitions: Object.fromEntries(Array.from({ length: n }, (_, i) => [`c${i}`, { enabled: true, seasons: { "2026-2027": { enabled: true, scope: "complete" } } }])) });
+  it("nouveau lot tant que 40 s ne sont pas écoulées : 5 lots (0, 10, 20, 30, 40 s), aucun au-delà", async () => {
+    state.durationMs = 5000;
+    state.db = createFakeSupabase({ competitions: Array.from({ length: 8 }, (_, i) => comp(i)), seasons: Array.from({ length: 8 }, (_, i) => season(i)), site_settings: [{ id: 1, data: { football_import_plan: completePlan(8) } }] });
+    const body = await call(competitionRoute, "/api/cron/competition-refresh?pass=details");
+    expect(state.runs.filter((run) => run.key === "football.lineups")).toHaveLength(5);
+    expect(body.elapsedMs).toBeLessThanOrEqual(50000);
+  });
+});

@@ -31,7 +31,9 @@ const EVENTS_PER_STEP = 2;
 // Le passage dédié a la fonction entière pour lui ; tant qu'il tourne, le
 // passage principal lui laisse les détails et rend ce temps aux Belges à l'étranger.
 const DEDICATED_DETAIL_STEPS = 12;
-const DEDICATED_DETAIL_START_BEFORE_MS = 36000;
+// Lot ≈ 10 s depuis les écritures groupées (5,7 à 7,6 s de compositions, 28/10/2026,
+// contre 11 à 23 s avant) : un lot lancé à 40 s finit vers 50 s, sous la coupure à 60 s.
+const DEDICATED_DETAIL_START_BEFORE_MS = 40000;
 const DEDICATED_DETAIL_FRESH_MS = 45 * 60000;
 // Belges à l'étranger (programme, feuilles de match, balayage) : après les
 // détails, un passage borné à 12 appels, démarré au plus tard à 32 s, arrêté à 48 s.
