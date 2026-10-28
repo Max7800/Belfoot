@@ -25,6 +25,14 @@ const DETAIL_START_BEFORE_MS = 20000;
 const DETAIL_FIRST_START_BEFORE_MS = 24000;
 const DETAIL_CALLS = 4;
 const EVENTS_PER_STEP = 2;
+// Passage dédié (?pass=details, programmé à part 10 min après le passage
+// principal) : un match par lot et un seul lot par passage principal ne
+// suffisaient pas (≈ 3 matchs par heure, retard jamais résorbé, 28/10/2026).
+// Le passage dédié a la fonction entière pour lui ; tant qu'il tourne, le
+// passage principal lui laisse les détails et rend ce temps aux Belges à l'étranger.
+const DEDICATED_DETAIL_STEPS = 12;
+const DEDICATED_DETAIL_START_BEFORE_MS = 36000;
+const DEDICATED_DETAIL_FRESH_MS = 45 * 60000;
 // Belges à l'étranger (programme, feuilles de match, balayage) : après les
 // détails, un passage borné à 12 appels, démarré au plus tard à 32 s, arrêté à 48 s.
 const ABROAD_START_BEFORE_MS = 32000;
@@ -85,6 +93,7 @@ export async function GET(request) {
   const startedAt = Date.now();
   const outOfTime = () => Date.now() - startedAt > REFRESH_TIME_BUDGET_MS;
   const dryRun = new URL(request.url).searchParams.get("dryRun") === "1";
+  const detailsOnly = new URL(request.url).searchParams.get("pass") === "details";
 
   try {
     const { data: settings } = await db.from("site_settings").select("data").eq("id", 1).maybeSingle();
@@ -187,8 +196,8 @@ export async function GET(request) {
     // Finir d'abord les reprises en cours, puis les nouvelles.
     dueStats.sort((a, b) => Number(b.resuming) - Number(a.resuming));
 
-    const pickedResults = dueResults.slice(0, maxCompetitions);
-    const pickedStats = dueStats.slice(0, maxStatsPerTick);
+    const pickedResults = detailsOnly ? [] : dueResults.slice(0, maxCompetitions);
+    const pickedStats = detailsOnly ? [] : dueStats.slice(0, maxStatsPerTick);
 
     if (dryRun) {
       return Response.json({
@@ -229,7 +238,7 @@ export async function GET(request) {
     // n'était plus jamais lancé (constaté le 26/10/2026). Les statistiques, elles,
     // reprennent leur lot au passage suivant.
     let rollover = null;
-    if (Date.now() - startedAt <= ROLLOVER_START_BEFORE_MS) {
+    if (!detailsOnly && Date.now() - startedAt <= ROLLOVER_START_BEFORE_MS) {
       // Compétitions visibles suivies + compétitions SURVEILLÉES (même masquées,
       // même sans saison publiée) : nouvelles campagnes importées jusqu'à « prête ».
       const followedIds = new Set(comps.map((competition) => competition.id));
@@ -285,6 +294,9 @@ export async function GET(request) {
     // ── Détails après match (après les statistiques, qui gardent leur priorité) ──
     const details = [];
     const detailCandidates = [];
+    const dedicatedRecent = Date.now() - (Date.parse(settings?.data?.football_match_details_last?.at || "") || 0) < DEDICATED_DETAIL_FRESH_MS;
+    const detailSteps = detailsOnly ? DEDICATED_DETAIL_STEPS : dedicatedRecent ? 0 : DETAIL_STEPS;
+    const detailStartBefore = (step) => (detailsOnly ? DEDICATED_DETAIL_START_BEFORE_MS : step === 0 ? DETAIL_FIRST_START_BEFORE_MS : DETAIL_START_BEFORE_MS);
     for (const competition of comps) {
       const state = detailState[competition.id] || {};
       const doneAt = Date.parse(state.doneAt || "") || 0;
@@ -295,7 +307,7 @@ export async function GET(request) {
       detailCandidates.push(competition);
     }
     detailCandidates.sort((a, b) => (Date.parse(detailState[a.id]?.attemptAt || "") || 0) - (Date.parse(detailState[b.id]?.attemptAt || "") || 0));
-    for (let step = 0; step < DETAIL_STEPS && detailCandidates.length && Date.now() - startedAt <= (step === 0 ? DETAIL_FIRST_START_BEFORE_MS : DETAIL_START_BEFORE_MS); step++) {
+    for (let step = 0; step < detailSteps && detailCandidates.length && Date.now() - startedAt <= detailStartBefore(step); step++) {
       const competition = detailCandidates.shift();
       const ctx = { db, competitionId: competition.id, season: seasonOf[competition.id].label, drain: true, apifootballKey: process.env.APIFOOTBALL_KEY };
       let complete = false;
@@ -313,6 +325,14 @@ export async function GET(request) {
       // Encore des matchs à détailler : la compétition repasse en fin de file.
       if (!complete && details.at(-1).ok) detailCandidates.push(competition);
       await persistState();
+    }
+
+    if (detailsOnly) {
+      // Trace lisible sans l'historique des jobs ; le passage principal s'y fie
+      // pour laisser les détails au passage dédié.
+      const last = { at: new Date().toISOString(), elapsedMs: Date.now() - startedAt, steps: details.length, failed: details.filter((item) => !item.ok).length };
+      await updateSiteSettings(db, { football_match_details_last: last });
+      return Response.json({ ok: details.length === 0 || details.some((item) => item.ok), pass: "details", ...last, details }, { status: details.length === 0 || details.some((item) => item.ok) ? 200 : 500 });
     }
 
     // ── Belges à l'étranger : suivi match par match (job global), avant les

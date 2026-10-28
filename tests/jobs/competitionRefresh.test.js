@@ -199,6 +199,47 @@ describe("cron competition-refresh — détails après match", () => {
   });
 });
 
+describe("cron competition-refresh — passage dédié aux détails (?pass=details)", () => {
+  // Constat du 28/10/2026 : un match détaillé par passage, ≈ 3 par heure, retard jamais résorbé.
+  const detailsTick = async () => (await GET(new Request("http://localhost/api/cron/competition-refresh?pass=details", { headers: { authorization: `Bearer ${SECRET}` } }))).json();
+  const settingsData = () => state.db.rows("site_settings")[0].data;
+  it("détails seulement : ni résultats, ni statistiques, ni renouvellement, ni Belges à l'étranger, ni entraîneurs", async () => {
+    state.db = seed({ competitions: [PRO, U21, NL], seasons: baseSeasons, plan: basePlan, matches: [finished("m1", "s-pro", "c-144", 3)] }); // statistiques dues
+    const body = await detailsTick();
+    expect(new Set(state.runs.map((run) => run.key))).toEqual(new Set(["football.lineups", "football.events"]));
+    expect(detailRuns()).toEqual([["football.lineups", "c-144"], ["football.events", "c-144"], ["football.lineups", "c-5"], ["football.events", "c-5"]]);
+    expect(body).toMatchObject({ ok: true, pass: "details", steps: 2, failed: 0 });
+    expect(settingsData().football_match_details_last).toMatchObject({ at: new Date(NOW).toISOString(), steps: 2, failed: 0 });
+    expect(settingsData().football_competition_refresh_state).toEqual({}); // résultats non touchés
+  });
+  it("jusqu'à 12 lots par passage dédié (6 au passage principal)", async () => {
+    state.detailResults["football.lineups"] = { complete: false, detail: "1 match(s) restant(s)" };
+    state.db = seed({ competitions: [PRO], seasons: baseSeasons, plan: basePlan });
+    await detailsTick();
+    expect(detailRuns().filter(([key]) => key === "football.lineups")).toHaveLength(12);
+  });
+  it("passage dédié récent (< 45 min) : le passage principal lui laisse les détails ; sinon il les reprend", async () => {
+    state.db = seed({ competitions: [PRO], seasons: baseSeasons, plan: basePlan });
+    settingsData().football_match_details_last = { at: new Date(NOW - 30 * 60000).toISOString() };
+    const body = await tick();
+    expect(detailRuns()).toEqual([]);
+    expect(state.runs.map((run) => run.key)).toContain("football.abroad-follow");
+    expect(body.details).toEqual([]);
+    state.runs = [];
+    settingsData().football_match_details_last = { at: new Date(NOW - 50 * 60000).toISOString() };
+    await tick();
+    expect(detailRuns()).toEqual([["football.lineups", "c-144"], ["football.events", "c-144"]]);
+  });
+  it("échec de tous les lots : 500, trace enregistrée", async () => {
+    state.detailResults["football.lineups"] = Promise.reject(new Error("API indisponible"));
+    state.detailResults["football.lineups"].catch(() => {});
+    state.db = seed({ competitions: [PRO], seasons: baseSeasons, plan: basePlan });
+    const response = await GET(new Request("http://localhost/api/cron/competition-refresh?pass=details", { headers: { authorization: `Bearer ${SECRET}` } }));
+    expect(response.status).toBe(500);
+    expect(settingsData().football_match_details_last).toMatchObject({ steps: 1, failed: 1 });
+  });
+});
+
 describe("cron competition-refresh — suivi des Belges à l'étranger", () => {
   it("lancé après les détails et avant les entraîneurs, périmètre global, 12 appels, échéance à 48 s", async () => {
     state.db = seed({ competitions: [PRO], seasons: baseSeasons, plan: basePlan });
