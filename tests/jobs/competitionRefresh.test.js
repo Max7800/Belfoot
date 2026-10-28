@@ -211,6 +211,12 @@ describe("cron competition-refresh — passage dédié aux détails (?pass=detai
     expect(body).toMatchObject({ ok: true, pass: "details", steps: 2, failed: 0 });
     expect(settingsData().football_match_details_last).toMatchObject({ at: new Date(NOW).toISOString(), steps: 2, failed: 0 });
     expect(settingsData().football_competition_refresh_state).toEqual({}); // résultats non touchés
+    // Durées par lot dans la trace : compositions et faits séparés.
+    expect(settingsData().football_match_details_last.timings).toEqual([
+      { competition: "Pro League", lineupsMs: expect.any(Number), eventsMs: expect.any(Number) },
+      { competition: "UEFA Nations League", lineupsMs: expect.any(Number), eventsMs: expect.any(Number) },
+    ]);
+    expect(settingsData().football_match_details_last.startMs).toEqual(expect.any(Number));
   });
   it("jusqu'à 12 lots par passage dédié (6 au passage principal)", async () => {
     state.detailResults["football.lineups"] = { complete: false, detail: "1 match(s) restant(s)" };

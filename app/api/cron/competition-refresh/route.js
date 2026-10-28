@@ -293,6 +293,10 @@ export async function GET(request) {
 
     // ── Détails après match (après les statistiques, qui gardent leur priorité) ──
     const details = [];
+    // Durées par lot (ms) : 2 lots en 52 s au premier passage dédié (28/10/2026),
+    // trace pour savoir où part le temps (compositions, faits, préparation).
+    const detailTimings = [];
+    const detailsStartMs = Date.now() - startedAt;
     const detailCandidates = [];
     const dedicatedRecent = Date.now() - (Date.parse(settings?.data?.football_match_details_last?.at || "") || 0) < DEDICATED_DETAIL_FRESH_MS;
     const detailSteps = detailsOnly ? DEDICATED_DETAIL_STEPS : dedicatedRecent ? 0 : DETAIL_STEPS;
@@ -314,8 +318,11 @@ export async function GET(request) {
       try {
         // matchCap : le préflight estime le coût sur ce plafond (3 matchs par défaut,
         // soit 9 appels > budget du lot : chaque lot était refusé avant tout appel).
+        const stepStart = Date.now();
         const lineups = await runJob("football.lineups", { ...ctx, matchCap: 1, requestLimit: DETAIL_CALLS });
+        const lineupsMs = Date.now() - stepStart;
         const events = await runJob("football.events", { ...ctx, matchCap: EVENTS_PER_STEP, eventsCap: EVENTS_PER_STEP, requestLimit: EVENTS_PER_STEP + 1 });
+        detailTimings.push({ competition: competition.name, lineupsMs, eventsMs: Date.now() - stepStart - lineupsMs });
         complete = [lineups, events].every((result) => typeof result !== "object" || result.complete !== false);
         details.push({ competition: competition.name, ok: true, complete });
       } catch (error) {
@@ -330,7 +337,7 @@ export async function GET(request) {
     if (detailsOnly) {
       // Trace lisible sans l'historique des jobs ; le passage principal s'y fie
       // pour laisser les détails au passage dédié.
-      const last = { at: new Date().toISOString(), elapsedMs: Date.now() - startedAt, steps: details.length, failed: details.filter((item) => !item.ok).length };
+      const last = { at: new Date().toISOString(), elapsedMs: Date.now() - startedAt, steps: details.length, failed: details.filter((item) => !item.ok).length, startMs: detailsStartMs, timings: detailTimings };
       await updateSiteSettings(db, { football_match_details_last: last });
       return Response.json({ ok: details.length === 0 || details.some((item) => item.ok), pass: "details", ...last, details }, { status: details.length === 0 || details.some((item) => item.ok) ? 200 : 500 });
     }
