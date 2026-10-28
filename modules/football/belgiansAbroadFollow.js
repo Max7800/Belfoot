@@ -24,6 +24,8 @@ import { updateSiteSettings } from "@/lib/siteSettings";
 import { isLeaseLost } from "@/lib/runLease";
 
 export const FIXTURES_EVERY_HOURS = 20;
+// Programme en échec (API indisponible, abonnement coupé le 28/10/2026) : retenté après 2 h.
+export const FIXTURES_RETRY_HOURS = 2;
 export const DETAIL_MATCHES_PER_RUN = 2;
 export const DETAIL_LOOKBACK_DAYS = 10;
 export const SCAN_PAGES_PER_FOLLOW = 3;
@@ -51,7 +53,8 @@ export function followTargets(players = [], clubs = {}) {
 // Championnat dont le programme est à relire (jamais lu, ou il y a plus de 20 h), le plus ancien d'abord.
 export function dueLeague(targets, state = {}, now = Date.now()) {
   const last = (id) => Date.parse(state[id]?.fixturesAt || "") || 0;
-  return targets.filter((target) => now - last(target.id) >= FIXTURES_EVERY_HOURS * 3600000).sort((a, b) => last(a.id) - last(b.id))[0] || null;
+  const wait = (id) => (state[id]?.error ? FIXTURES_RETRY_HOURS : FIXTURES_EVERY_HOURS) * 3600000;
+  return targets.filter((target) => now - last(target.id) >= wait(target.id)).sort((a, b) => last(a.id) - last(b.id))[0] || null;
 }
 
 // Balayage continu : premier passage = le pipeline manuel vient de tourner ;
