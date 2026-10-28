@@ -5,6 +5,14 @@ import { requireCompetitionId } from "@/lib/jobScope";
 const playerCareersJob = {
   key: "football.player-careers",
   async run({ db, competitionId, ...ctx }) {
+    // Pipeline global « Parcours des Belges à l’étranger » : les Belges trouvés
+    // par le balayage, un appel par joueur (clubs saison par saison), sans les
+    // statistiques de saison que le balayage fournit déjà.
+    if (ctx.globalScope === true) {
+      const refreshBefore = ctx.resumeState?.refreshBefore || new Date().toISOString();
+      await ctx.saveCheckpoint?.({ refreshBefore });
+      return syncPlayerCareers(db, { provider: "apifootball", name: "Belges à l’étranger" }, { ...ctx, abroadBelgians: true, includeCareerStats: false, refreshBefore });
+    }
     requireCompetitionId("football.player-careers", competitionId);
     const { data: competition, error } = await db.from("competitions").select("*").eq("id", competitionId).maybeSingle();
     if (error) throw error;
