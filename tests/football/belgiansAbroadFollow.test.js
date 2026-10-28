@@ -41,7 +41,7 @@ describe("suivi des Belges à l'étranger : un passage", () => {
   const fixture = (id, home, away, status, kickoff, extra = {}) => ({ external_id: id, home_ext: home, away_ext: away, home_name: `Club ${home}`, away_name: `Club ${away}`, home_logo: null, away_logo: null, home_score: status === "finished" ? 2 : null, away_score: status === "finished" ? 1 : null, status, minute: null, kickoff, round: "Regular Season - 10", ...extra });
   const register = (overrides = {}) => registerProvider({
     key: "apifootball",
-    async fetchMatchesWindow(competition, ctx) { calls.push(`window:${competition.external_id}:${ctx.season}:${ctx.from}:${ctx.to}`); return [fixture("5001", "194", "197", "finished", "2026-10-27T18:00:00Z"), fixture("5002", "197", "201", "finished", "2026-10-27T16:00:00Z"), fixture("5003", "205", "194", "scheduled", "2026-11-01T14:30:00Z")]; },
+    async fetchMatches(competition, ctx) { calls.push(`fixtures:${competition.external_id}:${ctx.season}`); return [fixture("4999", "194", "201", "finished", "2026-10-01T18:00:00Z"), fixture("5004", "194", "201", "scheduled", "2026-11-20T18:00:00Z"), fixture("5001", "194", "197", "finished", "2026-10-27T18:00:00Z"), fixture("5002", "197", "201", "finished", "2026-10-27T16:00:00Z"), fixture("5003", "205", "194", "scheduled", "2026-11-01T14:30:00Z")]; },
     async fetchMatchLineups(match) { calls.push(`lineups:${match.external_id}`); return []; },
     async fetchMatchPlayerStats(match) { calls.push(`players:${match.external_id}`); return [{ team_ext: "194", player_ext: "1", player_name: "Belge", minutes: 90, rating: 7.6, goals: 1, starter: true, substitute: false }]; },
     async fetchMatchTeamStats(match) { calls.push(`team:${match.external_id}`); return []; },
@@ -59,10 +59,10 @@ describe("suivi des Belges à l'étranger : un passage", () => {
   it("programme du championnat, matchs des clubs de Belges seulement, compétition masquée, feuille du match terminé", async () => {
     const db = seed();
     const result = await followBelgiansAbroad(db, { now: NOW });
-    expect(calls).toEqual(["window:88:2026:2026-10-26:2026-11-04", "lineups:5001", "players:5001", "team:5001", "events:5001"]);
+    expect(calls).toEqual(["fixtures:88:2026", "lineups:5001", "players:5001", "team:5001", "events:5001"]);
     const competition = db.rows("competitions")[0];
     expect(competition).toMatchObject({ external_id: "88", name: "Eredivisie", public_visible: false, competition_scope: "etranger", ext: { country: "Netherlands", imported_for: "belgians-abroad" } });
-    expect(db.rows("matches").map((match) => match.external_id).sort()).toEqual(["5001", "5003"]); // pas PSV – AZ
+    expect(db.rows("matches").map((match) => match.external_id).sort()).toEqual(["5001", "5003"]); // ni PSV – AZ, ni les matchs hors fenêtre (1er oct., 20 nov.)
     expect(db.rows("matches").find((match) => match.external_id === "5001")).toMatchObject({ competition_id: competition.id, status: "finished", home_club_id: "k-ajax" });
     expect(db.rows("match_player_stats")).toEqual([expect.objectContaining({ player_id: "p-1", minutes: 90, rating: 7.6, goals: 1 })]);
     const state = db.rows("site_settings")[0].data.football_abroad_follow_state;
@@ -106,7 +106,7 @@ describe("suivi des Belges : programme refusé par l'API", () => {
     const calls = [];
     registerProvider({
       key: "apifootball",
-      async fetchMatchesWindow() { calls.push("window"); throw new Error("API-Football: {\"plan\":\"Free plans do not have access to this season, try from 2022 to 2024.\"}"); },
+      async fetchMatches() { calls.push("window"); throw new Error("API-Football: {\"plan\":\"Free plans do not have access to this season, try from 2022 to 2024.\"}"); },
       async fetchLeaguePlayersPage() { calls.push("scan"); return { players: [], pages: 1 }; },
     });
     const db = createFakeSupabase({
