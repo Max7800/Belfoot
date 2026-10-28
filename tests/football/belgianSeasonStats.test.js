@@ -62,6 +62,28 @@ describe("job « saisons passées des Belges »", () => {
     expect(calls).toEqual(["102:2024", "102:2025"]);
     expect(second.complete).toBe(true);
   });
+  it("échéance de temps atteinte : arrêt entre deux saisons, reprise ensuite (coupure Vercel à 60 s)", async () => {
+    stubApi();
+    const db = seed([player("p-2", "102")]);
+    const first = await run(db, { deadline: Date.now() - 1 });
+    expect(calls).toEqual([]);
+    expect(first.complete).toBe(false);
+    const second = await run(db);
+    expect(calls).toHaveLength(5);
+    expect(second.complete).toBe(true);
+  });
+  it("échéance par défaut : 35 s après le début du lot", async () => {
+    const { SEASON_STATS_TIME_MS } = await import("@/modules/football/belgianSeasonStats");
+    expect(SEASON_STATS_TIME_MS).toBe(35000);
+    stubApi();
+    const db = seed([player("p-2", "102")]);
+    const realNow = Date.now;
+    let clock = realNow();
+    vi.spyOn(Date, "now").mockImplementation(() => (clock += 9000)); // chaque lecture de l'horloge avance de 9 s
+    try { await run(db, { deadline: undefined }); } finally { Date.now = realNow; vi.restoreAllMocks(); }
+    expect(calls.length).toBeGreaterThan(0);
+    expect(calls.length).toBeLessThan(5);
+  });
   it("refus de l'abonnement : arrêt sans rien marquer (reprise plus tard au même endroit)", async () => {
     stubApi();
     failure = Object.assign(/102:2022/, { errors: { plan: "Free plans do not have access to this season" } });
