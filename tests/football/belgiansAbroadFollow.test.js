@@ -56,7 +56,8 @@ describe("suivi des Belges à l'étranger : un passage", () => {
     clubs: [{ id: "k-ajax", source: "apifootball", external_id: "194", name: "Ajax", team_type: "first_team", locked: false, ext: {} }],
     players: [{ id: "p-1", source: "apifootball", external_id: "1", name: "Belge", nationality: "Belgium", club_id: "k-ajax", tracked: true, active: true, locked: false, ext: { league_stats: stats() } }],
     site_settings: [{ id: 1, data: {} }],
-  });
+  // clubs.name est NOT NULL en base : une insertion sans nom échoue comme en production (28/10/2026).
+  }, { notNull: { clubs: ["name"] } });
   beforeEach(() => { calls = []; register(); });
 
   it("programme du championnat, matchs des clubs de Belges seulement, compétition masquée, feuille du match terminé", async () => {
@@ -72,6 +73,15 @@ describe("suivi des Belges à l'étranger : un passage", () => {
     expect(state.leagues["88"]).toMatchObject({ fixturesAt: NOW.toISOString(), matches: 2, competitionId: competition.id });
     expect(state.scan).toMatchObject({ cycleCompletedAt: NOW.toISOString() }); // le pipeline manuel vient de tourner
     expect(result.detail).toMatch(/Eredivisie : 2 match\(s\) de Belges · 1 feuille\(s\) de match/);
+  });
+  it("clubs du programme insérés avec nom et logo ; club existant jamais renommé", async () => {
+    register({ async fetchMatches(competition, ctx) { calls.push(`fixtures:${competition.external_id}:${ctx.season}`); return [fixture("5001", "194", "197", "finished", "2026-10-27T18:00:00Z", { home_name: "AFC Ajax", away_logo: "https://media/197.png" })]; } });
+    const db = seed();
+    const result = await followBelgiansAbroad(db, { now: NOW });
+    expect(result.detail).not.toMatch(/échec/);
+    const byExternal = Object.fromEntries(db.rows("clubs").map((club) => [club.external_id, club]));
+    expect(byExternal["194"].name).toBe("Ajax"); // nom existant conservé
+    expect(byExternal["197"]).toMatchObject({ source: "apifootball", name: "Club 197", logo_url: "https://media/197.png" });
   });
   it("passage suivant (1 h plus tard) : rien à refaire, aucun appel", async () => {
     const db = seed();

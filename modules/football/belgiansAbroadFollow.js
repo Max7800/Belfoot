@@ -13,7 +13,7 @@
 //      semaines sinon (modules/football/scanBelgians.js).
 // État : site_settings.football_abroad_follow_state.
 import { getProvider } from "./providers";
-import { ensureCompetitions, idMapByExternalIds, upsertExternal } from "./sync";
+import { ensureCompetitions, ensureExternalReferences, idMapByExternalIds, upsertExternal } from "./sync";
 import { ensureSeason, seasonLabel } from "./season";
 import { resolveMatches } from "./syncCompetition";
 import { syncLineups } from "./syncLineups";
@@ -81,7 +81,9 @@ async function importFixtures(db, provider, target, now, ctx) {
   const competition = competitions.get(target.id);
   const seasonRow = await ensureSeason(db, competition.id, String(season));
   const missing = relevant.flatMap((match) => [{ external_id: match.home_ext, name: match.home_name, logo_url: match.home_logo }, { external_id: match.away_ext, name: match.away_name, logo_url: match.away_logo }]);
-  await upsertExternal(db, "clubs", "apifootball", missing, [], { extMode: "keep" });
+  // Clubs absents insérés avec nom et logo : sans nom, la base refusait l'insertion
+  // (Eerste Divisie, 28/10/2026). Un club existant garde son nom français.
+  await ensureExternalReferences(db, "clubs", "apifootball", missing);
   const clubMap = await idMapByExternalIds(db, "clubs", "apifootball", missing.map((club) => club.external_id));
   const rows = resolveMatches(relevant, competition.id, seasonRow.id, clubMap);
   await upsertExternal(db, "matches", "apifootball", rows, ["competition_id", "season_id", "home_club_id", "away_club_id", "home_score", "away_score", "status", "minute", "kickoff", "matchday", "round_raw", "phase", "round_number"]);
