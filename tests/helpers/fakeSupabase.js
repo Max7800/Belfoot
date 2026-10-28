@@ -5,9 +5,16 @@
 // défaut sur Supabase) SANS erreur : c'est ce plafond silencieux qui tronquait
 // les correspondances construites sur « toute la table ».
 
-// Colonne simple ou chemin JSON PostgREST « params->>cle » (valeur texte, comme en SQL).
+// Colonne simple ou chemin JSON PostgREST « params->>cle » (valeur texte, comme en
+// SQL) ou « ext->cle » (valeur JSON telle quelle).
 function readColumn(row, column) {
-  const [base, key] = String(column).split("->>");
+  const text = String(column);
+  if (!text.includes("->>") && text.includes("->")) {
+    const [base, key] = text.split("->");
+    const value = row[base]?.[key];
+    return value === undefined ? null : value;
+  }
+  const [base, key] = text.split("->>");
   if (key === undefined) return row[base];
   const value = row[base]?.[key];
   return value === null || value === undefined ? null : String(value);
@@ -109,8 +116,14 @@ export function createFakeSupabase(seed = {}, { maxRows = 1000, rpc = {}, unique
       // .contains("params", { cle: valeur }) : inclusion d'objet JSON (opérateur @>).
       contains(column, subset) { state.filters.push((row) => Object.entries(subset || {}).every(([key, value]) => JSON.stringify(row[column]?.[key]) === JSON.stringify(value))); return builder; },
       not(column, op, value) {
-        if (op !== "is" || value !== null) throw new Error("fakeSupabase: seul not(col, \"is\", null) est géré");
-        state.filters.push((row) => row[column] !== null && row[column] !== undefined);
+        // not(col, "in", "(a,b)") : exclusion d'une liste, comme PostgREST.
+        if (op === "in") {
+          const excluded = new Set(String(value).replace(/^\(|\)$/g, "").split(",").map((item) => item.trim()));
+          state.filters.push((row) => !excluded.has(String(readColumn(row, column))));
+          return builder;
+        }
+        if (op !== "is" || value !== null) throw new Error("fakeSupabase: seuls not(col, \"is\", null) et not(col, \"in\", liste) sont gérés");
+        state.filters.push((row) => readColumn(row, column) !== null && readColumn(row, column) !== undefined);
         return builder;
       },
       lt(column, value) { state.filters.push((row) => compare(readColumn(row, column), "lt", value)); return builder; },
