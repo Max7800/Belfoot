@@ -40,7 +40,7 @@ describe("careerSummary", () => {
   it("page Belges : parcours chargé et affiché sur chaque carte", () => {
     const page = fs.readFileSync("app/belges-a-l-etranger/page.js", "utf8");
     expect(page).toContain("loadMembershipsForPlayers(supabase, playerIds)");
-    expect(page).toContain("career: careerSummary(data.memberships[player.id] || [], player.club_id, data.clubs, { nationality: player.nationality })");
+    expect(page).toContain("career: careerSummary(data.memberships[player.id] || [], currentClubId, data.clubs, { nationality: player.nationality })");
     expect(page).toContain("Au club depuis {career.since}");
   });
 });
@@ -48,5 +48,32 @@ describe("careerSummary", () => {
 describe("carte de la page Belges : pays en français", () => {
   it("« England » affiché « Angleterre » (frenchNationName sur la carte)", () => {
     expect(fs.readFileSync("app/belges-a-l-etranger/page.js", "utf8")).toContain("{countryFlag(playerCountry)}</span>{frenchNationName(playerCountry)} · {playerCompetition}");
+  });
+});
+
+describe("page Belges : club actuel d'après les affectations (cas M. Godts, 28/10/2026)", () => {
+  // Fiche : club_id = Ajax (réécrit par le balayage de l'Eredivisie, 1 match avant son
+  // transfert). Affectations : PSG 2026 active, Belgique 2026 active (sélection), Ajax 2022-2025.
+  const clubsById = { ajax: { id: "ajax", name: "Ajax", team_type: "first_team" }, psg: { id: "psg", name: "Paris Saint Germain", team_type: "first_team" }, bel: { id: "bel", name: "Belgique", team_type: "national" } };
+  const memberships = [
+    { club_id: "ajax", season_start_year: 2025, active: false, is_primary: true },
+    { club_id: "ajax", season_start_year: 2026, active: false, is_primary: true, updated_at: "2026-10-25T22:20:31Z" },
+    { club_id: "psg", season_start_year: 2026, active: true, is_primary: true, updated_at: "2026-10-26T03:00:44Z" },
+    { club_id: "bel", season_start_year: 2026, active: true, is_primary: true, updated_at: "2026-09-29T19:59:08Z" },
+  ];
+  it("PSG, ni l'Ajax de la fiche ni la sélection", async () => {
+    const { resolveCurrentClubId } = await import("@/lib/playerCareer");
+    expect(resolveCurrentClubId({ player: { club_id: "ajax", nationality: "Belgium" }, memberships, clubsById })).toBe("psg");
+    expect(careerSummary(memberships, "psg", clubsById, { nationality: "Belgium" })).toMatchObject({ since: 2026, previous: [{ name: "Ajax" }] });
+  });
+  it("la page s'en sert pour le club, le championnat, le parcours et les matchs ; instantané de l'ancien club écarté", () => {
+    const page = fs.readFileSync("app/belges-a-l-etranger/page.js", "utf8");
+    expect(page).toContain("const currentClubId = resolveCurrentClubId({ player, memberships: data.memberships[player.id] || [], clubsById: data.clubs }) || player.club_id;");
+    expect(page).toContain("const club = data.clubs[currentClubId];");
+    expect(page).toContain("{ ...player, club_id: currentClubId, competition: null, country: null }");
+    expect(page).toContain("resolvePlayerLeague({ player: current,");
+    expect(page).toContain("const concernsPlayer = (item, match) => [item.club?.id, item.player.national_team_id]");
+    expect(page).toContain("...membershipRows.filter((row) => row.active).map((row) => row.club_id)");
+    expect(fs.readFileSync("lib/publicFootballData.js", "utf8")).toContain('select("id,player_id,club_id,season_start_year,active,is_primary,joined_at,updated_at")');
   });
 });
