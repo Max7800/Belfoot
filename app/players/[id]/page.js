@@ -19,7 +19,7 @@ import AdminHint from "@/components/AdminHint";
 import { careerStints, resolveCurrentClubId } from "@/lib/playerCareer";
 import { positionLabel } from "@/lib/positions";
 import PlayerStatsWidget from "@/components/football/PlayerStatsWidget";
-import { displaySeason } from "@/lib/playerSeasonWidget";
+import { displaySeason, withLeagueStats } from "@/lib/playerSeasonWidget";
 import { frenchNationName } from "@/lib/frenchNations";
 
 const FINISHED = new Set(["finished"]);
@@ -125,25 +125,27 @@ export default function PlayerPage() {
       for (const match of oldMatches || []) matchesById.set(match.id, match);
     }
     const matches = [...matchesById.values()];
-    const clubIds = [...new Set([...matches.flatMap((match) => [match.home_club_id, match.away_club_id]), ...memberships.map((row) => row.club_id), ...statsRows.map((row) => row.club_id), player.national_team_id].filter(Boolean))];
+    const clubIds = [...new Set([...matches.flatMap((match) => [match.home_club_id, match.away_club_id]), ...memberships.map((row) => row.club_id), ...statsRows.map((row) => row.club_id), player.ext?.league_stats?.club_id, player.national_team_id].filter(Boolean))];
     const competitionIds = [...new Set([...statsRows.map((row) => row.competition_id), ...matches.map((row) => row.competition_id)].filter(Boolean))];
     const [clubsResult, competitionsResult, routesResult] = await Promise.all([
       clubIds.length ? supabase.from("clubs").select("id,name,logo_url,team_type,national_category,ext").in("id", clubIds) : Promise.resolve({ data: [] }),
-      competitionIds.length ? supabase.from("competitions").select("id,name,slug,public_visible,logo_url,provider,competition_scope,competition_type,ext").in("id", competitionIds) : Promise.resolve({ data: [] }),
+      competitionIds.length ? supabase.from("competitions").select("id,name,slug,public_visible,logo_url,provider,external_id,competition_scope,competition_type,ext").in("id", competitionIds) : Promise.resolve({ data: [] }),
       competitionIds.length ? supabase.from("competitions").select("id,name,slug") : Promise.resolve({ data: [] }),
     ]);
     if (!alive) return;
+    // Chiffres du balayage (championnat non importé) : une ligne de saison de plus.
+    const withLeague = withLeagueStats(statsRows, player, Object.fromEntries((competitionsResult.data || []).map((row) => [row.id, row])));
     setState({
       player,
       club: clubResult.data || null,
       nationalTeam: nationalTeamResult.data || null,
       currentClubId,
       memberships,
-      stats: statsRows,
+      stats: withLeague.stats,
       performances: performancesResult.data || [],
       matches,
       clubs: Object.fromEntries((clubsResult.data || []).map((row) => [row.id, row])),
-      competitions: Object.fromEntries((competitionsResult.data || []).map((row) => [row.id, row])),
+      competitions: withLeague.competitions,
       // Indisponible (erreur) : liens par identifiant, toujours exacts.
       competitionRoutes: routesResult.error ? null : (routesResult.data || []),
       error: "",

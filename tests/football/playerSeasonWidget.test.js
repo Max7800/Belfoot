@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import { describe, expect, it } from "vitest";
-import { competitionTabs, displaySeason, matchDetails, share } from "@/lib/playerSeasonWidget";
+import { competitionTabs, displaySeason, matchDetails, share, withLeagueStats } from "@/lib/playerSeasonWidget";
 
 // Cas réel De Bruyne (27/10/2026) : Ligue des champions 3 matchs à 7,1 (note de
 // saison de l'API), mais une seule performance détaillée notée 6,1.
@@ -65,5 +65,30 @@ describe("saison affichée", () => {
     expect(displaySeason("2026", { competition_scope: "international" })).toBe("2026");
     expect(displaySeason("2025-2026", { competition_scope: "belgique" })).toBe("2025-2026");
     expect(displaySeason(null)).toBe("");
+  });
+});
+
+describe("chiffres du balayage sur la fiche joueur", () => {
+  const league = { season: "2026-2027", league: "Eredivisie", league_id: "88", league_logo: "ere.png", country: "Netherlands", club_id: "ajax", appearances: 9, lineups: 8, minutes: 700, goals: 2, assists: 3, yellow: 1, red: 0, rating: 7.1 };
+  const player = { club_id: "ajax", ext: { league_stats: league } };
+  it("championnat non importé : ligne de saison et compétition ajoutées (logo, portée étrangère)", () => {
+    const { stats, competitions } = withLeagueStats([stat("ucl", { appearances: 3 })], player, { ucl: { id: "ucl", name: "Champions League" } });
+    expect(stats.at(-1)).toMatchObject({ competition_id: "league-88", club_id: "ajax", season: "2026", appearances: 9, goals: 2, assists: 3, rating: 7.1 });
+    expect(competitions["league-88"]).toMatchObject({ name: "Eredivisie", logo_url: "ere.png", competition_scope: "etranger" });
+    expect(competitionTabs(stats).map((tab) => tab.competitionId)).toEqual(["league-88", "ucl"]);
+  });
+  it("compétition masquée du suivi connue : rattachée à elle (feuilles de match → cartes de détail)", () => {
+    const { stats, competitions } = withLeagueStats([], player, { hidden: { id: "hidden", name: "Eredivisie", external_id: "88" } });
+    expect(stats.map((row) => row.competition_id)).toEqual(["hidden"]);
+    expect(Object.keys(competitions)).toEqual(["hidden"]);
+  });
+  it("déjà présente pour cette saison, ou aucun match joué : rien n'est ajouté", () => {
+    const rows = [stat("hidden", { season: "2026", appearances: 9 })];
+    expect(withLeagueStats(rows, player, { hidden: { id: "hidden", external_id: "88" } }).stats).toBe(rows);
+    expect(withLeagueStats([], { ext: { league_stats: { ...league, appearances: 0 } } }, {}).stats).toEqual([]);
+    expect(withLeagueStats([], { ext: {} }, {}).stats).toEqual([]);
+    // Saison précédente du même championnat : la saison en cours est quand même ajoutée.
+    expect(withLeagueStats([stat("hidden", { season: "2025", appearances: 30 })], player, { hidden: { id: "hidden", external_id: "88" } }).stats).toHaveLength(2);
+    expect(withLeagueStats([stat("x", { season: "2026" })], player, { x: { id: "x", name: "Eredivisie" } }).stats).toHaveLength(1);
   });
 });
