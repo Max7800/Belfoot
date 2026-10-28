@@ -205,7 +205,15 @@ export function createFakeSupabase(seed = {}, { maxRows = 1000, rpc = {}, unique
         tables[name] = table(name).filter((row) => !matches(row));
       } else if (state.op === "upsert") {
         const keys = String(state.options.onConflict || "id").split(",").map((key) => key.trim());
-        const payloads = Array.isArray(state.payload) ? state.payload : [state.payload];
+        // Upsert groupé : comme supabase-js (defaultToNull) et PostgREST, les colonnes
+        // sont l'union des clés du lot ; une clé absente d'une ligne y est écrite à null.
+        const batch = Array.isArray(state.payload) ? state.payload : [state.payload];
+        const columns = [...new Set(batch.flatMap((payload) => Object.keys(payload)))];
+        const payloads = batch.length > 1 && state.options.defaultToNull !== false
+          ? batch.map((payload) => Object.fromEntries(columns.map((column) => [column, payload[column] === undefined ? null : payload[column]])))
+          : batch;
+        const conflictKeys = payloads.map((payload) => keys.map((key) => String(payload[key])).join("|"));
+        if (new Set(conflictKeys).size < conflictKeys.length) return { data: null, error: { code: "21000", message: "ON CONFLICT DO UPDATE command cannot affect row a second time" } };
         rows = payloads.map((payload) => {
           const existing = table(name).find((row) => keys.every((key) => row[key] === payload[key]));
           if (existing) return state.options.ignoreDuplicates ? existing : Object.assign(existing, payload);

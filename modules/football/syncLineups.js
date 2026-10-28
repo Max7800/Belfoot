@@ -193,6 +193,10 @@ export async function syncLineups(db, competition, ctx = {}) {
     const { data: lockedCallups, error: lockedCallupsError } = await db.from("national_match_callups").select("player_id").eq("match_id", match.id).eq("locked", true);
     if (lockedCallupsError) throw lockedCallupsError;
     const lockedCallupPlayerIds = new Set((lockedCallups || []).map((row) => row.player_id));
+    // Écritures groupées en fin de match (une par joueur coûtait 11 à 23 s par
+    // match, 28/10/2026) : une clé par joueur, la dernière ligne l'emporte.
+    const playerRows = new Map();
+    const callupRows = new Map();
     for (const row of merged.values()) {
       if (!row.player_ext || lockedPlayerIds.has(row.player_ext)) continue;
       const clubId = clubMap[row.team_ext] || null;
@@ -224,11 +228,10 @@ export async function syncLineups(db, competition, ctx = {}) {
         synced_at: now,
         ext: row.ext || {},
       };
-      const { error } = await db.from("match_player_stats").upsert(payload, { onConflict: "match_id,source,player_external_id" });
-      if (error) throw error;
+      playerRows.set(row.player_ext, payload);
       if (clubId && playerId && nationalTeamIds.has(clubId) && !lockedCallupPlayerIds.has(playerId)) {
         const callupStatus = payload.starter ? "started" : (Number(payload.minutes) > 0 ? "played" : "bench");
-        const { error: callupError } = await db.from("national_match_callups").upsert({
+        callupRows.set(playerId, {
           match_id: match.id,
           national_team_id: clubId,
           player_id: playerId,
@@ -240,10 +243,25 @@ export async function syncLineups(db, competition, ctx = {}) {
           ext: payload.ext,
           synced_at: now,
           updated_at: now,
-        }, { onConflict: "match_id,player_id" });
-        if (callupError) throw callupError;
+        });
       }
       players++;
+    }
+    // Un lot par forme de ligne : dans un upsert groupé, une colonne absente d'une
+    // ligne y serait écrite à null et effacerait un lien club/joueur déjà résolu.
+    const shapes = new Map();
+    for (const payload of playerRows.values()) {
+      const shape = `${"club_id" in payload}:${"player_id" in payload}`;
+      if (!shapes.has(shape)) shapes.set(shape, []);
+      shapes.get(shape).push(payload);
+    }
+    for (const rows of shapes.values()) {
+      const { error } = await db.from("match_player_stats").upsert(rows, { onConflict: "match_id,source,player_external_id" });
+      if (error) throw error;
+    }
+    if (callupRows.size) {
+      const { error: callupError } = await db.from("national_match_callups").upsert([...callupRows.values()], { onConflict: "match_id,player_id" });
+      if (callupError) throw callupError;
     }
     if (fetchTeamStats && teamResult.status === "fulfilled") {
       const rows = teamStats.map((row) => ({
