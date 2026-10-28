@@ -32,7 +32,6 @@ const DAY = 86400000;
 // Mercato (juillet-août, janvier) : un cycle de balayage par semaine ; sinon deux semaines.
 export const scanIntervalDays = (now = new Date()) => ([0, 6, 7].includes(now.getUTCMonth()) ? 7 : 14);
 
-const day = (time) => new Date(time).toISOString().slice(0, 10);
 
 // Championnats et clubs à suivre, d'après les Belges trouvés par le balayage.
 export function followTargets(players = [], clubs = {}) {
@@ -68,8 +67,12 @@ export function scanStep(scan = null, now = new Date()) {
 
 async function importFixtures(db, provider, target, now, ctx) {
   const season = scanSeason(target, now);
-  const fixtures = await provider.fetchMatchesWindow({ external_id: target.id }, { ...ctx, season: String(season), from: day(now.getTime() - 2 * DAY), to: day(now.getTime() + 7 * DAY) });
-  const relevant = fixtures.filter((match) => target.clubs.has(String(match.home_ext)) || target.clubs.has(String(match.away_ext)));
+  // Saison complète du championnat (même appel que la synchro des résultats) puis
+  // fenêtre filtrée ici : l'appel par dates (from/to) est refusé par l'API avec
+  // l'abonnement actuel (« Free plans do not have access to this season », 28/10/2026).
+  const fixtures = await provider.fetchMatches({ external_id: target.id, ext: { season: String(season) } }, { ...ctx, season: String(season) });
+  const from = now.getTime() - 2 * DAY; const to = now.getTime() + 7 * DAY;
+  const relevant = fixtures.filter((match) => (target.clubs.has(String(match.home_ext)) || target.clubs.has(String(match.away_ext))) && Date.parse(match.kickoff || "") >= from && Date.parse(match.kickoff || "") <= to);
   if (!relevant.length) return { season, imported: 0, competitionId: null };
   const competitions = await ensureCompetitions(db, "apifootball", [{ external_id: target.id, name: target.name, logo_url: target.logo, competition_type: "league", competition_scope: "etranger", ext: { country: target.country, season: String(season), imported_for: "belgians-abroad" } }]);
   const competition = competitions.get(target.id);

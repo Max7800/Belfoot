@@ -155,12 +155,6 @@ const provider = {
     const y = seasonYear(ctx.season || competition.ext?.season);
     return (await api(`/fixtures?league=${competition.external_id}&season=${y}`, ctx)).map(mapFixture);
   },
-  // Matchs d'un championnat sur une fenêtre de dates (YYYY-MM-DD) : un appel donne
-  // les résultats récents ET le programme (suivi des Belges à l'étranger).
-  async fetchMatchesWindow(competition, ctx = {}) {
-    const y = seasonYear(ctx.season || competition.ext?.season);
-    return (await api(`/fixtures?league=${competition.external_id}&season=${y}&from=${ctx.from}&to=${ctx.to}`, ctx)).map(mapFixture);
-  },
   // Re-récupère l'état FINAL (statut + score) de fixtures précises, par leur id
   // provider. Sert à finaliser des matchs restés "live" après le coup de sifflet.
   async fetchMatchesByExternalIds(externalIds, ctx = {}) {
