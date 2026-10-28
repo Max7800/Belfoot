@@ -37,3 +37,21 @@ describe("page Belges à l'étranger", () => {
     expect(map).not.toContain("exilé(s)");
   });
 });
+
+describe("en-tête de la page Belges", () => {
+  const page = fs.readFileSync("app/belges-a-l-etranger/page.js", "utf8");
+  it("Diables à l'étranger et « sous d'autres couleurs » comptés à côté des joueurs, pays et clubs", () => {
+    expect(page).toContain("{view.diables}</b>");
+    expect(page).toContain("{view.otherColors.length}</b>");
+    expect(page).toContain('diables: enriched.filter((item) => item.watch === "belgium").length');
+  });
+});
+
+describe("liste des Belges suivis", () => {
+  const page = fs.readFileSync("app/belges-a-l-etranger/page.js", "utf8");
+  it("paginée par 24 (bouton « Voir plus »), remise à 24 quand un filtre change", () => {
+    expect(page).toContain("const PAGE_SIZE = 24;");
+    expect(page).toContain("shown.slice(0, visibleCount).map(");
+    expect(page).toContain("useEffect(() => { setVisibleCount(PAGE_SIZE); }, [query, country, competition, position, profile]);");
+  });
+});
