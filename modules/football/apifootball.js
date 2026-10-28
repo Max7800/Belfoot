@@ -511,5 +511,33 @@ provider.fetchEvents = async function (match, ctx = {}) {
   }
   return events;
 };
+// Une page (20 joueurs) des joueurs d'un championnat pour une saison, avec
+// nationalité, lieu de naissance et statistiques dans CE championnat
+// (balayage des Belges, modules/football/scanBelgians.js).
+provider.fetchLeaguePlayersPage = async function (leagueId, season, page = 1, ctx = {}) {
+  const json = await apiFull(`/players?league=${leagueId}&season=${season}&page=${page}`, ctx);
+  const players = (json.response || []).map((row) => {
+    const stat = (row.statistics || []).find((entry) => String(entry.league?.id) === String(leagueId)) || row.statistics?.[0] || {};
+    return {
+      external_id: row.player?.id ? String(row.player.id) : null,
+      name: row.player?.name || null,
+      nationality: row.player?.nationality || null,
+      photo_url: row.player?.photo || null,
+      age: row.player?.age ?? null,
+      birth_date: row.player?.birth?.date || null,
+      birth_country: row.player?.birth?.country || null,
+      birth_place: row.player?.birth?.place || null,
+      position: stat.games?.position || null,
+      team: stat.team?.id ? { external_id: String(stat.team.id), name: stat.team.name || null, logo_url: stat.team.logo || null } : null,
+      league: { id: String(leagueId), name: stat.league?.name || null, country: stat.league?.country || null, logo: stat.league?.logo || null },
+      stats: {
+        appearances: stat.games?.appearences || 0, lineups: stat.games?.lineups || 0, minutes: stat.games?.minutes || 0,
+        goals: stat.goals?.total || 0, assists: stat.goals?.assists || 0, yellow: stat.cards?.yellow || 0, red: stat.cards?.red || 0,
+        rating: stat.games?.rating ? Number(stat.games.rating) : null,
+      },
+    };
+  }).filter((player) => player.external_id);
+  return { players, pages: Number(json.paging?.total) || 1 };
+};
 registerProvider(provider);
 export default provider;

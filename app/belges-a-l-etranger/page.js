@@ -4,7 +4,7 @@ import Link from "next/link";
 import { ArrowRight, CalendarDays, ChevronRight, Clock3, Flag, Flame, Globe2, MapPin, Search, Sparkles, Trophy, Users } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { UNKNOWN_CLUB, UNKNOWN_COMPETITION, UNKNOWN_COUNTRY, useBelgiansAbroadConfig } from "@/lib/belgiansAbroad";
-import { rankBelgians } from "@/lib/belgiansRankings";
+import { rankBelgians, seasonTotals } from "@/lib/belgiansRankings";
 import { isNationalSelectionClub, nationalityBadges, ratingTone } from "@/lib/nationalities";
 import { belgianWatchStatus, hasBelgianNationality, isBelgianFollowed, nationalityList } from "@/lib/playerIdentity";
 import { clubNationalLeagues, resolvePlayerCountry, resolvePlayerLeague } from "@/lib/playerSnapshot";
@@ -26,14 +26,6 @@ const year = (value) => Number((String(value || "").match(/\d{4}/) || [0])[0]);
 const safeColor = (value, fallback = "#e30613") => /^#[0-9a-f]{6}$/i.test(value || "") ? value : fallback;
 const safeOverlay = (value, fallback = 0.42) => Number.isFinite(Number(value)) ? Math.min(1, Math.max(0, Number(value))) : fallback;
 const countryFlag = (country) => nationalityBadges(country)[0]?.flag || FLAGS[country] || "🌍";
-
-function latestTotals(rows = []) {
-  const latest = Math.max(0, ...rows.map((row) => year(row.season)));
-  const selected = latest ? rows.filter((row) => year(row.season) === latest) : rows;
-  const sum = (key) => selected.reduce((total, row) => total + (Number(row[key]) || 0), 0);
-  const ratings = selected.filter((row) => Number(row.rating) > 0).map((row) => Number(row.rating));
-  return { season: latest || "—", appearances: sum("appearances"), minutes: sum("minutes"), goals: sum("goals"), assists: sum("assists"), rating: ratings.length ? ratings.reduce((a, b) => a + b, 0) / ratings.length : null };
-}
 
 function PlayerPhoto({ player, className = "h-16 w-16" }) {
   const initials = player?.name?.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase() || "BF";
@@ -102,7 +94,7 @@ export default function BelgiansAbroadPage() {
 
   useEffect(() => { (async () => {
     const [playerResult, competitionResult] = await Promise.all([
-      supabase.from("players").select(`${PUBLIC_PLAYER_FIELDS},binational_watch:ext->binational_watch,birth:ext->birth`).eq("tracked", true).eq("active", true),
+      supabase.from("players").select(`${PUBLIC_PLAYER_FIELDS},binational_watch:ext->binational_watch,birth:ext->birth,league_stats:ext->league_stats`).eq("tracked", true).eq("active", true),
       supabase.from("competitions").select("*"),
     ]);
     if (playerResult.error) throw playerResult.error;
@@ -160,7 +152,7 @@ export default function BelgiansAbroadPage() {
       const league = resolvePlayerLeague({ player, statRows: playerStats, competitionsById: data.competitions, clubLeagues, club });
       const resolvedCountry = resolvePlayerCountry({ player, club, league: league.competition }) || UNKNOWN_COUNTRY;
       const resolvedCompetition = league.name || UNKNOWN_COMPETITION;
-      return { player, club, nationalTeam: data.clubs[player.national_team_id], watch: belgianWatchStatus(player, data.clubs[player.national_team_id]), country: resolvedCountry, competition: resolvedCompetition, competitionData: league.competition, totals: latestTotals(playerStats), domesticBelgianClub };
+      return { player, club, nationalTeam: data.clubs[player.national_team_id], watch: belgianWatchStatus(player, data.clubs[player.national_team_id]), country: resolvedCountry, competition: resolvedCompetition, competitionData: league.competition, totals: seasonTotals(playerStats, player.league_stats), domesticBelgianClub };
     }).filter((item) => item.club && item.club.team_type !== "national" && !item.domesticBelgianClub && !isBelgianClub(item.club) && !isBelgian(item.country));
 
     const playerMap = Object.fromEntries(enriched.map((item) => [item.player.id, item]));
@@ -184,7 +176,7 @@ export default function BelgiansAbroadPage() {
     const leagues = Object.values(enriched.reduce((groups, item) => {
       const known = item.competition && item.competition !== UNKNOWN_COMPETITION;
       const key = known ? item.competition : `?${item.country}`;
-      if (!groups[key]) groups[key] = { key, name: known ? item.competition : item.country === UNKNOWN_COUNTRY ? "Pays à préciser" : frenchNationName(item.country), filter: item.competition, country: item.country, logo: item.competitionData?.logo_url || "", count: 0, unknownLeague: !known };
+      if (!groups[key]) groups[key] = { key, name: known ? item.competition : item.country === UNKNOWN_COUNTRY ? "Pays à préciser" : frenchNationName(item.country), filter: item.competition, country: item.country, logo: item.competitionData?.logo_url || item.player.league_stats?.league_logo || "", count: 0, unknownLeague: !known };
       groups[key].count += 1;
       return groups;
     }, {})).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, "fr"));
