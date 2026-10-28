@@ -43,6 +43,9 @@ export async function syncPlayerCareers(db, competition, ctx = {}) {
   const provider = getProvider(competition.provider);
   if (!provider?.fetchPlayerCareer) throw new Error(`${competition.name}: historiques de carrière non supportés`);
   const targeted = !!ctx.playerId;
+  // Belges trouvés par le balayage des championnats (pipeline global) : la
+  // plupart jouent dans des championnats que Belfoot n’importe pas.
+  const abroad = !targeted && ctx.abroadBelgians === true;
   const batchSize = targeted ? 1 : Math.max(1, Math.min(Number(ctx.batchSize) || 5, 25));
   let playersQuery = db.from("players")
     .select("id,name,external_id,source,nationality,career_sync_status,career_synced_at,ext")
@@ -51,6 +54,9 @@ export async function syncPlayerCareers(db, competition, ctx = {}) {
   let clubIds = [];
   if (targeted) {
     playersQuery = playersQuery.eq("id", ctx.playerId);
+  } else if (abroad) {
+    playersQuery = playersQuery.eq("tracked", true).eq("active", true).not("ext->league_stats", "is", null);
+    if (ctx.refreshBefore) playersQuery = playersQuery.or(`career_synced_at.is.null,career_synced_at.lt.${ctx.refreshBefore}`);
   } else {
     const { data: matches, error: matchesError } = await db.from("matches").select("home_club_id,away_club_id").eq("competition_id", competition.id);
     if (matchesError) throw matchesError;
@@ -227,14 +233,15 @@ export async function syncPlayerCareers(db, competition, ctx = {}) {
   // Lot : on signale l'avancement pour qu'un pipeline draine tous les joueurs de la
   // division (terminé quand plus aucun joueur n'a d'historique manquant).
   let remainingQuery = db.from("players").select("id", { count: "exact", head: true })
-    .eq("tracked", true).eq("active", true).in("club_id", clubIds);
+    .eq("tracked", true).eq("active", true);
+  remainingQuery = abroad ? remainingQuery.not("ext->league_stats", "is", null) : remainingQuery.in("club_id", clubIds);
   remainingQuery = ctx.refreshBefore
     ? remainingQuery.or(`career_synced_at.is.null,career_synced_at.lt.${ctx.refreshBefore}`)
     : remainingQuery.is("career_synced_at", null);
   const { count: remaining } = await remainingQuery;
   const left = remaining || 0;
   return {
-    detail: `${detail}${left ? ` · ${left} joueur(s) restant(s)` : " · division à jour"}`,
+    detail: `${detail}${left ? ` · ${left} joueur(s) restant(s)` : abroad ? " · parcours à jour" : " · division à jour"}`,
     complete: left === 0,
     progress: { current: players.length, total: left + players.length, unit: "joueurs" },
   };
