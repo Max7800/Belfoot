@@ -98,7 +98,7 @@ export default function Home() {
       supabase.from("matches").select(PUBLIC_MATCH_FIELDS).order("kickoff", { ascending: false }).limit(250),
       supabase.from("competitions").select("*"),
       supabase.from("seasons").select("*"),
-      supabase.from("players").select(`${PUBLIC_PLAYER_FIELDS},binational_watch:ext->binational_watch`).eq("tracked", true).eq("active", true),
+      supabase.from("players").select(`${PUBLIC_PLAYER_FIELDS},binational_watch:ext->binational_watch,birth:ext->birth`).eq("tracked", true).eq("active", true),
       supabase.from("entries").select("id,slug,title,excerpt,category,cover_url,published_at").eq("collection", "news").eq("published", true).is("deleted_at", null).order("published_at", { ascending: false, nullsFirst: false }).limit(9),
       supabase.from("votw_sessions").select("id,matchday,season_label,formation,status,closes_at").order("created_at", { ascending: false }).limit(5),
       supabase.from("forum_topics").select("id,title,author_name,last_activity").order("last_activity", { ascending: false }).limit(4),
