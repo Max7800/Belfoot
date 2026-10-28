@@ -131,7 +131,7 @@ describe("fiche joueur — câblage des liens de compétition", () => {
   });
 
   it("les données chargent le slug et la visibilité ; la vérification des URL est facultative", () => {
-    expect(source).toContain(`select("id,name,slug,public_visible,logo_url,provider,competition_scope,competition_type,ext").in("id", competitionIds)`);
+    expect(source).toContain(`select("id,name,slug,public_visible,logo_url,provider,external_id,competition_scope,competition_type,ext").in("id", competitionIds)`);
     expect(source).toContain(`competitionRoutes: routesResult.error ? null : (routesResult.data || [])`);
     expect(source).toContain("competitionHrefs(state.competitions, state.competitionRoutes)");
   });
