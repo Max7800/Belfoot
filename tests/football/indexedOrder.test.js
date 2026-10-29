@@ -8,7 +8,8 @@ describe("lectures volumineuses : tri par la colonne filtrée", () => {
   const data = fs.readFileSync("lib/publicFootballData.js", "utf8");
   it("performances par match, statistiques et affectations par joueur", () => {
     expect(data).toContain('.in("match_id", ids).order("match_id")');
-    expect(data).toContain('db.from("player_season_stats").select(PUBLIC_PLAYER_STATS_FIELDS).in("player_id", ids).order("player_id")');
+    expect(data).toContain('const query = db.from("player_season_stats").select(PUBLIC_PLAYER_STATS_FIELDS).in("player_id", ids);');
+    expect(data).toContain('return (sinceSeason ? query.gte("season", String(sinceSeason)) : query).order("player_id");');
     expect(data).toMatch(/from\("player_team_seasons"\)[^\n]*\.in\("player_id", ids\)\.order\("player_id"\)/);
   });
   it("page d'une compétition : matchs joués seulement, effectifs triés par club", () => {

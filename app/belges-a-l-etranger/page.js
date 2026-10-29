@@ -4,7 +4,7 @@ import Link from "next/link";
 import { ArrowRight, CalendarDays, ChevronRight, Clock3, Flag, Flame, Globe2, MapPin, Search, Sparkles, Trophy, Users } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { UNKNOWN_CLUB, UNKNOWN_COMPETITION, UNKNOWN_COUNTRY, useBelgiansAbroadConfig } from "@/lib/belgiansAbroad";
-import { rankBelgians, seasonTotals } from "@/lib/belgiansRankings";
+import { currentSeasonStart, rankBelgians, seasonTotals } from "@/lib/belgiansRankings";
 import { isNationalSelectionClub, nationalityBadges, ratingTone } from "@/lib/nationalities";
 import { belgianWatchStatus, hasBelgianNationality, isBelgianFollowed, nationalityList } from "@/lib/playerIdentity";
 import { clubNationalLeagues, resolvePlayerCountry, resolvePlayerLeague } from "@/lib/playerSnapshot";
@@ -109,7 +109,8 @@ export default function BelgiansAbroadPage() {
     const players = (playerResult.data || []).filter(isBelgianFollowed);
     const playerIds = players.map((player) => player.id);
     const [statsRows, performanceResult, membershipRows] = await Promise.all([
-      loadPlayerStatsForPlayers(supabase, playerIds),
+      // Saison en cours et précédente (championnat d'un club), plus les 5 saisons passées.
+      loadPlayerStatsForPlayers(supabase, playerIds, { sinceSeason: currentSeasonStart() - 1 }),
       playerIds.length ? supabase.from("match_player_stats").select(PUBLIC_MATCH_PLAYER_STATS_FIELDS).in("player_id", playerIds).order("synced_at", { ascending: false }).limit(500) : Promise.resolve({ data: [] }),
       // Parcours en club : arrivée au club actuel et clubs précédents sur chaque carte.
       loadMembershipsForPlayers(supabase, playerIds),

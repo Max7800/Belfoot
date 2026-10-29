@@ -29,7 +29,7 @@ import { isMatchOver } from "@/lib/matchStatus";
 import GroupStandings from "@/components/football/GroupStandings";
 import { PUBLIC_MATCH_FIELDS, PUBLIC_PLAYER_FIELDS, loadPlayerStatsForPlayers } from "@/lib/publicFootballData";
 import { preferAssignedPlayerStats } from "@/lib/playerStats";
-import { seasonTotals } from "@/lib/belgiansRankings";
+import { currentSeasonStart, seasonTotals } from "@/lib/belgiansRankings";
 import { isBelgianFollowed } from "@/lib/playerIdentity";
 import { clubNationalLeagues, resolvePlayerCountry, resolvePlayerLeague } from "@/lib/playerSnapshot";
 import { isNationsLeagueCompetition, nationsLeagueGroups } from "@/lib/nationsLeague";
@@ -97,7 +97,8 @@ export default function Home() {
       supabase.from("votw_sessions").select("id,matchday,season_label,formation,status,closes_at").order("created_at", { ascending: false }).limit(5),
       supabase.from("forum_topics").select("id,title,author_name,last_activity").order("last_activity", { ascending: false }).limit(4),
     ]);
-    const statsRows = await loadPlayerStatsForPlayers(supabase, (playerResult.data || []).map((player) => player.id));
+    // Saison en cours seulement, lue en même temps que les matchs (avant : à la suite).
+    const statsPromise = loadPlayerStatsForPlayers(supabase, (playerResult.data || []).map((player) => player.id), { sinceSeason: currentSeasonStart() });
     const competitionRows = competitionResult.data || [];
     const seasonRows = seasonResult.data || [];
     const requestedIds = new Set(configuredCompetitionIds.split(",").filter(Boolean));
@@ -105,7 +106,7 @@ export default function Home() {
     const carouselCompetitions = requestedIds.size
       ? competitionRows.filter((competition) => requestedIds.has(competition.id))
       : competitionRows.filter((competition) => competition.public_visible !== false);
-    const carouselMatchResults = await Promise.all(carouselCompetitions.map((competition) => {
+    const [statsRows, ...carouselMatchResults] = await Promise.all([statsPromise, ...carouselCompetitions.map((competition) => {
       const competitionSeasons = seasonRows.filter((season) => season.competition_id === competition.id);
       const activeSeason = sortPublicSeasons(competitionSeasons)[0];
       // Saisons existantes mais aucune publiée : aucun match (jamais de campagnes mélangées).
@@ -113,7 +114,7 @@ export default function Home() {
       let query = supabase.from("matches").select(PUBLIC_MATCH_FIELDS).eq("competition_id", competition.id).order("kickoff", { ascending: false }).limit(600);
       if (activeSeason) query = query.eq("season_id", activeSeason.id);
       return query;
-    }));
+    })]);
     const matchesById = new Map((recentMatchResult.data || []).map((match) => [match.id, match]));
     carouselMatchResults.forEach((result) => (result.data || []).forEach((match) => matchesById.set(match.id, match)));
 
