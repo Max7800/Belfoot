@@ -11,6 +11,10 @@ async function adminContext(request) {
   const token = (request.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
   if (!token) return { response: new Response("Unauthorized", { status: 401 }) };
   const db = getAdmin();
+  // Passage automatique (app/api/cron/pipeline-continue, 30/10/2026) : secret serveur,
+  // uniquement pour CONTINUER une exécution marquée auto_continue (contrôlé plus bas).
+  const secrets = [process.env.JOBS_SECRET, process.env.CRON_SECRET].filter(Boolean);
+  if (secrets.includes(token)) return { db, user: { id: null }, system: true };
   const { data: { user }, error } = await db.auth.getUser(token);
   if (error || !user) return { response: new Response("Unauthorized", { status: 401 }) };
   const { data: profile } = await db.from("profiles").select("role").eq("id", user.id).maybeSingle();
@@ -50,7 +54,9 @@ export async function POST(request) {
   if (auth.response) return auth.response;
   const input = await request.json().catch(() => ({}));
   try {
-    const { db, user } = auth;
+    const { db, user, system } = auth;
+    // Le serveur ne crée jamais de pipeline et ne change jamais un budget : il continue un lot.
+    if (system && !(input.pipelineRunId && input.continuation)) return new Response("Le passage automatique ne peut que continuer un pipeline existant.", { status: 403 });
     const budget = Math.max(1, Math.min(Number(input.requestLimit) || 10, 5000));
     // Exécutions abandonnées (bail dépassé) marquées avant toute décision :
     // une reprise ou une création ne voit jamais un « running » fantôme.
@@ -70,6 +76,8 @@ export async function POST(request) {
         return conflict(`Ce pipeline est encore actif (battement de moins de ${LEASE_MS / 1000} s). La reprise sera possible s'il cesse de battre.`);
       }
       if (!["paused", "error"].includes(data.status)) return conflict(`Statut « ${data.status} » : reprise impossible.`);
+      // Erreur, budget épuisé, retrait : la décision reste à l'administrateur.
+      if (system && (data.status !== "paused" || data.params?.auto_continue !== true || data.params?.dismissed_at)) return conflict("Pipeline à reprendre à la main : rien n'a été relancé.");
       const counters = await reconcileFromAttempts(db, data);
       // À la reprise, le budget saisi représente l'enveloppe que l'admin
       // accepte encore de dépenser. On conserve le plafond existant s'il est
@@ -77,7 +85,9 @@ export async function POST(request) {
       const requestLimit = input.continuation
         ? Number(data.request_limit) || 0
         : Math.max(Number(data.request_limit) || 0, counters.request_count + budget);
-      const resumeDetail = input.continuation
+      const resumeDetail = system
+        ? "Lot suivant lancé automatiquement par le serveur."
+        : input.continuation
         ? "Lot suivant lancé automatiquement depuis l’administration."
         : `Reprise demandée depuis l’administration avec ${budget} appel(s) encore autorisé(s).`;
       // Prise de possession ATOMIQUE : une seule requête, conditionnée au statut
@@ -138,6 +148,7 @@ export async function POST(request) {
           request_count: used,
           quota_remaining: quotaRemaining,
           detail: `Budget global atteint avant l’étape ${index + 1}. Reprends avec une nouvelle enveloppe pour continuer sans doublon.`,
+          params: { ...params, auto_continue: false },
           finished_at: null,
         });
         return Response.json({ ...publicRun(paused), continuationRequired: false, budgetExhausted: true });
@@ -158,6 +169,7 @@ export async function POST(request) {
               request_count: used,
               quota_remaining: quotaRemaining,
               detail: `Budget restant insuffisant pour le prochain lot de l’étape ${index + 1}. Reprends avec une nouvelle enveloppe.`,
+              params: { ...params, auto_continue: false },
               finished_at: null,
             });
             return Response.json({ ...publicRun(paused), continuationRequired: false, budgetExhausted: true });
@@ -195,6 +207,8 @@ export async function POST(request) {
             request_count: used,
             quota_remaining: quotaRemaining,
             detail: `Lot terminé : ${progress}. La suite peut être lancée automatiquement.`,
+            // Lot dans le budget : le passage automatique peut lancer la suite (cron pipeline-continue).
+            params: { ...params, auto_continue: true },
             finished_at: null,
           });
           return Response.json({ ...publicRun(paused), continuationRequired: true, progress: result.progress || null });
@@ -212,6 +226,7 @@ export async function POST(request) {
             request_count: used,
             quota_remaining: quotaRemaining,
             detail: `Étape ${index + 1}/${pipeline.jobs.length} terminée. L'étape suivante va démarrer dans un nouveau lot.`,
+            params: { ...params, auto_continue: true },
             finished_at: null,
           });
           return Response.json({ ...publicRun(paused), continuationRequired: true });
