@@ -1,5 +1,7 @@
 // Navigation de l'administration Belfoot.
-// Les panneaux restent accessibles par leur URL même lorsqu'ils sont rangés dans « Avancé ».
+// Section « Avancé » retirée le 30/10/2026 : Médias, SEO, Import / export, Modération
+// et Forum ouvraient une page vide, Configuration, Modules et Feature flags un JSON en
+// lecture seule (la configuration se modifie dans config/site.js).
 export const adminSections = [
   { label: "Accueil", icon: "home", panels: [{ key: "dashboard", label: "Vue d'ensemble" }] },
   { label: "Contenu", icon: "editorial", panels: [
@@ -35,15 +37,17 @@ export const adminSections = [
     { key: "lineups", label: "Formations" },
     { key: "matchPlayerStats", label: "Performances joueurs" },
   ] },
+  // Rangé le 30/10/2026 : l'utile d'abord, les pages de lecture et de réglage en retrait.
   { label: "Synchronisation", icon: "refresh", panels: [
-    { key: "sync-overview", label: "Vue d'ensemble (lecture seule)" },
+    { key: "jobs", label: "Synchronisations" },
+    { key: "sync-history", label: "Historique" },
     { key: "import-plan", label: "Plan d'import" },
     { key: "season-activation", label: "Saisons (activation)" },
-    { key: "jobs", label: "Jobs et historique" },
-    { key: "live-strategy", label: "Stratégie du direct" },
-    { key: "providers", label: "Sources de données" },
     { key: "data-maintenance", label: "Entretien des données" },
-    { key: "system-status", label: "Préparation 2026" },
+    { key: "sync-overview", label: "État détaillé (lecture seule)", secondary: true },
+    { key: "system-status", label: "Fiabilité des données", secondary: true },
+    { key: "live-strategy", label: "Stratégie du direct", secondary: true },
+    { key: "providers", label: "Sources de données", secondary: true },
   ] },
   { label: "Apparence du site", icon: "palette", panels: [
     { key: "homepage", label: "Page d'accueil" },
@@ -59,16 +63,6 @@ export const adminSections = [
     { key: "votw-sessions", label: "Onze & avant-match" },
     { key: "forum-moderation", label: "Forum" },
     { key: "reports", label: "Signalements" },
-  ] },
-  { label: "Avancé", icon: "settings", collapsed: true, panels: [
-    { key: "media", label: "Médias" },
-    { key: "seo", label: "SEO" },
-    { key: "io", label: "Import / export" },
-    { key: "config", label: "Configuration" },
-    { key: "modules", label: "Modules" },
-    { key: "flags", label: "Feature flags" },
-    { key: "moderation", label: "Modération" },
-    { key: "forum", label: "Forum" },
   ] },
 ];
 

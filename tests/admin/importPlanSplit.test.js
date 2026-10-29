@@ -85,9 +85,10 @@ describe("découpage de l'ancienne page « Plan d'import » en trois pages", () 
     expect(code.seasons).toContain("const [hidden, setHidden] = useViewPrefs(HIDDEN_COMPETITIONS_KEY, []);"); // partagé
     expect(code.plan).toContain("qui continueront d’être importées"); // les masquées autorisées sont signalées
   });
-  it("menu Synchronisation : trois pages enregistrées", () => {
-    const keys = adminSections.find((section) => section.label === "Synchronisation").panels.map((panel) => panel.key);
-    expect(keys).toEqual(["sync-overview", "import-plan", "season-activation", "jobs", "live-strategy", "providers", "data-maintenance", "system-status"]);
+  it("menu Synchronisation : l'utile d'abord, lecture et réglages en retrait (30/10/2026)", () => {
+    const panels = adminSections.find((section) => section.label === "Synchronisation").panels;
+    expect(panels.map((panel) => panel.key)).toEqual(["jobs", "sync-history", "import-plan", "season-activation", "data-maintenance", "sync-overview", "system-status", "live-strategy", "providers"]);
+    expect(panels.filter((panel) => panel.secondary).map((panel) => panel.key)).toEqual(["sync-overview", "system-status", "live-strategy", "providers"]);
     const registry = fs.readFileSync("components/admin/registry.js", "utf8");
     expect(registry).toContain('if (key === "season-activation") return { Comp: SeasonActivationPanel, props: {} };');
     expect(registry).toContain('if (key === "data-maintenance") return { Comp: DataMaintenancePanel, props: {} };');

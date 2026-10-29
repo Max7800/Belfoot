@@ -168,7 +168,7 @@ describe("panneau en lecture seule", () => {
     expect(registry).toContain('import SyncOverviewPanel from "./SyncOverviewPanel";');
     expect(registry).toContain('if (key === "sync-overview") return { Comp: SyncOverviewPanel, props: {} };');
     const group = adminSections.find((section) => section.label === "Synchronisation");
-    expect(group.panels[0]).toEqual({ key: "sync-overview", label: "Vue d'ensemble (lecture seule)" });
+    expect(group.panels.find((panel) => panel.key === "sync-overview")).toEqual({ key: "sync-overview", label: "État détaillé (lecture seule)", secondary: true });
     expect(group.panels.some((panel) => panel.key === "sync-errors")).toBe(false); // ancien emplacement vide remplacé
   });
 });
