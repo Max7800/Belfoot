@@ -18,7 +18,7 @@ import { normalizeProposeConfig } from "@/lib/propose";
 import { normalizeRankings } from "@/lib/rankings";
 import { invalidateTilesCache, TILE_SCOPES } from "@/lib/tiles";
 import { COMPETITION_SCOPES, groupCompetitionsByScope } from "@/lib/competitionScopes";
-import { healthItems, historyRows, syncSections } from "@/lib/adminSync";
+import { healthItems, historyRows, resumableRuns, syncSections } from "@/lib/adminSync";
 
 // Écriture sûre de site_settings (lib/siteSettings.js) : ne remplace que les
 // clés données, sans effacer une écriture concurrente (cron, job, autre onglet).
@@ -130,7 +130,8 @@ export function JobsPanel() {
   const load = async () => {
     const [jobResult, pipelineResult] = await Promise.all([
       supabase.from("job_runs").select("*").order("started_at", { ascending: false }).limit(30),
-      supabase.from("pipeline_runs").select(PIPELINE_RUN_PUBLIC_COLUMNS).order("started_at", { ascending: false }).limit(12),
+      // Assez d'historique pour savoir si une exécution plus récente a réussi.
+      supabase.from("pipeline_runs").select(PIPELINE_RUN_PUBLIC_COLUMNS).order("started_at", { ascending: false }).limit(60),
     ]);
     setRows(jobResult.data || []);
     setPipelineRuns(pipelineResult.data || []);
@@ -207,9 +208,13 @@ export function JobsPanel() {
   const latestQuota = rows.find((r) => r.quota_remaining != null)?.quota_remaining;
   // Saisons du plan d’import + saisons en base de la compétition (plus de liste figée).
   const seasonOptions = jobSeasonOptions({ plan: importPlan, availableSeasons, competitionId: compId, selected: season });
-  const resumablePipelineRuns = pipelineRuns
-    .filter((runItem) => ["error", "paused", "running"].includes(runItem.status))
-    .filter((runItem, index, items) => items.findIndex((candidate) => candidate.pipeline_key === runItem.pipeline_key && candidate.target_key === runItem.target_key) === index);
+  const resumablePipelineRuns = resumableRuns(pipelineRuns);
+  const dismissRun = async (runItem, label) => {
+    if (!window.confirm(`Retirer « ${label} » de la liste des reprises ?\n\nL'avancement reste enregistré ; rien n'est relancé.`)) return;
+    try { await adminRequest("/api/admin/pipeline-dismiss", { pipelineRunId: runItem.id }); setMsg(`✓ « ${label} » retiré de la liste.`); }
+    catch (e) { setMsg(`✗ Retrait impossible : ${e.message}`); }
+    load();
+  };
   const TONE = { ok: "border-emerald-400/25 bg-emerald-400/5 text-emerald-200", warn: "border-amber-400/30 bg-amber-400/5 text-amber-200", error: "border-red-400/30 bg-red-500/10 text-red-200" };
   const pipelineRow = (p) => <div key={p.key} className="flex flex-wrap items-center gap-2 py-1.5">
     <button disabled={!!busy || (!compId && !p.globalScope)} onClick={() => runPipeline(p)} title={p.jobs.map((j) => JOB_CATALOG[j]?.label || j).join(" → ")} className="rounded-lg border border-accent/30 bg-accent/10 px-3 py-1.5 text-sm font-bold text-accent disabled:opacity-50">{p.label}{busy === p.key ? " …" : ""}</button>
@@ -266,7 +271,7 @@ export function JobsPanel() {
       const stateLabel = { active: "En cours", abandoned: "Abandonné (bail expiré)", paused: "En pause", error: "En erreur" }[state] || state;
       const used = Number(runItem.request_count) || 0;
       const available = Math.max(0, (Number(runItem.request_limit) || 0) - used);
-      return <div key={runItem.id} className="mb-2 flex flex-wrap items-center gap-2 rounded-lg border border-amber-400/30 bg-amber-400/10 p-2 text-xs text-amber-200"><span className="flex-1"><b>{stateLabel}</b> · « {definition.label} » · étape {Math.min((runItem.next_step || 0) + 1, definition.jobs.length)}/{definition.jobs.length} · {used}/{runItem.request_limit} appels · {available} disponibles{runItem.detail ? ` · ${runItem.detail}` : ""}</span><button disabled={!!busy || recentlyRunning} title={recentlyRunning ? `Exécution encore active ; reprise possible après ${LEASE_MS / 1000} s sans battement.` : "Reprendre à l’étape enregistrée"} onClick={() => runPipeline(definition, runItem.id)} className="rounded border border-amber-300/40 px-2 py-1 font-bold disabled:opacity-50">{recentlyRunning ? "En cours…" : "Reprendre"}</button></div>;
+      return <div key={runItem.id} className="mb-2 flex flex-wrap items-center gap-2 rounded-lg border border-amber-400/30 bg-amber-400/10 p-2 text-xs text-amber-200"><span className="flex-1"><b>{stateLabel}</b> · « {definition.label} » · étape {Math.min((runItem.next_step || 0) + 1, definition.jobs.length)}/{definition.jobs.length} · {used}/{runItem.request_limit} appels · {available} disponibles{runItem.detail ? ` · ${runItem.detail}` : ""}</span><button disabled={!!busy || recentlyRunning} title={recentlyRunning ? `Exécution encore active ; reprise possible après ${LEASE_MS / 1000} s sans battement.` : "Reprendre à l’étape enregistrée"} onClick={() => runPipeline(definition, runItem.id)} className="rounded border border-amber-300/40 px-2 py-1 font-bold disabled:opacity-50">{recentlyRunning ? "En cours…" : "Reprendre"}</button>{!recentlyRunning && <button disabled={!!busy} onClick={() => dismissRun(runItem, definition.label)} title="Rien à reprendre : retirer ce bloc de la liste" className="rounded border border-line/20 px-2 py-1 text-muted hover:text-content disabled:opacity-50">Retirer</button>}</div>;
     })}
 
     <section className="mb-3 rounded-xl border border-accent/20 bg-accent/5 p-3">

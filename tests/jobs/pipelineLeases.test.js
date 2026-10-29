@@ -119,7 +119,7 @@ describe("bail : cohérence avec les durées maximales des routes", () => {
     walk(root);
     const executing = routes.filter((file) => /runJob\(|writeOwnedPipeline|from\("pipeline_runs"\)\.(update|insert)/.test(fs.readFileSync(file, "utf8")));
     expect(executing.map((file) => path.relative(root, file).replace(/\\/g, "/")).sort()).toEqual([
-      "admin/run-job/route.js", "admin/run-pipeline/route.js", "cron/competition-refresh/route.js", "cron/live-window/route.js", "cron/national-refresh/route.js", "jobs/[key]/route.js",
+      "admin/pipeline-dismiss/route.js", "admin/run-job/route.js", "admin/run-pipeline/route.js", "cron/competition-refresh/route.js", "cron/live-window/route.js", "cron/national-refresh/route.js", "jobs/[key]/route.js",
     ]);
     for (const file of executing) {
       const declared = fs.readFileSync(file, "utf8").match(/export const maxDuration = (\d+);/);
