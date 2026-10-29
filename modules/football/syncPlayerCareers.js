@@ -141,6 +141,8 @@ export async function syncPlayerCareers(db, competition, ctx = {}) {
     playersQuery = playersQuery.eq("id", ctx.playerId);
   } else if (abroad) {
     playersQuery = playersQuery.eq("tracked", true).eq("active", true).not("ext->league_stats", "is", null);
+    // Suivi automatique : seulement les Belges jamais traités (pas de rafraîchissement sans fin).
+    if (ctx.onlyMissing) playersQuery = playersQuery.is("career_synced_at", null);
     if (ctx.refreshBefore) playersQuery = playersQuery.or(`career_synced_at.is.null,career_synced_at.lt.${ctx.refreshBefore}`);
   } else {
     const { data: matches, error: matchesError } = await db.from("matches").select("home_club_id,away_club_id").eq("competition_id", competition.id);

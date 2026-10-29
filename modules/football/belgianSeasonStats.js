@@ -93,6 +93,7 @@ export async function syncBelgianSeasonStats(db, ctx = {}) {
   return {
     detail: `${finished} Belge(s) complété(s), ${calls} saison(s) demandée(s), ${lines} ligne(s) de statistiques${errors.length ? ` · ${errors.length} erreur(s) : ${errors.join(" ; ")}` : ""}${left ? ` · ${left} joueur(s) restant(s)` : " · saisons passées à jour"}`,
     complete: left === 0,
+    calls,
     progress: { current: finished, total: left + finished, unit: "joueurs" },
   };
 }
