@@ -135,12 +135,16 @@ export default function CompetitionPage() {
     setCompetitions([...(competitionRows || [])].filter((item) => item.public_visible !== false).sort((a, b) => (a.position ?? 999) - (b.position ?? 999) || (a.name || "").localeCompare(b.name || "")));
     const c = resolveCompetitionRoute(competitionRows || [], slug);
     if (!c) { setComp(null); return; }
-    setComp(c);
     const se = await supabase.from("seasons").select("*").eq("competition_id", c.id);
     if (se.error) throw se.error;
     const { seasons: orderedSeasons, unpublished } = publicSeasonState(se.data || []);
+    // Compétition et saisons posées ensemble (un seul rendu) : posée avant les saisons,
+    // la compétition lançait un premier chargement complet sans saison, aussitôt
+    // abandonné mais payé (29 lectures de joueurs au lieu de 17 en Ligue des champions,
+    // 30/10/2026).
     setSeasons(orderedSeasons); setSeasonLabel(orderedSeasons[0]?.label || "");
     setUnpublishedSeasons(unpublished);
+    setComp(c);
   })().catch(() => setComp(null)); }, [slug]);
 
   const activeSeason = seasons.find((season) => season.label === seasonLabel) || null;
