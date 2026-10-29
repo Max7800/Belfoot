@@ -17,3 +17,14 @@ describe("lectures volumineuses : tri par la colonne filtrée", () => {
     expect(page).toContain('.in("club_id", clubIds)\n        .order("club_id"))'.replace(/\n/g, page.includes("\r\n") ? "\r\n" : "\n"));
   });
 });
+
+describe("page d'une compétition : un seul chargement de la saison", () => {
+  it("compétition posée après ses saisons (posée avant, un premier chargement complet sans saison partait pour rien)", () => {
+    const page = fs.readFileSync("app/competitions/[slug]/page.js", "utf8").replace(/\r\n/g, "\n");
+    const seasonsAt = page.indexOf("setSeasons(orderedSeasons); setSeasonLabel(orderedSeasons[0]?.label || \"\");");
+    const compAt = page.indexOf("    setComp(c);\n", seasonsAt);
+    expect(seasonsAt).toBeGreaterThan(0);
+    expect(compAt).toBeGreaterThan(seasonsAt);
+    expect(page.slice(page.indexOf("const c = resolveCompetitionRoute(competitionRows || [], slug);"), seasonsAt)).not.toContain("setComp(c);");
+  });
+});
