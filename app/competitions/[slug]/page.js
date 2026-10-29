@@ -166,7 +166,8 @@ export default function CompetitionPage() {
         .select("id,player_id,club_id,position,shirt_number,squad_role,membership_type,is_primary,active,season_start_year")
         .eq("season_start_year", Number(activeYear))
         .eq("active", true)
-        .in("club_id", clubIds)) : Promise.resolve({ data: [], error: null }),
+        .in("club_id", clubIds)
+        .order("club_id")) : Promise.resolve({ data: [], error: null }),
       activeYear
         ? supabase.from("player_transfers").select("id,player_id,player_name,from_club_id,to_club_id,from_club_name,to_club_name,transfer_date,transfer_type").eq("season_start_year", Number(activeYear)).order("transfer_date", { ascending: false }).limit(100)
         : Promise.resolve({ data: [] }),
@@ -181,7 +182,8 @@ export default function CompetitionPage() {
     ].filter(Boolean))];
     const [loadedPlayers, exactMatchStats] = await Promise.all([
       playerIds.length ? loadPlayersByIds(supabase, playerIds) : Promise.resolve([]),
-      loadMatchStatsForMatches(supabase, seasonMatches.map((match) => match.id)),
+      // Matchs terminés ou en cours seulement : un match à venir n'a aucune performance.
+      loadMatchStatsForMatches(supabase, seasonMatches.filter((match) => ["finished", "live"].includes(match.status)).map((match) => match.id)),
     ]);
     let playerRows = loadedPlayers;
     if (!playerRows.length && clubIds.length) {
