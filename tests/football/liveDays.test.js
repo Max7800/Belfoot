@@ -47,7 +47,7 @@ describe("jour ouvert au chargement", () => {
 });
 
 describe("composant : branchements", () => {
-  const component = fs.readFileSync("components/football/LiveMatchCenter.js", "utf8");
+  const component = fs.readFileSync("components/football/LiveMatchCenter.js", "utf8") + fs.readFileSync("components/football/ScoreLine.js", "utf8");
   it("fenêtre et jour par défaut de lib/liveDays ; derniers faits pour les matchs en direct seulement", () => {
     expect(component).toContain("const { start, end } = dayWindow(new Date());");
     expect(component).toContain("defaultDay(matches, new Date())");
@@ -57,8 +57,9 @@ describe("composant : branchements", () => {
     expect(component).toContain("if (loadedIds.current.has(payload.new?.match_id || payload.old?.match_id)) scheduleLoad();");
   });
   it("mise en avant : la Belgique, et les clubs de Belges suivis hors des compétitions belges", () => {
-    expect(component).toContain("competitionMap[match.competition_id]?.competition_scope !== \"belgique\" && (followedClubs.has(match.home_club_id) || followedClubs.has(match.away_club_id))");
-    expect(component).toContain("isBelgiumTeam(clubs[match.home_club_id]) || isBelgiumTeam(clubs[match.away_club_id])");
+    expect(component).toContain("if (isBelgiumTeam(clubs[match.home_club_id])) return \"home\";");
+    expect(component).toContain("if (competitionMap[match.competition_id]?.competition_scope === \"belgique\") return null;");
+    expect(component).toContain("const highlighted = useCallback((match) => Boolean(followedSide(match)), [followedSide]);");
   });
   it("une ligne par équipe, score à droite ; compétitions sur deux colonnes en bureau", () => {
     expect(component).toContain("<TeamLine club={clubs[match.home_club_id]}");

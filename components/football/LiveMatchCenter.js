@@ -4,57 +4,14 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Radio, RefreshCw } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
-import { isMatchFinished, isMatchLive, matchStatusMeta } from "@/lib/matchStatus";
+import { isMatchLive } from "@/lib/matchStatus";
 import { dayStrip, dayWindow, defaultDay, matchesByDay } from "@/lib/liveDays";
+import { ScoreRow, isBelgiumTeam } from "./ScoreLine";
 
 // Scores en direct : barre de jours J-5 à J+7 (lib/liveDays.js), lignes de score
 // compactes regroupées par compétition, Belgique et clubs de Belges en tête.
 // Refonte après l'audit du 28/10/2026 (page vide après minuit, cartes de 180 px,
 // titre en double, résultats de la veille inaccessibles).
-
-function normalize(value) {
-  return String(value || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
-}
-
-export function isBelgiumTeam(club) {
-  const name = normalize(club?.name);
-  return Boolean(club?.national_followed && club?.national_category === "senior")
-    || ["belgique", "belgium", "belgie"].includes(name);
-}
-
-function eventSummary(event) {
-  if (!event) return null;
-  const icons = { goal: "⚽", yellow: "🟨", red: "🟥", sub: "🔁" };
-  return { icon: icons[event.type] || "●", text: event.player_name || event.detail || "Mise à jour du match" };
-}
-
-// Une ligne par équipe, score à droite (lisible sur téléphone : les noms ne sont
-// plus coupés à 8 lettres comme avec « domicile – score – extérieur » sur une ligne).
-function TeamLine({ club, score, dim, live }) {
-  return <div className={`flex items-center gap-2 ${dim ? "text-muted" : "font-bold"}`}>
-    {club?.logo_url ? <img src={club.logo_url} alt="" loading="lazy" className="h-5 w-5 flex-shrink-0 object-contain" /> : <span className="h-5 w-5 flex-shrink-0 rounded-full bg-white/[0.06]" />}
-    <span className="min-w-0 flex-1 truncate">{club?.name || "—"}</span>
-    <span className={`w-6 text-right font-black tabular-nums ${live ? "text-red-300" : ""}`}>{score ?? ""}</span>
-  </div>;
-}
-
-function ScoreRow({ match, clubs, highlighted, latestEvent }) {
-  const status = matchStatusMeta(match);
-  const finished = isMatchFinished(match);
-  const scored = match.home_score != null && match.away_score != null;
-  // Match terminé : le perdant en retrait, comme sur un tableau de scores.
-  const homeLost = finished && scored && match.home_score < match.away_score;
-  const awayLost = finished && scored && match.away_score < match.home_score;
-  const event = status.live ? eventSummary(latestEvent) : null;
-  return <Link href={`/matchs/${match.id}`} className={`grid grid-cols-[3.2rem_minmax(0,1fr)] items-center gap-2 px-3 py-2 text-[13px] transition hover:bg-white/[0.03] ${highlighted ? "border-l-2 border-amber-300/70 bg-amber-300/[0.03]" : "border-l-2 border-transparent"}`}>
-    <span className={`text-[11px] font-black tabular-nums ${status.live ? "text-red-400" : finished ? "text-muted" : "text-content/80"}`}>{status.live && <span className="mr-1 inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-red-500 align-middle" />}{status.compact}</span>
-    <div className="min-w-0 space-y-1">
-      <TeamLine club={clubs[match.home_club_id]} score={scored ? match.home_score : null} dim={homeLost} live={status.live} />
-      <TeamLine club={clubs[match.away_club_id]} score={scored ? match.away_score : null} dim={awayLost} live={status.live} />
-      {event && <div className="truncate text-[11px] text-muted">{event.icon} {latestEvent.minute != null ? `${latestEvent.minute}’ · ` : ""}{event.text}</div>}
-    </div>
-  </Link>;
-}
 
 export default function LiveMatchCenter({ competitions = [] }) {
   const [matches, setMatches] = useState([]);
@@ -130,8 +87,17 @@ export default function LiveMatchCenter({ competitions = [] }) {
 
   // Mis en avant : la Belgique, et les clubs de Belges suivis hors des compétitions
   // belges (en Pro League, chaque match a des Belges : le repère n'y voudrait rien dire).
-  const highlighted = useCallback((match) => isBelgiumTeam(clubs[match.home_club_id]) || isBelgiumTeam(clubs[match.away_club_id])
-    || (competitionMap[match.competition_id]?.competition_scope !== "belgique" && (followedClubs.has(match.home_club_id) || followedClubs.has(match.away_club_id))), [clubs, followedClubs, competitionMap]);
+  // Camp suivi d'un match (« home », « away » ou null) : la Belgique, sinon le club
+  // d'un Belge suivi hors des compétitions belges. Sert à la mise en avant et à V / N / D.
+  const followedSide = useCallback((match) => {
+    if (isBelgiumTeam(clubs[match.home_club_id])) return "home";
+    if (isBelgiumTeam(clubs[match.away_club_id])) return "away";
+    if (competitionMap[match.competition_id]?.competition_scope === "belgique") return null;
+    if (followedClubs.has(match.home_club_id)) return "home";
+    if (followedClubs.has(match.away_club_id)) return "away";
+    return null;
+  }, [clubs, followedClubs, competitionMap]);
+  const highlighted = useCallback((match) => Boolean(followedSide(match)), [followedSide]);
   const shown = (view === "live" ? live : byDay[view] || []).filter((match) => !belgiansOnly || highlighted(match));
   // Compétitions : celles avec la Belgique ou des Belges d'abord, puis l'ordre du site.
   const groups = Object.values(shown.reduce((all, match) => {
@@ -148,7 +114,9 @@ export default function LiveMatchCenter({ competitions = [] }) {
         {live.length > 0 && <button type="button" aria-pressed={view === "live"} onClick={() => setSelected("live")} className={`${chip(view === "live")} border-red-500/40 text-red-300`}><span className="flex items-center gap-1"><Radio size={12} />Direct</span><span className="text-[10px]">{live.length}</span></button>}
         {days.map((day) => {
           const count = (byDay[day.key] || []).length;
-          return <button key={day.key} type="button" aria-pressed={view === day.key} onClick={() => setSelected(day.key)} className={`${chip(view === day.key)} ${count ? "" : "opacity-45"}`}><span className="whitespace-nowrap">{day.label}</span><span className="text-[10px] font-semibold">{count ? `${count} match${count > 1 ? "s" : ""}` : "—"}</span></button>;
+          // Aujourd'hui repérable même non choisi : point rouge et contour, jamais grisé.
+          const today = day.offset === 0;
+          return <button key={day.key} type="button" aria-pressed={view === day.key} onClick={() => setSelected(day.key)} className={`${chip(view === day.key)} ${count || today ? "" : "opacity-45"} ${today && view !== day.key ? "border-red-400/50 text-content" : ""}`}><span className="flex items-center gap-1 whitespace-nowrap">{today && <span className="h-1.5 w-1.5 rounded-full bg-red-500" />}{day.label}</span><span className="text-[10px] font-semibold">{count ? `${count} match${count > 1 ? "s" : ""}` : "—"}</span></button>;
         })}
       </div>
     </div>
@@ -161,7 +129,7 @@ export default function LiveMatchCenter({ competitions = [] }) {
       {loading ? <div className="space-y-2">{[0, 1, 2, 3].map((item) => <div key={item} className="h-10 animate-pulse rounded-xl bg-surface2" />)}</div>
         : groups.length ? <div className="grid items-start gap-4 lg:grid-cols-2">{groups.map(({ competition, matches: groupMatches }) => <section key={competition.id || "other"} className="overflow-hidden rounded-2xl border border-line/10 bg-bg/30">
           <header className="flex items-center gap-2 border-b border-line/10 px-3 py-2">{competition.logo_url && <img src={competition.logo_url} alt="" loading="lazy" className="h-5 w-5 object-contain" />}<h3 className="min-w-0 flex-1 truncate text-sm font-black">{competition.name || "Autres matchs"}</h3><span className="text-[10px] text-muted">{groupMatches.length} match{groupMatches.length > 1 ? "s" : ""}</span></header>
-          <div className="divide-y divide-line/10">{[...groupMatches].sort((a, b) => Number(highlighted(b)) - Number(highlighted(a)) || new Date(a.kickoff || 0) - new Date(b.kickoff || 0)).map((match) => <ScoreRow key={match.id} match={match} clubs={clubs} highlighted={highlighted(match)} latestEvent={latestEvents[match.id]} />)}</div>
+          <div className="divide-y divide-line/10">{[...groupMatches].sort((a, b) => Number(highlighted(b)) - Number(highlighted(a)) || new Date(a.kickoff || 0) - new Date(b.kickoff || 0)).map((match) => <ScoreRow key={match.id} match={match} clubs={clubs} highlighted={highlighted(match)} followedSide={followedSide(match)} latestEvent={latestEvents[match.id]} />)}</div>
         </section>)}</div>
           : <div className="py-8 text-center"><Radio className="mx-auto h-7 w-7 text-muted/50" /><p className="mt-2 text-sm font-semibold">{belgiansOnly ? "Aucun match de la Belgique ou de Belges ce jour-là" : view === "live" ? "Aucun match en direct" : "Aucun match ce jour-là"}</p><p className="mt-1 text-xs text-muted">Choisis un autre jour dans la barre ci-dessus.</p></div>}
     </div>
