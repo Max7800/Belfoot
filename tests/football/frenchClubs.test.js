@@ -29,3 +29,12 @@ describe("noms de clubs", () => {
     expect(clubLabel("Tanghe Anton", "A. Tanghe")).toBeNull(); // club fantôme : toujours « Sans club »
   });
 });
+
+describe("équipes réserves de la Challenger Pro League", () => {
+  it("vrai nom, depuis la forme API comme depuis l'ancienne forme française", () => {
+    expect(["Club Brugge II", "Club Bruges II", "RSC Anderlecht II", "KRC Genk II", "Standard Liège II", "Standard Liege II"].map(frenchClubName))
+      .toEqual(["Club NXT", "Club NXT", "RSCA Futures", "Jong Genk", "SL16 FC", "SL16 FC"]);
+    expect(storedClubName("clubs", "Club Brugge II")).toBe("Club NXT");
+    expect(frenchClubName("Royal Antwerp II")).toBe("Royal Antwerp II"); // nom officiel non vérifié : inchangé
+  });
+});
