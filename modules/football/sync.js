@@ -2,11 +2,14 @@
 // `db` = client Supabase service-role (côté serveur uniquement).
 import { frenchTeamName } from "@/lib/frenchNations";
 import { frenchCompetitionName } from "@/lib/frenchCompetitions";
+import { frenchClubName } from "@/lib/frenchClubs";
 
 // Sélections nommées en français à l'écriture (« Spain U21 » → « Espagne U21 »),
 // quel que soit le job : l'API renvoie les noms anglais à chaque passage et
 // écrasait le nom français posé par syncNationalTeam.
-export const storedClubName = (table, name) => (table === "clubs" && typeof name === "string" ? frenchTeamName(name) : name);
+// Clubs en français aussi (lib/frenchClubs.js, 30/10/2026) : « Standard Liege » →
+// « Standard de Liège ». Appliqué à chaque écriture, l'API renvoyant l'anglais à chaque passage.
+export const storedClubName = (table, name) => (table === "clubs" && typeof name === "string" ? frenchClubName(frenchTeamName(name)) : name);
 
 // Références manquantes (clubs…) insérées avec leurs champs ; celles qui existent
 // déjà ne sont jamais modifiées (un nom français posé à la main est conservé).
