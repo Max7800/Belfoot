@@ -19,6 +19,8 @@ import { resolveMatches } from "./syncCompetition";
 import { syncLineups } from "./syncLineups";
 import { syncEvents } from "./syncEvents";
 import { SCAN_LEAGUES, scanBelgians, scanSeason } from "./scanBelgians";
+import { syncPlayerCareers } from "./syncPlayerCareers";
+import { syncBelgianSeasonStats } from "./belgianSeasonStats";
 import { readAll } from "@/lib/readAll";
 import { updateSiteSettings } from "@/lib/siteSettings";
 import { isLeaseLost } from "@/lib/runLease";
@@ -167,6 +169,24 @@ export async function followBelgiansAbroad(db, ctx = {}) {
     const result = await scanBelgians(db, { ...ctx, now, requestLimit: SCAN_PAGES_PER_FOLLOW, resumeState: state.scan, saveCheckpoint: async (checkpoint) => { state.scan = { ...state.scan, ...checkpoint }; } });
     if (result.complete) state.scan = { ...state.scan, leagueIndex: 0, page: 1, cycleCompletedAt: now.toISOString() };
     notes.push(`balayage : ${result.detail}`);
+  }
+
+  // 4. Nouveaux Belges du balayage complétés tout seuls (30/10/2026) : parcours en
+  // club, puis saisons passées, un joueur par passage et seulement avec les appels
+  // restants du passage (le programme et les feuilles de match passent d'abord).
+  const callsLeft = () => (Number(ctx.requestLimit) || 12) - (Number(ctx.requestTracker?.count) || 0);
+  if (provider?.fetchPlayerCareer && callsLeft() >= 2 && Date.now() < deadline) {
+    try {
+      const career = await syncPlayerCareers(db, { provider: "apifootball", name: "Belges à l'étranger" }, { ...ctx, abroadBelgians: true, onlyMissing: true, batchSize: 1, includeCareerStats: false });
+      if (typeof career === "object" && career.progress?.current > 0) notes.push("parcours d'un nouveau Belge");
+      else if (callsLeft() >= 1 && Date.now() < deadline) {
+        const seasons = await syncBelgianSeasonStats(db, { ...ctx, now, batchSize: 1, requestLimit: callsLeft(), deadline });
+        if (seasons.calls > 0) notes.push(`saisons passées : ${seasons.detail.split(" · ")[0]}`);
+      }
+    } catch (error) {
+      if (isLeaseLost(error)) throw error;
+      notes.push(`nouveaux Belges en échec (${String(error?.message || error).slice(0, 80)})`);
+    }
   }
 
   await updateSiteSettings(db, { football_abroad_follow_state: state });
