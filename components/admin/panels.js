@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import siteConfig from "@/config/site";
-import { JOB_CATALOG, jobKeys, JOB_GROUPS, jobsInGroup, jobPipelines } from "@/lib/jobCatalog";
+import { JOB_CATALOG, jobPipelines } from "@/lib/jobCatalog";
 import { LEASE_MS, PIPELINE_RUN_PUBLIC_COLUMNS, runState } from "@/lib/runLease";
 import { jobSeasonOptions } from "@/lib/importPlan";
 import { adminRequest, preflightSummary } from "@/lib/adminJobs";
@@ -18,6 +18,7 @@ import { normalizeProposeConfig } from "@/lib/propose";
 import { normalizeRankings } from "@/lib/rankings";
 import { invalidateTilesCache, TILE_SCOPES } from "@/lib/tiles";
 import { COMPETITION_SCOPES, groupCompetitionsByScope } from "@/lib/competitionScopes";
+import { healthItems, historyRows, syncSections } from "@/lib/adminSync";
 
 // Écriture sûre de site_settings (lib/siteSettings.js) : ne remplace que les
 // clés données, sans effacer une écriture concurrente (cron, job, autre onglet).
@@ -122,7 +123,10 @@ export function JobsPanel() {
   const [nationalGender, setNationalGender] = useState("auto");
   const nationalGenderParam = nationalGender === "auto" ? null : nationalGender;
   const [pipelineRuns, setPipelineRuns] = useState([]);
-  const targetedJobs = new Set(["football.team-test", "football.national-team", "football.find-national-teams", "football.resolve-national-clubs"]);
+  const [settingsData, setSettingsData] = useState({});
+  const [openPanels, setOpenPanels] = useState(() => new Set());
+  const togglePanel = (key) => setOpenPanels((current) => { const next = new Set(current); if (next.has(key)) next.delete(key); else next.add(key); return next; });
+  const sections = syncSections();
   const load = async () => {
     const [jobResult, pipelineResult] = await Promise.all([
       supabase.from("job_runs").select("*").order("started_at", { ascending: false }).limit(30),
@@ -135,7 +139,7 @@ export function JobsPanel() {
     load();
     supabase.from("competitions").select("*").order("name").then(({ data }) => setComps(distinctProviderCompetitions(data || [])));
     supabase.from("seasons").select("competition_id,label").order("label", { ascending: false }).then(({ data }) => setAvailableSeasons(data || []));
-    supabase.from("site_settings").select("data").eq("id", 1).maybeSingle().then(({ data }) => setImportPlan(data?.data?.football_import_plan || null));
+    supabase.from("site_settings").select("data").eq("id", 1).maybeSingle().then(({ data }) => { setImportPlan(data?.data?.football_import_plan || null); setSettingsData(data?.data || {}); });
   }, []);
   // Façade commune (lib/adminJobs.js) : même session, mêmes erreurs, même texte de préflight.
   const jobParams = () => ({ season, competitionId: compId || null, matchCap, batchSize, requestLimit, teamExternalId, nationalCategory, nationalGender: nationalGenderParam });
@@ -206,11 +210,28 @@ export function JobsPanel() {
   const resumablePipelineRuns = pipelineRuns
     .filter((runItem) => ["error", "paused", "running"].includes(runItem.status))
     .filter((runItem, index, items) => items.findIndex((candidate) => candidate.pipeline_key === runItem.pipeline_key && candidate.target_key === runItem.target_key) === index);
+  const TONE = { ok: "border-emerald-400/25 bg-emerald-400/5 text-emerald-200", warn: "border-amber-400/30 bg-amber-400/5 text-amber-200", error: "border-red-400/30 bg-red-500/10 text-red-200" };
+  const pipelineRow = (p) => <div key={p.key} className="flex flex-wrap items-center gap-2 py-1.5">
+    <button disabled={!!busy || (!compId && !p.globalScope)} onClick={() => runPipeline(p)} title={p.jobs.map((j) => JOB_CATALOG[j]?.label || j).join(" → ")} className="rounded-lg border border-accent/30 bg-accent/10 px-3 py-1.5 text-sm font-bold text-accent disabled:opacity-50">{p.label}{busy === p.key ? " …" : ""}</button>
+    {!p.globalScope && <button disabled={!!busy || !compId} onClick={() => simulate(p)} className="rounded-lg border border-line/20 px-2 py-1.5 text-xs text-muted hover:border-accent/40 disabled:opacity-50">Simuler</button>}
+    <span className="min-w-0 flex-1 text-[11px] leading-4 text-muted">{p.globalScope ? "Tous les Belges, sans compétition à choisir. " : ""}{p.description}</span>
+  </div>;
+  const jobButton = (k) => <button key={k} disabled={!!busy || (JOB_CATALOG[k]?.target === "competition" && !compId)} onClick={() => run(k)} className="rounded border border-line/20 bg-surface2 px-3 py-1.5 text-sm font-bold disabled:opacity-50">{JOB_CATALOG[k]?.label || k}{busy === k ? " …" : ""}</button>;
+  const fold = (key, title, hint, children) => <section className="mb-3 rounded-xl border border-line/10">
+    <button type="button" onClick={() => togglePanel(key)} aria-expanded={openPanels.has(key)} className="flex w-full items-center gap-2 px-3 py-2.5 text-left"><span className={`text-xs text-muted transition ${openPanels.has(key) ? "rotate-90" : ""}`}>▶</span><b className="text-sm">{title}</b><span className="text-[11px] text-muted">{hint}</span></button>
+    {openPanels.has(key) && <div className="border-t border-line/10 p-3">{children}</div>}
+  </section>;
   return (<div>
-    <h2 className="mb-4 text-lg font-bold">Jobs & synchronisation</h2>
-    <p className="mb-3 text-xs leading-5 text-muted">Chaque lancement affiche maintenant son coût estimé et respecte un budget strict. Une relance identique est bloquée tant que le premier job travaille. La base 2024/2025 reste la référence de développement ; le passage à 2026/2027 se fera ici, compétition par compétition, lorsque l'abonnement API sera actif.</p>
-    <div className="mb-3 flex flex-wrap items-center gap-2">
-      <select value={compId} onChange={(e) => setCompId(e.target.value)} className="rounded border border-line/10 bg-surface2 px-2 py-1 text-sm"><option value="">Choisir une compétition…</option>{(() => {
+    <h2 className="mb-1 text-lg font-bold">Synchronisations</h2>
+    <p className="mb-4 text-xs leading-5 text-muted">Résultats, statistiques, compositions, faits, entraîneurs, nouvelles campagnes et Belges à l&apos;étranger se mettent à jour tout seuls. Ici : leur état, et les quelques actions qui restent à lancer à la main.</p>
+
+    <section className="mb-4">
+      <div className="mb-2 text-xs font-black uppercase tracking-wider text-muted">Santé des automatismes</div>
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{healthItems(settingsData, rows).map((item) => <div key={item.key} className={`rounded-xl border px-3 py-2 text-xs ${TONE[item.status]}`}><b className="block text-[13px] text-content">{item.status === "ok" ? "✓" : item.status === "warn" ? "⚠" : "✗"} {item.label}</b><span className="mt-0.5 block leading-4">{item.detail}</span></div>)}</div>
+    </section>
+
+    <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-line/10 bg-surface/60 p-3">
+      <select value={compId} onChange={(e) => setCompId(e.target.value)} aria-label="Compétition" className="rounded border border-line/10 bg-surface2 px-2 py-1 text-sm"><option value="">Choisir une compétition…</option>{(() => {
         // Taxonomie partagée avec le plan d'import : Belgique / Europe / Étranger (par pays) / Sélections.
         const byName = (a, b) => a.name.localeCompare(b.name);
         const buckets = groupCompetitionsByScope(comps, byName);
@@ -221,85 +242,90 @@ export function JobsPanel() {
               <optgroup key={`etr-${country}`} label={`${scope.icon} ${country}`}>{buckets.etranger[country].map(opt)}</optgroup>
             ));
           }
-          const rows = buckets[scope.key] || [];
-          if (!rows.length) return [];
-          return [<optgroup key={scope.key} label={`${scope.icon} ${scope.label}`}>{rows.map(opt)}</optgroup>];
+          const scopeRows = buckets[scope.key] || [];
+          if (!scopeRows.length) return [];
+          return [<optgroup key={scope.key} label={`${scope.icon} ${scope.label}`}>{scopeRows.map(opt)}</optgroup>];
         });
       })()}</select>
       <label className="text-xs text-muted">Saison</label>
       <select value={season} onChange={(e) => setSeason(e.target.value)} className="w-32 rounded border border-line/10 bg-surface2 px-2 py-1 text-sm">{seasonOptions.map((label) => <option key={label} value={label}>{label}</option>)}</select>
-      <label className="text-xs text-muted">Max matchs</label>
-      <input type="number" min="1" max="20" value={matchCap} onChange={(e) => setMatchCap(Math.max(1, Math.min(20, Number(e.target.value) || 1)))} className="w-16 rounded border border-line/10 bg-surface2 px-2 py-1 text-sm" />
-      <label className="text-xs text-muted">Lot joueurs</label>
-      <input type="number" min="1" max="25" value={batchSize} onChange={(e) => setBatchSize(Math.max(1, Math.min(25, Number(e.target.value) || 1)))} className="w-16 rounded border border-line/10 bg-surface2 px-2 py-1 text-sm" />
-      <label className="text-xs text-muted">Budget API / reprise</label>
-      <input
-        type="number"
-        min="1"
-        max="5000"
-        value={requestLimit}
-        onFocus={(e) => e.target.select()}
-        onChange={(e) => setRequestLimit(e.target.value === "" ? "" : Math.max(1, Math.min(5000, Number(e.target.value) || 1)))}
-        onBlur={() => setRequestLimit((value) => Math.max(1, Math.min(5000, Number(value) || 1)))}
-        className="w-20 rounded border border-line/10 bg-surface2 px-2 py-1 text-sm"
-      />
+      <label className="text-xs text-muted">Budget d&apos;appels</label>
+      <input type="number" min="1" max="5000" value={requestLimit} onFocus={(e) => e.target.select()} onChange={(e) => setRequestLimit(e.target.value === "" ? "" : Math.max(1, Math.min(5000, Number(e.target.value) || 1)))} onBlur={() => setRequestLimit((value) => Math.max(1, Math.min(5000, Number(value) || 1)))} className="w-20 rounded border border-line/10 bg-surface2 px-2 py-1 text-sm" />
       {latestQuota != null && <span className="ml-auto rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-bold text-emerald-300" title="Quota restant lu lors de la dernière synchronisation">≈ {latestQuota} appels restants</span>}
     </div>
 
-    <div className="mb-4 rounded-xl border border-accent/20 bg-accent/5 p-3">
-      <div className="mb-2 text-xs font-black uppercase tracking-wider text-accent">Pipelines — séquences en 1 clic</div>
-      <div className="space-y-1.5">
-        {jobPipelines().map((p) => (
-          <div key={p.key} className="flex flex-wrap items-center gap-2">
-            <button disabled={!!busy || (!compId && !p.globalScope)} onClick={() => runPipeline(p)} title={`${p.description}\n${p.jobs.map((j) => JOB_CATALOG[j]?.label || j).join(" → ")}`} className="rounded-lg border border-accent/30 bg-accent/10 px-3 py-1.5 text-sm font-bold text-accent disabled:opacity-50">{p.label}{busy === p.key ? " …" : ""}</button>
-            <button disabled={!!busy || (!compId && !p.globalScope)} onClick={() => simulate(p)} className="rounded-lg border border-line/20 px-2 py-1.5 text-xs text-muted hover:border-accent/40 disabled:opacity-50">🔎 Simuler</button>
-            <span className="text-[11px] text-muted">{p.description}</span>
-          </div>
-        ))}
-      </div>
-      {resumablePipelineRuns.map((runItem) => {
-        const definition = jobPipelines().find((item) => item.key === runItem.pipeline_key);
-        if (!definition) return null;
-        // Même règle de bail que le serveur (lib/runLease.js). Indicatif seulement :
-        // la route run-pipeline reste seule juge d'une reprise.
-        const state = runState(runItem);
-        const recentlyRunning = state === "active";
-        const stateLabel = { active: "En cours", abandoned: "Abandonné (bail expiré)", paused: "En pause", error: "En erreur" }[state] || state;
-        const used = Number(runItem.request_count) || 0;
-        const available = Math.max(0, (Number(runItem.request_limit) || 0) - used);
-        return <div key={runItem.id} className="mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-amber-400/30 bg-amber-400/10 p-2 text-xs text-amber-200"><span className="flex-1"><b>{stateLabel}</b> · « {definition.label} » · étape {Math.min((runItem.next_step || 0) + 1, definition.jobs.length)}/{definition.jobs.length} · {used} consommés · {available} disponibles{runItem.detail ? ` · ${runItem.detail}` : ""}</span><button disabled={!!busy || recentlyRunning} title={recentlyRunning ? `Exécution encore active ; reprise possible après ${LEASE_MS / 1000} s sans battement.` : "Reprendre à l’étape enregistrée"} onClick={() => runPipeline(definition, runItem.id)} className="rounded bg-amber-400/20 px-3 py-1 font-bold text-amber-200 disabled:opacity-50">{recentlyRunning ? "En cours" : "Reprendre"}</button></div>;
-      })}
-      <p className="mt-2 text-[11px] leading-5 text-muted">Pour un nouveau pipeline, le budget est partagé sur toute la séquence. Il n'existe plus de plafond caché à 100 appels : l'enveloppe saisie (jusqu'à 5 000) reste toutefois contrôlée par le préflight, le quota connu et la confirmation administrateur. « Compléter la saison » enchaîne automatiquement les lots et ignore les matchs déjà traités. Lors d'une reprise, la valeur saisie devient l'enveloppe <b>encore disponible</b> : les appels déjà consommés et l'avancement restent enregistrés.</p>
-    </div>
-
-    {Object.entries(JOB_GROUPS).sort((a, b) => a[1].order - b[1].order).map(([g, meta]) => {
-      // Le mercato a son pipeline dédié : le bouton brut lançait plusieurs
-      // clubs dans une seule invocation et pouvait expirer sur Vercel Hobby.
-      const keys = jobsInGroup(g).filter((key) => !targetedJobs.has(key) && key !== "football.transfers" && key !== "football.discover-belgians" && key !== "football.scan-belgians" && key !== "football.belgian-season-stats" && key !== "football.abroad-follow");
-      if (!keys.length) return null;
-      return (
-        <div key={g} className="mb-3">
-          <div className="mb-1.5 text-xs font-black uppercase tracking-wider text-muted">{meta.label}</div>
-          <div className="flex flex-wrap gap-2">
-            {keys.map((k) => (
-              <button key={k} disabled={!!busy || (JOB_CATALOG[k]?.target === "competition" && !compId)} onClick={() => run(k)} title={JOB_CATALOG[k]?.requires ? `À lancer après : ${JOB_CATALOG[k].requires.map((r) => JOB_CATALOG[r]?.label || r).join(", ")}` : ""} className="rounded bg-accent px-3 py-1.5 text-sm font-bold text-white disabled:opacity-50">
-                {(JOB_CATALOG[k]?.label || k)}{JOB_CATALOG[k]?.requires ? " ·" : ""}{busy === k ? " …" : ""}
-              </button>
-            ))}
-          </div>
-        </div>
-      );
-    })}
-      <div className="mb-3 rounded-xl border border-amber-400/15 bg-amber-400/5 p-3"><div className="mb-2 text-xs font-black uppercase tracking-wider text-amber-300">Imports ciblés</div><div className="flex flex-wrap items-center gap-2"><label className="text-xs text-muted">ID équipe API</label><input value={teamExternalId} onChange={(e) => setTeamExternalId(e.target.value.replace(/\D/g, ""))} placeholder="ID" className="w-20 rounded border border-line/10 bg-surface2 px-2 py-1 text-sm" /><label className="text-xs text-muted">Catégorie</label><select value={nationalCategory} onChange={(e) => setNationalCategory(e.target.value)} className="rounded border border-line/10 bg-surface2 px-2 py-1 text-sm"><option value="senior">Équipe A</option><option value="u21">U21</option><option value="u19">U19</option><option value="u17">U17</option><option value="u16">U16</option><option value="u15">U15</option></select><label className="text-xs text-muted">Genre</label><select value={nationalGender} onChange={(e) => setNationalGender(e.target.value)} className="rounded border border-line/10 bg-surface2 px-2 py-1 text-sm"><option value="auto">Selon l’API</option><option value="men">Hommes</option><option value="women">Femmes</option></select>{jobKeys().filter((key) => targetedJobs.has(key)).map((k) => <button key={k} disabled={!!busy || (JOB_CATALOG[k]?.target === "competition" && !compId) || (JOB_CATALOG[k]?.target === "national" && !teamExternalId)} onClick={() => run(k)} className="rounded border border-amber-400/25 bg-amber-400/10 px-3 py-1.5 text-sm font-bold text-amber-100 disabled:opacity-50">{JOB_CATALOG[k]?.label || k}{busy === k ? " …" : ""}</button>)}</div><p className="mt-2 text-[11px] leading-5 text-muted">1. Trouve les IDs. 2. Synchronise la sélection : toutes ses compétitions de la saison, amicaux compris, sont créées automatiquement et restent masquées du portail général. 3. « Compléter les clubs » traite au maximum le nombre indiqué dans « Max matchs », à raison d'un appel par joueur.</p></div>
-    <p className="mb-3 rounded-lg border border-red-400/15 bg-red-500/5 p-3 text-xs leading-5 text-muted"><b className="text-content">Direct :</b> c&apos;est le seul job autorisé sans compétition choisie ; il traite alors uniquement celles dont « Direct activé » est coché. Il consomme un appel pour la journée, puis au maximum « Max matchs » appels pour les événements des rencontres en cours. L&apos;affichage public et Supabase Realtime ne consomment aucun appel API-Football.</p>
     {msg && <p className="mb-3 whitespace-pre-line rounded border border-line/10 bg-surface p-2 text-sm text-muted">{msg}</p>}
-    <div className="divide-y divide-line/10 rounded-xl border border-line/10">
-      {rows.map((j) => <div key={j.id} className="flex items-center justify-between p-3 text-sm"><span>{j.job_key} · {new Date(j.started_at).toLocaleString()}</span><span className={j.status === "error" ? "text-red-400" : j.status === "ok" ? "text-green-400" : "text-muted"}>{j.status}{j.detail ? ` · ${j.detail}` : ""}</span></div>)}
-      {rows.length === 0 && <div className="p-4 text-sm text-muted">Aucune exécution.</div>}
+
+    {resumablePipelineRuns.map((runItem) => {
+      const definition = jobPipelines().find((item) => item.key === runItem.pipeline_key);
+      if (!definition) return null;
+      // Même règle de bail que le serveur (lib/runLease.js). Indicatif seulement :
+      // la route run-pipeline reste seule juge d'une reprise.
+      const state = runState(runItem);
+      const recentlyRunning = state === "active";
+      const stateLabel = { active: "En cours", abandoned: "Abandonné (bail expiré)", paused: "En pause", error: "En erreur" }[state] || state;
+      const used = Number(runItem.request_count) || 0;
+      const available = Math.max(0, (Number(runItem.request_limit) || 0) - used);
+      return <div key={runItem.id} className="mb-2 flex flex-wrap items-center gap-2 rounded-lg border border-amber-400/30 bg-amber-400/10 p-2 text-xs text-amber-200"><span className="flex-1"><b>{stateLabel}</b> · « {definition.label} » · étape {Math.min((runItem.next_step || 0) + 1, definition.jobs.length)}/{definition.jobs.length} · {used}/{runItem.request_limit} appels · {available} disponibles{runItem.detail ? ` · ${runItem.detail}` : ""}</span><button disabled={!!busy || recentlyRunning} title={recentlyRunning ? `Exécution encore active ; reprise possible après ${LEASE_MS / 1000} s sans battement.` : "Reprendre à l’étape enregistrée"} onClick={() => runPipeline(definition, runItem.id)} className="rounded border border-amber-300/40 px-2 py-1 font-bold disabled:opacity-50">{recentlyRunning ? "En cours…" : "Reprendre"}</button></div>;
+    })}
+
+    <section className="mb-3 rounded-xl border border-accent/20 bg-accent/5 p-3">
+      <div className="mb-1 text-xs font-black uppercase tracking-wider text-accent">Actions courantes</div>
+      <div className="divide-y divide-line/10">{sections.common.pipelines.map(pipelineRow)}</div>
+      <div className="mt-2 flex flex-wrap gap-2">{sections.common.jobs.map(jobButton)}</div>
+      <p className="mt-2 text-[11px] leading-5 text-muted">Chaque lancement affiche d&apos;abord son coût estimé et respecte le budget saisi. Une relance identique est bloquée tant que la première travaille.</p>
+    </section>
+
+    {fold("catchup", "Rattrapages ponctuels", "une fois par saison au plus", <div className="divide-y divide-line/10">{sections.catchup.map(pipelineRow)}</div>)}
+
+    {fold("advanced", "Avancé", "doublons des automatismes, jobs isolés, sélections", <>
+      <div className="mb-3 flex flex-wrap items-center gap-2"><label className="text-xs text-muted">Max matchs</label><input type="number" min="1" max="20" value={matchCap} onChange={(e) => setMatchCap(Math.max(1, Math.min(20, Number(e.target.value) || 1)))} className="w-16 rounded border border-line/10 bg-surface2 px-2 py-1 text-sm" /><label className="text-xs text-muted">Lot joueurs</label><input type="number" min="1" max="25" value={batchSize} onChange={(e) => setBatchSize(Math.max(1, Math.min(25, Number(e.target.value) || 1)))} className="w-16 rounded border border-line/10 bg-surface2 px-2 py-1 text-sm" /></div>
+      <div className="mb-3 divide-y divide-line/10">{sections.advanced.pipelines.map(pipelineRow)}</div>
+      <div className="mb-3 flex flex-wrap gap-2">{sections.advanced.jobs.map(jobButton)}</div>
+      <div className="rounded-xl border border-amber-400/15 bg-amber-400/5 p-3"><div className="mb-2 text-xs font-black uppercase tracking-wider text-amber-300">Sélection par identifiant d&apos;équipe</div><div className="flex flex-wrap items-center gap-2"><label className="text-xs text-muted">ID équipe API</label><input value={teamExternalId} onChange={(e) => setTeamExternalId(e.target.value.replace(/\D/g, ""))} placeholder="ID" className="w-20 rounded border border-line/10 bg-surface2 px-2 py-1 text-sm" /><label className="text-xs text-muted">Catégorie</label><select value={nationalCategory} onChange={(e) => setNationalCategory(e.target.value)} className="rounded border border-line/10 bg-surface2 px-2 py-1 text-sm"><option value="senior">Équipe A</option><option value="u21">U21</option><option value="u19">U19</option><option value="u17">U17</option><option value="u16">U16</option><option value="u15">U15</option></select><label className="text-xs text-muted">Genre</label><select value={nationalGender} onChange={(e) => setNationalGender(e.target.value)} className="rounded border border-line/10 bg-surface2 px-2 py-1 text-sm"><option value="auto">Selon l&apos;API</option><option value="men">Hommes</option><option value="women">Femmes</option></select>{sections.targeted.map((k) => <button key={k} disabled={!!busy || (JOB_CATALOG[k]?.target === "competition" && !compId) || (JOB_CATALOG[k]?.target === "national" && !teamExternalId)} onClick={() => run(k)} className="rounded border border-amber-400/25 bg-amber-400/10 px-3 py-1.5 text-sm font-bold text-amber-100 disabled:opacity-50">{JOB_CATALOG[k]?.label || k}{busy === k ? " …" : ""}</button>)}</div></div>
+    </>)}
+
+    <p className="mt-4 text-xs text-muted">Le détail de chaque exécution est dans l&apos;onglet « Historique ».</p>
+  </div>);
+}
+
+// Historique lisible des exécutions (lib/adminSync.js) : avant le 30/10/2026, cet
+// onglet affichait le même panneau que « Synchronisations ».
+export function SyncHistoryPanel() {
+  const [runs, setRuns] = useState([]);
+  const [competitions, setCompetitions] = useState({});
+  const [errorsOnly, setErrorsOnly] = useState(false);
+  const [openId, setOpenId] = useState(null);
+  const load = async () => {
+    const [jobResult, competitionResult] = await Promise.all([
+      supabase.from("job_runs").select("*").order("started_at", { ascending: false }).limit(80),
+      supabase.from("competitions").select("id,name"),
+    ]);
+    setRuns(jobResult.data || []);
+    setCompetitions(Object.fromEntries((competitionResult.data || []).map((row) => [row.id, row])));
+  };
+  useEffect(() => { load(); }, []);
+  const tone = { ok: "bg-emerald-500/15 text-emerald-300", error: "bg-red-500/15 text-red-300", running: "bg-sky-500/15 text-sky-300", paused: "bg-amber-400/15 text-amber-200", timeout: "bg-red-500/10 text-red-300" };
+  const label = { ok: "OK", error: "Erreur", running: "En cours", paused: "En pause", timeout: "Expiré" };
+  const rowsShown = historyRows(runs, competitions, { errorsOnly });
+  return (<div>
+    <div className="mb-3 flex flex-wrap items-center gap-3"><h2 className="text-lg font-bold">Historique</h2><span className="text-xs text-muted">80 dernières exécutions, manuelles et automatiques</span><label className="ml-auto flex items-center gap-1.5 text-xs"><input type="checkbox" checked={errorsOnly} onChange={(e) => setErrorsOnly(e.target.checked)} />Erreurs seulement</label><button type="button" onClick={load} className="rounded border border-line/20 px-2 py-1 text-xs">Actualiser</button></div>
+    <div className="overflow-hidden rounded-xl border border-line/10">
+      {rowsShown.map((row) => <div key={row.id} className="border-b border-line/10 last:border-0">
+        <button type="button" onClick={() => setOpenId(openId === row.id ? null : row.id)} className="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-3 py-2 text-left text-sm hover:bg-white/[0.02] sm:grid-cols-[auto_minmax(0,1fr)_minmax(0,10rem)_5rem_6rem_9rem]">
+          <span className={`rounded-full px-2 py-0.5 text-[10px] font-black ${tone[row.status] || "bg-surface2 text-muted"}`}>{label[row.status] || row.status}</span>
+          <span className="min-w-0 truncate font-bold">{row.label}</span>
+          <span className="hidden truncate text-xs text-muted sm:block">{row.competition || "—"}</span>
+          <span className="hidden text-right text-xs tabular-nums text-muted sm:block">{row.calls ? `${row.calls} appels` : "—"}</span>
+          <span className="hidden text-right text-xs tabular-nums text-muted sm:block">{row.duration || "—"}</span>
+          <span className="text-right text-xs tabular-nums text-muted">{row.startedAt ? new Date(row.startedAt).toLocaleString("fr-BE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : ""}</span>
+        </button>
+        {openId === row.id && <p className="whitespace-pre-line break-words bg-surface/60 px-3 py-2 text-xs leading-5 text-muted">{row.competition ? `${row.competition} · ` : ""}{row.calls ? `${row.calls} appels · ` : ""}{row.duration ? `${row.duration} · ` : ""}{row.detail || "Aucun détail."}</p>}
+      </div>)}
+      {rowsShown.length === 0 && <div className="p-4 text-sm text-muted">{errorsOnly ? "Aucune erreur récente." : "Aucune exécution."}</div>}
     </div>
   </div>);
 }
-export const SyncHistoryPanel = JobsPanel;
 
 export function ProvidersPanel() {
   const [comps, setComps] = useState([]);
