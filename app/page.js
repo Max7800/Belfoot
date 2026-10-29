@@ -29,6 +29,7 @@ import { isMatchOver } from "@/lib/matchStatus";
 import GroupStandings from "@/components/football/GroupStandings";
 import { PUBLIC_MATCH_FIELDS, PUBLIC_PLAYER_FIELDS, loadPlayerStatsForPlayers } from "@/lib/publicFootballData";
 import { preferAssignedPlayerStats } from "@/lib/playerStats";
+import { seasonTotals } from "@/lib/belgiansRankings";
 import { isBelgianFollowed } from "@/lib/playerIdentity";
 import { clubNationalLeagues, resolvePlayerCountry, resolvePlayerLeague } from "@/lib/playerSnapshot";
 import { isNationsLeagueCompetition, nationsLeagueGroups } from "@/lib/nationsLeague";
@@ -41,18 +42,10 @@ const isEurope = (competition) => /(champions|europa|conference)/i.test(competit
 const isKnockoutCompetition = (competition) => /(cup|coupe|beker|pokal)/i.test(`${competition?.name || ""} ${competition?.ext?.type || ""}`);
 const FOLLOWED_BELGIANS_SLIDE_ID = "followed-belgians";
 
-function latestPlayerTotals(rows = []) {
-  const preferred = preferAssignedPlayerStats(rows);
-  const latest = Math.max(0, ...preferred.map((row) => year(row.season)));
-  const selected = latest ? preferred.filter((row) => year(row.season) === latest) : preferred;
-  const sum = (key) => selected.reduce((total, row) => total + (Number(row[key]) || 0), 0);
-  const ratings = selected.map((row) => Number(row.rating)).filter((value) => value > 0);
-  return {
-    appearances: sum("appearances"),
-    goals: sum("goals"),
-    assists: sum("assists"),
-    rating: ratings.length ? ratings.reduce((a, b) => a + b, 0) / ratings.length : null,
-  };
+// Saison en cours seulement, chiffres du balayage à défaut (lib/belgiansRankings.js),
+// comme la page Belges : « En forme » affichait 83 matchs à A. Engels (toute la saison 2025).
+function latestPlayerTotals(rows = [], leagueStats = null) {
+  return seasonTotals(preferAssignedPlayerStats(rows), leagueStats);
 }
 
 function SectionTitle({ section, href, icon: Icon }) {
@@ -98,7 +91,7 @@ export default function Home() {
       supabase.from("matches").select(PUBLIC_MATCH_FIELDS).order("kickoff", { ascending: false }).limit(250),
       supabase.from("competitions").select("*"),
       supabase.from("seasons").select("*"),
-      supabase.from("players").select(`${PUBLIC_PLAYER_FIELDS},binational_watch:ext->binational_watch,birth:ext->birth`).eq("tracked", true).eq("active", true),
+      supabase.from("players").select(`${PUBLIC_PLAYER_FIELDS},binational_watch:ext->binational_watch,birth:ext->birth,league_stats:ext->league_stats`).eq("tracked", true).eq("active", true),
       supabase.from("entries").select("id,slug,title,excerpt,category,cover_url,published_at").eq("collection", "news").eq("published", true).is("deleted_at", null).order("published_at", { ascending: false, nullsFirst: false }).limit(9),
       supabase.from("votw_sessions").select("id,matchday,season_label,formation,status,closes_at").order("created_at", { ascending: false }).limit(5),
       supabase.from("forum_topics").select("id,title,author_name,last_activity").order("last_activity", { ascending: false }).limit(4),
@@ -166,7 +159,7 @@ export default function Home() {
       const league = resolvePlayerLeague({ player, statRows: rows, competitionsById: competitionMap, clubLeagues });
       const country = resolvePlayerCountry({ player, club, league: league.competition }) || "";
       const competition = league.name || "Autres championnats";
-      return { player, club, totals: latestPlayerTotals(rows), country, competition, competitionData: league.competition, domesticBelgianClub };
+      return { player, club, totals: latestPlayerTotals(rows, player.league_stats), country, competition, competitionData: league.competition, domesticBelgianClub };
     }).filter((item) => item.club && item.club.team_type !== "national" && !item.domesticBelgianClub && !isBelgian(item.club?.ext?.country || item.club?.ext?.team?.country) && !isBelgian(item.country)).sort((a, b) => (b.totals.goals + b.totals.assists) - (a.totals.goals + a.totals.assists) || (b.totals.rating || 0) - (a.totals.rating || 0));
 
     const byClub = new Map(players.map((item) => [item.player.club_id, item]));
