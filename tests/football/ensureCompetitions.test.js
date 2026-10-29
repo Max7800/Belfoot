@@ -331,7 +331,8 @@ describe("syncPlayerCareers — collision : écritures réelles, joueur en erreu
     careerSeason = { 5000: [seasonRow("307", "2932"), seasonRow("301", "2940")] };
     await syncPlayerCareers(db, base(), { playerId: "p-1", includeCareerStats: true, season: "2026-2027" });
     const created301 = db.rows("competitions").find((row) => row.external_id === "301");
-    expect(created301).toMatchObject({ name: "Pro League", provider: P });
+    // Homonyme étranger : pays en français dans le nom (30/10/2026), plus de confusion avec la Pro League belge.
+    expect(created301).toMatchObject({ name: "Pro League (Arabie saoudite)", provider: P });
     expect(db.rows("player_season_stats").map((row) => row.competition_id).sort()).toEqual(["c-307", created301.id].sort());
     expect(db.rows("players")[0].career_sync_status).toBe("ok");
   });
