@@ -41,7 +41,7 @@ describe("fiche joueur : branchements", () => {
   const page = fs.readFileSync("app/players/[id]/page.js", "utf8");
   const widget = fs.readFileSync("components/football/PlayerStatsWidget.js", "utf8");
   it("saisons dépliables, la plus récente ouverte", () => {
-    expect(page).toContain("const seasons = useMemo(() => groupStatsBySeason(stats), [stats]);");
+    expect(page).toContain("const seasons = useMemo(() => groupStatsBySeason(stats, competitions), [stats, competitions]);");
     expect(page).toContain("const open = openYears || new Set(seasons[0] ? [seasons[0].year] : []);");
     expect(page).toContain("<SeasonStats stats={state.stats}");
   });
