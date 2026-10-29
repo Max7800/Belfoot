@@ -4,8 +4,8 @@ import { requireCompetitionId } from "@/lib/jobScope";
 export default {
   key: "football.discover-belgians",
   async run({ db, competitionId, ...ctx }) {
-    // Seul le pipeline « monde » (globalScope) peut parcourir toutes les compétitions.
-    requireCompetitionId("football.discover-belgians", competitionId, { allowGlobal: true, globalScope: ctx.globalScope });
+    // Une compétition à la fois (la découverte « monde » a été retirée le 30/10/2026).
+    requireCompetitionId("football.discover-belgians", competitionId);
     let query = db.from("competitions").select("*").not("provider", "is", null).order("id");
     if (competitionId) query = query.eq("id", competitionId);
     const { data: comps, error } = await query;

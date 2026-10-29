@@ -89,8 +89,10 @@ describe("contrat de périmètre (lib/jobScope.js)", () => {
     expect(() => resolveJobScope("football.sync", {})).toThrow(JobScopeError);
     expect(() => resolveJobScope("football.sync", { competitionId: "  " })).toThrow(JobScopeError);
     expect(() => resolveJobScope("football.sync", { globalScope: true })).toThrow("périmètre global n'est pas autorisé");
-    expect(resolveJobScope("football.discover-belgians", { globalScope: true })).toBe("global");
-    expect(() => resolveJobScope("football.discover-belgians", {})).toThrow(JobScopeError);
+    expect(resolveJobScope("football.player-careers", { globalScope: true })).toBe("global");
+    expect(() => resolveJobScope("football.player-careers", {})).toThrow(JobScopeError);
+    // Découverte « monde » retirée le 30/10/2026 (remplacée par le balayage des championnats).
+    expect(() => resolveJobScope("football.discover-belgians", { globalScope: true })).toThrow("périmètre global n'est pas autorisé");
     expect(resolveJobScope("football.live-sync", {})).toBe("live");
     expect(resolveJobScope("football.live-sync", { competitionId: "c-1" })).toBe("competition");
     expect(resolveJobScope("football.find-national-teams", {})).toBe("none");
@@ -152,11 +154,11 @@ describe("périmètres valides (non-régression)", () => {
     expect(db.rows("job_runs").find((run) => run.job_key === "football.sync" && run.id !== "j-stale")).toMatchObject({ target_key: "c-1", status: "ok" });
   });
 
-  it("global explicite : la découverte « monde » est autorisée", async () => {
+  it("global explicite : le parcours des Belges à l'étranger est autorisé", async () => {
     const db = seed();
-    const result = await runJob("football.discover-belgians", { db, season: SEASON, globalScope: true, requestLimit: 10 });
+    const result = await runJob("football.player-careers", { db, season: SEASON, globalScope: true, requestLimit: 10 });
     expect(result.ok).toBe(true);
-    expect(db.rows("job_runs").find((run) => run.job_key === "football.discover-belgians")).toMatchObject({ target_key: "global" });
+    expect(db.rows("job_runs").find((run) => run.job_key === "football.player-careers")).toMatchObject({ target_key: "global" });
   });
 
   it("direct sans compétition : seules les compétitions live_enabled sont traitées", async () => {
@@ -199,11 +201,11 @@ describe("routes : aucun contournement du périmètre", () => {
     expect(state.db.rows("job_runs").map((run) => [run.id, run.status])).toEqual([["j-stale", "timeout"]]);
   });
 
-  it("run-pipeline : le pipeline « monde » déclaré global reste autorisé", async () => {
+  it("run-pipeline : un pipeline déclaré global reste autorisé", async () => {
     state.db = seed();
-    const response = await runPipeline(admin({ pipelineKey: "discover-world", season: SEASON, requestLimit: 50 }));
+    const response = await runPipeline(admin({ pipelineKey: "belgian-careers", season: SEASON, requestLimit: 50 }));
     expect(response.status).toBe(200);
-    expect(state.db.rows("pipeline_runs")[0]).toMatchObject({ pipeline_key: "discover-world", target_key: "all" });
+    expect(state.db.rows("pipeline_runs")[0]).toMatchObject({ pipeline_key: "belgian-careers", target_key: "all" });
   });
 
   it("job-preflight : le globalScope du client est ignoré (blocage affiché)", async () => {
