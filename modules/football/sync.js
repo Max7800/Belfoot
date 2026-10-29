@@ -1,6 +1,7 @@
 // Upsert de données externes SANS écraser l'éditorial ni une saisie manuelle (locked).
 // `db` = client Supabase service-role (côté serveur uniquement).
 import { frenchTeamName } from "@/lib/frenchNations";
+import { frenchCompetitionName } from "@/lib/frenchCompetitions";
 
 // Sélections nommées en français à l'écriture (« Spain U21 » → « Espagne U21 »),
 // quel que soit le job : l'API renvoie les noms anglais à chaque passage et
@@ -223,7 +224,8 @@ export async function ensureCompetitions(db, provider, defs) {
   const first = await classifyCompetitions(db, provider, uniq);
   if (first.collisions.length) throw new CompetitionCollisionError(first.collisions);
   const byExt = new Map(first.existing);
-  const rowsToInsert = first.toCreate.map((d) => ({ source: provider, public_visible: false, ...d, provider, external_id: String(d.external_id) }));
+  // Nom français dès la création (lib/frenchCompetitions.js) ; une fiche existante n'est jamais renommée.
+  const rowsToInsert = first.toCreate.map((d) => ({ source: provider, public_visible: false, ...d, name: frenchCompetitionName(d.name, d.ext?.country), provider, external_id: String(d.external_id) }));
   if (rowsToInsert.length) {
     const { error } = await db.from("competitions").insert(rowsToInsert);
     if (error && error.code !== "23505") throw new Error(`competitions: ${error.message}`);
