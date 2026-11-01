@@ -9,6 +9,7 @@
 import { getProvider } from "./providers";
 import { syncCareerSeasonStats } from "./syncPlayerCareers";
 import { isLeaseLost } from "@/lib/runLease";
+import { historySeasons } from "./playerHistoryPlan";
 
 export const PAST_SEASONS = 5;
 // Fonction Vercel coupée à 60 s : pas de nouvelle saison au-delà de 35 s (un lot de
@@ -17,8 +18,7 @@ export const SEASON_STATS_TIME_MS = 35000;
 
 // Saisons passées, de la plus ancienne à la plus récente : « 2021 » … « 2025 » en octobre 2026.
 export function pastSeasons(now = new Date(), count = PAST_SEASONS) {
-  const current = now.getUTCMonth() >= 6 ? now.getUTCFullYear() : now.getUTCFullYear() - 1;
-  return Array.from({ length: count }, (_, index) => String(current - count + index));
+  return historySeasons(now, count);
 }
 
 // Saisons à demander : celles du parcours (toutes si le parcours est vide), pas encore faites.

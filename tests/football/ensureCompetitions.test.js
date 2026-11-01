@@ -304,8 +304,10 @@ describe("syncPlayerCareers — collision : écritures réelles, joueur en erreu
   it("groupé : le joueur en collision est en erreur, les autres sont traités ; le lot n'échoue pas mais signale la collision", async () => {
     const db = createFakeSupabase({
       competitions: [base(), ...ambiguous307()],
+      seasons: [{ id: "league-season", competition_id: "c-144", label: "2026-2027" }],
       clubs: [{ id: "club-home", source: P, external_id: "260", name: "Club 260", team_type: "first_team", locked: false }],
-      matches: [{ id: "m-1", competition_id: "c-144", home_club_id: "club-home", away_club_id: null, source: P, external_id: "1" }],
+      matches: [{ id: "m-1", competition_id: "c-144", season_id: "league-season", home_club_id: "club-home", away_club_id: null, source: P, external_id: "1" }],
+      player_team_seasons: ["a", "b"].map((letter) => ({ id: `member-${letter}`, player_id: `p-${letter}`, club_id: "club-home", season_start_year: 2026, squad_role: "first_team" })),
       players: [
         player("p-a", "5001", { tracked: true, active: true, club_id: "club-home", career_synced_at: null }),
         player("p-b", "5002", { tracked: true, active: true, club_id: "club-home", career_synced_at: null }),

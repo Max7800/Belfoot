@@ -134,8 +134,10 @@ describe("syncCompetition : perte de bail dans un appel facultatif", () => {
 describe("syncPlayerCareers : perte de bail au milieu d'un lot", () => {
   it("arrêt immédiat : le joueur suivant n'est ni traité ni marqué en erreur", async () => {
     const db = seed({
+      seasons: [{ id: "s-1", competition_id: C1, label: SEASON }],
       clubs: [{ id: "club-home", source: P, external_id: "260", name: "Club 260", team_type: "first_team", locked: false }],
-      matches: [{ id: "m-1", competition_id: C1, home_club_id: "club-home", away_club_id: null, source: P, external_id: "1" }],
+      matches: [{ id: "m-1", competition_id: C1, season_id: "s-1", home_club_id: "club-home", away_club_id: null, source: P, external_id: "1" }],
+      player_team_seasons: ["a", "b"].map((letter) => ({ id: `member-${letter}`, player_id: `p-${letter}`, club_id: "club-home", season_start_year: 2025, squad_role: "first_team" })),
       players: [
         { id: "p-a", name: "Joueur A", source: P, external_id: "5001", tracked: true, active: true, club_id: "club-home", career_synced_at: null, career_sync_status: null, locked: false, ext: {} },
         { id: "p-b", name: "Joueur B", source: P, external_id: "5002", tracked: true, active: true, club_id: "club-home", career_synced_at: null, career_sync_status: null, locked: false, ext: {} },

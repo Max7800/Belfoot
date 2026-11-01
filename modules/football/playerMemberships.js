@@ -36,6 +36,7 @@ export async function upsertPlayerMembership(db, {
   squadRole,
   isPrimary = true,
   active = true,
+  preserveExisting = false,
   ext = {},
   syncedAt = new Date().toISOString(),
 }) {
@@ -50,6 +51,9 @@ export async function upsertPlayerMembership(db, {
     .maybeSingle();
   if (selectError) throw new Error(`Affectation joueur: ${selectError.message}`);
   if (existing?.locked) return existing;
+  // Les données de carrière décrivent un passage, pas l'état d'un effectif.
+  // Une affectation déjà connue peut contenir des données plus précises.
+  if (existing && preserveExisting) return existing;
 
   const patch = {
     player_id: playerId,

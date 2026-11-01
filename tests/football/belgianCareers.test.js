@@ -25,6 +25,14 @@ const run = (db, ctx = {}) => playerCareersJob.run({ db, globalScope: true, apif
 afterEach(() => { vi.unstubAllGlobals(); calls.length = 0; });
 
 describe("Parcours des Belges à l'étranger (pipeline global)", () => {
+  it("ne désactive pas une affectation existante pendant l'import d'un parcours", async () => {
+    stubApi();
+    const db = seed([player("p-1", "101", { ext: { league_stats: { league_id: 98 } } })]);
+    db.rows("clubs").push({ id: "genk", source: "apifootball", external_id: "1", name: "KRC Genk", team_type: "first_team", ext: {} });
+    db.rows("player_team_seasons").push({ id: "membership", player_id: "p-1", club_id: "genk", season: "2021-2022", active: true, position: "Attacker", locked: false });
+    await run(db);
+    expect(db.rows("player_team_seasons").find((row) => row.id === "membership")).toMatchObject({ active: true, position: "Attacker" });
+  });
   it("seuls les Belges trouvés par le balayage : clubs passés saison par saison, sélection écartée, un appel par joueur", async () => {
     stubApi();
     const db = seed([player("p-1", "101", { ext: { league_stats: { league_id: 98 } } }), player("p-2", "102", { ext: { league_stats: { league_id: 39 } } }), player("p-3", "103")]);
