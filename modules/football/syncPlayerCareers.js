@@ -204,7 +204,7 @@ export async function syncPlayerCareers(db, competition, ctx = {}) {
       const seasonKey = String(ctx.season || "").match(/\d{4}/)?.[0];
       const completedExt = ctx.includeCareerStats && seasonKey
         ? { ...(player.ext || {}), career_stats_seasons: { ...(player.ext?.career_stats_seasons || {}), [seasonKey]: completedAt } }
-        : player.ext;
+        : null;
       const saved = await db.from("players").update({ career_sync_status: "ok", career_synced_at: completedAt, ...(completedExt ? { ext: completedExt } : {}) }).eq("id", player.id);
       if (saved.error) throw saved.error;
     } catch (error) {
