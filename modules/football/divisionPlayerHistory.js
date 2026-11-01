@@ -7,6 +7,7 @@ import { syncCareerSeasonStats, syncPlayerCareers } from "./syncPlayerCareers";
 // saison, après l'écriture des données, pour reprendre sans oublier une saison.
 export async function syncDivisionPlayerHistory(db, competition, ctx = {}) {
   const { players, membershipCount } = await loadDivisionCareerPlayers(db, competition, ctx.season);
+  if (!membershipCount) throw new Error("Aucun joueur rattaché à la division pour cette saison : vérifie d'abord les effectifs");
   if (membershipCount > players.length) throw new Error(`${membershipCount - players.length} joueur(s) sans identifiant fournisseur compatible : vérification nécessaire avant de déclarer la division complète`);
   const provider = getProvider(competition.provider);
   if (!provider?.fetchPlayerCareer || !provider?.fetchPlayerCareerSeason) throw new Error("Historiques de joueur non pris en charge");

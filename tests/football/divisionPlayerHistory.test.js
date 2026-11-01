@@ -49,4 +49,18 @@ describe("historique de division par lots", () => {
     await expect(run(db, 3)).rejects.toThrow("API indisponible");
     expect(db.rows("players")[0].ext.career_stats_seasons[2021]).toBeUndefined();
   });
+
+  it("ne déclare pas une division complète si aucun effectif n'est connu", async () => {
+    const db = seed();
+    db.rows("player_team_seasons").splice(0);
+    await expect(run(db, 3)).rejects.toThrow(/Aucun joueur/);
+    expect(calls).toEqual([]);
+  });
+
+  it("signale une fiche sans identifiant au lieu de l'ignorer", async () => {
+    const db = seed();
+    db.rows("players")[0].external_id = null;
+    await expect(run(db, 3)).rejects.toThrow(/sans identifiant/);
+    expect(calls).toEqual([]);
+  });
 });
