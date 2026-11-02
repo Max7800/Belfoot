@@ -61,6 +61,9 @@ describe("belgianWatchStatus — nationalité ≠ sélection représentée", () 
 
   it("représente la Belgique", () => {
     expect(belgianWatchStatus({ nationality: "Belgium" }, BELGIUM)).toBe("belgium");
+    expect(belgianWatchStatus({ nationality: "Portugal" }, BELGIUM)).toBe("belgium");
+    expect(isBelgianFollowed({ nationality: "Portugal" }, BELGIUM)).toBe(true);
+    expect(isBelgianFollowed({ nationality: "Portugal" }, MOROCCO)).toBe(false);
   });
 
   it("Belge représentant une autre sélection : « Sous d'autres couleurs », toujours suivi", () => {

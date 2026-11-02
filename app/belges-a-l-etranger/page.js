@@ -105,8 +105,16 @@ export default function BelgiansAbroadPage() {
     ]);
     if (playerResult.error) throw playerResult.error;
     if (competitionResult.error) throw competitionResult.error;
-    // Nationalité belge parmi d'autres (« Maroc, Belgique ») ou binational classé à suivre.
-    const players = (playerResult.data || []).filter(isBelgianFollowed);
+    // Charger les sélections avant de filtrer : une sélection belge est aussi
+    // un lien valide lorsque le fournisseur ne renvoie qu'une autre nationalité.
+    const nationalIds = [...new Set((playerResult.data || []).map((player) => player.national_team_id).filter(Boolean))];
+    const nationalTeams = {};
+    for (let i = 0; i < nationalIds.length; i += 400) {
+      const result = await supabase.from("clubs").select("id,name,team_type,ext").in("id", nationalIds.slice(i, i + 400));
+      if (result.error) throw result.error;
+      for (const team of result.data || []) nationalTeams[team.id] = team;
+    }
+    const players = (playerResult.data || []).filter((player) => isBelgianFollowed(player, nationalTeams[player.national_team_id]));
     const playerIds = players.map((player) => player.id);
     const [statsRows, performanceResult, membershipRows] = await Promise.all([
       // Saison en cours et précédente (championnat d'un club), plus les 5 saisons passées.
