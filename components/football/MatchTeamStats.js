@@ -1,4 +1,5 @@
 "use client";
+import { matchComparison } from "@/lib/matchComparison";
 
 const GROUPS = [
   { label: "Vue d’ensemble", rows: [["possession", "Possession", "%"], ["shots_total", "Tirs"], ["shots_on_goal", "Tirs cadrés"], ["expected_goals", "Buts attendus", "xg"]] },
@@ -13,17 +14,13 @@ function display(value, unit) {
 }
 
 function StatRow({ label, field, unit, home, away }) {
-  const homeValue = home?.[field] == null ? null : Number(home[field]);
-  const awayValue = away?.[field] == null ? null : Number(away[field]);
-  const total = Math.max(0, (homeValue || 0) + (awayValue || 0));
-  const homeWidth = field === "possession" || field === "pass_accuracy" ? (homeValue || 0) : total ? ((homeValue || 0) / total) * 100 : 0;
-  const awayWidth = field === "possession" || field === "pass_accuracy" ? (awayValue || 0) : total ? ((awayValue || 0) / total) * 100 : 0;
+  const { home: homeValue, away: awayValue, homeWidth, awayWidth, leader } = matchComparison(field, home?.[field], away?.[field]);
   return (
     <div className="py-2.5">
       <div className="mb-1.5 grid grid-cols-[3.25rem_1fr_3.25rem] items-center gap-2 text-xs">
-        <b className={homeValue != null && homeValue > awayValue ? "text-accent" : "text-muted"}>{display(homeValue, unit)}</b>
+        <b className={leader === "home" ? "text-accent" : "text-muted"}>{display(homeValue, unit)}</b>
         <span className="text-center text-[11px] font-semibold text-muted">{label}</span>
-        <b className={`text-right ${awayValue != null && awayValue > homeValue ? "text-amber-300" : "text-muted"}`}>{display(awayValue, unit)}</b>
+        <b className={`text-right ${leader === "away" ? "text-amber-300" : "text-muted"}`}>{display(awayValue, unit)}</b>
       </div>
       <div className="grid grid-cols-2 gap-1">
         <div className="flex h-1.5 justify-end overflow-hidden rounded-l-full bg-white/[0.05]"><span className="h-full rounded-full bg-accent" style={{ width: `${Math.min(100, homeWidth)}%` }} /></div>

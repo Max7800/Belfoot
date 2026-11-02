@@ -1,5 +1,10 @@
 # BELFOOT — Passation technique
 
+## 02/11/2026 — Match Center
+
+- PR #102 : compositions et statistiques du direct actualisées via notifications et repli périodique, actualisation manuelle étendue, affichage prudent des données manquantes et événements sans équipe centrés. Vérifier en conditions réelles la couverture Realtime et la charge ; aucun appel API-Football depuis le navigateur. Voir la PR pour les vérifications et l'état du déploiement.
+- L'utilisateur souhaite ensuite une refonte visuelle de la fiche match et des couleurs ; cette PR ne la réalise pas.
+
 ## 02/11/2026 — Fiche club
 
 - PR #101 : logo du club en filigrane, aperçu de saison conditionné aux sections administrables (classement calculé, effectif et année, prochain match programmé) ; test visuel à effectuer, CI et déploiement à consulter sur la PR.
