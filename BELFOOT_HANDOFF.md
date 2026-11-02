@@ -1,10 +1,16 @@
 # BELFOOT — Passation technique
 
-## 02/11/2026 — Aperçu de la fiche club
+## 02/11/2026 — Fiche club
 
-- PR de présentation de la fiche club : aperçu conditionnel des sections autorisées (classement calculé, effectif connu et saison correspondante, prochain match programmé seulement). L'année de l'effectif reste explicite si elle diffère du contexte sportif ; aucun changement des synchronisations ni des réglages administrateur. Tests ciblés 8/8, lint sans erreur ; rendu mobile et ordinateur à contrôler.
-- PR #100 de navigation fiche joueur et PR #99 de compteur d'historiques en attente séparément ; la PR #100 inclut le correctif #97. CI et état de déploiement à consulter sur chaque PR.
-- PR #98 fusionnée et déployée (`36a793e`) ; rattrapage repris avec 1000 appels additionnels. Statut final et compteur global à vérifier.
+- PR #101 : logo du club en filigrane, aperçu de saison conditionné aux sections administrables (classement calculé, effectif et année, prochain match programmé) ; test visuel à effectuer, CI et déploiement à consulter sur la PR.
+- L'utilisateur signale I. Leko à Gand ; une ancienne fiche API distincte (1153) reste liée à Gand alors qu'une autre est liée à Bruges. Recherche « De Mil » sans résultat selon l'utilisateur ; la synchronisation club n'a pas corrigé l'affichage. Rechercher la cause fournisseur et les journaux avant modification des données.
+
+## 02/11/2026 — Présentation des fiches joueurs
+
+- PR de présentation : navigation Vue d'ensemble / Statistiques / Parcours / Matchs ; portrait mobile légèrement plus compact. Elle inclut le correctif de la PR #97 : exclusion des matchs amicaux et doublons du résumé et indication de la saison. Aucun changement de synchronisation ou de données.
+- Tests ciblés 25/25 ; vérification visuelle mobile et ordinateur toujours nécessaire (aperçu local `sites-preview` incompatible avec l'option `--host` de Next.js). Voir PR pour CI et déploiement.
+- Historiques : l'utilisateur a repris le lot avec 1 000 appels additionnels et a observé 22/634 ; la PR #99 corrige le compteur partiel, son résultat en production reste à vérifier. La PR #98 est fusionnée et déployée (`36a793e`).
+- Diego Moreira apparaît désormais parmi les Belges à l'étranger selon l'utilisateur ; sa double nationalité belge et portugaise reste à contrôler sur sa fiche.
 
 ## 02/11/2026 — Timeout du rattrapage des historiques
 
