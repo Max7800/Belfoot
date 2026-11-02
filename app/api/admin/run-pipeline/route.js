@@ -139,6 +139,7 @@ export async function POST(request) {
     const own = (patch) => writeOwnedPipeline(db, pipelineRun.id, leaseToken, patch);
     const { _not_before: _previousNotBefore, ...resumeParams } = pipelineRun.params || {};
     let params = { ...resumeParams, lease_token: leaseToken };
+    if (input.pipelineRunId && !input.continuation) { const { _job_busy_retries, ...rest } = params; params = rest; }
     let used = Number(pipelineRun.request_count) || 0;
     let quotaRemaining = pipelineRun.quota_remaining ?? null;
     for (let index = Number(pipelineRun.next_step) || 0; index < pipeline.jobs.length; index++) {
@@ -200,6 +201,7 @@ export async function POST(request) {
           thesportsdbKey: process.env.THESPORTSDB_KEY,
           apifootballKey: process.env.APIFOOTBALL_KEY,
         });
+        if (params._job_busy_retries) { const { _job_busy_retries, ...rest } = params; params = rest; }
         used += result.requests || 0;
         quotaRemaining = result.quotaRemaining ?? quotaRemaining;
         if (!result.complete) {
@@ -241,6 +243,21 @@ export async function POST(request) {
       } catch (stepError) {
         // Instance dépossédée : elle n'a plus le droit d'écrire, y compris l'erreur.
         if (lostLease(stepError)) throw stepError;
+        // Le cron horaire et le rattrapage peuvent viser la même division.
+        // Attendre le job concurrent au lieu d'interrompre le pipeline. Une
+        // limite évite de répéter indéfiniment un conflit persistant.
+        if (pipeline.jobs[index] === "football.division-history" && stepError?.code === "JOB_ALREADY_RUNNING") {
+          const retries = (Number(params._job_busy_retries) || 0) + 1;
+          const retryAt = new Date(Date.now() + 2 * 60000).toISOString();
+          const retry = retries <= 5;
+          const paused = await own({
+            status: retry ? "paused" : "error", next_step: index, request_count: used, quota_remaining: quotaRemaining,
+            detail: retry ? "Un autre historique travaille sur cette compétition ; reprise différée." : "Historique toujours occupé après plusieurs tentatives ; vérifier le job actif.",
+            params: { ...params, _job_busy_retries: retries, auto_continue: retry, ...(retry ? { _not_before: retryAt } : {}) },
+            finished_at: retry ? null : new Date().toISOString(),
+          });
+          return Response.json({ ...publicRun(paused), continuationRequired: false });
+        }
         // Écriture conditionnée au jeton : une instance perdante ne peut jamais
         // faire passer en erreur le pipeline exécuté par l'instance gagnante.
         await own({ status: "error", next_step: index, request_count: used, quota_remaining: quotaRemaining, detail: stepError.message || String(stepError), finished_at: new Date().toISOString() });

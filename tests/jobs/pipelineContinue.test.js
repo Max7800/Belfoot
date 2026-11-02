@@ -4,9 +4,9 @@ import { pickContinuableRun } from "@/lib/adminSync";
 
 // Pipelines continués par le serveur (30/10/2026) : vraie route run-pipeline et vraie
 // route cron ; runJob simulé (un lot = 3 appels).
-const state = vi.hoisted(() => ({ db: null, jobs: [], result: null }));
+const state = vi.hoisted(() => ({ db: null, jobs: [], result: null, error: null }));
 vi.mock("@/lib/supabaseAdmin", () => ({ getAdmin: () => state.db }));
-vi.mock("@/lib/jobs", () => ({ runJob: async (key, ctx) => { state.jobs.push({ key, requestLimit: ctx.requestLimit, globalScope: ctx.globalScope, ...(key === "football.division-history" ? { deadline: ctx.deadline, maxHistoryRequestsPerRun: ctx.maxHistoryRequestsPerRun, providerTimeoutMs: ctx.providerTimeoutMs } : {}) }); return state.result; } }));
+vi.mock("@/lib/jobs", () => ({ runJob: async (key, ctx) => { state.jobs.push({ key, requestLimit: ctx.requestLimit, globalScope: ctx.globalScope, ...(key === "football.division-history" ? { deadline: ctx.deadline, maxHistoryRequestsPerRun: ctx.maxHistoryRequestsPerRun, providerTimeoutMs: ctx.providerTimeoutMs } : {}) }); if (state.error) throw state.error; return state.result; } }));
 const { GET } = await import("@/app/api/cron/pipeline-continue/route");
 const { POST: runPipeline } = await import("@/app/api/admin/run-pipeline/route");
 
@@ -19,7 +19,7 @@ const row = () => state.db.rows("pipeline_runs")[0];
 
 beforeAll(() => { process.env.CRON_SECRET = SECRET; vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(NOW); });
 afterAll(() => { delete process.env.CRON_SECRET; vi.useRealTimers(); });
-beforeEach(() => { state.jobs = []; state.result = { complete: false, requests: 3, progress: { current: 5, total: 200, unit: "joueurs" } }; });
+beforeEach(() => { state.jobs = []; state.error = null; state.result = { complete: false, requests: 3, progress: { current: 5, total: 200, unit: "joueurs" } }; });
 
 describe("choix de la pause à continuer", () => {
   it("respecte la date de reprise après un bail ou une erreur temporaire", () => {
@@ -90,6 +90,20 @@ describe("passage automatique", () => {
 
 describe("route des pipelines appelée avec le secret serveur", () => {
   const call = (body) => runPipeline(new Request("http://localhost/x", { method: "POST", headers: { authorization: `Bearer ${SECRET}` }, body: JSON.stringify(body) }));
+  it("diffère une collision de job d'historiques sans consommer ni augmenter le budget", async () => {
+    state.db = seed([run({ pipeline_key: "jpl-history", target_key: "league", steps: ["football.division-history"], request_count: 10, request_limit: 500, params: { auto_continue: true, competitionId: "league" } })]);
+    state.error = Object.assign(new Error("Ce job est déjà en cours pour cette sélection."), { code: "JOB_ALREADY_RUNNING" });
+    const response = await call({ pipelineRunId: "r1", continuation: true });
+    expect(await response.json()).toMatchObject({ status: "paused", continuationRequired: false });
+    expect(row()).toMatchObject({ request_count: 10, request_limit: 500, params: { auto_continue: true, _job_busy_retries: 1, _not_before: new Date(NOW + 120000).toISOString() } });
+  });
+  it("arrête les tentatives automatiques après cinq collisions", async () => {
+    state.db = seed([run({ pipeline_key: "jpl-history", steps: ["football.division-history"], params: { auto_continue: true, _job_busy_retries: 5 } })]);
+    state.error = Object.assign(new Error("occupé"), { code: "JOB_ALREADY_RUNNING" });
+    const response = await call({ pipelineRunId: "r1", continuation: true });
+    expect(await response.json()).toMatchObject({ status: "error", continuationRequired: false });
+    expect(row().params.auto_continue).toBe(false);
+  });
   it("borne chaque lot d'historiques sans réduire son budget global", async () => {
     state.db = seed([run({ pipeline_key: "jpl-history", target_key: "league", steps: ["football.division-history"], request_count: 10, request_limit: 500, params: { auto_continue: true, competitionId: "league", season: "2026-2027" } })]);
     expect((await call({ pipelineRunId: "r1", continuation: true })).status).toBe(200);

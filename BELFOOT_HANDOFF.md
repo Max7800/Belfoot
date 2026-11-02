@@ -1,5 +1,11 @@
 # BELFOOT — Passation technique
 
+## 02/11/2026 — Collision de synchronisations d'historiques
+
+- Capture utilisateur : pipeline `jpl-history` en erreur « Ce job est déjà en cours pour cette sélection » à 1348/1545 appels ; carte cron 76/634 et quota observé environ 5923. État au moment de la capture, à recontrôler. Deux autres pipelines en erreur de budget insuffisant sont indépendants ; ne pas les relancer sans diagnostic.
+- Cause dans le code : l'index de job actif empêche bien les exécutions concurrentes mais une collision retourne une erreur ordinaire, interrompant le pipeline. PR proposée : code d'erreur typé et pause de 2 minutes pour division-history, avec plafond de 5 collisions consécutives et maintien du budget ; tests ciblés 84/84. Ne pas désactiver les verrous, ne pas créer de pipeline doublon ; vérifier avant reprise la cible, le budget restant et les tâches actives.
+- L'utilisateur souhaite des statistiques de match plus compactes et lisibles, inspirées de sa capture API-Football, sans copie ; Leko à Gand reste à diagnostiquer. PR #99 de compteur global encore en attente.
+
 ## 02/11/2026 — Match Center
 
 - PR #102 : compositions et statistiques du direct actualisées via notifications et repli périodique, actualisation manuelle étendue, affichage prudent des données manquantes et événements sans équipe centrés. Vérifier en conditions réelles la couverture Realtime et la charge ; aucun appel API-Football depuis le navigateur. Voir la PR pour les vérifications et l'état du déploiement.
