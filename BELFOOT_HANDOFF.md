@@ -1,9 +1,15 @@
 # BELFOOT — Passation technique
 
-## 02/11/2026 — Lisibilité des statistiques du match
+## 02/11/2026 — Statistiques de match
 
-- Demande utilisateur : statistiques plus compactes et lisibles, inspirées d'une capture de comparaison API-Football. PR dédiée : valeurs et libellés plus lisibles, barres centrées cyan/rose avec domiciles et extérieurs identifiés, surfaces compatibles thème Belfoot. Les données absentes restent distinctes des zéros et aucune comparaison partielle n'est ajoutée. Vérification visuelle mobile et desktop encore nécessaire.
-- Capture de l'administration : pipeline jpl-history en erreur à 1348/1545 appels, conflit job déjà en cours ; PR #103 corrige la gestion de cette concurrence, à vérifier et déployer après accord. PR #99 compteur global toujours ouverte ; pas de nouvelle reprise lancée.
+- PR #104 : lignes plus compactes, chiffres et libellés plus lisibles, barres centrées cyan/rose et équipes identifiées. Les données manquantes restent distinctes des zéros. Rendu mobile et desktop à vérifier ; voir la PR pour la CI et le déploiement.
+- L'utilisateur signale plusieurs entraîneurs périmés en Pro League : Leko à Gand et Hasi à Anderlecht. Audit global à poursuivre ; pas de modification de données sur la base de ces seuls exemples.
+
+## 02/11/2026 — Collision de synchronisations d'historiques
+
+- Capture utilisateur : pipeline `jpl-history` en erreur « Ce job est déjà en cours pour cette sélection » à 1348/1545 appels ; carte cron 76/634 et quota observé environ 5923. État au moment de la capture, à recontrôler. Deux autres pipelines en erreur de budget insuffisant sont indépendants ; ne pas les relancer sans diagnostic.
+- Cause dans le code : l'index de job actif empêche bien les exécutions concurrentes mais une collision retourne une erreur ordinaire, interrompant le pipeline. PR proposée : code d'erreur typé et pause de 2 minutes pour division-history, avec plafond de 5 collisions consécutives et maintien du budget ; tests ciblés 84/84. Ne pas désactiver les verrous, ne pas créer de pipeline doublon ; vérifier avant reprise la cible, le budget restant et les tâches actives.
+- L'utilisateur souhaite des statistiques de match plus compactes et lisibles, inspirées de sa capture API-Football, sans copie ; Leko à Gand reste à diagnostiquer. PR #99 de compteur global encore en attente.
 
 ## 02/11/2026 — Match Center
 
