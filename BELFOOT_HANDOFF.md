@@ -1,3 +1,8 @@
+### 02/11/2026 — Bandeau et carte des Belges à l’étranger
+
+- Sur desktop, suppression du portrait agrandi dans le bandeau par défaut : deux prochains matchs connus sont mis en avant, avec liens et joueurs concernés. Le bandeau personnalisé avec image reste pris en charge ; sans matchs, un message neutre s’affiche. La carte reste interactive, occupe une colonne plus compacte sur grand écran et s’accompagne d’un top pays filtrant l’annuaire. Sur mobile, ce classement latéral est masqué.
+- Aucun changement de synchronisation, SQL ou données ; aucun appel API-Football. Tests ciblés page : 8 réussis ; ESLint sans erreur, avertissements existants sur images. Vérification visuelle responsive encore nécessaire.
+
 ### 02/11/2026 — Performances récentes des Belges : lecture bornée
 
 - PR empilée sur la PR #107 : la migration 0041 ajoute une fonction PostgreSQL SECURITY INVOKER limitée à 80 joueurs suivis et actifs, 5 matchs par joueur et 45 jours, dédoublonnés par match et sans sélections. L’index existant (player_id,match_id) sert au filtrage. Le client découpe les listes par 80 ; si la fonction est absente (PGRST202), repli sur l’ancienne requête de 500 lignes avec mention visible. Les autres erreurs sont remontées.
