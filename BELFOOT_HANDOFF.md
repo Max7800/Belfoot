@@ -1,5 +1,12 @@
 # BELFOOT — Passation technique
 
+## 02/11/2026 — Fiabilité du Match Center
+
+- Audit : stats et compositions étaient chargées une seule fois, malgré le rafraîchissement du score et des événements ; événements sans équipe affichés à l'extérieur ; barres trompeuses si donnée adverse absente et mise en avant excessive des fautes/cartons.
+- PR distincte : réactualisation des détails en direct avec écoute et repli périodique visible, actualisation manuelle complète, conservation des données en cas d'erreur ; score consulté distingué de la connexion temps réel ; événements non attribués centrés ; comparaisons seulement avec deux valeurs connues, fautes/cartons sans hiérarchie positive. Tests ciblés 27/27 ; lint sans erreur. Tester le direct et la charge des lectures en conditions réelles avant déploiement.
+- PR #101 fiche club : le propriétaire souhaite son logo dans la bannière, ajouté sur la branche. Le propriétaire signale Ivan Leko affiché à Gand alors qu'il entraîne Bruges ; l'origine dans les données des entraîneurs reste à vérifier sans modifier les fiches à l'aveugle.
+- PR #100 fiche joueur et PR #99 compteur des historiques en attente ; PR #98 fusionnée/déployée. Rattrapage d'historiques en cours selon dernier retour du propriétaire.
+
 ## 02/11/2026 — Timeout du rattrapage des historiques
 
 - L'utilisateur a observé 37/634 joueurs vérifiés, puis `FUNCTION_INVOCATION_TIMEOUT` sur le pipeline manuel Pro League à budget 500. L'état exact du pipeline et la réconciliation effective en production ne sont pas encore vérifiés. Le progrès durable par saison et les compteurs d'appels sont conçus pour permettre la reprise ; ne pas présumer que la dernière étape interrompue est terminée ni créer un doublon de pipeline.
