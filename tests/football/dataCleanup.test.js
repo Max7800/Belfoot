@@ -69,6 +69,12 @@ describe("sélections reconnues au nom", () => {
 
 describe("doublons de transferts", () => {
   const transfer = (id, date, extra = {}) => ({ id, player_id: "borys", from_club_id: "westerlo", to_club_id: "slask", transfer_date: date, ...extra });
+  it("regroupe une équipe jeune et son parent uniquement si le lien est explicite", () => {
+    const rows = [transfer("u21", "2026-08-03", { from_club_id: "young" }), transfer("senior", "2026-08-02", { from_club_id: "parent" })];
+    expect(dedupeTransfers(rows, { young: { parent_club_id: "parent" } }).map((row) => row.id)).toEqual(["senior"]);
+    expect(dedupeTransfers(rows, { young: { parent_club_id: null } })).toHaveLength(2);
+    expect(dedupeTransfers([rows[0], { ...rows[1], transfer_date: "2025-01-01" }], { young: { parent_club_id: "parent" } })).toHaveLength(2);
+  });
   it("même joueur et mêmes clubs à quelques jours : un seul affiché (le plus ancien), ordre conservé", () => {
     const rows = [transfer("t3", "2026-09-08"), transfer("t2", "2026-09-07"), transfer("other", "2026-09-06", { player_id: "niang" })];
     expect(dedupeTransfers(rows).map((row) => row.id)).toEqual(["t2", "other"]);
