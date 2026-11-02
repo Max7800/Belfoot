@@ -1,5 +1,11 @@
 # BELFOOT — Passation technique
 
+## 02/11/2026 — Suivi et résumé joueur
+
+- Historiques Pro League : l'utilisateur indique 37/634 joueurs entièrement vérifiés ; le rattrapage progresse. Quota et état du lot de 500 à recontrôler dans l'administration.
+- PR #96 fusionnée et déployée (`c56603a`) ; l'utilisateur confirme que Diego Moreira apparaît parmi les Belges à l'étranger. Sa fiche n'indique que Portugal, l'utilisateur précise qu'il possède aussi la nationalité belge ; correction manuelle proposée depuis Modifier la fiche, réalisation non confirmée.
+- PR distincte de résumé joueur : la dernière saison connue est identifiée dans l'en-tête ; les matchs amicaux et doublons sont exclus des chiffres résumés, comme du tableau des saisons, et « amicaux » est reconnu. Tests ciblés 17/17, lint sans erreur. Voir la PR pour l'état CI et déploiement.
+
 ## 02/11/2026 — Diego Moreira
 
 - Diagnostic en base communiqué par l'utilisateur : `D. Moreira` (API 335056) actif et suivi, nationalité Portugal, sélection Belgique, club AC Milan ; naissance absente. L'annuaire écartait les joueurs sans nationalité/naissance/suivi binational belge AVANT de consulter leur sélection, et `belgianWatchStatus` rejetait également ces joueurs avant d'examiner l'équipe nationale.
