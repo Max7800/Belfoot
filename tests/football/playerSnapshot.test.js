@@ -86,6 +86,16 @@ describe("playerSnapshotPatch", () => {
 });
 
 describe("resolvePlayerLeague / resolvePlayerCountry (affichage)", () => {
+  it("une coupe absente des compétitions connues ne devient pas le championnat du joueur", () => {
+    for (const name of ["FA Cup", "Coppa Italia", "DFB Pokal", "Supercoupe (Pays-Bas)"]) {
+      expect(resolvePlayerLeague({ player: { club_id: "c", competition: name } }).name).toBeNull();
+    }
+  });
+  it("préserve les championnats non importés et donne priorité aux métadonnées fiables", () => {
+    expect(resolvePlayerLeague({ player: { competition: "Eredivisie" } }).name).toBe("Eredivisie");
+    const league = { name: "Cup League", competition_type: "league", competition_scope: "etranger", ext: { country: "England" } };
+    expect(resolvePlayerLeague({ player: { competition: "Cup League" }, competitionsById: { id: league } }).name).toBe("Cup League");
+  });
   const MOKIO_ROWS = [
     { player_id: "mokio", club_id: "club-ajax", competition_id: "c-uecl", season: "2026", appearances: 6 },
     { player_id: "mokio", club_id: "club-ajax", competition_id: "c-ere", season: "2026", appearances: 7 },
