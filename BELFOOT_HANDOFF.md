@@ -1,5 +1,10 @@
 # BELFOOT — Passation technique
 
+## 02/11/2026 — Lisibilité des statistiques du match
+
+- Demande utilisateur : statistiques plus compactes et lisibles, inspirées d'une capture de comparaison API-Football. PR dédiée : valeurs et libellés plus lisibles, barres centrées cyan/rose avec domiciles et extérieurs identifiés, surfaces compatibles thème Belfoot. Les données absentes restent distinctes des zéros et aucune comparaison partielle n'est ajoutée. Vérification visuelle mobile et desktop encore nécessaire.
+- Capture de l'administration : pipeline jpl-history en erreur à 1348/1545 appels, conflit job déjà en cours ; PR #103 corrige la gestion de cette concurrence, à vérifier et déployer après accord. PR #99 compteur global toujours ouverte ; pas de nouvelle reprise lancée.
+
 ## 02/11/2026 — Match Center
 
 - PR #102 : compositions et statistiques du direct actualisées via notifications et repli périodique, actualisation manuelle étendue, affichage prudent des données manquantes et événements sans équipe centrés. Vérifier en conditions réelles la couverture Realtime et la charge ; aucun appel API-Football depuis le navigateur. Voir la PR pour les vérifications et l'état du déploiement.
