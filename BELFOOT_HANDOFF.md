@@ -3,7 +3,7 @@
 ## 02/11/2026 — Historiques et transferts
 
 - PR #94 fusionnée (`137bb0b`), production Vercel READY ; migration 0040 confirmée et contrôlée par l'utilisateur. Cron `belfoot-jpl-history` installé et actif, réglage activé. Premier passage manuel : 5 étapes, 5 appels, quota 7360, 0/634 joueurs entièrement vérifiés ; rattrapage manuel 500 appels lancé ou en cours, résultat à confirmer.
-- Freddie Potts : 3 lignes API pour la même arrivée à Bruges les 2–3 août 2026, départ West Ham ou West Ham U21. L'équipe U21 a `parent_club_id` vide ; relier le club parent reste à examiner avant toute modification de base. Correctif d'affichage proposé dans la PR dédiée : seuls les liens parent explicites servent au regroupement ; aucun transfert supprimé.
+- Freddie Potts : 3 lignes API pour la même arrivée à Bruges les 2–3 août 2026, départ West Ham ou West Ham U21. Le propriétaire a renseigné et confirmé dans Supabase le lien `parent_club_id` West Ham U21 → West Ham le 02/11/2026 ; aucun transfert ni joueur n'a été supprimé ou déplacé. Correctif d'affichage proposé dans la PR dédiée : seuls les liens parent explicites servent au regroupement ; aucun transfert supprimé.
 
 ## Historiques automatiques Pro League — PR #94 en brouillon (02/11/2026)
 
