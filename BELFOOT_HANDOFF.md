@@ -1,15 +1,17 @@
 # BELFOOT — Passation technique
 
-## 02/11/2026 — Fiche joueur, proposition de navigation
+## 02/11/2026 — Présentation des fiches joueurs
 
-- PR de présentation empilée sur la PR #97 : navigation Vue d'ensemble / Statistiques / Parcours / Matchs, conservation des fonctions et réglages administrateur ; parcours accessible directement, portrait mobile légèrement plus compact. À tester visuellement sur mobile et ordinateur avec fiches riches et vides avant fusion ; aucun changement de synchronisation ou de données.
-- Historique : après reprise du pipeline à 1 000 appels supplémentaires, l'utilisateur a signalé 22/634. La PR #99 corrige un compteur qui peut omettre les joueurs déjà vérifiés situés après l'arrêt du lot ; le pipeline tourne peut-être encore. PR #98 déployée pour raccourcir les lots. État final à vérifier.
+- PR de présentation : navigation Vue d'ensemble / Statistiques / Parcours / Matchs ; portrait mobile légèrement plus compact. Elle inclut le correctif de la PR #97 : exclusion des matchs amicaux et doublons du résumé et indication de la saison. Aucun changement de synchronisation ou de données.
+- Tests ciblés 25/25 ; vérification visuelle mobile et ordinateur toujours nécessaire (aperçu local `sites-preview` incompatible avec l'option `--host` de Next.js). Voir PR pour CI et déploiement.
+- Historiques : l'utilisateur a repris le lot avec 1 000 appels additionnels et a observé 22/634 ; la PR #99 corrige le compteur partiel, son résultat en production reste à vérifier. La PR #98 est fusionnée et déployée (`36a793e`).
+- Diego Moreira apparaît désormais parmi les Belges à l'étranger selon l'utilisateur ; sa double nationalité belge et portugaise reste à contrôler sur sa fiche.
 
-## 02/11/2026 — Suivi et résumé joueur
+## 02/11/2026 — Timeout du rattrapage des historiques
 
-- Historiques Pro League : l'utilisateur indique 37/634 joueurs entièrement vérifiés ; le rattrapage progresse. Quota et état du lot de 500 à recontrôler dans l'administration.
-- PR #96 fusionnée et déployée (`c56603a`) ; l'utilisateur confirme que Diego Moreira apparaît parmi les Belges à l'étranger. Sa fiche n'indique que Portugal, l'utilisateur précise qu'il possède aussi la nationalité belge ; correction manuelle proposée depuis Modifier la fiche, réalisation non confirmée.
-- PR distincte de résumé joueur : la dernière saison connue est identifiée dans l'en-tête ; les matchs amicaux et doublons sont exclus des chiffres résumés, comme du tableau des saisons, et « amicaux » est reconnu. Tests ciblés 17/17, lint sans erreur. Voir la PR pour l'état CI et déploiement.
+- L'utilisateur a observé 37/634 joueurs vérifiés, puis `FUNCTION_INVOCATION_TIMEOUT` sur le pipeline manuel Pro League à budget 500. L'état exact du pipeline et la réconciliation effective en production ne sont pas encore vérifiés. Le progrès durable par saison et les compteurs d'appels sont conçus pour permettre la reprise ; ne pas présumer que la dernière étape interrompue est terminée ni créer un doublon de pipeline.
+- Correctif proposé sur une PR séparée : chaque invocation du pipeline division-history a une échéance mesurée dès l'entrée de la route (25 s), 3 appels maximum par lot, délai fournisseur 6 s ; budget global conservé. Lot sans progrès faute de temps : reprise différée pour éviter une boucle rapide. Les délais DB et fournisseur peuvent encore dépasser les marges ; validation en production nécessaire après accord. Tests ciblés 23/23.
+- PR #97 de fiche joueur reste distincte. L'utilisateur a confirmé que Diego Moreira apparaît désormais parmi les Belges à l'étranger ; il précise aussi que Diego a les nationalités belge et portugaise (mise à jour de sa fiche non confirmée).
 
 ## 02/11/2026 — Diego Moreira
 
