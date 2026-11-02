@@ -180,7 +180,7 @@ export async function followBelgiansAbroad(db, ctx = {}) {
       const career = await syncPlayerCareers(db, { provider: "apifootball", name: "Belges à l'étranger" }, { ...ctx, abroadBelgians: true, onlyMissing: true, batchSize: 1, includeCareerStats: false });
       if (typeof career === "object" && career.progress?.current > 0) notes.push("parcours d'un nouveau Belge");
       else if (callsLeft() >= 1 && Date.now() < deadline) {
-        const seasons = await syncBelgianSeasonStats(db, { ...ctx, now, batchSize: 1, requestLimit: callsLeft(), deadline });
+        const seasons = await syncBelgianSeasonStats(db, { ...ctx, expandHistory: settings?.data?.football_jpl_history_enabled === true, now, batchSize: 1, requestLimit: callsLeft(), deadline });
         if (seasons.calls > 0) notes.push(`saisons passées : ${seasons.detail.split(" · ")[0]}`);
       }
     } catch (error) {

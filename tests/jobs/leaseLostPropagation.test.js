@@ -12,7 +12,7 @@ const P = "apifootball";
 const T0 = new Date("2026-10-12T10:00:00Z").getTime();
 const SEASON = "2025-2026";
 const C1 = "c-1";
-const MIGRATIONS = ["0004_job_execution_guardrails", "0023_season_safe_sync", "0024_player_team_seasons", "0033_history_foundations", "0034_match_sync_state", "0035_match_team_stats"].map((version) => ({ module: version.startsWith("0004") ? "core" : "football", version }));
+const MIGRATIONS = ["0004_job_execution_guardrails", "0023_season_safe_sync", "0024_player_team_seasons", "0033_history_foundations", "0040_player_history_work", "0034_match_sync_state", "0035_match_team_stats"].map((version) => ({ module: version.startsWith("0004") ? "core" : "football", version }));
 const PLAN = { version: 4, seasons: [{ label: SEASON, enabled: true }], competitions: { [C1]: { enabled: true, expected_clubs: 2, expected_matches: 1, seasons: { [SEASON]: { enabled: true, scope: "complete", expected_clubs: 2, expected_matches: 1 } } } }, nationalTeams: {} };
 
 function deferred() {
@@ -134,8 +134,10 @@ describe("syncCompetition : perte de bail dans un appel facultatif", () => {
 describe("syncPlayerCareers : perte de bail au milieu d'un lot", () => {
   it("arrêt immédiat : le joueur suivant n'est ni traité ni marqué en erreur", async () => {
     const db = seed({
+      seasons: [{ id: "s-1", competition_id: C1, label: SEASON }],
       clubs: [{ id: "club-home", source: P, external_id: "260", name: "Club 260", team_type: "first_team", locked: false }],
-      matches: [{ id: "m-1", competition_id: C1, home_club_id: "club-home", away_club_id: null, source: P, external_id: "1" }],
+      matches: [{ id: "m-1", competition_id: C1, season_id: "s-1", home_club_id: "club-home", away_club_id: null, source: P, external_id: "1" }],
+      player_team_seasons: ["a", "b"].map((letter) => ({ id: `member-${letter}`, player_id: `p-${letter}`, club_id: "club-home", season_start_year: 2025, squad_role: "first_team" })),
       players: [
         { id: "p-a", name: "Joueur A", source: P, external_id: "5001", tracked: true, active: true, club_id: "club-home", career_synced_at: null, career_sync_status: null, locked: false, ext: {} },
         { id: "p-b", name: "Joueur B", source: P, external_id: "5002", tracked: true, active: true, club_id: "club-home", career_synced_at: null, career_sync_status: null, locked: false, ext: {} },

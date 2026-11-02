@@ -136,7 +136,8 @@ export async function POST(request) {
     // Toutes les écritures de l'exécution passent par le jeton : statut,
     // progression, battement, compteurs, points de reprise, erreurs.
     const own = (patch) => writeOwnedPipeline(db, pipelineRun.id, leaseToken, patch);
-    let params = { ...(pipelineRun.params || {}), lease_token: leaseToken };
+    const { _not_before: _previousNotBefore, ...resumeParams } = pipelineRun.params || {};
+    let params = { ...resumeParams, lease_token: leaseToken };
     let used = Number(pipelineRun.request_count) || 0;
     let quotaRemaining = pipelineRun.quota_remaining ?? null;
     for (let index = Number(pipelineRun.next_step) || 0; index < pipeline.jobs.length; index++) {
@@ -198,6 +199,8 @@ export async function POST(request) {
         used += result.requests || 0;
         quotaRemaining = result.quotaRemaining ?? quotaRemaining;
         if (!result.complete) {
+          const waitForLease = result.meta?.waitForLease === true;
+          const notBefore = waitForLease ? (result.meta?.retryAfter || new Date(Date.now() + 2 * 60000).toISOString()) : null;
           const progress = result.progress?.total
             ? `${result.progress.current}/${result.progress.total} ${result.progress.unit || "éléments"}`
             : "checkpoint enregistré";
@@ -208,10 +211,10 @@ export async function POST(request) {
             quota_remaining: quotaRemaining,
             detail: `Lot terminé : ${progress}. La suite peut être lancée automatiquement.`,
             // Lot dans le budget : le passage automatique peut lancer la suite (cron pipeline-continue).
-            params: { ...params, auto_continue: true },
+            params: { ...params, auto_continue: true, ...(notBefore ? { _not_before: notBefore } : {}) },
             finished_at: null,
           });
-          return Response.json({ ...publicRun(paused), continuationRequired: true, progress: result.progress || null });
+          return Response.json({ ...publicRun(paused), continuationRequired: !waitForLease, progress: result.progress || null });
         }
         if (params._resume?.[jobKey]) {
           const nextResume = { ...params._resume };

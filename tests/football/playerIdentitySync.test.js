@@ -82,6 +82,18 @@ function expectProtectedIdentities(db) {
 }
 
 describe("syncSquads — identités protégées sur plusieurs synchronisations", () => {
+  it("conserve les joueurs transférés de la saison sans les ramener dans leur ancien club", async () => {
+    const db = seedDb();
+    db.rows("players").push({ id: "p-transfer", source: PROVIDER, external_id: "9", name: "Joueur 9", club_id: "club-b", position: "Attacker", locked: false, active: true, ext: {} });
+    registerProvider({ key: PROVIDER, async fetchSquadPlayers(club) { return club.external_id === "10" ? [seasonPlayer(9, "France", "2003-01-01")] : []; }, async fetchCurrentSquad(club) { return club.external_id === "10" ? [squadPlayer(1)] : []; } });
+    await syncSquads(db, { ...COMPETITION }, CTX);
+    await syncSquads(db, { ...COMPETITION }, CTX);
+    expect(player(db, "p-transfer")).toMatchObject({ club_id: "club-b", position: "Attacker", active: true });
+    const rows = db.rows("player_team_seasons").filter((row) => row.player_id === "p-transfer" && row.club_id === "club-a");
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ active: false, season_start_year: YEAR });
+    expect(db.rows("player_season_stats").some((row) => row.player_id === "p-transfer" && row.club_id === "club-a")).toBe(true);
+  });
   it("conserve les valeurs manuelles et connues, met à jour le reste, sans doublon", async () => {
     const db = seedDb();
     const ids = db.rows("players").map((row) => row.id);

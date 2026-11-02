@@ -1,5 +1,18 @@
 # BELFOOT — Passation technique
 
+## Historiques automatiques Pro League — PR #94 en brouillon (02/11/2026)
+
+- Branche `feat/automated-player-history`, PR https://github.com/Max7800/Belfoot/pull/94 ; base `main` `c518d048`, code vérifié sur `cee7bab`. CI GitHub réussie : 926 tests, lint sans erreur (121 avertissements), build réussi avec Supabase fictif. Recontrôler les vérifications sur le dernier commit avant toute fusion.
+- Aperçu Vercel du commit `cee7bab` : compilation réussie puis échec lors de la préparation de `/sitemap.xml` : `supabaseUrl is required` ; `NEXT_PUBLIC_SUPABASE_URL` absente pendant ce build Preview. Cela ne vérifie pas l'environnement Production ni le fonctionnement en conditions réelles. L'utilisateur accepte de ne pas bloquer l'avancement sur l'aperçu visuel.
+- Le déploiement Preview utilise Node 26 malgré le réglage Vercel 24, à cause de `engines.node >=20.9.0` dans `package.json` ; vérifier la compatibilité de l'environnement de production avant mise en service.
+
+- Périmètre : joueurs de la Pro League API-Football 144 de la saison publique, toutes nationalités, y compris les joueurs transférés pendant la saison. Les affectations `player_team_seasons` sont dédupliquées ; effectifs absents, fiches sans identifiant et clubs incomplets restent signalés.
+- Parcours en club puis cinq saisons précédant la saison courante, toutes compétitions fournies par le fournisseur. Les données absentes de l'API ne sont pas inventées. Les affectations existantes et verrouillées sont préservées. L'import d'effectif conserve les joueurs transférés sans leur réattribuer leur ancien club courant.
+- `0040_player_history_work` : état indépendant par joueur et saison (saison 0 = parcours), succès existants repris depuis les marqueurs valides, prise atomique par jeton, bail de 5 minutes et nouvelle tentative différée de 2 h après erreur. Les pipelines Belges et Pro League utilisent le même état. Les mutations de marqueurs sont fusionnées côté base sans réécrire tout `players.ext`.
+- Un cron distinct `/api/cron/jpl-history` exécute au maximum 5 appels d'historique par heure. Une vérification hebdomadaire de l'effectif traite un club par passage, avec au plus 4 appels supplémentaires et reprise par index. L'automatisation est désactivée par défaut ; le panneau Synchronisations affiche l'état et permet son activation explicite. Ce même réglage active aussi l'élargissement automatique aux cinq saisons des Belges à l'étranger. Le pipeline manuel `jpl-history` conserve budget, préflight et reprise. « Vérifié » signifie que l'API a répondu pour les étapes, y compris lorsqu'elle ne fournit pas de statistiques.
+- **Migration `0040`** : exécutée manuellement dans Supabase par l'utilisateur, qui a confirmé son succès le 02/11/2026 ; statut rapporté par l'utilisateur, non vérifié directement en base. Aucun lancement de synchronisation ni installation du cron n'a été réalisé dans cette session. Vérifier la cible et la CI, puis obtenir l'accord explicite avant fusion ; installer séparément `supabase/jpl_history_cron_setup.sql` et activer l'automatisation seulement après accord pour la synchronisation. Contrôler la couverture et le quota avant le premier passage.
+- Diego Moreira, le doublon Freddie Potts et les améliorations visuelles des fiches restent des chantiers séparés.
+
 ## Roadmap des synchronisations — 8 PR (audit du 12/10/2026, Claude)
 
 Audit complet des synchronisations (lecture seule) puis plan validé avec l'utilisateur : **une seule PR à la fois, feu vert explicite à chaque étape**. Les boutons de synchronisation contextuels (fiches compétition, club, joueur) sont conservés ; le futur panneau central les complète sans les remplacer.

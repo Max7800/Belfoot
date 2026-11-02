@@ -11,7 +11,7 @@ const playerCareersJob = {
     if (ctx.globalScope === true) {
       const refreshBefore = ctx.resumeState?.refreshBefore || new Date().toISOString();
       await ctx.saveCheckpoint?.({ refreshBefore });
-      return syncPlayerCareers(db, { provider: "apifootball", name: "Belges à l’étranger" }, { ...ctx, abroadBelgians: true, includeCareerStats: false, refreshBefore });
+      return syncPlayerCareers(db, { provider: "apifootball", name: "Belges à l’étranger" }, { ...ctx, historyWork: true, abroadBelgians: true, includeCareerStats: false, refreshBefore });
     }
     requireCompetitionId("football.player-careers", competitionId);
     const { data: competition, error } = await db.from("competitions").select("*").eq("id", competitionId).maybeSingle();
@@ -25,7 +25,7 @@ const playerCareersJob = {
     // (career_synced_at < refreshBefore) → tous les joueurs sont refaits, une seule fois.
     const refreshBefore = ctx.playerId ? null : (ctx.resumeState?.refreshBefore || new Date().toISOString());
     if (refreshBefore) await ctx.saveCheckpoint?.({ refreshBefore });
-    return syncPlayerCareers(db, competition, { ...ctx, includeCareerStats, refreshBefore });
+    return syncPlayerCareers(db, competition, { ...ctx, historyWork: true, includeCareerStats, refreshBefore });
   },
 };
 

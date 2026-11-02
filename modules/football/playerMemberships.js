@@ -36,25 +36,39 @@ export async function upsertPlayerMembership(db, {
   squadRole,
   isPrimary = true,
   active = true,
+  preserveExisting = false,
   ext = {},
   syncedAt = new Date().toISOString(),
 }) {
   if (!playerId || !club?.id || !season) return null;
   const seasonValue = String(season);
-  const { data: existing, error: selectError } = await db
+  const year = seasonStart(seasonValue);
+  const yearFormat = seasonValue.match(/^(\d{4})(?:-(\d{4}))?$/);
+  const standardSeason = yearFormat && (!yearFormat[2] || Number(yearFormat[2]) === year + 1);
+  let existingQuery = db
     .from("player_team_seasons")
-    .select("id,locked")
+    .select("id,locked,season")
     .eq("player_id", playerId)
-    .eq("club_id", club.id)
-    .eq("season", seasonValue)
-    .maybeSingle();
+    .eq("club_id", club.id);
+  // Les synchronisations existantes écrivent parfois « 2026 » et les
+  // carrières « 2026-2027 » : ce sont la même affectation sportive.
+  existingQuery = standardSeason
+    ? existingQuery.or(`season.eq.${year},season.eq.${year}-${year + 1}`)
+    : existingQuery.eq("season", seasonValue);
+  const { data: candidates, error: selectError } = await existingQuery.order("id", { ascending: true });
   if (selectError) throw new Error(`Affectation joueur: ${selectError.message}`);
+  const existing = (candidates || []).find((row) => row.locked)
+    || (candidates || []).find((row) => row.season === seasonValue)
+    || candidates?.[0];
   if (existing?.locked) return existing;
+  // Les données de carrière décrivent un passage, pas l'état d'un effectif.
+  // Une affectation déjà connue peut contenir des données plus précises.
+  if (existing && preserveExisting) return existing;
 
   const patch = {
     player_id: playerId,
     club_id: club.id,
-    season: seasonValue,
+    season: existing?.season || (standardSeason ? `${year}-${year + 1}` : seasonValue),
     season_start_year: seasonStart(seasonValue),
     membership_type: membershipType,
     squad_role: squadRole || squadRoleForClub(club),

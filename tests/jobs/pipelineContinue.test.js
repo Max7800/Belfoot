@@ -22,6 +22,11 @@ afterAll(() => { delete process.env.CRON_SECRET; vi.useRealTimers(); });
 beforeEach(() => { state.jobs = []; state.result = { complete: false, requests: 3, progress: { current: 5, total: 200, unit: "joueurs" } }; });
 
 describe("choix de la pause à continuer", () => {
+  it("respecte la date de reprise après un bail ou une erreur temporaire", () => {
+    const waiting = run({ params: { auto_continue: true, _not_before: new Date(NOW + 3600000).toISOString() } });
+    expect(pickContinuableRun([waiting], NOW)).toBeNull();
+    expect(pickContinuableRun([waiting], NOW + 3600000)?.id).toBe("r1");
+  });
   it("pause marquée, non retirée, sans battement depuis 2 min ; la plus ancienne d'abord", () => {
     const runs = [run({ id: "a", heartbeat_at: new Date(NOW - 60000).toISOString() }), run({ id: "b", heartbeat_at: new Date(NOW - 30 * 60000).toISOString() }), run({ id: "c", heartbeat_at: new Date(NOW - 40 * 60000).toISOString(), params: { auto_continue: false } }), run({ id: "d", heartbeat_at: new Date(NOW - 50 * 60000).toISOString(), params: { auto_continue: true, dismissed_at: "x" } }), run({ id: "e", status: "error", heartbeat_at: new Date(NOW - 60 * 60000).toISOString() })];
     expect(pickContinuableRun(runs, NOW).id).toBe("b");
@@ -31,6 +36,16 @@ describe("choix de la pause à continuer", () => {
 });
 
 describe("passage automatique", () => {
+  it("attend le délai annoncé si une autre exécution détient la saison", async () => {
+    const retryAfter = new Date(NOW + 3600000).toISOString();
+    state.result = { complete: false, requests: 0, progress: { current: 0, total: 1 }, meta: { waitForLease: true, retryAfter } };
+    state.db = seed([run()]);
+    await cron();
+    expect(row()).toMatchObject({ status: "paused", params: { auto_continue: true, _not_before: retryAfter } });
+    state.db.rows("pipeline_runs")[0].heartbeat_at = new Date(NOW - 10 * 60000).toISOString();
+    expect(await cron()).toMatchObject({ idle: true });
+    expect(state.jobs).toHaveLength(1);
+  });
   it("un lot lancé, budget inchangé, nouvelle pause encore continuable ; trace pour la santé", async () => {
     state.db = seed([run()]);
     const body = await cron();
@@ -75,6 +90,12 @@ describe("passage automatique", () => {
 
 describe("route des pipelines appelée avec le secret serveur", () => {
   const call = (body) => runPipeline(new Request("http://localhost/x", { method: "POST", headers: { authorization: `Bearer ${SECRET}` }, body: JSON.stringify(body) }));
+  it("n'enchaîne pas immédiatement les requêtes quand une saison est déjà verrouillée", async () => {
+    state.db = seed([run()]);
+    state.result = { complete: false, requests: 0, progress: { current: 0, total: 1 }, meta: { waitForLease: true, retryAfter: new Date(NOW + 3600000).toISOString() } };
+    const response = await call({ pipelineRunId: "r1", continuation: true });
+    expect(await response.json()).toMatchObject({ status: "paused", continuationRequired: false });
+  });
   it("ne crée jamais de pipeline, ne reprend jamais sans continuation (403)", async () => {
     state.db = seed([]);
     expect((await call({ pipelineKey: "belgian-season-stats", requestLimit: 5000 })).status).toBe(403);
