@@ -47,7 +47,7 @@ describe("careerSummary", () => {
 
 describe("carte de la page Belges : pays en français", () => {
   it("« England » affiché « Angleterre » (frenchNationName sur la carte)", () => {
-    expect(fs.readFileSync("app/belges-a-l-etranger/page.js", "utf8")).toContain("{countryFlag(playerCountry)}</span>{frenchNationName(playerCountry)} · {playerCompetition}");
+    expect(fs.readFileSync("app/belges-a-l-etranger/page.js", "utf8")).toContain("{countryFlag(playerCountry)}</span>{countryName(playerCountry)} · {playerCompetition}");
   });
 });
 
