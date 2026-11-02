@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import { describe, expect, it } from "vitest";
-import { SHARE_TONES, groupStatsBySeason, shareTone } from "@/lib/playerSeasons";
+import { SHARE_TONES, groupStatsBySeason, isCountableSeasonStat, shareTone } from "@/lib/playerSeasons";
 
 // Fiche joueur jugée « fort chargée » le 28/10/2026 : saisons dépliables,
 // listes limitées à 3, couleurs des anneaux selon le niveau.
@@ -51,5 +51,16 @@ describe("fiche joueur : branchements", () => {
   });
   it("anneaux du widget colorés selon le niveau", () => {
     for (const metric of ["shots", "passes", "duels", "dribbles"]) expect(widget).toContain(`ringTone={shareTone("${metric}",`);
+  });
+});
+
+
+describe("statistiques comptabilisées dans le résumé", () => {
+  it("exclut les amicaux et doublons, et conserve les compétitions officielles", () => {
+    const competitions = { a: { name: "Friendlies Clubs" }, b: { name: "Pro League" }, c: { name: "Matchs amicaux" } };
+    expect(isCountableSeasonStat({ competition_id: "a" }, competitions)).toBe(false);
+    expect(isCountableSeasonStat({ competition_id: "c" }, competitions)).toBe(false);
+    expect(isCountableSeasonStat({ competition_id: "b", duplicateOf: "other" }, competitions)).toBe(false);
+    expect(isCountableSeasonStat({ competition_id: "b" }, competitions)).toBe(true);
   });
 });
