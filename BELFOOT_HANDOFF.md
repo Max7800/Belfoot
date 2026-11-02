@@ -1,3 +1,8 @@
+### 02/11/2026 — Couverture des championnats des joueurs
+
+- Un instantané de championnat dont le nom indique explicitement une coupe (cup, coppa, pokal, coupe, supercoupe) et qui n’est pas relié à une compétition nationale identifiée n’est plus affiché comme championnat. Les métadonnées fiables et les lignes de championnat du club restent prioritaires ; les autres championnats non importés restent affichés. Aucune donnée n’est modifiée.
+- Cela ne règle pas les coupes mal typées par le fournisseur comme championnats, ni les doublons de libellé ou la limite globale de 500 performances ; ces points restent à auditer avec leurs identifiants. Tests ciblés : 25 réussis et lint sans erreur.
+
 ### 2026-11-02 — ChatGPT — reprise des entraîneurs après échec
 
 - Diagnostic transmis par l’admin : le 28 octobre plusieurs jobs entraîneurs ont échoué sur le quota API ; l’ancien cron effaçait le lot de reprise et considérait l’échec comme une vérification hebdomadaire. Le cron conserve désormais le dernier lot confirmé et réessaie après 24 h, y compris les anciens états d’erreur. Les autres compétitions restent éligibles pendant l’attente.
