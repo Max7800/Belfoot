@@ -1,5 +1,10 @@
 # BELFOOT — Passation technique
 
+## 02/11/2026 — Fiche club
+
+- PR #101 : logo du club en filigrane, aperçu de saison conditionné aux sections administrables (classement calculé, effectif et année, prochain match programmé) ; test visuel à effectuer, CI et déploiement à consulter sur la PR.
+- L'utilisateur signale I. Leko à Gand ; une ancienne fiche API distincte (1153) reste liée à Gand alors qu'une autre est liée à Bruges. Recherche « De Mil » sans résultat selon l'utilisateur ; la synchronisation club n'a pas corrigé l'affichage. Rechercher la cause fournisseur et les journaux avant modification des données.
+
 ## 02/11/2026 — Présentation des fiches joueurs
 
 - PR de présentation : navigation Vue d'ensemble / Statistiques / Parcours / Matchs ; portrait mobile légèrement plus compact. Elle inclut le correctif de la PR #97 : exclusion des matchs amicaux et doublons du résumé et indication de la saison. Aucun changement de synchronisation ou de données.
