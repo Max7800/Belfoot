@@ -1,5 +1,12 @@
 # BELFOOT — Passation technique
 
+## 02/11/2026 — Diego Moreira
+
+- Diagnostic en base communiqué par l'utilisateur : `D. Moreira` (API 335056) actif et suivi, nationalité Portugal, sélection Belgique, club AC Milan ; naissance absente. L'annuaire écartait les joueurs sans nationalité/naissance/suivi binational belge AVANT de consulter leur sélection, et `belgianWatchStatus` rejetait également ces joueurs avant d'examiner l'équipe nationale.
+- PR dédiée : la sélection belge explicite est reconnue comme lien suffisant, sans réécrire la nationalité ; annuaire et accueil chargent la sélection avant le filtre. Tests ciblés 23 réussis, ESLint ciblé sans erreur. Statut de la PR et CI à vérifier sur GitHub ; aucun changement de données et aucune synchronisation lancée pour ce diagnostic.
+- Suivi historiques : PR #94 fusionnée et en production, migration et cron installés et confirmés ; premier passage manuel 5 étapes / 5 appels, 0/634 joueurs complets, quota 7360. Le résultat du lot de rattrapage demandé de 500 appels reste à confirmer.
+- Freddie Potts : PR #95 fusionnée et déployée (`2fa46bb`) ; le propriétaire a rattaché West Ham U21 à West Ham. Vérification visuelle du doublon restant à confirmer.
+
 ## 02/11/2026 — Historiques et transferts
 
 - PR #94 fusionnée (`137bb0b`), production Vercel READY ; migration 0040 confirmée et contrôlée par l'utilisateur. Cron `belfoot-jpl-history` installé et actif, réglage activé. Premier passage manuel : 5 étapes, 5 appels, quota 7360, 0/634 joueurs entièrement vérifiés ; rattrapage manuel 500 appels lancé ou en cours, résultat à confirmer.

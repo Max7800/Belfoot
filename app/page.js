@@ -123,7 +123,7 @@ export default function Home() {
     // (ligues + coupes + sélections + clubs étrangers des Belges) — pas besoin de limiter.
     const neededClubIds = new Set();
     for (const match of matchesById.values()) { if (match.home_club_id) neededClubIds.add(match.home_club_id); if (match.away_club_id) neededClubIds.add(match.away_club_id); }
-    for (const player of (playerResult.data || [])) { if (player.club_id) neededClubIds.add(player.club_id); }
+    for (const player of (playerResult.data || [])) { if (player.club_id) neededClubIds.add(player.club_id); if (player.national_team_id) neededClubIds.add(player.national_team_id); }
     const clubList = [];
     const clubIdChunks = [...neededClubIds];
     for (let i = 0; i < clubIdChunks.length; i += 400) {
@@ -153,7 +153,7 @@ export default function Home() {
     for (const row of data.stats) (statMap[row.player_id] ||= []).push(row);
 
     const clubLeagues = clubNationalLeagues(data.stats, competitionMap);
-    const players = data.players.filter(isBelgianFollowed).map((player) => {
+    const players = data.players.filter((player) => isBelgianFollowed(player, data.clubs[player.national_team_id])).map((player) => {
       const rows = statMap[player.id] || [];
       const club = data.clubs[player.club_id];
       const domesticBelgianClub = rows.some((row) => row.club_id === player.club_id && isBelgian(competitionMap[row.competition_id]?.ext?.country));
