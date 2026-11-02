@@ -1,6 +1,10 @@
 # BELFOOT — Passation technique
 
-## Historiques automatiques Pro League — PR en préparation (01/11/2026)
+## Historiques automatiques Pro League — PR #94 en brouillon (02/11/2026)
+
+- Branche `feat/automated-player-history`, PR https://github.com/Max7800/Belfoot/pull/94 ; base `main` `c518d048`, code vérifié sur `cee7bab`. CI GitHub réussie : 926 tests, lint sans erreur (121 avertissements), build réussi avec Supabase fictif. Recontrôler les vérifications sur le dernier commit avant toute fusion.
+- Aperçu Vercel du commit `cee7bab` : compilation réussie puis échec lors de la préparation de `/sitemap.xml` : `supabaseUrl is required` ; `NEXT_PUBLIC_SUPABASE_URL` absente pendant ce build Preview. Cela ne vérifie pas l'environnement Production ni le fonctionnement en conditions réelles. L'utilisateur accepte de ne pas bloquer l'avancement sur l'aperçu visuel.
+- Le déploiement Preview utilise Node 26 malgré le réglage Vercel 24, à cause de `engines.node >=20.9.0` dans `package.json` ; vérifier la compatibilité de l'environnement de production avant mise en service.
 
 - Périmètre : joueurs de la Pro League API-Football 144 de la saison publique, toutes nationalités, y compris les joueurs transférés pendant la saison. Les affectations `player_team_seasons` sont dédupliquées ; effectifs absents, fiches sans identifiant et clubs incomplets restent signalés.
 - Parcours en club puis cinq saisons précédant la saison courante, toutes compétitions fournies par le fournisseur. Les données absentes de l'API ne sont pas inventées. Les affectations existantes et verrouillées sont préservées. L'import d'effectif conserve les joueurs transférés sans leur réattribuer leur ancien club courant.
