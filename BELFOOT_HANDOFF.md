@@ -1,6 +1,6 @@
 ### 02/11/2026 — Bandeau et carte des Belges à l’étranger
 
-- Sur desktop, suppression du portrait agrandi dans le bandeau par défaut : deux prochains matchs connus sont mis en avant, avec liens et joueurs concernés. Le bandeau personnalisé avec image reste pris en charge ; sans matchs, un message neutre s’affiche. La carte reste interactive, occupe une colonne plus compacte sur grand écran et s’accompagne d’un top pays filtrant l’annuaire. Sur mobile, ce classement latéral est masqué.
+- Sur desktop, suppression du portrait agrandi dans le bandeau par défaut : deux prochains matchs connus sont mis en avant, avec liens et joueurs concernés. Le bandeau personnalisé avec image reste pris en charge ; sans matchs, un message neutre s’affiche. À la demande de l’utilisateur, la carte reste bien visible mais perd ses encadrements rectangulaires et son fond carré ; elle est intégrée au fond de page, avec un panneau discret des pays filtrant l’annuaire sur grand écran. Sur mobile, ce classement latéral est masqué.
 - Aucun changement de synchronisation, SQL ou données ; aucun appel API-Football. Tests ciblés page : 8 réussis ; ESLint sans erreur, avertissements existants sur images. Vérification visuelle responsive encore nécessaire.
 
 ### 02/11/2026 — Performances récentes des Belges : lecture bornée
