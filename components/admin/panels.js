@@ -19,6 +19,7 @@ import { normalizeRankings } from "@/lib/rankings";
 import { invalidateTilesCache, TILE_SCOPES } from "@/lib/tiles";
 import { COMPETITION_SCOPES, groupCompetitionsByScope } from "@/lib/competitionScopes";
 import { healthItems, historyRows, resumableRuns, syncSections } from "@/lib/adminSync";
+import ProtectedCoaches from "@/components/admin/ProtectedCoaches";
 
 // Écriture sûre de site_settings (lib/siteSettings.js) : ne remplace que les
 // clés données, sans effacer une écriture concurrente (cron, job, autre onglet).
@@ -248,6 +249,7 @@ export function JobsPanel() {
       <button disabled={!!busy} onClick={() => setHistoryAuto(settingsData.football_jpl_history_enabled !== true)} className="mt-2 rounded-lg border border-line/20 px-3 py-1.5 text-xs font-bold disabled:opacity-50">{settingsData.football_jpl_history_enabled === true ? "Désactiver" : "Activer"} les historiques automatiques Pro League</button>
     </section>
 
+    <ProtectedCoaches />
     <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-line/10 bg-surface/60 p-3">
       <select value={compId} onChange={(e) => setCompId(e.target.value)} aria-label="Compétition" className="rounded border border-line/10 bg-surface2 px-2 py-1 text-sm"><option value="">Choisir une compétition…</option>{(() => {
         // Taxonomie partagée avec le plan d'import : Belgique / Europe / Étranger (par pays) / Sélections.
