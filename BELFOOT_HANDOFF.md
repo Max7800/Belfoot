@@ -1,5 +1,11 @@
 # BELFOOT — Passation technique
 
+## 02/11/2026 — Reprise et compteur d'historiques
+
+- PR #98 fusionnée et déployée (`36a793e`) : lots du pipeline limités à 3 appels, échéance de route et timeout fournisseur. Le pipeline interrompu affichait 456/500 appels ; l'utilisateur l'a repris avec 1 000 appels supplémentaires et a vu 22/634, après 37/634 précédemment. Résultat final encore à vérifier.
+- Audit : le compteur ne comptait que les joueurs avant le point d'arrêt du lot, en oubliant les joueurs déjà complets après ce point ; la baisse affichée ne prouve pas une perte de données. Correctif dans une PR dédiée : compter tous les joueurs de l'instantané d'états, puis inclure les étapes acquittées pendant le passage. Instantané possiblement retardé en cas d'exécution concurrente ; aucune donnée de production modifiée.
+- PR #97 de fiche joueur reste en attente ; PR #96 Diego déployée, utilisateur confirme son apparition. Sa double nationalité belge et portugaise reste à vérifier sur sa fiche après éventuelle modification manuelle.
+
 ## 02/11/2026 — Timeout du rattrapage des historiques
 
 - L'utilisateur a observé 37/634 joueurs vérifiés, puis `FUNCTION_INVOCATION_TIMEOUT` sur le pipeline manuel Pro League à budget 500. L'état exact du pipeline et la réconciliation effective en production ne sont pas encore vérifiés. Le progrès durable par saison et les compteurs d'appels sont conçus pour permettre la reprise ; ne pas présumer que la dernière étape interrompue est terminée ni créer un doublon de pipeline.
