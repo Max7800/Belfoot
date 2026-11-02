@@ -69,7 +69,7 @@ export default function BelgiansWorldMap({ players = [] }) {
   const badgeR = viewKey === "monde" ? 7 : 3.5;
 
   return (
-    <div className="rounded-2xl border border-line/10 bg-surface/60 p-3 sm:p-4">
+    <div className="min-w-0 px-1 py-2 sm:px-2">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <div className="text-xs font-black uppercase tracking-wider text-amber-300">🌍 Les Belges dans le monde</div>
         <div className="text-[11px] text-muted">{players.length} Belge{players.length > 1 ? "s" : ""} à l’étranger</div>
@@ -83,7 +83,7 @@ export default function BelgiansWorldMap({ players = [] }) {
 
       <div className="mb-2 text-[11px] text-muted">👆 Clique sur une <span className="font-bold text-accent">pastille rouge</span> (ou le pays surligné) pour voir les Belges qui y jouent.</div>
 
-      <div className="relative overflow-hidden rounded-xl bg-[#0b1220]">
+      <div className="relative overflow-hidden bg-[radial-gradient(ellipse_at_center,rgba(38,55,80,0.48)_0%,transparent_70%)]">
         <style>{`.rsm-svg,.rsm-geographies,.rsm-geography,.rsm-zoomable-group,.rsm-svg *{outline:none!important;}.rsm-svg:focus,.rsm-zoomable-group:focus{outline:none!important;}@keyframes bfHalo{0%,100%{opacity:.12}50%{opacity:.4}}.bf-halo{animation:bfHalo 2.2s ease-in-out infinite;}.bf-badge{transition:transform .12s ease;transform-box:fill-box;transform-origin:center;}.bf-badge:hover{transform:scale(1.25);}.bf-geo{outline:none;}.bf-geo:hover{fill:rgba(255,255,255,0.07);stroke:rgba(255,255,255,0.25);stroke-width:.5;}.bf-geo-active{cursor:pointer;}.bf-geo-active:hover,.bf-geo-active:active{fill:#e30613;}`}</style>
         <ComposableMap projection="geoMercator" projectionConfig={{ scale: 130 }} style={{ width: "100%", height: "auto", outline: "none" }}>
           <ZoomableGroup center={view.center} zoom={view.zoom} maxZoom={8}>
