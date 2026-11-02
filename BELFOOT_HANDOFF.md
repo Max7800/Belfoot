@@ -1,5 +1,10 @@
 # BELFOOT — Passation technique
 
+## 02/11/2026 — Fiche joueur, proposition de navigation
+
+- PR de présentation empilée sur la PR #97 : navigation Vue d'ensemble / Statistiques / Parcours / Matchs, conservation des fonctions et réglages administrateur ; parcours accessible directement, portrait mobile légèrement plus compact. À tester visuellement sur mobile et ordinateur avec fiches riches et vides avant fusion ; aucun changement de synchronisation ou de données.
+- Historique : après reprise du pipeline à 1 000 appels supplémentaires, l'utilisateur a signalé 22/634. La PR #99 corrige un compteur qui peut omettre les joueurs déjà vérifiés situés après l'arrêt du lot ; le pipeline tourne peut-être encore. PR #98 déployée pour raccourcir les lots. État final à vérifier.
+
 ## 02/11/2026 — Suivi et résumé joueur
 
 - Historiques Pro League : l'utilisateur indique 37/634 joueurs entièrement vérifiés ; le rattrapage progresse. Quota et état du lot de 500 à recontrôler dans l'administration.
