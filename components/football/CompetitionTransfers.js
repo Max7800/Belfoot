@@ -95,16 +95,17 @@ export default function CompetitionTransfers({ competition }) {
         .eq("season_start_year", year)
         .or(`from_club_id.in.(${idList}),to_club_id.in.(${idList})`)
         .order("transfer_date", { ascending: false }));
-      const list = dedupeTransfers(data || []);
-      setRows(list);
       // Logos des clubs des deux côtés et photos des joueurs, par paquets (URL bornée).
-      const clubKeys = [...new Set([...ids, ...list.flatMap((t) => [t.from_club_id, t.to_club_id])].filter(Boolean))];
-      const playerIds = [...new Set(list.map((t) => t.player_id).filter(Boolean))];
+      const raw = data || [];
+      const clubKeys = [...new Set([...ids, ...raw.flatMap((t) => [t.from_club_id, t.to_club_id])].filter(Boolean))];
+      const playerIds = [...new Set(raw.map((t) => t.player_id).filter(Boolean))];
       const [clubResult, players] = await Promise.all([
-        readChunks(chunkIds(clubKeys), (chunk) => supabase.from("clubs").select("id,name,logo_url").in("id", chunk)),
+        readChunks(chunkIds(clubKeys), (chunk) => supabase.from("clubs").select("id,name,logo_url,parent_club_id").in("id", chunk)),
         loadPlayersByIds(supabase, playerIds),
       ]);
-      setClubs(Object.fromEntries((clubResult.data || []).map((club) => [club.id, club])));
+      const clubMap = Object.fromEntries((clubResult.data || []).map((club) => [club.id, club]));
+      setRows(dedupeTransfers(raw, clubMap));
+      setClubs(clubMap);
       setPhotos(Object.fromEntries(players.map((player) => [player.id, player.photo_url])));
       setLoading(false);
     })().catch(() => { setRows([]); setLoading(false); });
