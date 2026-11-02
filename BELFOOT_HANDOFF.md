@@ -1,5 +1,10 @@
 # BELFOOT — Passation technique
 
+## 02/11/2026 — Statistiques de match
+
+- PR #104 : lignes plus compactes, chiffres et libellés plus lisibles, barres centrées cyan/rose et équipes identifiées. Les données manquantes restent distinctes des zéros. Rendu mobile et desktop à vérifier ; voir la PR pour la CI et le déploiement.
+- L'utilisateur signale plusieurs entraîneurs périmés en Pro League : Leko à Gand et Hasi à Anderlecht. Audit global à poursuivre ; pas de modification de données sur la base de ces seuls exemples.
+
 ## 02/11/2026 — Collision de synchronisations d'historiques
 
 - Capture utilisateur : pipeline `jpl-history` en erreur « Ce job est déjà en cours pour cette sélection » à 1348/1545 appels ; carte cron 76/634 et quota observé environ 5923. État au moment de la capture, à recontrôler. Deux autres pipelines en erreur de budget insuffisant sont indépendants ; ne pas les relancer sans diagnostic.
