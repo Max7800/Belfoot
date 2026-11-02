@@ -379,8 +379,8 @@ export async function GET(request) {
           : { checkedAt: state.checkedAt || null, clubIndex: Number(result.progress?.current) || 0 };
         coaches = { competition: competition?.name, ok: true, complete, detail: String(result?.detail || result || "").slice(0, 300) };
       } catch (error) {
-        // Échec mémorisé : pas de nouvel essai avant la semaine suivante.
-        coachState[coachCandidate] = { checkedAt: now.toISOString(), clubIndex: 0, error: String(error?.message || error).slice(0, 200) };
+        // Préserver le dernier lot terminé ; attendre 24 h avant de réessayer.
+        coachState[coachCandidate] = { checkedAt: state.checkedAt || null, clubIndex: Number(state.clubIndex) || 0, failedAt: now.toISOString(), error: String(error?.message || error).slice(0, 200) };
         coaches = { competition: competition?.name, ok: false, error: String(error?.message || error).slice(0, 300) };
       }
       await persistState();

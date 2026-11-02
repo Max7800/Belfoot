@@ -21,6 +21,7 @@ import { phaseLabel } from "@/lib/phaseLabels";
 import ClubSeasonWidget from "@/components/football/ClubSeasonWidget";
 import { summarizeClubSeason } from "@/lib/clubSeasonWidget";
 import { nationalTeamPagePath } from "@/lib/nationalCategories";
+import { nextClubFixture } from "@/lib/clubOverview";
 
 const POS = { Goalkeeper: 0, Defender: 1, Midfielder: 2, Attacker: 3 };
 const ROLE_LABELS = { first_team: "Équipe première", reserve: "Réserve", u23: "U23", youth: "Jeunes", women: "Équipe féminine", unknown: "Groupe à préciser" };
@@ -165,6 +166,11 @@ export default function ClubPage() {
   };
   const counts = { honours: honours.length, squad: squad.length, linked: linked.length, last: finished.length, next: upcoming.length };
   const visibleSections = sections.filter((section) => section.key !== "linked" || linked.length > 0);
+  const sectionEnabled = (key) => visibleSections.some((section) => section.key === key);
+  const nextFixture = sectionEnabled("next") ? nextClubFixture(seasonMatches) : null;
+  const showRanking = sectionEnabled("ranking") && Boolean(sport?.row);
+  const showSquad = sectionEnabled("squad") && squad.length > 0;
+  const showOverview = showRanking || showSquad || nextFixture;
   const activeMobileSection = visibleSections.find((section) => section.key === mobileSection) || visibleSections[0];
   const clubsHref = sport?.competition ? `${competitionPath(sport.competition)}?tab=clubs` : "/competitions";
 
@@ -226,14 +232,22 @@ export default function ClubPage() {
     <div>
       <Link href={clubsHref} className="mb-3 inline-flex items-center gap-1.5 text-sm font-semibold text-muted transition hover:text-content"><ArrowLeft className="h-4 w-4" /> Clubs{sport?.competition?.name ? ` · ${sport.competition.name}` : ""}</Link>
       <div className="relative mb-5 overflow-hidden rounded-3xl border border-line/10 p-4 sm:mb-6 sm:p-7" style={{ background: `linear-gradient(120deg, ${primary}26, ${secondary}12 58%, rgba(15,23,42,0.2))` }}>
-        <Shield className="pointer-events-none absolute -bottom-12 -right-8 h-44 w-44 opacity-[0.05]" />
+        {club.logo_url ? <img src={club.logo_url} alt="" aria-hidden="true" className="pointer-events-none absolute -bottom-12 -right-5 h-44 w-44 rotate-[-8deg] object-contain opacity-[0.09] sm:-bottom-16 sm:right-3 sm:h-60 sm:w-60" /> : <Shield className="pointer-events-none absolute -bottom-12 -right-8 h-44 w-44 opacity-[0.05]" aria-hidden="true" />}
         <div className="relative flex items-center gap-3 sm:gap-4">{club.logo_url && <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-black/15 p-2 sm:h-20 sm:w-20"><img src={club.logo_url} className="h-full w-full object-contain" alt="" /></div>}<div className="min-w-0"><div className="text-[10px] font-bold uppercase tracking-[0.22em] text-muted">{club.nickname || club.city || "Club"}</div><h1 className="truncate text-2xl font-black sm:text-4xl">{club.name}</h1>{coach && <div className="mt-1.5 flex items-center gap-2 text-xs text-muted sm:mt-2 sm:text-sm">{coach.photo_url && <img src={coach.photo_url} className="h-6 w-6 rounded-full object-cover" alt="" />}<span className="truncate">Entraîneur : <b className="text-content">{coach.name}</b></span></div>}</div></div>
       </div>
+      {showOverview && <section aria-label="Aperçu de la saison" className="mb-5 rounded-3xl border border-line/10 bg-surface/70 p-4 sm:p-5">
+        <div className="mb-3 flex flex-wrap items-end justify-between gap-2"><div><p className="text-[10px] font-black uppercase tracking-[0.18em] text-accent">En bref</p><h2 className="mt-1 text-lg font-black">La saison du club</h2></div>{sport?.competition?.name && <p className="text-xs text-muted">{sport.competition.name}{sport.season?.label ? ` · ${sport.season.label}` : ""}</p>}</div>
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          {showRanking && <div className="rounded-2xl border border-line/10 bg-bg/35 p-3"><p className="text-[10px] font-bold uppercase tracking-wider text-muted">Classement calculé</p><p className="mt-2 text-xl font-black">{sport.standings.findIndex((row) => row.club === id) + 1}<span className="text-xs">e</span> <span className="text-sm font-semibold text-muted">· {sport.row.pts} points</span></p><p className="mt-1 text-[11px] text-muted">{phaseLabel(sport.phase)}</p></div>}
+          {showSquad && <div className="rounded-2xl border border-line/10 bg-bg/35 p-3"><p className="text-[10px] font-bold uppercase tracking-wider text-muted">Effectif connu</p><p className="mt-2 text-xl font-black">{squad.length} <span className="text-sm font-semibold text-muted">joueurs</span></p><p className="mt-1 text-[11px] text-muted">{rosterYear ? `Effectif ${rosterYear}-${rosterYear + 1}` : "Saison non précisée"}{contextYear && rosterYear && contextYear !== rosterYear ? " · saison différente de l’aperçu" : ""}</p></div>}
+          {nextFixture && <Link href={`/matchs/${nextFixture.id}`} className="rounded-2xl border border-line/10 bg-bg/35 p-3 transition hover:border-accent/40"><p className="text-[10px] font-bold uppercase tracking-wider text-muted">Prochain match</p><p className="mt-2 truncate text-sm font-black">{clubsMap[nextFixture.home_club_id]?.name || "Équipe à préciser"} – {clubsMap[nextFixture.away_club_id]?.name || "Équipe à préciser"}</p><p className="mt-1 text-[11px] text-muted">{new Date(nextFixture.kickoff).toLocaleString("fr-BE", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</p></Link>}
+        </div>
+      </section>}
       <div className="mb-5"><DiscussButton refType="club" refId={club.id} title={`Discussion : ${club.name}`} label={club.team_type === "national" ? "Discuter de cette sélection" : "Discuter de ce club"} categorySlug="football-belge" /></div>
       {isAdmin && <div className="mb-5 rounded-2xl border border-amber-300/20 bg-amber-300/[0.05] p-4"><div className="flex flex-wrap items-center gap-3"><div className="min-w-0 flex-1"><div className="text-[10px] font-black uppercase tracking-[.18em] text-amber-200">Outil administrateur</div><p className="mt-1 text-xs leading-5 text-muted">« Synchroniser ce club » : matchs, effectif et entraîneur de la saison. « Actualiser les joueurs » : carrière et statistiques de chaque joueur de l’effectif, par lots.</p></div><button type="button" onClick={syncThisClub} disabled={careerBusy || !sport?.competition?.provider} className="inline-flex items-center gap-2 rounded-xl border border-accent/30 bg-accent/10 px-3 py-2 text-xs font-bold text-content disabled:opacity-50"><RefreshCw className={`h-4 w-4 ${careerBusy ? "animate-spin" : ""}`} />Synchroniser ce club</button><button type="button" onClick={refreshClubCareers} disabled={careerBusy || !sport?.competition?.provider} className="inline-flex items-center gap-2 rounded-xl border border-amber-300/25 bg-amber-300/10 px-3 py-2 text-xs font-bold text-amber-100 disabled:opacity-50"><RefreshCw className={`h-4 w-4 ${careerBusy ? "animate-spin" : ""}`} />Actualiser les joueurs du club</button></div>{careerStatus && <p className="mt-3 rounded-lg border border-line/10 bg-bg/35 px-3 py-2 text-xs text-muted">{careerStatus}</p>}</div>}
       <div className="sm:hidden">
         <div className="-mx-4 mb-3 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {visibleSections.map((section) => <button key={section.key} onClick={() => setMobileSection(section.key)} className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-bold transition ${activeMobileSection?.key === section.key ? "border-accent bg-accent/15 text-accent" : "border-line/15 bg-surface text-muted"}`}>{section.label}{counts[section.key] != null ? ` · ${counts[section.key]}` : ""}</button>)}
+          {visibleSections.map((section) => <button key={section.key} type="button" aria-pressed={activeMobileSection?.key === section.key} onClick={() => setMobileSection(section.key)} className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-bold transition ${activeMobileSection?.key === section.key ? "border-accent bg-accent/15 text-accent" : "border-line/15 bg-surface text-muted"}`}>{section.label}{counts[section.key] != null ? ` · ${counts[section.key]}` : ""}</button>)}
         </div>
         {activeMobileSection && <section className="overflow-hidden rounded-2xl border border-line/10 bg-surface"><div className="border-b border-line/10 px-4 py-3"><h2 className="font-black">{activeMobileSection.label}{counts[activeMobileSection.key] != null && <span className="ml-2 text-xs font-normal text-muted">({counts[activeMobileSection.key]})</span>}</h2></div><div className="p-4">{content[activeMobileSection.key]}</div></section>}
       </div>

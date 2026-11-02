@@ -1,10 +1,45 @@
+### 02/11/2026 — Compteur d’historiques de division
+
+- Le compteur additionne les joueurs complets dans l’instantané entier et les étapes terminées par le lot, y compris après son point d’arrêt. Une autre exécution peut rendre cet instantané temporairement en retard ; le compteur ne prouve pas l’absence d’erreurs de données. Les checkpoints et le budget ne changent pas.
+- Une ancienne exécution manuelle avait affiché 37 puis 22 joueurs, et une reprise ultérieure a été différée pour cause de concurrence. Ne pas la relancer en double ; vérifier son état réel avant toute intervention.
+
+### 2026-11-02 — ChatGPT — reprise des entraîneurs après échec
+
+- Diagnostic transmis par l’admin : le 28 octobre plusieurs jobs entraîneurs ont échoué sur le quota API ; l’ancien cron effaçait le lot de reprise et considérait l’échec comme une vérification hebdomadaire. Le cron conserve désormais le dernier lot confirmé et réessaie après 24 h, y compris les anciens états d’erreur. Les autres compétitions restent éligibles pendant l’attente.
+- L’API a également renvoyé le 2 novembre un mandat de Leko toujours ouvert à Gand (id 1153), tandis qu’une autre fiche Leko existe à Bruges (id 25726). Le simple rafraîchissement ne garantit pas une correction : identité et mandats doivent être vérifiés ; aucune fiche n’a été fusionnée ou corrigée en production par cette PR. Les dates des autres fiches et les erreurs du 28 octobre ne suffisent pas à attribuer chaque fiche obsolète à ces erreurs.
+- Aucun SQL ni appel API lancé par ce changement. La reprise automatique consommera des appels après déploiement ; une correction manuelle protégée et vérifiée peut rester nécessaire si le provider est inexact.
+
+- Le 02/11/2026, l’admin a confirmé dans Supabase trois fiches manuelles protégées : Vítor Bruno (Anderlecht), Rik De Mil (La Gantoise) et Mario Kohnen (Charleroi), établies après vérification sur les sites des clubs. Les fiches API précédentes restent en base. Les synchronisations ignorent ces trois clubs tant que la protection est active : suivre et modifier manuellement ces affectations en cas de changement.
+
 # BELFOOT — Passation technique
 
-## 02/11/2026 — Reprise et compteur d'historiques
+## 02/11/2026 — Statistiques de match
 
-- PR #98 fusionnée et déployée (`36a793e`) : lots du pipeline limités à 3 appels, échéance de route et timeout fournisseur. Le pipeline interrompu affichait 456/500 appels ; l'utilisateur l'a repris avec 1 000 appels supplémentaires et a vu 22/634, après 37/634 précédemment. Résultat final encore à vérifier.
-- Audit : le compteur ne comptait que les joueurs avant le point d'arrêt du lot, en oubliant les joueurs déjà complets après ce point ; la baisse affichée ne prouve pas une perte de données. Correctif dans une PR dédiée : compter tous les joueurs de l'instantané d'états, puis inclure les étapes acquittées pendant le passage. Instantané possiblement retardé en cas d'exécution concurrente ; aucune donnée de production modifiée.
-- PR #97 de fiche joueur reste en attente ; PR #96 Diego déployée, utilisateur confirme son apparition. Sa double nationalité belge et portugaise reste à vérifier sur sa fiche après éventuelle modification manuelle.
+- PR #104 : lignes plus compactes, chiffres et libellés plus lisibles, barres centrées cyan/rose et équipes identifiées. Les données manquantes restent distinctes des zéros. Rendu mobile et desktop à vérifier ; voir la PR pour la CI et le déploiement.
+- L'utilisateur signale plusieurs entraîneurs périmés en Pro League : Leko à Gand et Hasi à Anderlecht. Audit global à poursuivre ; pas de modification de données sur la base de ces seuls exemples.
+
+## 02/11/2026 — Collision de synchronisations d'historiques
+
+- Capture utilisateur : pipeline `jpl-history` en erreur « Ce job est déjà en cours pour cette sélection » à 1348/1545 appels ; carte cron 76/634 et quota observé environ 5923. État au moment de la capture, à recontrôler. Deux autres pipelines en erreur de budget insuffisant sont indépendants ; ne pas les relancer sans diagnostic.
+- Cause dans le code : l'index de job actif empêche bien les exécutions concurrentes mais une collision retourne une erreur ordinaire, interrompant le pipeline. PR proposée : code d'erreur typé et pause de 2 minutes pour division-history, avec plafond de 5 collisions consécutives et maintien du budget ; tests ciblés 84/84. Ne pas désactiver les verrous, ne pas créer de pipeline doublon ; vérifier avant reprise la cible, le budget restant et les tâches actives.
+- L'utilisateur souhaite des statistiques de match plus compactes et lisibles, inspirées de sa capture API-Football, sans copie ; Leko à Gand reste à diagnostiquer. PR #99 de compteur global encore en attente.
+
+## 02/11/2026 — Match Center
+
+- PR #102 : compositions et statistiques du direct actualisées via notifications et repli périodique, actualisation manuelle étendue, affichage prudent des données manquantes et événements sans équipe centrés. Vérifier en conditions réelles la couverture Realtime et la charge ; aucun appel API-Football depuis le navigateur. Voir la PR pour les vérifications et l'état du déploiement.
+- L'utilisateur souhaite ensuite une refonte visuelle de la fiche match et des couleurs ; cette PR ne la réalise pas.
+
+## 02/11/2026 — Fiche club
+
+- PR #101 : logo du club en filigrane, aperçu de saison conditionné aux sections administrables (classement calculé, effectif et année, prochain match programmé) ; test visuel à effectuer, CI et déploiement à consulter sur la PR.
+- L'utilisateur signale I. Leko à Gand ; une ancienne fiche API distincte (1153) reste liée à Gand alors qu'une autre est liée à Bruges. Recherche « De Mil » sans résultat selon l'utilisateur ; la synchronisation club n'a pas corrigé l'affichage. Rechercher la cause fournisseur et les journaux avant modification des données.
+
+## 02/11/2026 — Présentation des fiches joueurs
+
+- PR de présentation : navigation Vue d'ensemble / Statistiques / Parcours / Matchs ; portrait mobile légèrement plus compact. Elle inclut le correctif de la PR #97 : exclusion des matchs amicaux et doublons du résumé et indication de la saison. Aucun changement de synchronisation ou de données.
+- Tests ciblés 25/25 ; vérification visuelle mobile et ordinateur toujours nécessaire (aperçu local `sites-preview` incompatible avec l'option `--host` de Next.js). Voir PR pour CI et déploiement.
+- Historiques : l'utilisateur a repris le lot avec 1 000 appels additionnels et a observé 22/634 ; la PR #99 corrige le compteur partiel, son résultat en production reste à vérifier. La PR #98 est fusionnée et déployée (`36a793e`).
+- Diego Moreira apparaît désormais parmi les Belges à l'étranger selon l'utilisateur ; sa double nationalité belge et portugaise reste à contrôler sur sa fiche.
 
 ## 02/11/2026 — Timeout du rattrapage des historiques
 

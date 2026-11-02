@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { createFakeSupabase } from "../helpers/fakeSupabase";
 import { refreshSeasonFor, refreshTargets } from "@/lib/competitionRefresh";
+import { coachRefreshCandidate } from "@/lib/campaignRollover";
 
 // La vraie route du cron competition-refresh, sur un faux Supabase. runJob est
 // remplacé : on vérifie QUELS jobs seraient lancés, avec quelle saison.
@@ -124,6 +125,28 @@ describe("cron competition-refresh — toutes les compétitions visibles", () =>
 });
 
 describe("cron competition-refresh — entraîneurs chaque semaine", () => {
+  it("échec : conserver le dernier lot, temporiser 24 h puis reprendre", async () => {
+    state.db = seed({ competitions: [PRO], seasons: baseSeasons, plan: basePlan, coachState: { "c-144": { checkedAt: new Date(NOW - 8 * 24 * H).toISOString(), clubIndex: 4 } } });
+    state.detailResults["football.coaches"] = Promise.reject(new Error("quota épuisé"));
+    state.detailResults["football.coaches"].catch(() => {});
+    await tick();
+    const saved = state.db.rows("site_settings")[0].data.football_coach_refresh_state["c-144"];
+    expect(saved).toMatchObject({ clubIndex: 4, failedAt: new Date(NOW).toISOString(), error: "quota épuisé" });
+    expect(coachRefreshCandidate(["c-144"], { "c-144": saved }, NOW + 23 * H)).toBeNull();
+    expect(coachRefreshCandidate(["c-144"], { "c-144": saved }, NOW + 24 * H)).toBe("c-144");
+    state.detailResults = {}; state.runs = [];
+    vi.setSystemTime(NOW + 24 * H);
+    await tick();
+    expect(coachRuns()[0].resumeState.clubIndex).toBe(4);
+    expect(state.db.rows("site_settings")[0].data.football_coach_refresh_state["c-144"]).toMatchObject({ clubIndex: 0, checkedAt: new Date(NOW + 24 * H).toISOString() });
+    vi.setSystemTime(NOW);
+  });
+  it("anciennes erreurs : retry après 24 h ; une compétition en attente ne bloque pas les autres", () => {
+    const old = { error: "quota", checkedAt: new Date(NOW - 25 * H).toISOString(), clubIndex: 0 };
+    const recent = { error: "quota", failedAt: new Date(NOW - H).toISOString(), clubIndex: 4 };
+    expect(coachRefreshCandidate(["old"], { old }, NOW)).toBe("old");
+    expect(coachRefreshCandidate(["recent", "other"], { recent }, NOW)).toBe("other");
+  });
   // Constat du 27/10/2026 : « N. Hayen » restait l'entraîneur de Club Brugge,
   // les entraîneurs n'étant mis à jour que par un job manuel.
   it("compétition de clubs autorisée : entraîneurs vérifiés, date enregistrée ; sélections jamais", async () => {

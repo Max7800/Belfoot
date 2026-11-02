@@ -15,6 +15,7 @@ import DiscussButton from "@/components/forum/DiscussButton";
 import { eventDetailLabel, findMatchPlayer } from "@/lib/matchLineup";
 import { phaseLabel } from "@/lib/phaseLabels";
 import { repairMojibake } from "@/lib/mojibake";
+import { matchEventSide } from "@/lib/matchComparison";
 
 const eventIcon = (type) => ({ goal: "⚽", yellow: "🟨", red: "🟥", sub: "🔁" }[type] || "•");
 
@@ -27,7 +28,7 @@ function PlayerName({ name, playerId, rows, className = "" }) {
   return id ? <Link href={`/players/${id}`} className={`${className} hover:text-accent hover:underline`}>{name}</Link> : <span className={className}>{name}</span>;
 }
 
-function EventList({ events, players, clubs, homeId, rows = [], empty, limit }) {
+function EventList({ events, players, clubs, homeId, awayId, rows = [], empty, limit }) {
   const shown = limit ? events.slice(-limit).reverse() : events;
   if (!shown.length) return <p className="rounded-2xl border border-dashed border-line/15 p-5 text-center text-sm text-muted">{empty}</p>;
   return <div className="divide-y divide-line/10 overflow-hidden rounded-2xl border border-line/10 bg-surface/45">{shown.map((event, index) => {
@@ -46,13 +47,15 @@ function EventList({ events, players, clubs, homeId, rows = [], empty, limit }) 
       line = <>{player} ↓</>;
       if (assistLink) sub = <>{assistLink} ↑</>;
     }
-    const home = Boolean(event.club_id) && event.club_id === homeId;
+    const side = matchEventSide(event, homeId, awayId);
+    const home = side === "home";
     const minute = event.minute != null ? `${event.minute}${event.extra_minute ? `+${event.extra_minute}` : ""}’` : "";
     const fact = <span className={`flex min-w-0 items-start gap-2 ${home ? "flex-row-reverse text-right" : ""}`}>
       <span className="shrink-0">{/missed penalty/i.test(event.detail || "") ? "❌" : eventIcon(event.type)}</span>
       <span className="min-w-0"><span className="block truncate font-medium">{line}</span>{sub && <span className="block truncate text-xs text-muted">{sub}</span>}</span>
       {clubs[event.club_id]?.logo_url && <img src={clubs[event.club_id].logo_url} className="mt-0.5 h-4 w-4 shrink-0 object-contain sm:hidden" alt="" />}
     </span>;
+    if (!side) return <div key={event.id || index} className="flex items-center justify-center gap-2 px-3 py-2 text-sm"><span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-[11px] font-bold text-muted">{minute}</span>{fact}<span className="text-xs text-muted">Équipe non précisée</span></div>;
     return <div key={event.id || index} className="grid grid-cols-[1fr_3rem_1fr] items-center gap-2 px-3 py-2 text-sm">
       <div className="min-w-0">{home && fact}</div>
       <span className="justify-self-center rounded-full bg-white/[0.06] px-2 py-0.5 text-[11px] font-bold tabular-nums text-muted">{minute}</span>
@@ -76,6 +79,8 @@ export default function MatchPage() {
   const [lastUpdated, setLastUpdated] = useState(null);
   const [realtime, setRealtime] = useState("connecting");
   const eventRefreshTimer = useRef(null);
+  const detailRefreshTimer = useRef(null);
+  const lastDetailRefresh = useRef(0);
   const L = useLabels();
 
   const refreshScore = useCallback(async () => {
@@ -83,13 +88,35 @@ export default function MatchPage() {
     if (data) { setM(data); setLastUpdated(new Date()); }
   }, [id]);
   const refreshEvents = useCallback(async () => {
-    const { data } = await supabase.from("match_events").select("*").eq("match_id", id).order("minute", { ascending: true });
-    setEvents(data || []);
+    const { data, error } = await supabase.from("match_events").select("*").eq("match_id", id).order("minute", { ascending: true });
+    if (!error) setEvents(data || []);
+  }, [id]);
+  const refreshDetails = useCallback(async () => {
+    lastDetailRefresh.current = Date.now();
+    const [li, ps, ts, ca] = await Promise.all([
+      supabase.from("match_lineups").select("*").eq("match_id", id),
+      supabase.from("match_player_stats").select("*").eq("match_id", id),
+      supabase.from("match_team_stats").select("*").eq("match_id", id),
+      supabase.from("national_match_callups").select("*").eq("match_id", id),
+    ]);
+    if (!li.error) setLineups(li.data || []);
+    if (!ps.error) setMatchPlayerStats(ps.data || []);
+    if (!ts.error) setTeamStats(ts.data || []);
+    if (!ca.error) setCallups(ca.data || []);
+    const playerIds = [...new Set([...(ps.data || []).map((row) => row.player_id), ...(ca.data || []).map((row) => row.player_id)].filter(Boolean))];
+    if (playerIds.length) {
+      const { data, error } = await supabase.from("players").select("id,name,photo_url").in("id", playerIds);
+      if (!error) setPlayers((current) => ({ ...current, ...Object.fromEntries((data || []).map((player) => [player.id, player])) }));
+    }
   }, [id]);
   const scheduleEventRefresh = useCallback(() => {
     window.clearTimeout(eventRefreshTimer.current);
     eventRefreshTimer.current = window.setTimeout(refreshEvents, 250);
   }, [refreshEvents]);
+  const scheduleDetailRefresh = useCallback(() => {
+    window.clearTimeout(detailRefreshTimer.current);
+    detailRefreshTimer.current = window.setTimeout(refreshDetails, 500);
+  }, [refreshDetails]);
 
   useEffect(() => { (async () => {
     const { data: match } = await supabase.from("matches").select("*").eq("id", id).maybeSingle();
@@ -120,15 +147,18 @@ export default function MatchPage() {
         if (payload.new?.id) { setM(payload.new); setLastUpdated(new Date()); }
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "match_events", filter: `match_id=eq.${id}` }, scheduleEventRefresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "match_lineups", filter: `match_id=eq.${id}` }, scheduleDetailRefresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "match_player_stats", filter: `match_id=eq.${id}` }, scheduleDetailRefresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "match_team_stats", filter: `match_id=eq.${id}` }, scheduleDetailRefresh)
       .subscribe((status) => setRealtime(status === "SUBSCRIBED" ? "connected" : status === "CHANNEL_ERROR" || status === "TIMED_OUT" ? "fallback" : "connecting"));
-    return () => { window.clearTimeout(eventRefreshTimer.current); supabase.removeChannel(matchChannel); };
-  }, [id, scheduleEventRefresh]);
+    return () => { window.clearTimeout(eventRefreshTimer.current); window.clearTimeout(detailRefreshTimer.current); supabase.removeChannel(matchChannel); };
+  }, [id, scheduleEventRefresh, scheduleDetailRefresh]);
 
   useEffect(() => {
     if (!isMatchLive(m)) return undefined;
-    const timer = window.setInterval(() => { if (document.visibilityState === "visible") { refreshScore(); refreshEvents(); } }, 30000);
+    const timer = window.setInterval(() => { if (document.visibilityState === "visible") { refreshScore(); refreshEvents(); if (Date.now() - lastDetailRefresh.current >= 60000) refreshDetails(); } }, 30000);
     return () => window.clearInterval(timer);
-  }, [m, refreshEvents, refreshScore]);
+  }, [m, refreshEvents, refreshScore, refreshDetails]);
 
   const diableSquad = useMemo(() => {
     const nationalTeamId = Object.values(clubs).find((club) => club.team_type === "national" && club.national_followed && club.national_category === "senior" && (club.national_gender || "men") === "men")?.id;
@@ -167,17 +197,17 @@ export default function MatchPage() {
     </div>
 
     {(venue || referee) && <div className="mb-2 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-[11px] text-muted">{venue && <span className="inline-flex items-center gap-1"><MapPin size={12} />{venue}</span>}{referee && <span className="inline-flex items-center gap-1"><UserRound size={12} />{referee}</span>}</div>}
-    <div className="mb-5 flex flex-wrap items-center justify-center gap-2 text-[10px] text-muted"><span className={`h-1.5 w-1.5 rounded-full ${realtime === "connected" ? "bg-green-400" : realtime === "fallback" ? "bg-amber-400" : "bg-muted"}`} />{realtime === "connected" ? "Direct connecté" : realtime === "fallback" ? "Actualisation automatique" : "Connexion…"}{lastUpdated && <span>· {lastUpdated.toLocaleTimeString("fr-BE", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</span>}<button type="button" onClick={() => { refreshScore(); refreshEvents(); }} aria-label="Actualiser le match" className="rounded p-1 hover:bg-surface"><RefreshCw size={11} /></button><DiscussButton refType="match" refId={id} title={`Discussion : ${home.name || "?"} - ${away.name || "?"}`} label="Discuter" /></div>
+    <div className="mb-5 flex flex-wrap items-center justify-center gap-2 text-[10px] text-muted"><span className={`h-1.5 w-1.5 rounded-full ${realtime === "connected" ? "bg-green-400" : realtime === "fallback" ? "bg-amber-400" : "bg-muted"}`} />{status.live ? (realtime === "connected" ? "Connexion au direct active" : realtime === "fallback" ? "Actualisation automatique" : "Connexion au direct…") : "Informations du match"}{lastUpdated && <span>· Score consulté à {lastUpdated.toLocaleTimeString("fr-BE", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</span>}<button type="button" onClick={() => { refreshScore(); refreshEvents(); refreshDetails(); }} aria-label="Actualiser le match" className="rounded p-1 hover:bg-surface"><RefreshCw size={11} /></button><DiscussButton refType="match" refId={id} title={`Discussion : ${home.name || "?"} - ${away.name || "?"}`} label="Discuter" /></div>
 
     <nav className="mb-5 flex overflow-x-auto rounded-2xl border border-line/10 bg-surface/70" aria-label="Contenu du match">{tabs.map(([key, label, count, Icon]) => <button key={key} type="button" onClick={() => setActiveTab(key)} aria-current={activeTab === key ? "page" : undefined} className={`flex shrink-0 items-center gap-1.5 border-b-2 px-4 py-3 text-[11px] font-black uppercase tracking-[0.12em] transition sm:flex-1 sm:justify-center ${activeTab === key ? "border-accent bg-accent/10 text-accent" : "border-transparent text-muted hover:bg-white/[0.04] hover:text-content"}`}><Icon size={14} aria-hidden />{label}{count > 0 && <span className="rounded-full bg-white/[0.07] px-1.5 py-0.5 text-[9px] tracking-normal">{count}</span>}</button>)}</nav>
 
     {activeTab === "summary" && <div className="grid gap-5 lg:grid-cols-[1.1fr_.9fr]">
       <section><h2 className="mb-3 text-sm font-black uppercase tracking-wider">Le match en chiffres</h2><MatchTeamStats homeClub={home} awayClub={away} rows={teamStats} compact empty={emptyTeamStats} /></section>
-      <section><h2 className="mb-3 flex items-center gap-2 text-sm font-black uppercase tracking-wider">{status.live && <Radio size={14} className="text-red-400" />}Temps forts</h2><EventList events={events} players={players} clubs={clubs} homeId={m.home_club_id} rows={matchPlayerStats} empty={emptyEvents} limit={6} /></section>
+      <section><h2 className="mb-3 flex items-center gap-2 text-sm font-black uppercase tracking-wider">{status.live && <Radio size={14} className="text-red-400" />}Temps forts</h2><EventList events={events} players={players} clubs={clubs} homeId={m.home_club_id} awayId={m.away_club_id} rows={matchPlayerStats} empty={emptyEvents} limit={6} /></section>
       <div className="lg:col-span-2"><MatchLineups homeClub={home} awayClub={away} lineups={lineups} rows={matchPlayerStats} pitchOnly onOpen={() => setActiveTab("lineups")} labels={{ title: L("match.lineups", "Compositions"), open: "Voir les compositions complètes" }} /></div>
       {diableSquad.length > 0 && <section className="lg:col-span-2"><DiableRatings match={m} squad={diableSquad} title="Notes des Diables de ce match" /></section>}
     </div>}
-    {activeTab === "events" && <section><h2 className="mb-3 flex items-center gap-2 text-sm font-black uppercase tracking-wider">{status.live && <Radio size={14} className="text-red-400" />}{L("match.events", "Faits du match")}</h2><EventList events={events} players={players} clubs={clubs} homeId={m.home_club_id} rows={matchPlayerStats} empty={emptyEvents} /></section>}
+    {activeTab === "events" && <section><h2 className="mb-3 flex items-center gap-2 text-sm font-black uppercase tracking-wider">{status.live && <Radio size={14} className="text-red-400" />}{L("match.events", "Faits du match")}</h2><EventList events={events} players={players} clubs={clubs} homeId={m.home_club_id} awayId={m.away_club_id} rows={matchPlayerStats} empty={emptyEvents} /></section>}
     {activeTab === "lineups" && <section><div className="mb-3"><h2 className="text-lg font-black">{L("match.lineups", "Compositions")}</h2><p className="text-xs text-muted">{L("match.lineups.subtitle", "Titulaires, formations et remplaçants")}</p></div><MatchLineups homeClub={home} awayClub={away} lineups={lineups} rows={matchPlayerStats} labels={{ starters: L("match.starters", "Titulaires"), bench: L("match.bench", "Remplaçants"), formationEmpty: L("match.formation.empty", "Formation non renseignée"), startersEmpty: L("match.starters.empty", status.key === "scheduled" ? "Composition pas encore annoncée." : "Composition non disponible."), home: L("match.home", "Domicile"), away: L("match.away", "Extérieur") }} /></section>}
     {activeTab === "stats" && <section><h2 className="mb-3 text-lg font-black">Statistiques collectives</h2><MatchTeamStats homeClub={home} awayClub={away} rows={teamStats} empty={emptyTeamStats} /></section>}
     {activeTab === "players" && <section><div className="mb-3"><h2 className="text-lg font-black">Performances des joueurs</h2><p className="text-xs text-muted">Minutes, note et actions décisives enregistrées pour ce match.</p></div><MatchPlayerRatings homeClub={home} awayClub={away} rows={matchPlayerStats} /></section>}
