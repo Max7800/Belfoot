@@ -1,3 +1,8 @@
+### 02/11/2026 — Performances récentes des Belges : lecture bornée
+
+- PR empilée sur la PR #107 : la migration 0041 ajoute une fonction PostgreSQL SECURITY INVOKER limitée à 80 joueurs suivis et actifs, 5 matchs par joueur et 45 jours, dédoublonnés par match et sans sélections. L’index existant (player_id,match_id) sert au filtrage. Le client découpe les listes par 80 ; si la fonction est absente (PGRST202), repli sur l’ancienne requête de 500 lignes avec mention visible. Les autres erreurs sont remontées.
+- Le 02/11/2026, l’utilisateur a exécuté la migration 0041 dans Supabase et a confirmé « success ». L’utilisateur a ensuite confirmé en lecture seule que la fonction et son enregistrement existent tous deux (true, true) ; aucun appel API-Football ou synchronisation n’a été lancé par cette migration. En l’absence de migration, les données restent partielles. Tests réels PostgreSQL PGlite et repli client ; 934 tests locaux réussis sur cet environnement. Les temps d’exécution sur le volume réel et les politiques RLS production restent à vérifier avant généralisation.
+
 ### 02/11/2026 — Page Belges à l’étranger : première amélioration
 
 - Accès rapide à l’annuaire, filtres réinitialisables et cohérents, recherche sans accents, noms de pays avec tirets traduits, listes de ligues et profils repliées, compteurs masqués en chargement ou erreur. Les chargements de clubs en erreur ne sont plus silencieux. L’adversaire d’une performance est établi à partir du club de la performance et non du club actuel.
