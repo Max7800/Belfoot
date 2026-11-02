@@ -1,5 +1,11 @@
 # BELFOOT — Passation technique
 
+## 02/11/2026 — Timeout du rattrapage des historiques
+
+- L'utilisateur a observé 37/634 joueurs vérifiés, puis `FUNCTION_INVOCATION_TIMEOUT` sur le pipeline manuel Pro League à budget 500. L'état exact du pipeline et la réconciliation effective en production ne sont pas encore vérifiés. Le progrès durable par saison et les compteurs d'appels sont conçus pour permettre la reprise ; ne pas présumer que la dernière étape interrompue est terminée ni créer un doublon de pipeline.
+- Correctif proposé sur une PR séparée : chaque invocation du pipeline division-history a une échéance mesurée dès l'entrée de la route (25 s), 3 appels maximum par lot, délai fournisseur 6 s ; budget global conservé. Lot sans progrès faute de temps : reprise différée pour éviter une boucle rapide. Les délais DB et fournisseur peuvent encore dépasser les marges ; validation en production nécessaire après accord. Tests ciblés 23/23.
+- PR #97 de fiche joueur reste distincte. L'utilisateur a confirmé que Diego Moreira apparaît désormais parmi les Belges à l'étranger ; il précise aussi que Diego a les nationalités belge et portugaise (mise à jour de sa fiche non confirmée).
+
 ## 02/11/2026 — Diego Moreira
 
 - Diagnostic en base communiqué par l'utilisateur : `D. Moreira` (API 335056) actif et suivi, nationalité Portugal, sélection Belgique, club AC Milan ; naissance absente. L'annuaire écartait les joueurs sans nationalité/naissance/suivi binational belge AVANT de consulter leur sélection, et `belgianWatchStatus` rejetait également ces joueurs avant d'examiner l'équipe nationale.

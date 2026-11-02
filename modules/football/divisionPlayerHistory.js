@@ -27,7 +27,7 @@ export async function syncDivisionPlayerHistory(db, competition, ctx = {}) {
     for (const row of result.data || []) states.set(`${row.player_id}:${row.season}`, row);
   }
   const deadline = Number(ctx.deadline) || Date.now() + 35000;
-  const limit = Math.max(1, Number(ctx.requestLimit) || 10);
+  const limit = Math.min(Math.max(1, Number(ctx.requestLimit) || 10), Math.max(1, Number(ctx.maxHistoryRequestsPerRun) || Infinity));
   const count = () => Number(ctx.requestTracker?.count) || 0;
   let completed = 0;
   let work = 0;
@@ -70,6 +70,8 @@ export async function syncDivisionPlayerHistory(db, competition, ctx = {}) {
     complete: !stopped && !busy && !unresolved,
     detail: `${completed}/${players.length} joueur(s) vérifiés parmi les effectifs connus · ${work} étape(s) traitée(s)${busy - failed ? ` · ${busy - failed} joueur(s) en cours ailleurs` : ""}${failed ? ` · ${failed} joueur(s) en erreur, nouvelle tentative différée` : ""}${unresolved ? ` · ${unresolved} fiche(s) sans identifiant fournisseur compatible` : ""}`,
     progress: { current: completed, total: players.length, unit: "joueurs" },
-    meta: { waitForLease: (busy > 0 || unresolved > 0) && !stopped, retryAfter },
+    // Si les lectures préparatoires ont épuisé le temps disponible, ne pas
+    // enchaîner instantanément des lots vides : laisser un délai de reprise.
+    meta: { waitForLease: ((busy > 0 || unresolved > 0) && !stopped) || (stopped && work === 0 && count() === 0 && Date.now() >= deadline), retryAfter },
   };
 }
