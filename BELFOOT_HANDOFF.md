@@ -1,3 +1,8 @@
+### 02/11/2026 — Entraîneurs protégés dans l’administration
+
+- L’onglet Synchronisations liste les entraîneurs liés à un club dont la fiche est verrouillée, quelle que soit leur source. Ces clubs sont ignorés par le job automatique ; la protection ne prouve pas que le nom est à jour. Chargement paginé et erreur explicite, sans modification ni appel API-Football.
+- Audit des sources officielles : Genk Jess Thorup, Antwerp Marvin Compper, Saint-Trond Frédéric De Meyer, OH Louvain Timmy Simons, Cercle Bruges Lars Friis, Westerlo Issame Charaï. Les données du dernier relevé étaient anciennes ; aucune correction de ces six clubs n’est supposée effectuée par cette PR. Les trois corrections déjà confirmées (Anderlecht, Gand, Charleroi) sont protégées manuellement.
+
 ### 2026-11-02 — ChatGPT — reprise des entraîneurs après échec
 
 - Diagnostic transmis par l’admin : le 28 octobre plusieurs jobs entraîneurs ont échoué sur le quota API ; l’ancien cron effaçait le lot de reprise et considérait l’échec comme une vérification hebdomadaire. Le cron conserve désormais le dernier lot confirmé et réessaie après 24 h, y compris les anciens états d’erreur. Les autres compétitions restent éligibles pendant l’attente.
