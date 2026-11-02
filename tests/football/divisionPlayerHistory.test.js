@@ -51,6 +51,26 @@ const seed = () => {
 const run = (db, limit) => syncDivisionPlayerHistory(db, competition, { season: "2026-2027", now, requestLimit: limit, requestTracker: { count: 0 } });
 
 describe("historique de division par lots", () => {
+  it("limite les appels par invocation sans épuiser le budget global et reprend", async () => {
+    const db = seed();
+    const first = await syncDivisionPlayerHistory(db, competition, { season: "2026-2027", now, requestLimit: 500, maxHistoryRequestsPerRun: 2, requestTracker: { count: 0 } });
+    expect(first.complete).toBe(false);
+    expect(calls).toHaveLength(2);
+    calls = [];
+    const second = await syncDivisionPlayerHistory(db, competition, { season: "2026-2027", now, requestLimit: 498, maxHistoryRequestsPerRun: 2, requestTracker: { count: 0 } });
+    expect(second.complete).toBe(false);
+    expect(calls).toHaveLength(2);
+    calls = [];
+    const last = await syncDivisionPlayerHistory(db, competition, { season: "2026-2027", now, requestLimit: 496, maxHistoryRequestsPerRun: 2, requestTracker: { count: 0 } });
+    expect(last.complete).toBe(true);
+    expect(calls).toHaveLength(1);
+  });
+  it("diffère la reprise si la préparation a épuisé le temps sans appel", async () => {
+    const result = await syncDivisionPlayerHistory(seed(), competition, { season: "2026-2027", now, deadline: Date.now() - 1, requestLimit: 500, requestTracker: { count: 0 } });
+    expect(result.complete).toBe(false);
+    expect(result.meta.waitForLease).toBe(true);
+    expect(calls).toEqual([]);
+  });
   it("refuse les compétitions autres que la Pro League et l'absence de cible", async () => {
     const db = seed();
     db.rows("competitions").push({ id: "other", provider: "apifootball", external_id: "2" });

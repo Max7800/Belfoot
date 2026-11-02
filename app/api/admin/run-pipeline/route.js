@@ -50,6 +50,7 @@ async function reconcileFromAttempts(db, run) {
 }
 
 export async function POST(request) {
+  const invocationStartedAt = Date.now();
   const auth = await adminContext(request);
   if (auth.response) return auth.response;
   const input = await request.json().catch(() => ({}));
@@ -184,6 +185,9 @@ export async function POST(request) {
           matchCap: stepMatchCap,
           drain: pipeline.drainJobs?.includes(jobKey) || false,
           requestLimit: remaining,
+          // L'enveloppe globale peut être grande, mais chaque invocation reste
+          // courte et garde du temps pour persister le checkpoint.
+          ...(jobKey === "football.division-history" ? { deadline: invocationStartedAt + 25000, maxHistoryRequestsPerRun: 3, providerTimeoutMs: 6000 } : {}),
           pipelineRunId: pipelineRun.id,
           pipelineLeaseToken: leaseToken,
           pipelineStep: index,

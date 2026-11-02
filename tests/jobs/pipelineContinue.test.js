@@ -6,7 +6,7 @@ import { pickContinuableRun } from "@/lib/adminSync";
 // route cron ; runJob simulé (un lot = 3 appels).
 const state = vi.hoisted(() => ({ db: null, jobs: [], result: null }));
 vi.mock("@/lib/supabaseAdmin", () => ({ getAdmin: () => state.db }));
-vi.mock("@/lib/jobs", () => ({ runJob: async (key, ctx) => { state.jobs.push({ key, requestLimit: ctx.requestLimit, globalScope: ctx.globalScope }); return state.result; } }));
+vi.mock("@/lib/jobs", () => ({ runJob: async (key, ctx) => { state.jobs.push({ key, requestLimit: ctx.requestLimit, globalScope: ctx.globalScope, ...(key === "football.division-history" ? { deadline: ctx.deadline, maxHistoryRequestsPerRun: ctx.maxHistoryRequestsPerRun, providerTimeoutMs: ctx.providerTimeoutMs } : {}) }); return state.result; } }));
 const { GET } = await import("@/app/api/cron/pipeline-continue/route");
 const { POST: runPipeline } = await import("@/app/api/admin/run-pipeline/route");
 
@@ -90,6 +90,12 @@ describe("passage automatique", () => {
 
 describe("route des pipelines appelée avec le secret serveur", () => {
   const call = (body) => runPipeline(new Request("http://localhost/x", { method: "POST", headers: { authorization: `Bearer ${SECRET}` }, body: JSON.stringify(body) }));
+  it("borne chaque lot d'historiques sans réduire son budget global", async () => {
+    state.db = seed([run({ pipeline_key: "jpl-history", target_key: "league", steps: ["football.division-history"], request_count: 10, request_limit: 500, params: { auto_continue: true, competitionId: "league", season: "2026-2027" } })]);
+    expect((await call({ pipelineRunId: "r1", continuation: true })).status).toBe(200);
+    expect(state.jobs[0]).toMatchObject({ key: "football.division-history", requestLimit: 490, deadline: NOW + 25000, maxHistoryRequestsPerRun: 3, providerTimeoutMs: 6000 });
+    expect(row()).toMatchObject({ status: "paused", request_count: 13, request_limit: 500 });
+  });
   it("n'enchaîne pas immédiatement les requêtes quand une saison est déjà verrouillée", async () => {
     state.db = seed([run()]);
     state.result = { complete: false, requests: 0, progress: { current: 0, total: 1 }, meta: { waitForLease: true, retryAfter: new Date(NOW + 3600000).toISOString() } };
