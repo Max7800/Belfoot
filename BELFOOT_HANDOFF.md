@@ -1,3 +1,9 @@
+### 02/11/2026 — Page Belges à l’étranger : première amélioration
+
+- Accès rapide à l’annuaire, filtres réinitialisables et cohérents, recherche sans accents, noms de pays avec tirets traduits, listes de ligues et profils repliées, compteurs masqués en chargement ou erreur. Les chargements de clubs en erreur ne sont plus silencieux. L’adversaire d’une performance est établi à partir du club de la performance et non du club actuel.
+- La sélection « En forme » exige un match enregistré depuis moins de 45 jours et indique le nombre de matchs disponibles ; le Belge du moment précise la période. Les données peuvent rester partielles : la requête actuelle conserve son plafond global de 500 performances triées par date de synchronisation. Ne pas présenter ces classements comme exhaustifs. À traiter séparément : accès équitable et performant aux derniers matchs, dédoublonnage fiable des championnats et exclusion des coupes, refonte visuelle complète et validation mobile.
+- Aucun appel API-Football, changement de données, synchronisation ni migration. Trois fichiers de tests ciblés : 20 tests réussis ; ESLint sans erreur, avec avertissements existants sur les images.
+
 ### 2026-11-02 — ChatGPT — reprise des entraîneurs après échec
 
 - Diagnostic transmis par l’admin : le 28 octobre plusieurs jobs entraîneurs ont échoué sur le quota API ; l’ancien cron effaçait le lot de reprise et considérait l’échec comme une vérification hebdomadaire. Le cron conserve désormais le dernier lot confirmé et réessaie après 24 h, y compris les anciens états d’erreur. Les autres compétitions restent éligibles pendant l’attente.

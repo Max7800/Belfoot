@@ -41,8 +41,8 @@ describe("page Belges à l'étranger", () => {
 describe("en-tête de la page Belges", () => {
   const page = fs.readFileSync("app/belges-a-l-etranger/page.js", "utf8");
   it("Diables à l'étranger et « sous d'autres couleurs » comptés à côté des joueurs, pays et clubs", () => {
-    expect(page).toContain("{view.diables}</b>");
-    expect(page).toContain("{view.otherColors.length}</b>");
+    expect(page).toContain('data.loading || data.error ? "—" : view.diables');
+    expect(page).toContain('data.loading || data.error ? "—" : view.otherColors.length');
     expect(page).toContain('diables: enriched.filter((item) => item.watch === "belgium").length');
   });
 });
