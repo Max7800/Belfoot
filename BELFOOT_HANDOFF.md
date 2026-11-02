@@ -1,5 +1,11 @@
 # BELFOOT — Passation technique
 
+## 02/11/2026 — Aperçu de la fiche club
+
+- PR de présentation de la fiche club : aperçu conditionnel des sections autorisées (classement calculé, effectif connu et saison correspondante, prochain match programmé seulement). L'année de l'effectif reste explicite si elle diffère du contexte sportif ; aucun changement des synchronisations ni des réglages administrateur. Tests ciblés 8/8, lint sans erreur ; rendu mobile et ordinateur à contrôler.
+- PR #100 de navigation fiche joueur et PR #99 de compteur d'historiques en attente séparément ; la PR #100 inclut le correctif #97. CI et état de déploiement à consulter sur chaque PR.
+- PR #98 fusionnée et déployée (`36a793e`) ; rattrapage repris avec 1000 appels additionnels. Statut final et compteur global à vérifier.
+
 ## 02/11/2026 — Timeout du rattrapage des historiques
 
 - L'utilisateur a observé 37/634 joueurs vérifiés, puis `FUNCTION_INVOCATION_TIMEOUT` sur le pipeline manuel Pro League à budget 500. L'état exact du pipeline et la réconciliation effective en production ne sont pas encore vérifiés. Le progrès durable par saison et les compteurs d'appels sont conçus pour permettre la reprise ; ne pas présumer que la dernière étape interrompue est terminée ni créer un doublon de pipeline.
