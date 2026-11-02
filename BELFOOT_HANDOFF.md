@@ -4,6 +4,8 @@
 - L’API a également renvoyé le 2 novembre un mandat de Leko toujours ouvert à Gand (id 1153), tandis qu’une autre fiche Leko existe à Bruges (id 25726). Le simple rafraîchissement ne garantit pas une correction : identité et mandats doivent être vérifiés ; aucune fiche n’a été fusionnée ou corrigée en production par cette PR. Les dates des autres fiches et les erreurs du 28 octobre ne suffisent pas à attribuer chaque fiche obsolète à ces erreurs.
 - Aucun SQL ni appel API lancé par ce changement. La reprise automatique consommera des appels après déploiement ; une correction manuelle protégée et vérifiée peut rester nécessaire si le provider est inexact.
 
+- Le 02/11/2026, l’admin a confirmé dans Supabase trois fiches manuelles protégées : Vítor Bruno (Anderlecht), Rik De Mil (La Gantoise) et Mario Kohnen (Charleroi), établies après vérification sur les sites des clubs. Les fiches API précédentes restent en base. Les synchronisations ignorent ces trois clubs tant que la protection est active : suivre et modifier manuellement ces affectations en cas de changement.
+
 # BELFOOT — Passation technique
 
 ## 02/11/2026 — Statistiques de match
