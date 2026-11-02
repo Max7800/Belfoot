@@ -1,3 +1,5 @@
+- Retour Supabase du 02/11 : corrections manuelles protégées confirmées pour Lars Friis au Cercle Bruges et Frédéric De Meyer à Saint-Trond. Après synchronisation, Genk (Jess Thorup), Antwerp (Marvin Compper), OH Louvain (Timmy Simons) et Westerlo (I. Charaï) étaient corrects en source API et non protégés. Ne pas supposer qu’ils sont verrouillés ; les cinq clubs protégés doivent être revus manuellement en cas de changement.
+
 ### 02/11/2026 — Entraîneurs protégés dans l’administration
 
 - L’onglet Synchronisations liste les entraîneurs liés à un club dont la fiche est verrouillée, quelle que soit leur source. Ces clubs sont ignorés par le job automatique ; la protection ne prouve pas que le nom est à jour. Chargement paginé et erreur explicite, sans modification ni appel API-Football.
