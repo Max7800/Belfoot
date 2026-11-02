@@ -34,3 +34,6 @@ end $$;
 
 revoke all on function public.abroad_recent_performances(uuid[]) from public;
 grant execute on function public.abroad_recent_performances(uuid[]) to anon, authenticated;
+
+insert into public.schema_migrations (module, version)
+values ('football', '0041_abroad_recent_performances') on conflict do nothing;

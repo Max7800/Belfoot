@@ -8,6 +8,7 @@ const b = "00000000-0000-0000-0000-000000000002";
 beforeAll(async () => {
   db = new PGlite();
   await db.exec(`create role anon; create role authenticated;
+    create table schema_migrations (module text, version text, primary key(module,version));
     create table players (id uuid primary key, tracked boolean, active boolean);
     create table matches (id uuid primary key, kickoff timestamptz);
     create table clubs (id uuid primary key, team_type text);
@@ -39,5 +40,15 @@ describe("performances récentes en PostgreSQL", () => {
     const r = await db.query("select * from abroad_recent_performances($1::uuid[])", [[a]]);
     expect(r.rows.map((row) => row.goals)).toEqual([42,2,3,4,5]);
     expect(new Set(r.rows.map((row) => row.match_id)).size).toBe(5);
+  });
+  it("respecte les politiques de lecture du rôle appelant", async () => {
+    await db.exec(`grant select on players,matches,clubs,match_player_stats to anon;
+      alter table players enable row level security;
+      create policy deny_players on players for select to anon using (false);
+      set role anon;`);
+    try {
+      const r = await db.query("select * from abroad_recent_performances($1::uuid[])", [[a]]);
+      expect(r.rows).toEqual([]);
+    } finally { await db.exec("reset role"); }
   });
 });
