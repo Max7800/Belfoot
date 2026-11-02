@@ -25,6 +25,21 @@ const run = (db, ctx = {}) => playerCareersJob.run({ db, globalScope: true, apif
 afterEach(() => { vi.unstubAllGlobals(); calls.length = 0; });
 
 describe("Parcours des Belges à l'étranger (pipeline global)", () => {
+  it("un parcours déjà verrouillé reste en attente sans appel API ni fausse fin", async () => {
+    stubApi();
+    const db = seed([player("p-1", "101", { ext: { league_stats: {} } })]);
+    db.rows("player_history_work").push({ player_id: "p-1", season: 0, state: "running", lease_expires_at: new Date(Date.now() + 60000).toISOString() });
+    const result = await run(db);
+    expect(calls).toEqual([]);
+    expect(result).toMatchObject({ complete: false, progress: { current: 0 }, meta: { waitForLease: true } });
+  });
+  it("un lot avec une erreur ne se déclare pas réussi", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({ status: 200, ok: true, headers: { get: () => null }, text: async () => JSON.stringify({ response: [], errors: { parameters: "joueur inconnu" }, paging: {} }) })));
+    const db = seed([player("p-1", "101", { ext: { league_stats: {} } })]);
+    await expect(run(db)).rejects.toThrow(/joueur inconnu/);
+    expect(db.rows("players")[0].career_sync_status).toBe("error");
+    expect(db.rows("player_history_work").find((row) => row.player_id === "p-1" && row.season === 0).state).toBe("error");
+  });
   it("ne désactive pas une affectation existante pendant l'import d'un parcours", async () => {
     stubApi();
     const db = seed([player("p-1", "101", { ext: { league_stats: { league_id: 98 } } })]);

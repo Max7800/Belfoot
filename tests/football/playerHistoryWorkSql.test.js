@@ -36,7 +36,27 @@ describe("verrou et progression des historiques en PostgreSQL", () => {
   });
   it("ne donne pas accès aux utilisateurs anonymes ou authentifiés", async () => {
     expect(await scalar("select has_table_privilege('anon','public.player_history_work','SELECT') as ok")).toBe(false);
-    expect(await scalar("select has_function_privilege('authenticated','public.claim_player_history_work(uuid,integer,uuid)','EXECUTE') as ok")).toBe(false);
-    expect(await scalar("select has_function_privilege('service_role','public.claim_player_history_work(uuid,integer,uuid)','EXECUTE') as ok")).toBe(true);
+    expect(await scalar("select has_function_privilege('authenticated','public.claim_player_history_work(uuid,integer,uuid,boolean)','EXECUTE') as ok")).toBe(false);
+    expect(await scalar("select has_function_privilege('service_role','public.claim_player_history_work(uuid,integer,uuid,boolean)','EXECUTE') as ok")).toBe(true);
+  });
+  it("diffère une nouvelle tentative après une erreur sans marquer la saison complète", async () => {
+    expect(await scalar("select claim_player_history_work($1,2023,$2) as ok", [player, first])).toBe(true);
+    expect(await scalar("select finish_player_history_work($1,2023,$2,'erreur API') as ok", [player, first])).toBe(true);
+    expect(await scalar("select claim_player_history_work($1,2023,$2) as ok", [player, second])).toBe(false);
+    await db.exec("update player_history_work set lease_expires_at = now() - interval '1 second' where season = 2023");
+    expect(await scalar("select claim_player_history_work($1,2023,$2) as ok", [player, second])).toBe(true);
+  });
+  it("une actualisation forcée respecte le verrou et un jeton est obligatoire", async () => {
+    expect(await scalar("select claim_player_history_work($1,2024,$2,true) as ok", [player, first])).toBe(true);
+    expect(await scalar("select claim_player_history_work($1,2024,$2,true) as ok", [player, second])).toBe(false);
+    expect(await scalar("select finish_player_history_work($1,2024,$2) as ok", [player, first])).toBe(true);
+    await expect(db.query("select claim_player_history_work($1,2020,null)", [player])).rejects.toThrow(/jeton/);
+  });
+  it("met à jour seulement les métadonnées historiques en conservant les autres données", async () => {
+    await db.query("update players set ext = $2::jsonb where id = $1", [player, JSON.stringify({ league_stats: { league_id: 39 }, career_stats_seasons: { 2022: "ancien" } })]);
+    expect(await scalar("select patch_player_history_metadata($1,$2::jsonb) as ok", [player, JSON.stringify({ career_stats_seasons: { 2023: "nouveau" } })])).toBe(true);
+    const { ext } = (await db.query("select ext from players where id = $1", [player])).rows[0];
+    expect(ext).toEqual({ league_stats: { league_id: 39 }, career_stats_seasons: { 2022: "ancien", 2023: "nouveau" } });
+    await expect(db.query("select patch_player_history_metadata($1,$2::jsonb)", [player, JSON.stringify({ league_stats: null })])).rejects.toThrow();
   });
 });

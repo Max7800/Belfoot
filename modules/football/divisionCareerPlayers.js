@@ -28,6 +28,6 @@ export async function loadDivisionCareerPlayers(db, competition, season) {
 }
 
 export function pendingDivisionCareerPlayers(players, refreshBefore) {
-  return players.filter((player) => !player.career_synced_at || (refreshBefore && player.career_synced_at < refreshBefore))
+  return players.filter((player) => !player.career_synced_at || ["error", "running"].includes(player.career_sync_status) || (refreshBefore && player.career_synced_at < refreshBefore))
     .sort((a, b) => String(a.career_synced_at || "").localeCompare(String(b.career_synced_at || "")) || String(a.id).localeCompare(String(b.id)));
 }

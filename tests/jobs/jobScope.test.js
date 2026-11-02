@@ -17,7 +17,7 @@ const { GET: legacyJobRoute } = await import("@/app/api/jobs/[key]/route");
 const P = "apifootball";
 const SEASON = "2025-2026";
 const T0 = new Date("2026-10-13T10:00:00Z").getTime();
-const MIGRATIONS = ["0004_job_execution_guardrails", "0005_persistent_pipeline_runs", "0023_season_safe_sync", "0024_player_team_seasons", "0028_followed_national_teams", "0033_history_foundations", "0034_match_sync_state", "0035_match_team_stats", "0036_competition_scope", "0037_player_transfers", "0038_player_national_team", "0026_match_center_live", "0032_season_rollout"].map((version) => ({ module: /^000[45]/.test(version) ? "core" : "football", version }));
+const MIGRATIONS = ["0004_job_execution_guardrails", "0005_persistent_pipeline_runs", "0023_season_safe_sync", "0024_player_team_seasons", "0028_followed_national_teams", "0033_history_foundations", "0040_player_history_work", "0034_match_sync_state", "0035_match_team_stats", "0036_competition_scope", "0037_player_transfers", "0038_player_national_team", "0026_match_center_live", "0032_season_rollout"].map((version) => ({ module: /^000[45]/.test(version) ? "core" : "football", version }));
 const PLAN = { version: 4, seasons: [{ label: SEASON, enabled: true }], competitions: Object.fromEntries(["c-1", "c-2"].map((id) => [id, { enabled: true, expected_clubs: 0, expected_matches: 0, seasons: { [SEASON]: { enabled: true, scope: "complete", expected_clubs: 0, expected_matches: 0 } } }])), nationalTeams: {} };
 
 // Tout appel au fournisseur est compté : un refus ne doit en déclencher AUCUN.

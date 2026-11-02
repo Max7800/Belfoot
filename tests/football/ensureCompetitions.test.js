@@ -301,7 +301,7 @@ describe("syncPlayerCareers — collision : écritures réelles, joueur en erreu
     expect(db.rows("players")[0].career_sync_status).toBe("error");
   });
 
-  it("groupé : le joueur en collision est en erreur, les autres sont traités ; le lot n'échoue pas mais signale la collision", async () => {
+  it("groupé : le joueur en collision reste à reprendre, les autres sont traités", async () => {
     const db = createFakeSupabase({
       competitions: [base(), ...ambiguous307()],
       seasons: [{ id: "league-season", competition_id: "c-144", label: "2026-2027" }],
@@ -322,10 +322,8 @@ describe("syncPlayerCareers — collision : écritures réelles, joueur en erreu
     expect(db.rows("player_season_stats")).toEqual([expect.objectContaining({ player_id: "p-b", competition_id: created301.id })]);
     expect(result.detail).toContain("1 erreur(s) dont 1 collision(s) de compétitions");
     expect(result.detail).toContain("Joueur 5001: statistiques de saison non enregistrées");
-    // Choix assumé : une erreur individuelle ne fait pas échouer tout le lot
-    // (comportement existant pour toutes les erreurs de joueur) ; elle reste visible
-    // dans le détail du job et sur la fiche (career_sync_status = error).
-    expect(result.complete).toBe(true);
+    // Le lot ne doit pas annoncer une division à jour après une erreur.
+    expect(result.complete).toBe(false);
   });
 
   it("homonymes non ambigus : chaque statistique va dans la bonne « Pro League » (non-régression)", async () => {

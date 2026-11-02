@@ -12,7 +12,7 @@ const P = "apifootball";
 const T0 = new Date("2026-10-12T10:00:00Z").getTime();
 const SEASON = "2025-2026";
 const C1 = "c-1";
-const MIGRATIONS = ["0004_job_execution_guardrails", "0023_season_safe_sync", "0024_player_team_seasons", "0033_history_foundations", "0034_match_sync_state", "0035_match_team_stats"].map((version) => ({ module: version.startsWith("0004") ? "core" : "football", version }));
+const MIGRATIONS = ["0004_job_execution_guardrails", "0023_season_safe_sync", "0024_player_team_seasons", "0033_history_foundations", "0040_player_history_work", "0034_match_sync_state", "0035_match_team_stats"].map((version) => ({ module: version.startsWith("0004") ? "core" : "football", version }));
 const PLAN = { version: 4, seasons: [{ label: SEASON, enabled: true }], competitions: { [C1]: { enabled: true, expected_clubs: 2, expected_matches: 1, seasons: { [SEASON]: { enabled: true, scope: "complete", expected_clubs: 2, expected_matches: 1 } } } }, nationalTeams: {} };
 
 function deferred() {

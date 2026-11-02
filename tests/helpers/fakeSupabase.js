@@ -236,7 +236,30 @@ export function createFakeSupabase(seed = {}, { maxRows = 1000, rpc = {}, unique
     rpcCalls,
     async rpc(name, args) {
       rpcCalls.push({ name, args });
-      return rpc[name] ? rpc[name](args) : { data: null, error: null };
+      if (rpc[name]) return rpc[name](args);
+      if (name === "claim_player_history_work") {
+        let row = table("player_history_work").find((item) => item.player_id === args.p_player && item.season === args.p_season);
+        const unavailable = (row?.state === "done" && !args.p_force) || (row?.lease_expires_at && Date.parse(row.lease_expires_at) > Date.now());
+        if (unavailable) return { data: false, error: null };
+        if (!row) { row = { player_id: args.p_player, season: args.p_season }; table("player_history_work").push(row); }
+        Object.assign(row, { state: "running", lease_token: args.p_token, lease_expires_at: new Date(Date.now() + 300000).toISOString() });
+        return { data: true, error: null };
+      }
+      if (name === "finish_player_history_work") {
+        const row = table("player_history_work").find((item) => item.player_id === args.p_player && item.season === args.p_season && item.state === "running" && item.lease_token === args.p_token && Date.parse(item.lease_expires_at) > Date.now());
+        if (!row) return { data: false, error: null };
+        Object.assign(row, { state: args.p_error ? "error" : "done", lease_token: null, lease_expires_at: args.p_error ? new Date(Date.now() + 7200000).toISOString() : null });
+        return { data: true, error: null };
+      }
+      if (name === "patch_player_history_metadata") {
+        const player = table("players").find((item) => item.id === args.p_player);
+        if (!player) return { data: false, error: null };
+        const ext = player.ext || {};
+        const patch = args.p_patch || {};
+        player.ext = { ...ext, ...patch, career_stats_seasons: { ...(ext.career_stats_seasons || {}), ...(patch.career_stats_seasons || {}) } };
+        return { data: true, error: null };
+      }
+      return { data: null, error: null };
     },
   };
 }

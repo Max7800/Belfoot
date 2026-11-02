@@ -6,6 +6,7 @@ import { isNationName } from "@/lib/frenchNations";
 import { classifyNationalTeams } from "./nationalClassification";
 import { isLeaseLost } from "@/lib/runLease";
 import { loadDivisionCareerPlayers, pendingDivisionCareerPlayers } from "./divisionCareerPlayers";
+import { claimHistoryWork, finishHistoryWork, patchHistoryMetadata, HistoryBusyError } from "./playerHistoryWork";
 
 // Sélection : indicateur de l'API, ou nom exact d'un pays (« Japan », « Brazil
 // U17 ») — l'historique de carrière ne fournit pas toujours l'indicateur, et
@@ -30,9 +31,20 @@ function inferredTeamType(name, national = false) {
 // Statistiques d'une saison (ctx.season) toutes compétitions d'un joueur : clubs,
 // compétitions et saisons créés au besoin, affectations, lignes de stats (une
 // ligne verrouillée n'est jamais modifiée). Renvoie le nombre de lignes écrites.
-export async function syncCareerSeasonStats(db, provider, competition, player, ctx = {}) {
+async function syncCareerSeasonStatsUnlocked(db, provider, competition, player, ctx = {}) {
   let statLines = 0;
-  const seasonStats = await provider.fetchPlayerCareerSeason(player, ctx);
+  const fetchedStats = await provider.fetchPlayerCareerSeason(player, ctx);
+  // Certaines réponses contiennent plusieurs lignes pour le même club et la
+  // même compétition. Une seule ligne peut être stockée pour cette clé ; on
+  // conserve la plus complète sans additionner artificiellement les chiffres.
+  const uniqueStats = new Map();
+  for (const row of fetchedStats) {
+    const key = `${row.team?.external_id}:${row.competition?.external_id}`;
+    const previous = uniqueStats.get(key);
+    const rank = (item) => Number(item?.stats?.minutes || 0) * 1000 + Number(item?.stats?.appearances || 0);
+    if (!previous || rank(row) > rank(previous)) uniqueStats.set(key, row);
+  }
+  const seasonStats = [...uniqueStats.values()];
   await ensureExternalReferences(db, "clubs", competition.provider, seasonStats.map((row) => ({
     external_id: row.team.external_id,
     name: row.team.name,
@@ -126,6 +138,25 @@ export async function syncCareerSeasonStats(db, provider, competition, player, c
   return statLines;
 }
 
+export async function syncCareerSeasonStats(db, provider, competition, player, ctx = {}) {
+  const season = Number(String(ctx.season || "").match(/\d{4}/)?.[0]);
+  const ownsLease = ctx.historyLease?.playerId === player.id && ctx.historyLease?.season === season;
+  if (!ctx.historyWork || ownsLease) return syncCareerSeasonStatsUnlocked(db, provider, competition, player, ctx);
+  if (!season) throw new Error("Saison requise pour les statistiques de carrière");
+  const claim = await claimHistoryWork(db, player.id, season, { force: ctx.historyForceSeason === true });
+  if (claim.state === "done") return 0;
+  if (claim.state === "busy" || claim.state === "error") throw new HistoryBusyError();
+  try {
+    const result = await syncCareerSeasonStatsUnlocked(db, provider, competition, player, ctx);
+    await finishHistoryWork(db, player.id, season, claim.token);
+    return result;
+  } catch (error) {
+    if (isLeaseLost(error)) throw error;
+    await finishHistoryWork(db, player.id, season, claim.token, String(error?.message || error));
+    throw error;
+  }
+}
+
 export async function syncPlayerCareers(db, competition, ctx = {}) {
   const provider = getProvider(competition.provider);
   if (!provider?.fetchPlayerCareer) throw new Error(`${competition.name}: historiques de carrière non supportés`);
@@ -144,7 +175,7 @@ export async function syncPlayerCareers(db, competition, ctx = {}) {
   } else if (abroad) {
     playersQuery = playersQuery.eq("tracked", true).eq("active", true).not("ext->league_stats", "is", null);
     // Suivi automatique : seulement les Belges jamais traités (pas de rafraîchissement sans fin).
-    if (ctx.onlyMissing) playersQuery = playersQuery.is("career_synced_at", null);
+    if (ctx.onlyMissing) playersQuery = playersQuery.or("career_synced_at.is.null,career_sync_status.eq.error,career_sync_status.eq.running");
     if (ctx.refreshBefore) playersQuery = playersQuery.or(`career_synced_at.is.null,career_synced_at.lt.${ctx.refreshBefore}`);
   } else {
     const division = await loadDivisionCareerPlayers(db, competition, ctx.season);
@@ -160,10 +191,27 @@ export async function syncPlayerCareers(db, competition, ctx = {}) {
   let statLines = 0;
   const errors = [];
   let collisions = 0;
+  let waiting = 0;
+  let retryAfter = null;
+  let processed = 0;
   for (const player of players) {
-    const started = await db.from("players").update({ career_sync_status: "running" }).eq("id", player.id);
-    if (started.error) throw started.error;
+    const ownsCareer = ctx.historyLease?.playerId === player.id && ctx.historyLease?.season === 0;
+    const careerClaim = ctx.historyWork && !ownsCareer ? await claimHistoryWork(db, player.id, 0, { force: !ctx.onlyMissing }) : null;
+    if (careerClaim?.state === "busy" || careerClaim?.state === "error") {
+      if (targeted) throw new HistoryBusyError();
+      waiting++;
+      if (careerClaim.retryAfter && (!retryAfter || careerClaim.retryAfter < retryAfter)) retryAfter = careerClaim.retryAfter;
+      continue;
+    }
+    if (careerClaim?.state === "done") {
+      const repaired = await db.from("players").update({ career_sync_status: "ok", career_synced_at: new Date().toISOString() }).eq("id", player.id);
+      if (repaired.error) throw repaired.error;
+      processed++;
+      continue;
+    }
     try {
+      const started = await db.from("players").update({ career_sync_status: "running" }).eq("id", player.id);
+      if (started.error) throw started.error;
       const history = await provider.fetchPlayerCareer(player, ctx);
       await ensureExternalReferences(db, "clubs", competition.provider, history.map((row) => ({
         external_id: row.team.external_id,
@@ -199,18 +247,30 @@ export async function syncPlayerCareers(db, competition, ctx = {}) {
         });
         memberships++;
       }
-      if (ctx.includeCareerStats && provider.fetchPlayerCareerSeason) statLines += await syncCareerSeasonStats(db, provider, competition, player, ctx);
+      if (ctx.includeCareerStats && provider.fetchPlayerCareerSeason) statLines += await syncCareerSeasonStats(db, provider, competition, player, { ...ctx, historyForceSeason: true });
       const completedAt = new Date().toISOString();
       const seasonKey = String(ctx.season || "").match(/\d{4}/)?.[0];
-      const completedExt = ctx.includeCareerStats && seasonKey
+      const completedExt = !ctx.historyWork && ctx.includeCareerStats && seasonKey
         ? { ...(player.ext || {}), career_stats_seasons: { ...(player.ext?.career_stats_seasons || {}), [seasonKey]: completedAt } }
         : null;
       const saved = await db.from("players").update({ career_sync_status: "ok", career_synced_at: completedAt, ...(completedExt ? { ext: completedExt } : {}) }).eq("id", player.id);
       if (saved.error) throw saved.error;
+      if (ctx.historyWork && ctx.includeCareerStats && seasonKey) await patchHistoryMetadata(db, player.id, { career_stats_seasons: { [seasonKey]: completedAt } });
+      if (careerClaim) await finishHistoryWork(db, player.id, 0, careerClaim.token);
+      processed++;
     } catch (error) {
       // Perte de bail : arrêt immédiat du lot, sans marquer ce joueur ni les suivants.
       if (isLeaseLost(error)) throw error;
-      const failed = await db.from("players").update({ career_sync_status: "error", career_synced_at: new Date().toISOString() }).eq("id", player.id);
+      if (error instanceof HistoryBusyError) {
+        // Le parcours vient de réussir ; seule la saison est déjà occupée.
+        const saved = await db.from("players").update({ career_sync_status: "ok", career_synced_at: new Date().toISOString() }).eq("id", player.id);
+        if (saved.error) throw saved.error;
+        if (careerClaim) await finishHistoryWork(db, player.id, 0, careerClaim.token);
+        throw error;
+      }
+      if (careerClaim) await finishHistoryWork(db, player.id, 0, careerClaim.token, String(error?.message || error));
+      // Une tentative échouée ne doit pas ressembler à une mise à jour réussie.
+      const failed = await db.from("players").update({ career_sync_status: "error" }).eq("id", player.id);
       if (failed.error) throw failed.error;
       // Collision : l'historique de carrière et les références de clubs de ce
       // joueur sont déjà écrits (indépendants de la compétition) ; seules ses
@@ -224,15 +284,18 @@ export async function syncPlayerCareers(db, competition, ctx = {}) {
     }
   }
   if (targeted && errors.length) throw new Error(errors.join("; "));
-  const detail = `${competition.name}: ${players.length} carrière(s), ${memberships} affectation(s) historiques${ctx.includeCareerStats ? ` · ${statLines} ligne(s) statistique(s) toutes compétitions` : ""}${errors.length ? ` · ${errors.length} erreur(s)${collisions ? ` dont ${collisions} collision(s) de compétitions` : ""}: ${errors.join("; ")}` : ""}`;
+  const detail = `${competition.name}: ${processed} carrière(s), ${memberships} affectation(s) historiques${ctx.includeCareerStats ? ` · ${statLines} ligne(s) statistique(s) toutes compétitions` : ""}${waiting ? ` · ${waiting} joueur(s) en attente de reprise` : ""}${errors.length ? ` · ${errors.length} erreur(s)${collisions ? ` dont ${collisions} collision(s) de compétitions` : ""}: ${errors.join("; ")}` : ""}`;
+  if (ctx.historyWork && errors.length) throw new Error(detail);
   if (targeted) return detail;
   // Lot : on signale l'avancement pour qu'un pipeline draine tous les joueurs de la
   // division (terminé quand plus aucun joueur n'a d'historique manquant).
-  let remaining = divisionPending ? Math.max(0, divisionPending.length - players.length) : 0;
+  let remaining = divisionPending ? Math.max(0, divisionPending.length - processed) : 0;
   if (abroad) {
     let remainingQuery = db.from("players").select("id", { count: "exact", head: true })
-      .eq("tracked", true).eq("active", true).not("ext->league_stats", "is", null);
-    remainingQuery = ctx.refreshBefore
+      .eq("tracked", true).eq("active", true).eq("source", competition.provider).not("external_id", "is", null).not("ext->league_stats", "is", null);
+    remainingQuery = ctx.onlyMissing
+      ? remainingQuery.or("career_synced_at.is.null,career_sync_status.eq.error,career_sync_status.eq.running")
+      : ctx.refreshBefore
       ? remainingQuery.or(`career_synced_at.is.null,career_synced_at.lt.${ctx.refreshBefore}`)
       : remainingQuery.is("career_synced_at", null);
     const result = await remainingQuery;
@@ -242,7 +305,8 @@ export async function syncPlayerCareers(db, competition, ctx = {}) {
   const left = remaining || 0;
   return {
     detail: `${detail}${left ? ` · ${left} joueur(s) restant(s)` : abroad ? " · parcours à jour" : " · division à jour"}`,
-    complete: left === 0,
-    progress: { current: players.length, total: left + players.length, unit: "joueurs" },
+    complete: left === 0 && waiting === 0,
+    progress: { current: processed, total: left + processed, unit: "joueurs" },
+    meta: { waitForLease: waiting > 0 && processed === 0, retryAfter },
   };
 }

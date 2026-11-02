@@ -12,7 +12,7 @@ describe("rangement des actions", () => {
   it("actions courantes : mise en place, compléter, mercato, balayage + campagne et vérification", () => {
     expect(sections.common.pipelines.map((p) => p.key)).toEqual(COMMON_PIPELINES);
     expect(sections.common.jobs).toEqual(["football.campaign-rollover", "football.league-check"]);
-    expect(sections.catchup.map((p) => p.key)).toEqual(["belgian-careers", "belgian-season-stats", "careers-division"]);
+    expect(sections.catchup.map((p) => p.key)).toEqual(["belgian-careers", "belgian-season-stats", "careers-division", "jpl-history"]);
   });
   it("chaque pipeline et chaque job a une seule place ; rien ne disparaît", () => {
     const placed = [...sections.common.pipelines, ...sections.catchup, ...sections.advanced.pipelines].map((p) => p.key);

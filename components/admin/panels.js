@@ -128,13 +128,15 @@ export function JobsPanel() {
   const togglePanel = (key) => setOpenPanels((current) => { const next = new Set(current); if (next.has(key)) next.delete(key); else next.add(key); return next; });
   const sections = syncSections();
   const load = async () => {
-    const [jobResult, pipelineResult] = await Promise.all([
+    const [jobResult, pipelineResult, settingsResult] = await Promise.all([
       supabase.from("job_runs").select("*").order("started_at", { ascending: false }).limit(30),
       // Assez d'historique pour savoir si une exécution plus récente a réussi.
       supabase.from("pipeline_runs").select(PIPELINE_RUN_PUBLIC_COLUMNS).order("started_at", { ascending: false }).limit(60),
+      supabase.from("site_settings").select("data").eq("id", 1).maybeSingle(),
     ]);
     setRows(jobResult.data || []);
     setPipelineRuns(pipelineResult.data || []);
+    if (settingsResult.data) setSettingsData(settingsResult.data.data || {});
   };
   useEffect(() => {
     load();
@@ -216,6 +218,16 @@ export function JobsPanel() {
     load();
   };
   const TONE = { ok: "border-emerald-400/25 bg-emerald-400/5 text-emerald-200", warn: "border-amber-400/30 bg-amber-400/5 text-amber-200", error: "border-red-400/30 bg-red-500/10 text-red-200" };
+  const setHistoryAuto = async (enabled) => {
+    if (enabled && !window.confirm("Activer les historiques automatiques Pro League et le complément des cinq saisons des Belges à l'étranger ? Chaque passage Pro League utilise jusqu'à 5 appels pour les historiques et, pendant la vérification hebdomadaire des effectifs, jusqu'à 4 appels supplémentaires. L'installation de la tâche planifiée est nécessaire.")) return;
+    setBusy("history-auto");
+    try {
+      await updateSiteSettings(supabase, { football_jpl_history_enabled: enabled }, { expected: { football_jpl_history_enabled: settingsData.football_jpl_history_enabled } });
+      setSettingsData((current) => ({ ...current, football_jpl_history_enabled: enabled }));
+      setMsg(enabled ? "✓ Historiques automatiques activés." : "✓ Historiques automatiques désactivés.");
+    } catch (error) { setMsg(`✗ Réglage impossible : ${error.message}`); }
+    setBusy(null);
+  };
   const pipelineRow = (p) => <div key={p.key} className="flex flex-wrap items-center gap-2 py-1.5">
     <button disabled={!!busy || (!compId && !p.globalScope)} onClick={() => runPipeline(p)} title={p.jobs.map((j) => JOB_CATALOG[j]?.label || j).join(" → ")} className="rounded-lg border border-accent/30 bg-accent/10 px-3 py-1.5 text-sm font-bold text-accent disabled:opacity-50">{p.label}{busy === p.key ? " …" : ""}</button>
     {!p.globalScope && <button disabled={!!busy || !compId} onClick={() => simulate(p)} className="rounded-lg border border-line/20 px-2 py-1.5 text-xs text-muted hover:border-accent/40 disabled:opacity-50">Simuler</button>}
@@ -233,6 +245,7 @@ export function JobsPanel() {
     <section className="mb-4">
       <div className="mb-2 text-xs font-black uppercase tracking-wider text-muted">Santé des automatismes</div>
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{healthItems(settingsData, rows).map((item) => <div key={item.key} className={`rounded-xl border px-3 py-2 text-xs ${TONE[item.status]}`}><b className="block text-[13px] text-content">{item.status === "ok" ? "✓" : item.status === "warn" ? "⚠" : "✗"} {item.label}</b><span className="mt-0.5 block leading-4">{item.detail}</span></div>)}</div>
+      <button disabled={!!busy} onClick={() => setHistoryAuto(settingsData.football_jpl_history_enabled !== true)} className="mt-2 rounded-lg border border-line/20 px-3 py-1.5 text-xs font-bold disabled:opacity-50">{settingsData.football_jpl_history_enabled === true ? "Désactiver" : "Activer"} les historiques automatiques Pro League</button>
     </section>
 
     <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-line/10 bg-surface/60 p-3">

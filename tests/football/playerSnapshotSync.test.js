@@ -96,7 +96,7 @@ describe("P0-3 — cron des coupes d'Europe", () => {
     const db = seedDb();
     await syncSquads(db, { ...EREDIVISIE }, { season: String(YEAR - 1) });
     expect(player(db, "p-mokio")).toMatchObject({ club_id: "club-ajax" });
-    expect(db.rows("player_team_seasons").find((row) => row.player_id === "p-mokio" && row.club_id === "club-psv")).toMatchObject({ season: String(YEAR - 1) });
+    expect(db.rows("player_team_seasons").find((row) => row.player_id === "p-mokio" && row.club_id === "club-psv")).toMatchObject({ season: `${YEAR - 1}-${YEAR}` });
   });
 
   it("la découverte des Belges sur une coupe d'Europe respecte la même règle", async () => {

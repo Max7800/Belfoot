@@ -26,5 +26,6 @@ describe("joueurs d'une division et d'une saison", () => {
   it("reprend uniquement les joueurs non traités depuis le début de la passe", () => {
     const players = [{ id: "a", career_synced_at: "2026-10-02" }, { id: "b", career_synced_at: null }, { id: "c", career_synced_at: "2026-10-04" }];
     expect(pendingDivisionCareerPlayers(players, "2026-10-03").map((p) => p.id)).toEqual(["b", "a"]);
+    expect(pendingDivisionCareerPlayers([{ id: "d", career_synced_at: "2026-10-04", career_sync_status: "error" }], "2026-10-03").map((p) => p.id)).toEqual(["d"]);
   });
 });

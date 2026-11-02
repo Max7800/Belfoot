@@ -1,5 +1,14 @@
 # BELFOOT — Passation technique
 
+## Historiques automatiques Pro League — PR en préparation (01/11/2026)
+
+- Périmètre : joueurs de la Pro League API-Football 144 de la saison publique, toutes nationalités, y compris les joueurs transférés pendant la saison. Les affectations `player_team_seasons` sont dédupliquées ; effectifs absents, fiches sans identifiant et clubs incomplets restent signalés.
+- Parcours en club puis cinq saisons précédant la saison courante, toutes compétitions fournies par le fournisseur. Les données absentes de l'API ne sont pas inventées. Les affectations existantes et verrouillées sont préservées. L'import d'effectif conserve les joueurs transférés sans leur réattribuer leur ancien club courant.
+- `0040_player_history_work` : état indépendant par joueur et saison (saison 0 = parcours), succès existants repris depuis les marqueurs valides, prise atomique par jeton, bail de 5 minutes et nouvelle tentative différée de 2 h après erreur. Les pipelines Belges et Pro League utilisent le même état. Les mutations de marqueurs sont fusionnées côté base sans réécrire tout `players.ext`.
+- Un cron distinct `/api/cron/jpl-history` exécute au maximum 5 appels d'historique par heure. Une vérification hebdomadaire de l'effectif traite un club par passage, avec au plus 4 appels supplémentaires et reprise par index. L'automatisation est désactivée par défaut ; le panneau Synchronisations affiche l'état et permet son activation explicite. Ce même réglage active aussi l'élargissement automatique aux cinq saisons des Belges à l'étranger. Le pipeline manuel `jpl-history` conserve budget, préflight et reprise. « Vérifié » signifie que l'API a répondu pour les étapes, y compris lorsqu'elle ne fournit pas de statistiques.
+- **Aucune opération de production n'a été effectuée.** Avant toute mise en service, obtenir l'accord utilisateur, vérifier la CI et la cible, préparer la migration `0040` AVANT le déploiement du code (sinon les jobs de carrières existants seront bloqués par le préflight), puis installer séparément `supabase/jpl_history_cron_setup.sql` et activer explicitement l'automatisation dans l'admin. Contrôler la couverture et le quota avant le premier passage. Ne pas fusionner ni lancer de synchronisation sans son accord.
+- Diego Moreira, le doublon Freddie Potts et les améliorations visuelles des fiches restent des chantiers séparés.
+
 ## Roadmap des synchronisations — 8 PR (audit du 12/10/2026, Claude)
 
 Audit complet des synchronisations (lecture seule) puis plan validé avec l'utilisateur : **une seule PR à la fois, feu vert explicite à chaque étape**. Les boutons de synchronisation contextuels (fiches compétition, club, joueur) sont conservés ; le futur panneau central les complète sans les remplacer.

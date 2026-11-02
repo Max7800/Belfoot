@@ -1,7 +1,7 @@
 import { getProvider } from "./providers";
 import { loadDivisionCareerPlayers } from "./divisionCareerPlayers";
 import { historySeasons } from "./playerHistoryPlan";
-import { claimHistoryWork, finishHistoryWork } from "./playerHistoryWork";
+import { claimHistoryWork, finishHistoryWork, patchHistoryMetadata } from "./playerHistoryWork";
 import { syncCareerSeasonStats, syncPlayerCareers } from "./syncPlayerCareers";
 import { isLeaseLost } from "@/lib/runLease";
 
@@ -11,10 +11,21 @@ import { isLeaseLost } from "@/lib/runLease";
 export async function syncDivisionPlayerHistory(db, competition, ctx = {}) {
   const { players, membershipCount } = await loadDivisionCareerPlayers(db, competition, ctx.season);
   if (!membershipCount) throw new Error("Aucun joueur rattaché à la division pour cette saison : vérifie d'abord les effectifs");
-  if (membershipCount > players.length) throw new Error(`${membershipCount - players.length} joueur(s) sans identifiant fournisseur compatible : vérification nécessaire avant de déclarer la division complète`);
+  const unresolved = Math.max(0, membershipCount - players.length);
   const provider = getProvider(competition.provider);
   if (!provider?.fetchPlayerCareer || !provider?.fetchPlayerCareerSeason) throw new Error("Historiques de joueur non pris en charge");
   const seasons = historySeasons(ctx.now || new Date());
+  // Chaque paquet contient au plus 100 joueurs × 6 étapes : aucune lecture ne
+  // dépasse le plafond Supabase de 1 000 lignes. Les étapes déjà terminées ne
+  // nécessitent ensuite aucun RPC individuel à chaque passage du cron.
+  const states = new Map();
+  const years = [0, ...seasons.map(Number)];
+  for (let offset = 0; offset < players.length; offset += 100) {
+    const ids = players.slice(offset, offset + 100).map((player) => player.id);
+    const result = await db.from("player_history_work").select("player_id,season,state,lease_expires_at,last_error").in("player_id", ids).in("season", years).limit(600);
+    if (result.error) throw result.error;
+    for (const row of result.data || []) states.set(`${row.player_id}:${row.season}`, row);
+  }
   const deadline = Number(ctx.deadline) || Date.now() + 35000;
   const limit = Math.max(1, Number(ctx.requestLimit) || 10);
   const count = () => Number(ctx.requestTracker?.count) || 0;
@@ -22,16 +33,28 @@ export async function syncDivisionPlayerHistory(db, competition, ctx = {}) {
   let work = 0;
   let stopped = false;
   let busy = 0;
+  let failed = 0;
+  let retryAfter = null;
   for (const player of players) {
     let playerDone = true;
     for (const season of ["0", ...seasons]) {
+      if (states.get(`${player.id}:${season}`)?.state === "done") continue;
       if (Date.now() >= deadline || count() >= limit) { stopped = true; playerDone = false; break; }
       const claim = await claimHistoryWork(db, player.id, season);
       if (claim.state === "done") continue;
-      if (claim.state === "busy") { busy++; playerDone = false; break; }
+      if (claim.state === "busy" || claim.state === "error") {
+        busy++; playerDone = false;
+        if (claim.state === "error") failed++;
+        if (claim.retryAfter && (!retryAfter || claim.retryAfter < retryAfter)) retryAfter = claim.retryAfter;
+        break;
+      }
       try {
-        if (season === "0") await syncPlayerCareers(db, competition, { ...ctx, playerId: player.id, includeCareerStats: false });
-        else await syncCareerSeasonStats(db, provider, competition, player, { ...ctx, season });
+        const historyLease = { playerId: player.id, season: Number(season), token: claim.token };
+        if (season === "0") await syncPlayerCareers(db, competition, { ...ctx, historyWork: true, historyLease, playerId: player.id, includeCareerStats: false });
+        else {
+          await syncCareerSeasonStats(db, provider, competition, player, { ...ctx, historyWork: true, historyLease, season });
+          await patchHistoryMetadata(db, player.id, { career_stats_seasons: { [season]: new Date().toISOString() } });
+        }
         await finishHistoryWork(db, player.id, season, claim.token);
         work++;
       } catch (error) {
@@ -44,8 +67,9 @@ export async function syncDivisionPlayerHistory(db, competition, ctx = {}) {
     if (stopped) break;
   }
   return {
-    complete: !stopped && !busy,
-    detail: `${completed}/${players.length} joueur(s) complets · ${work} étape(s) traitée(s)${busy ? ` · ${busy} joueur(s) en cours ailleurs` : ""}`,
+    complete: !stopped && !busy && !unresolved,
+    detail: `${completed}/${players.length} joueur(s) vérifiés parmi les effectifs connus · ${work} étape(s) traitée(s)${busy - failed ? ` · ${busy - failed} joueur(s) en cours ailleurs` : ""}${failed ? ` · ${failed} joueur(s) en erreur, nouvelle tentative différée` : ""}${unresolved ? ` · ${unresolved} fiche(s) sans identifiant fournisseur compatible` : ""}`,
     progress: { current: completed, total: players.length, unit: "joueurs" },
+    meta: { waitForLease: (busy > 0 || unresolved > 0) && !stopped, retryAfter },
   };
 }
