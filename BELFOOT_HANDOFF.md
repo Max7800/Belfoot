@@ -1,11 +1,21 @@
 # BELFOOT — Passation technique
 
-## 02/11/2026 — Fiabilité du Match Center
+## 02/11/2026 — Match Center
 
-- Audit : stats et compositions étaient chargées une seule fois, malgré le rafraîchissement du score et des événements ; événements sans équipe affichés à l'extérieur ; barres trompeuses si donnée adverse absente et mise en avant excessive des fautes/cartons.
-- PR distincte : réactualisation des détails en direct avec écoute et repli périodique visible, actualisation manuelle complète, conservation des données en cas d'erreur ; score consulté distingué de la connexion temps réel ; événements non attribués centrés ; comparaisons seulement avec deux valeurs connues, fautes/cartons sans hiérarchie positive. Tests ciblés 27/27 ; lint sans erreur. Tester le direct et la charge des lectures en conditions réelles avant déploiement.
-- PR #101 fiche club : le propriétaire souhaite son logo dans la bannière, ajouté sur la branche. Le propriétaire signale Ivan Leko affiché à Gand alors qu'il entraîne Bruges ; l'origine dans les données des entraîneurs reste à vérifier sans modifier les fiches à l'aveugle.
-- PR #100 fiche joueur et PR #99 compteur des historiques en attente ; PR #98 fusionnée/déployée. Rattrapage d'historiques en cours selon dernier retour du propriétaire.
+- PR #102 : compositions et statistiques du direct actualisées via notifications et repli périodique, actualisation manuelle étendue, affichage prudent des données manquantes et événements sans équipe centrés. Vérifier en conditions réelles la couverture Realtime et la charge ; aucun appel API-Football depuis le navigateur. Voir la PR pour les vérifications et l'état du déploiement.
+- L'utilisateur souhaite ensuite une refonte visuelle de la fiche match et des couleurs ; cette PR ne la réalise pas.
+
+## 02/11/2026 — Fiche club
+
+- PR #101 : logo du club en filigrane, aperçu de saison conditionné aux sections administrables (classement calculé, effectif et année, prochain match programmé) ; test visuel à effectuer, CI et déploiement à consulter sur la PR.
+- L'utilisateur signale I. Leko à Gand ; une ancienne fiche API distincte (1153) reste liée à Gand alors qu'une autre est liée à Bruges. Recherche « De Mil » sans résultat selon l'utilisateur ; la synchronisation club n'a pas corrigé l'affichage. Rechercher la cause fournisseur et les journaux avant modification des données.
+
+## 02/11/2026 — Présentation des fiches joueurs
+
+- PR de présentation : navigation Vue d'ensemble / Statistiques / Parcours / Matchs ; portrait mobile légèrement plus compact. Elle inclut le correctif de la PR #97 : exclusion des matchs amicaux et doublons du résumé et indication de la saison. Aucun changement de synchronisation ou de données.
+- Tests ciblés 25/25 ; vérification visuelle mobile et ordinateur toujours nécessaire (aperçu local `sites-preview` incompatible avec l'option `--host` de Next.js). Voir PR pour CI et déploiement.
+- Historiques : l'utilisateur a repris le lot avec 1 000 appels additionnels et a observé 22/634 ; la PR #99 corrige le compteur partiel, son résultat en production reste à vérifier. La PR #98 est fusionnée et déployée (`36a793e`).
+- Diego Moreira apparaît désormais parmi les Belges à l'étranger selon l'utilisateur ; sa double nationalité belge et portugaise reste à contrôler sur sa fiche.
 
 ## 02/11/2026 — Timeout du rattrapage des historiques
 
