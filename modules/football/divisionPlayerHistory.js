@@ -29,21 +29,19 @@ export async function syncDivisionPlayerHistory(db, competition, ctx = {}) {
   const deadline = Number(ctx.deadline) || Date.now() + 35000;
   const limit = Math.min(Math.max(1, Number(ctx.requestLimit) || 10), Math.max(1, Number(ctx.maxHistoryRequestsPerRun) || Infinity));
   const count = () => Number(ctx.requestTracker?.count) || 0;
-  let completed = 0;
   let work = 0;
   let stopped = false;
   let busy = 0;
   let failed = 0;
   let retryAfter = null;
   for (const player of players) {
-    let playerDone = true;
     for (const season of ["0", ...seasons]) {
       if (states.get(`${player.id}:${season}`)?.state === "done") continue;
-      if (Date.now() >= deadline || count() >= limit) { stopped = true; playerDone = false; break; }
+      if (Date.now() >= deadline || count() >= limit) { stopped = true; break; }
       const claim = await claimHistoryWork(db, player.id, season);
-      if (claim.state === "done") continue;
+      if (claim.state === "done") { states.set(`${player.id}:${season}`, { state: "done" }); continue; }
       if (claim.state === "busy" || claim.state === "error") {
-        busy++; playerDone = false;
+        busy++;
         if (claim.state === "error") failed++;
         if (claim.retryAfter && (!retryAfter || claim.retryAfter < retryAfter)) retryAfter = claim.retryAfter;
         break;
@@ -56,6 +54,7 @@ export async function syncDivisionPlayerHistory(db, competition, ctx = {}) {
           await patchHistoryMetadata(db, player.id, { career_stats_seasons: { [season]: new Date().toISOString() } });
         }
         await finishHistoryWork(db, player.id, season, claim.token);
+        states.set(`${player.id}:${season}`, { state: "done" });
         work++;
       } catch (error) {
         if (isLeaseLost(error)) throw error;
@@ -63,9 +62,11 @@ export async function syncDivisionPlayerHistory(db, competition, ctx = {}) {
         throw error;
       }
     }
-    if (playerDone) completed++;
     if (stopped) break;
   }
+  // Le lot peut s'arrêter au milieu de la liste ; les joueurs déjà complets
+  // après ce point comptent eux aussi dans l'avancement global.
+  const completed = players.filter((player) => years.every((season) => states.get(`${player.id}:${season}`)?.state === "done")).length;
   return {
     complete: !stopped && !busy && !unresolved,
     detail: `${completed}/${players.length} joueur(s) vérifiés parmi les effectifs connus · ${work} étape(s) traitée(s)${busy - failed ? ` · ${busy - failed} joueur(s) en cours ailleurs` : ""}${failed ? ` · ${failed} joueur(s) en erreur, nouvelle tentative différée` : ""}${unresolved ? ` · ${unresolved} fiche(s) sans identifiant fournisseur compatible` : ""}`,

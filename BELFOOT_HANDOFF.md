@@ -1,3 +1,8 @@
+### 02/11/2026 — Compteur d’historiques de division
+
+- Le compteur additionne les joueurs complets dans l’instantané entier et les étapes terminées par le lot, y compris après son point d’arrêt. Une autre exécution peut rendre cet instantané temporairement en retard ; le compteur ne prouve pas l’absence d’erreurs de données. Les checkpoints et le budget ne changent pas.
+- Une ancienne exécution manuelle avait affiché 37 puis 22 joueurs, et une reprise ultérieure a été différée pour cause de concurrence. Ne pas la relancer en double ; vérifier son état réel avant toute intervention.
+
 ### 2026-11-02 — ChatGPT — reprise des entraîneurs après échec
 
 - Diagnostic transmis par l’admin : le 28 octobre plusieurs jobs entraîneurs ont échoué sur le quota API ; l’ancien cron effaçait le lot de reprise et considérait l’échec comme une vérification hebdomadaire. Le cron conserve désormais le dernier lot confirmé et réessaie après 24 h, y compris les anciens états d’erreur. Les autres compétitions restent éligibles pendant l’attente.

@@ -51,6 +51,16 @@ const seed = () => {
 const run = (db, limit) => syncDivisionPlayerHistory(db, competition, { season: "2026-2027", now, requestLimit: limit, requestTracker: { count: 0 } });
 
 describe("historique de division par lots", () => {
+  it("compte aussi les joueurs déjà complets situés après l'arrêt du lot", async () => {
+    const db = seed();
+    db.rows("players").push({ id: "z", name: "Player Z", source: "apifootball", external_id: "99", ext: {} });
+    db.rows("player_team_seasons").push({ id: "member-z", player_id: "z", club_id: "a", season_start_year: 2026 });
+    db.rows("player_history_work").push(...[0, 2021, 2022, 2023, 2024, 2025].map((season) => ({ player_id: "z", season, state: "done" })));
+    const result = await run(db, 1);
+    expect(result.complete).toBe(false);
+    expect(result.progress).toMatchObject({ current: 1, total: 2 });
+    expect(calls).toEqual(["career:p"]);
+  });
   it("limite les appels par invocation sans épuiser le budget global et reprend", async () => {
     const db = seed();
     const first = await syncDivisionPlayerHistory(db, competition, { season: "2026-2027", now, requestLimit: 500, maxHistoryRequestsPerRun: 2, requestTracker: { count: 0 } });
