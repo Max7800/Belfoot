@@ -1,3 +1,8 @@
+### 03/11/2026 — Fiches club et notes de match
+
+- La fiche club affiche son identité puis un indicateur pendant le chargement des détails, au lieu de présenter des informations en cours de chargement comme manquantes. Les clubs des matchs sont chargés par lots avec un message explicite en cas d'erreur. L'observation initiale sur l'AC Milan était transitoire : les noms finissent par apparaître.
+- Sur la fiche joueur, une note de match nulle ou absente n'est plus affichée 0,0 ; une durée manquante n'est plus assimilée à zéro. Aucune modification des données en base.
+
 ### 03/11/2026 — Fins de contrat dans les transferts
 
 - Affichage : rapprochement prudent de la sortie « nom du joueur » et d'une destination unique API-Football dans les 90 jours, pour un même joueur et club d'origine. Si plusieurs dates sont fournies pour cette destination, elles restent à confirmer. Les cas ambigus, les prêts et les lignes manuelles sont préservés.

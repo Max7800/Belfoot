@@ -22,6 +22,7 @@ import ClubSeasonWidget from "@/components/football/ClubSeasonWidget";
 import { summarizeClubSeason } from "@/lib/clubSeasonWidget";
 import { nationalTeamPagePath } from "@/lib/nationalCategories";
 import { nextClubFixture } from "@/lib/clubOverview";
+import { loadClubsForMatches } from "@/lib/publicFootballData";
 
 const POS = { Goalkeeper: 0, Defender: 1, Midfielder: 2, Attacker: 3 };
 const ROLE_LABELS = { first_team: "Équipe première", reserve: "Réserve", u23: "U23", youth: "Jeunes", women: "Équipe féminine", unknown: "Groupe à préciser" };
@@ -39,6 +40,8 @@ export default function ClubPage() {
   const [club, setClub] = useState(undefined);
   const [matches, setMatches] = useState([]);
   const [clubsMap, setClubsMap] = useState({});
+  const [matchClubsError, setMatchClubsError] = useState(false);
+  const [detailsLoading, setDetailsLoading] = useState(true);
   const [players, setPlayers] = useState([]);
   const [memberships, setMemberships] = useState([]);
   const [coach, setCoach] = useState(null);
@@ -61,13 +64,12 @@ export default function ClubPage() {
     if (nationalPath && !authLoading && !isAdmin) router.replace(nationalPath);
   }, [nationalPath, authLoading, isAdmin, router]);
 
-  useEffect(() => { (async () => {
+  useEffect(() => { setDetailsLoading(true); (async () => {
     const { data: c } = await supabase.from("clubs").select("*").eq("id", id).maybeSingle();
-    if (!c) { setClub(null); return; }
+    if (!c) { setClub(null); setDetailsLoading(false); return; }
     setClub(c);
     const { data: m } = await supabase.from("matches").select("*").or(`home_club_id.eq.${id},away_club_id.eq.${id}`).order("kickoff", { ascending: false }).limit(250);
     const clubMatches = m || []; setMatches(clubMatches);
-    const ids = [...new Set(clubMatches.flatMap((match) => [match.home_club_id, match.away_club_id]).filter(Boolean))];
     const contexts = new Map();
     clubMatches.filter((match) => match.competition_id && match.season_id).forEach((match) => {
       const key = `${match.competition_id}:${match.season_id}`; const current = contexts.get(key) || { count: 0, latest: 0, match };
@@ -86,14 +88,15 @@ export default function ClubPage() {
     // l'archive qui contient le plus de rencontres. Sinon un 2024/25 complet
     // masque durablement l'effectif 2026/27 encore en cours et ses transferts.
     const contextMatch = requestedContext?.match || [...contexts.values()].sort((a, b) => b.latest - a.latest || b.count - a.count)[0]?.match;
-    const [clubResult, playerResult, membershipResult, coachResult, linkedResult] = await Promise.all([
-      ids.length ? supabase.from("clubs").select("id,name,logo_url").in("id", ids) : Promise.resolve({ data: [] }),
+    const [matchClubs, playerResult, membershipResult, coachResult, linkedResult] = await Promise.all([
+      loadClubsForMatches(supabase, clubMatches).then((data) => ({ data, error: false })).catch(() => ({ data: {}, error: true })),
       readAll(() => supabase.from("players").select("*").eq("club_id", id).order("name")),
       readAll(() => supabase.from("player_team_seasons").select("*").eq("club_id", id).eq("active", true).order("season_start_year", { ascending: false, nullsFirst: false })),
       supabase.from("coaches").select("*").eq("club_id", id),
       supabase.from("clubs").select("id,name,logo_url,team_type,parent_club_id").or(`parent_club_id.eq.${id},id.eq.${c.parent_club_id || "00000000-0000-0000-0000-000000000000"}${c.parent_club_id ? `,parent_club_id.eq.${c.parent_club_id}` : ""}`),
     ]);
-    setClubsMap(Object.fromEntries((clubResult.data || []).map((item) => [item.id, item])));
+    setClubsMap({ ...matchClubs.data, [c.id]: c });
+    setMatchClubsError(matchClubs.error);
     const coaches = coachResult.data || [];
     const membershipRows = membershipResult.error ? [] : (membershipResult.data || []);
     let rosterPlayers = playerResult.data || [];
@@ -128,7 +131,8 @@ export default function ClubPage() {
       ]) : [{ data: [] }, { data: [] }, { data: [] }];
       setSport({ competition, season: seasonResult.data, phase, standings, row: standings.find((row) => row.club === id), teamMatches, events: eventResult.data || [], lineups: lineupResult.data || [], teamStats: teamStatResult.data || [] });
     }
-  })().catch(() => setClub(null)); }, [id, requestedSeason]);
+    setDetailsLoading(false);
+  })().catch(() => { setClub(null); setDetailsLoading(false); }); }, [id, requestedSeason]);
 
   if (club === undefined) return <p className="text-muted">Chargement…</p>;
   if (club === null) return <p className="text-muted">Club introuvable.</p>;
@@ -235,12 +239,14 @@ export default function ClubPage() {
         {club.logo_url ? <img src={club.logo_url} alt="" aria-hidden="true" className="pointer-events-none absolute -bottom-12 -right-5 h-44 w-44 rotate-[-8deg] object-contain opacity-[0.09] sm:-bottom-16 sm:right-3 sm:h-60 sm:w-60" /> : <Shield className="pointer-events-none absolute -bottom-12 -right-8 h-44 w-44 opacity-[0.05]" aria-hidden="true" />}
         <div className="relative flex items-center gap-3 sm:gap-4">{club.logo_url && <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-black/15 p-2 sm:h-20 sm:w-20"><img src={club.logo_url} className="h-full w-full object-contain" alt="" /></div>}<div className="min-w-0"><div className="text-[10px] font-bold uppercase tracking-[0.22em] text-muted">{club.nickname || club.city || "Club"}</div><h1 className="truncate text-2xl font-black sm:text-4xl">{club.name}</h1>{coach && <div className="mt-1.5 flex items-center gap-2 text-xs text-muted sm:mt-2 sm:text-sm">{coach.photo_url && <img src={coach.photo_url} className="h-6 w-6 rounded-full object-cover" alt="" />}<span className="truncate">Entraîneur : <b className="text-content">{coach.name}</b></span></div>}</div></div>
       </div>
+      {detailsLoading ? <p role="status" className="py-6 text-sm text-muted">Chargement des informations du club…</p> : <>
       {showOverview && <section aria-label="Aperçu de la saison" className="mb-5 rounded-3xl border border-line/10 bg-surface/70 p-4 sm:p-5">
         <div className="mb-3 flex flex-wrap items-end justify-between gap-2"><div><p className="text-[10px] font-black uppercase tracking-[0.18em] text-accent">En bref</p><h2 className="mt-1 text-lg font-black">La saison du club</h2></div>{sport?.competition?.name && <p className="text-xs text-muted">{sport.competition.name}{sport.season?.label ? ` · ${sport.season.label}` : ""}</p>}</div>
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {showRanking && <div className="rounded-2xl border border-line/10 bg-bg/35 p-3"><p className="text-[10px] font-bold uppercase tracking-wider text-muted">Classement calculé</p><p className="mt-2 text-xl font-black">{sport.standings.findIndex((row) => row.club === id) + 1}<span className="text-xs">e</span> <span className="text-sm font-semibold text-muted">· {sport.row.pts} points</span></p><p className="mt-1 text-[11px] text-muted">{phaseLabel(sport.phase)}</p></div>}
           {showSquad && <div className="rounded-2xl border border-line/10 bg-bg/35 p-3"><p className="text-[10px] font-bold uppercase tracking-wider text-muted">Effectif connu</p><p className="mt-2 text-xl font-black">{squad.length} <span className="text-sm font-semibold text-muted">joueurs</span></p><p className="mt-1 text-[11px] text-muted">{rosterYear ? `Effectif ${rosterYear}-${rosterYear + 1}` : "Saison non précisée"}{contextYear && rosterYear && contextYear !== rosterYear ? " · saison différente de l’aperçu" : ""}</p></div>}
           {nextFixture && <Link href={`/matchs/${nextFixture.id}`} className="rounded-2xl border border-line/10 bg-bg/35 p-3 transition hover:border-accent/40"><p className="text-[10px] font-bold uppercase tracking-wider text-muted">Prochain match</p><p className="mt-2 truncate text-sm font-black">{clubsMap[nextFixture.home_club_id]?.name || "Équipe à préciser"} – {clubsMap[nextFixture.away_club_id]?.name || "Équipe à préciser"}</p><p className="mt-1 text-[11px] text-muted">{new Date(nextFixture.kickoff).toLocaleString("fr-BE", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</p></Link>}
+          {matchClubsError && <p className="text-xs text-muted">Certains noms d’équipes n’ont pas pu être chargés. Réessaie en actualisant la page.</p>}
         </div>
       </section>}
       <div className="mb-5"><DiscussButton refType="club" refId={club.id} title={`Discussion : ${club.name}`} label={club.team_type === "national" ? "Discuter de cette sélection" : "Discuter de ce club"} categorySlug="football-belge" /></div>
@@ -254,6 +260,7 @@ export default function ClubPage() {
       <div className="hidden sm:block">
         {visibleSections.map((section) => <CollapsibleSection key={section.key} id={`club-${section.key}`} title={section.label} count={counts[section.key]}>{content[section.key]}</CollapsibleSection>)}
       </div>
+      </>}
     </div>
   );
 }
