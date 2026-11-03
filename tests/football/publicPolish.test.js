@@ -42,7 +42,8 @@ describe("textes publics sans jargon d'administration", () => {
 describe("Belges à l'étranger et en-têtes", () => {
   it("libellés « inconnu » partagés : la carte ignore exactement le pays inconnu affiché", () => {
     expect(read("lib/belgiansAbroad.js")).toContain('export const UNKNOWN_COUNTRY = "Pays non précisé";');
-    expect(read("components/football/BelgiansWorldMap.js")).toContain("if (!raw || raw === UNKNOWN_COUNTRY) continue;");
+    expect(read("lib/belgiansMapGroups.js")).toContain("if (!raw || raw === unknownCountry) continue;");
+    expect(read("components/football/BelgiansWorldMap.js")).toContain("groupMapPlayers(players, UNKNOWN_COUNTRY)");
     const form = read("lib/abroadForm.js");
     expect(form).toContain("|| UNKNOWN_COUNTRY;");
     expect(form).toContain("league.name || UNKNOWN_COMPETITION;");
@@ -50,7 +51,7 @@ describe("Belges à l'étranger et en-têtes", () => {
   it("carte du monde : styles au format react-simple-maps 5 (avant : pays tous noirs)", () => {
     const map = read("components/football/BelgiansWorldMap.js");
     expect(map).not.toMatch(/style=\{\{\s*default:/); // ancienne API (v3), ignorée par la v5
-    expect(map).toContain("fill={fillFor(n)}");
+    expect(map).toContain('selected === name ? "#e30613" : fillFor(n)');
     expect(map).toContain('className={n ? "bf-geo bf-geo-active" : "bf-geo"}');
     expect(map).toContain(".bf-geo-active:hover,.bf-geo-active:active{fill:#e30613;}");
     expect(read("package.json")).toMatch(/"react-simple-maps": "\^5\./);
