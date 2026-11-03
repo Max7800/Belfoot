@@ -1,8 +1,37 @@
 import fs from "node:fs";
 import { describe, expect, it } from "vitest";
-import { clubLabel, isPlayerNamedClub, matchesTransferQuery, summarizeTransfers, transferDirection, transferKind } from "@/lib/transfersView";
+import { clubLabel, collapseFreeAgentTransitions, isPlayerNamedClub, matchesTransferQuery, summarizeTransfers, transferDirection, transferKind } from "@/lib/transfersView";
 import { decodeEntities } from "@/lib/mojibake";
 import { transferTypeLabel } from "@/lib/transferLabels";
+
+describe("fin de contrat et signature", () => {
+  const base = { source: "apifootball", player_id: "p", player_name: "Y. Verschaeren", from_club_id: "anderlecht", transfer_type: "Free agent" };
+  const ghost = { ...base, id: "ghost", to_club_name: "Verschaeren Yari", transfer_date: "2026-06-29" };
+  const signing = { ...base, id: "signing", to_club_name: "Sampdoria", to_club_external_id: "498", transfer_date: "2026-08-11" };
+  it("regroupe la fin de contrat et les dates contradictoires d'une même destination", () => {
+    const rows = [ghost, signing, { ...signing, id: "duplicate", transfer_date: "2026-08-13" }, { ...signing, id: "early", transfer_date: "2026-06-29" }];
+    const result = collapseFreeAgentTransitions(rows);
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({ to_club_name: "Sampdoria", transfer_date_uncertain: true });
+    expect(summarizeTransfers(result, new Set(["anderlecht"])).totals.departures).toBe(1);
+    expect(rows).toHaveLength(4);
+  });
+  it("conserve la date de signature unique, comme pour Rits", () => {
+    const result = collapseFreeAgentTransitions([{ ...ghost, player_name: "M. Rits", to_club_name: "Rits Mats" }, { ...signing, player_name: "M. Rits", to_club_id: "beerschot", to_club_external_id: "263", to_club_name: "Beerschot VA", transfer_date: "2026-08-26" }]);
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({ transfer_date: "2026-08-26", transfer_date_uncertain: false });
+  });
+  it("ne rapproche pas une destination ambiguë, un prêt ou des données manuelles", () => {
+    for (const other of [
+      { ...signing, id: "other", to_club_external_id: "999" },
+      { ...signing, id: "other", transfer_type: "Loan" },
+      { ...signing, id: "other", source: "manual" },
+      { ...ghost, id: "other" },
+    ]) expect(collapseFreeAgentTransitions([ghost, signing, other])).toHaveLength(3);
+    expect(collapseFreeAgentTransitions([ghost, { ...signing, transfer_date: "2026-10-01" }])).toHaveLength(2);
+    expect(collapseFreeAgentTransitions([{ ...ghost, player_id: null }, signing])).toHaveLength(2);
+  });
+});
 
 // Audit de la page Transferts du 28/10/2026 (784 transferts 2026).
 describe("nature d'un transfert", () => {

@@ -1,3 +1,8 @@
+### 03/11/2026 — Fins de contrat dans les transferts
+
+- Affichage : rapprochement prudent de la sortie « nom du joueur » et d'une destination unique API-Football dans les 90 jours, pour un même joueur et club d'origine. Si plusieurs dates sont fournies pour cette destination, elles restent à confirmer. Les cas ambigus, les prêts et les lignes manuelles sont préservés.
+- Les données en base ne sont ni fusionnées ni supprimées. Les résultats Rits et Verschaeren fournis par l'utilisateur sont couverts par des tests ; cette règle ne résout pas tous les doublons possibles. Pas de synchronisation de production.
+
 ### 03/11/2026 — Classement de forme partagé
 
 - Accueil et page Belges utilisent le même chargement et calcul : joueurs à l'étranger, clubs courants, performances de club et cinq matchs au maximum dans les 45 derniers jours. Les statistiques anciennes ou de sélection ne contribuent pas au classement. L'accueil charge ce bloc séparément du reste et indique les erreurs.
