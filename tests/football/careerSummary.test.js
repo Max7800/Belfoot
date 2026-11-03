@@ -39,8 +39,9 @@ describe("careerSummary", () => {
   });
   it("page Belges : parcours chargé et affiché sur chaque carte", () => {
     const page = fs.readFileSync("app/belges-a-l-etranger/page.js", "utf8");
-    expect(page).toContain("loadMembershipsForPlayers(supabase, playerIds)");
-    expect(page).toContain("career: careerSummary(data.memberships[player.id] || [], currentClubId, data.clubs, { nationality: player.nationality })");
+    const form = fs.readFileSync("lib/abroadForm.js", "utf8");
+    expect(form).toContain("loadMembershipsForPlayers(db, playerIds)");
+    expect(form).toContain("career: careerSummary(data.memberships[player.id] || [], currentClubId, data.clubs, { nationality: player.nationality })");
     expect(page).toContain("Au club depuis {career.since}");
   });
 });
@@ -68,12 +69,13 @@ describe("page Belges : club actuel d'après les affectations (cas M. Godts, 28/
   });
   it("la page s'en sert pour le club, le championnat, le parcours et les matchs ; instantané de l'ancien club écarté", () => {
     const page = fs.readFileSync("app/belges-a-l-etranger/page.js", "utf8");
-    expect(page).toContain("const currentClubId = resolveCurrentClubId({ player, memberships: data.memberships[player.id] || [], clubsById: data.clubs }) || player.club_id;");
-    expect(page).toContain("const club = data.clubs[currentClubId];");
-    expect(page).toContain("{ ...player, club_id: currentClubId, competition: null, country: null }");
-    expect(page).toContain("resolvePlayerLeague({ player: current,");
+    const form = fs.readFileSync("lib/abroadForm.js", "utf8");
+    expect(form).toContain("const currentClubId = resolveCurrentClubId({ player, memberships: data.memberships[player.id] || [], clubsById: data.clubs }) || player.club_id;");
+    expect(form).toContain("const club = data.clubs[currentClubId];");
+    expect(form).toContain("{ ...player, club_id: currentClubId, competition: null, country: null }");
+    expect(form).toContain("resolvePlayerLeague({ player: current,");
     expect(page).toContain("const concernsPlayer = (item, match) => [item.club?.id, item.player.national_team_id]");
-    expect(page).toContain("...membershipRows.filter((row) => row.active).map((row) => row.club_id)");
+    expect(form).toContain("...membershipRows.filter((row) => row.active).map((row) => row.club_id)");
     expect(fs.readFileSync("lib/publicFootballData.js", "utf8")).toContain('select("id,player_id,club_id,season_start_year,active,is_primary,joined_at,updated_at")');
   });
 });

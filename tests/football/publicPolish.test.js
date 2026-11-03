@@ -43,9 +43,9 @@ describe("Belges à l'étranger et en-têtes", () => {
   it("libellés « inconnu » partagés : la carte ignore exactement le pays inconnu affiché", () => {
     expect(read("lib/belgiansAbroad.js")).toContain('export const UNKNOWN_COUNTRY = "Pays non précisé";');
     expect(read("components/football/BelgiansWorldMap.js")).toContain("if (!raw || raw === UNKNOWN_COUNTRY) continue;");
-    const page = read("app/belges-a-l-etranger/page.js");
-    expect(page).toContain("|| UNKNOWN_COUNTRY;");
-    expect(page).toContain("league.name || UNKNOWN_COMPETITION;");
+    const form = read("lib/abroadForm.js");
+    expect(form).toContain("|| UNKNOWN_COUNTRY;");
+    expect(form).toContain("league.name || UNKNOWN_COMPETITION;");
   });
   it("carte du monde : styles au format react-simple-maps 5 (avant : pays tous noirs)", () => {
     const map = read("components/football/BelgiansWorldMap.js");

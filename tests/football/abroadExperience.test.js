@@ -26,6 +26,18 @@ describe("page des Belges : recherche et performances", () => {
     expect(result.data).toHaveLength(81);
     expect(result.limited).toBe(false);
   });
+  it("ne lance jamais plus de deux lots de performances en même temps", async () => {
+    let active = 0; let maximum = 0;
+    const db = { rpc: async () => { active++; maximum = Math.max(maximum, active); await new Promise((resolve) => setTimeout(resolve, 1)); active--; return { data: [] }; } };
+    await loadAbroadPerformances(db, Array.from({ length: 241 }, (_, i) => String(i)), "id");
+    expect(maximum).toBe(2);
+    expect(active).toBe(0);
+  });
+  it("ne masque pas une erreur réelle derrière une fonction manquante dans un autre lot", async () => {
+    let calls = 0;
+    const db = { rpc: async () => ({ error: ++calls === 1 ? { code: "PGRST202" } : new Error("indisponible") }) };
+    await expect(loadAbroadPerformances(db, Array.from({ length: 81 }, (_, i) => String(i)), "id")).rejects.toThrow("indisponible");
+  });
   it("se replie seulement si la fonction n'est pas installée", async () => {
     const query = { select: () => query, in: () => query, order: () => query, limit: async () => ({ data: [{ id: "x" }] }) };
     const db = { rpc: async () => ({ error: { code: "PGRST202" } }), from: () => query };
