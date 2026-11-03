@@ -16,6 +16,7 @@ import { DEFAULT_COMPETITION_HUB } from "@/lib/competitionHub";
 import { normalizeNationalTeamsConfig } from "@/lib/nationalTeams";
 import { normalizeProposeConfig } from "@/lib/propose";
 import { normalizeRankings } from "@/lib/rankings";
+import { uefaPointsDisplay } from "@/lib/rankingDisplay";
 import { invalidateTilesCache, TILE_SCOPES } from "@/lib/tiles";
 import { COMPETITION_SCOPES, groupCompetitionsByScope } from "@/lib/competitionScopes";
 import { healthItems, historyRows, resumableRuns, syncSections } from "@/lib/adminSync";
@@ -778,6 +779,7 @@ export function RankingsPanel() {
           <label className="text-xs text-muted">Points<input value={cfg.uefa.points} onChange={(e) => setUefa("points", e.target.value)} className={`mt-1 w-24 ${box}`} /></label>
           <label className="text-xs text-muted">Tendance<select value={cfg.uefa.trend} onChange={(e) => setUefa("trend", e.target.value)} className={`mt-1 ${box}`}><option value="">—</option><option value="up">▲ Monte</option><option value="down">▼ Descend</option><option value="steady">= Stable</option></select></label>
         </div>
+        {!uefaPointsDisplay(cfg.uefa.points).valid && <p className="mt-2 text-xs text-amber-300">Coefficient à vérifier : indique la valeur décimale officielle, par exemple 59,450. La valeur actuelle reste enregistrée jusqu’à correction.</p>}
       </div>
 
       <div className="flex items-center gap-3"><button onClick={save} disabled={status === "saving"} className="rounded-xl bg-accent px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{status === "saving" ? "Enregistrement…" : "Enregistrer"}</button>{status === "saved" && <span className="text-sm text-green-400">Enregistré</span>}{status === "error" && <span className="text-sm text-red-400">Erreur</span>}</div>

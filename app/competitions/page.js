@@ -5,6 +5,7 @@ import { ArrowRight, CalendarDays, Flag, Globe2, ListOrdered, Shield, Sparkles, 
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useRankings } from "@/lib/rankings";
+import { uefaPointsDisplay } from "@/lib/rankingDisplay";
 import { formatCompetitionName, getCompetitionType, isEuropeanClubCompetition } from "@/lib/competitionType";
 import { competitionPath } from "@/lib/competitionRoutes";
 import { useCompetitionHub } from "@/lib/competitionHub";
@@ -132,7 +133,7 @@ function CompetitionsContent() {
           </div>
           <div className="flex-shrink-0 text-right">
             {rankings.uefa.rank !== "" && <div className="text-2xl font-black">{rankings.uefa.rank}<span className="text-sm text-muted">ᵉ</span> {rankings.uefa.trend === "up" ? <span className="text-emerald-400">▲</span> : rankings.uefa.trend === "down" ? <span className="text-red-400">▼</span> : ""}</div>}
-            {rankings.uefa.points !== "" && <div className="text-xs text-muted">{rankings.uefa.points} pts</div>}
+            {rankings.uefa.points !== "" && <div className="text-xs text-muted">{uefaPointsDisplay(rankings.uefa.points).text}{uefaPointsDisplay(rankings.uefa.points).valid ? " pts" : ""}</div>}
           </div>
         </div>
       )}
