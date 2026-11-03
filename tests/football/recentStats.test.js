@@ -20,6 +20,6 @@ describe("statistiques des saisons récentes seulement", () => {
     const home = fs.readFileSync("app/page.js", "utf8");
     expect(home).toContain("{ sinceSeason: currentSeasonStart() }");
     expect(home).toContain("const [statsRows, ...carouselMatchResults] = await Promise.all([statsPromise,");
-    expect(fs.readFileSync("app/belges-a-l-etranger/page.js", "utf8")).toContain("{ sinceSeason: currentSeasonStart() - 1 }");
+    expect(fs.readFileSync("lib/abroadForm.js", "utf8")).toContain("{ sinceSeason: currentSeasonStart() - 1 }");
   });
 });

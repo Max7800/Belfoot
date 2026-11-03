@@ -4,13 +4,11 @@ import Link from "next/link";
 import { ArrowRight, CalendarDays, ChevronRight, Clock3, Flag, Flame, Globe2, MapPin, Search, Sparkles, Trophy, Users } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { UNKNOWN_CLUB, UNKNOWN_COMPETITION, UNKNOWN_COUNTRY, useBelgiansAbroadConfig } from "@/lib/belgiansAbroad";
-import { currentSeasonStart, rankBelgians, seasonTotals } from "@/lib/belgiansRankings";
-import { formatProviderCountry, isRecentPerformance, loadAbroadPerformances, searchText } from "@/lib/abroadExperience";
-import { isNationalSelectionClub, nationalityBadges, ratingTone } from "@/lib/nationalities";
-import { belgianWatchStatus, hasBelgianNationality, isBelgianFollowed, nationalityList } from "@/lib/playerIdentity";
-import { clubNationalLeagues, resolvePlayerCountry, resolvePlayerLeague } from "@/lib/playerSnapshot";
-import { PUBLIC_MATCH_FIELDS, PUBLIC_MATCH_PLAYER_STATS_FIELDS, PUBLIC_PLAYER_FIELDS, loadMatchesByIds, loadMembershipsForPlayers, loadPlayerStatsForPlayers } from "@/lib/publicFootballData";
-import { careerSummary, resolveCurrentClubId } from "@/lib/playerCareer";
+import { rankBelgians } from "@/lib/belgiansRankings";
+import { formatProviderCountry, searchText } from "@/lib/abroadExperience";
+import { buildAbroadForm, loadAbroadFormData } from "@/lib/abroadForm";
+import { nationalityBadges, ratingTone } from "@/lib/nationalities";
+import { belgianWatchStatus, hasBelgianNationality, nationalityList } from "@/lib/playerIdentity";
 import { supabase } from "@/lib/supabaseClient";
 import dynamic from "next/dynamic";
 import AdminHint from "@/components/AdminHint";
@@ -25,7 +23,6 @@ const PAGE_SIZE = 24;
 const SECTION_LINKS = { today: "/direct", form: "#all-players", recap: "/matchs" };
 const normal = (value) => String(value || "").trim().toLocaleLowerCase("fr");
 const isBelgian = (value) => normal(value).startsWith("belg");
-const isBelgianClub = (club) => isBelgian(club?.ext?.country) || isBelgian(club?.ext?.team?.country);
 const year = (value) => Number((String(value || "").match(/\d{4}/) || [0])[0]);
 const safeColor = (value, fallback = "#e30613") => /^#[0-9a-f]{6}$/i.test(value || "") ? value : fallback;
 const safeOverlay = (value, fallback = 0.42) => Number.isFinite(Number(value)) ? Math.min(1, Math.max(0, Number(value))) : fallback;
@@ -102,109 +99,22 @@ export default function BelgiansAbroadPage() {
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   useEffect(() => { setVisibleCount(PAGE_SIZE); }, [query, country, competition, position, profile]);
 
-  useEffect(() => { (async () => {
-    const [playerResult, competitionResult] = await Promise.all([
-      supabase.from("players").select(`${PUBLIC_PLAYER_FIELDS},binational_watch:ext->binational_watch,birth:ext->birth,league_stats:ext->league_stats`).eq("tracked", true).eq("active", true),
-      supabase.from("competitions").select("*"),
-    ]);
-    if (playerResult.error) throw playerResult.error;
-    if (competitionResult.error) throw competitionResult.error;
-    // Charger les sélections avant de filtrer : une sélection belge est aussi
-    // un lien valide lorsque le fournisseur ne renvoie qu'une autre nationalité.
-    const nationalIds = [...new Set((playerResult.data || []).map((player) => player.national_team_id).filter(Boolean))];
-    const nationalTeams = {};
-    for (let i = 0; i < nationalIds.length; i += 400) {
-      const result = await supabase.from("clubs").select("id,name,team_type,ext").in("id", nationalIds.slice(i, i + 400));
-      if (result.error) throw result.error;
-      for (const team of result.data || []) nationalTeams[team.id] = team;
-    }
-    const players = (playerResult.data || []).filter((player) => isBelgianFollowed(player, nationalTeams[player.national_team_id]));
-    const playerIds = players.map((player) => player.id);
-    const [statsRows, performanceResult, membershipRows] = await Promise.all([
-      // Saison en cours et précédente (championnat d'un club), plus les 5 saisons passées.
-      loadPlayerStatsForPlayers(supabase, playerIds, { sinceSeason: currentSeasonStart() - 1 }),
-      loadAbroadPerformances(supabase, playerIds, PUBLIC_MATCH_PLAYER_STATS_FIELDS),
-      // Parcours en club : arrivée au club actuel et clubs précédents sur chaque carte.
-      loadMembershipsForPlayers(supabase, playerIds),
-    ]);
-    // Clubs des affectations actives inclus : le club actuel peut différer de club_id (transfert).
-    const followedTeamIds = [...new Set([...players.flatMap((player) => [player.club_id, player.national_team_id]), ...membershipRows.filter((row) => row.active).map((row) => row.club_id)].filter(Boolean))];
-    const upcomingResult = followedTeamIds.length ? await supabase.from("matches").select(PUBLIC_MATCH_FIELDS).or(`home_club_id.in.(${followedTeamIds.join(",")}),away_club_id.in.(${followedTeamIds.join(",")})`).neq("status", "finished").gte("kickoff", new Date().toISOString()).order("kickoff", { ascending: true }).limit(100) : { data: [] };
-    if (upcomingResult.error) throw upcomingResult.error;
-    const performanceMatches = await loadMatchesByIds(supabase, (performanceResult.data || []).map((row) => row.match_id));
-    const matchMap = new Map([...(upcomingResult.data || []), ...performanceMatches].map((match) => [match.id, match]));
-    // Charger UNIQUEMENT les clubs référencés (joueurs + sélections + adversaires des
-    // matchs + clubs des stats), par paquets → fini les « Club à renseigner » dus au
-    // plafond de 1000 clubs, et ça reste rapide quel que soit le total en base.
-    const clubIdSet = new Set(followedTeamIds);
-    for (const match of matchMap.values()) { if (match.home_club_id) clubIdSet.add(match.home_club_id); if (match.away_club_id) clubIdSet.add(match.away_club_id); }
-    for (const row of [...statsRows, ...membershipRows]) { if (row.club_id) clubIdSet.add(row.club_id); }
-    const clubList = [];
-    const clubIdArr = [...clubIdSet].filter(Boolean);
-    for (let i = 0; i < clubIdArr.length; i += 400) {
-      const { data, error } = await supabase.from("clubs").select("id,name,logo_url,team_type,ext").in("id", clubIdArr.slice(i, i + 400));
-      if (error) throw error;
-      if (data) clubList.push(...data);
-    }
-    const stats = {};
-    for (const row of statsRows) (stats[row.player_id] ||= []).push(row);
-    const memberships = {};
-    for (const row of membershipRows) (memberships[row.player_id] ||= []).push(row);
-    setData({
-      players,
-      clubs: Object.fromEntries(clubList.map((item) => [item.id, item])),
-      competitions: Object.fromEntries((competitionResult.data || []).map((item) => [item.id, item])),
-      stats,
-      memberships,
-      matches: [...matchMap.values()],
-      performances: performanceResult.data || [],
-      performancesLimited: performanceResult.limited,
-      loading: false,
-      error: "",
-    });
-  })().catch((error) => setData((current) => ({ ...current, loading: false, error: error.message || String(error) }))); }, []);
+  useEffect(() => {
+    let active = true;
+    loadAbroadFormData(supabase, { includeUpcoming: true })
+      .then((result) => { if (active) setData(result); })
+      .catch((error) => { if (active) setData((current) => ({ ...current, loading: false, error: error.message || String(error) })); });
+    return () => { active = false; };
+  }, []);
 
   const view = useMemo(() => {
-    // Championnat national connu de chaque club, d'après toutes les lignes chargées.
-    const clubLeagues = clubNationalLeagues(Object.values(data.stats).flat(), data.competitions);
-    const enriched = data.players.map((player) => {
-      // Club actuel d'après les affectations, comme la fiche joueur : club_id est
-      // réécrit par le balayage avec le club de la ligue scannée (M. Godts affiché
-      // à l'Ajax après son transfert au PSG, 28/10/2026).
-      const currentClubId = resolveCurrentClubId({ player, memberships: data.memberships[player.id] || [], clubsById: data.clubs }) || player.club_id;
-      const club = data.clubs[currentClubId];
-      // Instantané (championnat, pays) écrit pour l'ancien club : écarté après un transfert.
-      const current = currentClubId === player.club_id ? player : { ...player, club_id: currentClubId, competition: null, country: null };
-      // La fiche étrangère reste un bilan de club : les lignes de sélection
-      // appartiennent au parcours international de la fiche joueur.
-      const playerStats = (data.stats[player.id] || []).filter((row) => !isNationalSelectionClub(data.clubs[row.club_id], player.nationality));
-      const domesticBelgianClub = playerStats.some((row) => row.club_id === currentClubId && isBelgian(data.competitions[row.competition_id]?.ext?.country));
-      // Championnat et pays : statistiques du club actuel, puis championnat du club,
-      // puis instantané s'il est valide — jamais « World » ni une coupe d'Europe.
-      const league = resolvePlayerLeague({ player: current, statRows: playerStats, competitionsById: data.competitions, clubLeagues, club });
-      const resolvedCountry = resolvePlayerCountry({ player: current, club, league: league.competition }) || UNKNOWN_COUNTRY;
-      const resolvedCompetition = league.name || UNKNOWN_COMPETITION;
-      return { player, club, nationalTeam: data.clubs[player.national_team_id], watch: belgianWatchStatus(player, data.clubs[player.national_team_id]), country: resolvedCountry, competition: resolvedCompetition, competitionData: league.competition, totals: seasonTotals(playerStats, player.league_stats), career: careerSummary(data.memberships[player.id] || [], currentClubId, data.clubs, { nationality: player.nationality }), domesticBelgianClub };
-    }).filter((item) => item.club && item.club.team_type !== "national" && !item.domesticBelgianClub && !isBelgianClub(item.club) && !isBelgian(item.country));
+    const { enriched, performances, allForm, form } = buildAbroadForm(data);
 
-    const playerMap = Object.fromEntries(enriched.map((item) => [item.player.id, item]));
-    const matchMap = Object.fromEntries(data.matches.map((match) => [match.id, match]));
     const now = new Date();
     const concernsPlayer = (item, match) => [item.club?.id, item.player.national_team_id].filter(Boolean).some((teamId) => teamId === match.home_club_id || teamId === match.away_club_id);
     const watched = data.matches.filter((match) => match.kickoff && match.status !== "finished" && new Date(match.kickoff) >= now && enriched.some((item) => concernsPlayer(item, match))).sort((a, b) => new Date(a.kickoff) - new Date(b.kickoff)).slice(0, 6).map((match) => ({ match, players: enriched.filter((item) => concernsPlayer(item, match)) }));
 
-    const performances = data.performances.map((performance) => ({ performance, item: playerMap[performance.player_id], match: matchMap[performance.match_id] })).filter((row) => row.item && row.match?.kickoff && Number(row.performance.minutes) > 0 && data.clubs[row.performance.club_id]?.team_type !== "national").sort((a, b) => new Date(b.match.kickoff) - new Date(a.match.kickoff));
-    const byPlayer = {};
-    for (const row of performances) if ((byPlayer[row.item.player.id] ||= []).length < 5) byPlayer[row.item.player.id].push(row);
-    const allForm = enriched.map((item) => {
-      const recent = byPlayer[item.player.id] || [];
-      const goals = recent.reduce((sum, row) => sum + (Number(row.performance.goals) || 0), 0);
-      const assists = recent.reduce((sum, row) => sum + (Number(row.performance.assists) || 0), 0);
-      const ratings = recent.map((row) => Number(row.performance.rating)).filter((value) => value > 0);
-      const rating = ratings.length ? ratings.reduce((a, b) => a + b, 0) / ratings.length : recent.length ? null : item.totals.rating;
-      return { ...item, recent, ratings, recentCount: recent.length, goals: recent.length ? goals : item.totals.goals, assists: recent.length ? assists : item.totals.assists, rating, score: goals * 4 + assists * 3 + (rating || 0) + (recent.length ? recent.length : item.totals.appearances / 10) };
-    }).sort((a, b) => b.score - a.score || a.player.name.localeCompare(b.player.name, "fr"));
-    const form = allForm.filter((item) => item.recentCount > 0 && isRecentPerformance(item.recent[0]?.match));
+
 
     const leagues = Object.values(enriched.reduce((groups, item) => {
       const known = item.competition && item.competition !== UNKNOWN_COMPETITION;

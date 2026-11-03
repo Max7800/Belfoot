@@ -21,16 +21,17 @@ describe("championnat d'un Belge à l'étranger", () => {
 
 describe("page Belges à l'étranger", () => {
   const page = fs.readFileSync("app/belges-a-l-etranger/page.js", "utf8");
+  const form = fs.readFileSync("lib/abroadForm.js", "utf8");
   const map = fs.readFileSync("components/football/BelgiansWorldMap.js", "utf8");
   it("championnat non suivi : un groupe par pays, plus un seul groupe au drapeau du premier joueur", () => {
     expect(page).toContain("const key = known ? item.competition : `?${item.country}`;");
     expect(page).toContain("selectLeague(league.filter, league.unknownLeague ? league.country : null)");
   });
   it("dernières performances : matchs en club où le joueur est entré en jeu", () => {
-    expect(page).toContain('Number(row.performance.minutes) > 0 && data.clubs[row.performance.club_id]?.team_type !== "national"');
+    expect(form).toContain('Number(row.performance.minutes) > 0 && data.clubs[row.performance.club_id]?.team_type !== "national"');
   });
   it("championnat cohérent avec le club actuel", () => {
-    expect(page).toContain("clubLeagues, club });");
+    expect(form).toContain("clubLeagues, club });");
   });
   it("coquilles corrigées", () => {
     expect(map).toContain("Clique sur une <span");
