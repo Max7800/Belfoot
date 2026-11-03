@@ -1,3 +1,8 @@
+### 03/11/2026 — Carte des Belges sur ordinateur
+
+- Sur desktop, la carte conserve sa taille et pilote un panneau latéral : sélection sur la carte ou dans le classement, quelques joueurs et liens vers les listes filtrées. Sur mobile, les joueurs sélectionnés restent sous la carte. Les nations britanniques sont regroupées et explicitement indiquées en Royaume-Uni ; accès clavier ajouté aux pays actifs.
+- Les données restent celles déjà chargées pour la page ; aucune nouvelle synchronisation ni requête API-Football. Tests ciblés et CI à vérifier ; contrôle visuel réel desktop/mobile nécessaire avant toute fusion.
+
 ### 03/11/2026 — Fins de contrat dans les transferts
 
 - Affichage : rapprochement prudent de la sortie « nom du joueur » et d'une destination unique API-Football dans les 90 jours, pour un même joueur et club d'origine. Si plusieurs dates sont fournies pour cette destination, elles restent à confirmer. Les cas ambigus, les prêts et les lignes manuelles sont préservés.

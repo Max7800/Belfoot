@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ComposableMap, Geographies, Geography, ZoomableGroup, Marker } from "react-simple-maps";
 import { geoCentroid, geoArea } from "d3-geo";
 import { UNKNOWN_COUNTRY } from "@/lib/belgiansAbroad";
+import { geoName, groupMapPlayers } from "@/lib/belgiansMapGroups";
 
 // Ancre de la pastille : centroïde du PLUS GRAND polygone du pays, pas le centroïde
 // global. Sinon les territoires d'outre-mer (France+Guyane, Espagne+Canaries,
@@ -26,17 +27,6 @@ function badgeAnchor(geo) {
 
 const GEO_URL = "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json";
 
-// Nom pays Belfoot -> nom du fond de carte (world-atlas). À ajuster au fil de l'eau.
-const COUNTRY_ALIAS = {
-  "England": "United Kingdom", "Scotland": "United Kingdom", "Wales": "United Kingdom", "Northern Ireland": "United Kingdom",
-  "USA": "United States of America", "United States": "United States of America",
-  "Türkiye": "Turkey", "Czechia": "Czech Republic", "Czech Republic": "Czech Republic",
-  "South Korea": "South Korea", "North Macedonia": "North Macedonia", "Bosnia & Herzegovina": "Bosnia and Herz.",
-  "Ivory Coast": "Côte d'Ivoire", "Saudi Arabia": "Saudi Arabia", "UAE": "United Arab Emirates",
-  "Serbia": "Serbia", "Russia": "Russia", "Netherlands": "Netherlands",
-};
-const geoName = (c) => COUNTRY_ALIAS[c] || c;
-
 // Vues par continent (centre [lng, lat] + zoom).
 const VIEWS = {
   monde: { label: "🌍 Monde", center: [12, 28], zoom: 1 },
@@ -46,25 +36,16 @@ const VIEWS = {
   asie: { label: "🌏 Asie", center: [95, 28], zoom: 2 },
 };
 
-export default function BelgiansWorldMap({ players = [] }) {
+export default function BelgiansWorldMap({ players = [], selection = null, onSelect = () => {} }) {
   const [viewKey, setViewKey] = useState("europe");
-  const [selected, setSelected] = useState(null);
   const [tooltip, setTooltip] = useState(null);
   const view = VIEWS[viewKey];
 
-  const byCountry = useMemo(() => {
-    const map = {};
-    for (const p of players) {
-      const raw = p?.country;
-      if (!raw || raw === UNKNOWN_COUNTRY) continue;
-      const name = geoName(raw);
-      (map[name] ||= { label: raw, list: [] }).list.push(p);
-    }
-    return map;
-  }, [players]);
+  const byCountry = useMemo(() => groupMapPlayers(players, UNKNOWN_COUNTRY), [players]);
 
   const max = Math.max(1, ...Object.values(byCountry).map((c) => c.list.length));
   const fillFor = (n) => (n ? `rgba(227,6,19,${(0.22 + 0.63 * (n / max)).toFixed(2)})` : "rgba(255,255,255,0.045)");
+  const selected = selection ? geoName(selection.key) : null;
   const current = selected && byCountry[selected];
   const badgeR = viewKey === "monde" ? 7 : 3.5;
 
@@ -77,14 +58,14 @@ export default function BelgiansWorldMap({ players = [] }) {
 
       <div className="mb-2 flex flex-wrap gap-1">
         {Object.entries(VIEWS).map(([key, v]) => (
-          <button key={key} onClick={() => { setViewKey(key); setSelected(null); }} className={`rounded-lg px-2.5 py-1 text-xs font-bold transition ${viewKey === key ? "bg-accent text-white" : "bg-surface2 text-muted hover:text-content"}`}>{v.label}</button>
+          <button key={key} onClick={() => { setViewKey(key); onSelect(null); }} className={`rounded-lg px-2.5 py-1 text-xs font-bold transition ${viewKey === key ? "bg-accent text-white" : "bg-surface2 text-muted hover:text-content"}`}>{v.label}</button>
         ))}
       </div>
 
       <div className="mb-2 text-[11px] text-muted">👆 Clique sur une <span className="font-bold text-accent">pastille rouge</span> (ou le pays surligné) pour voir les Belges qui y jouent.</div>
 
-      <div className="relative overflow-hidden bg-[radial-gradient(ellipse_at_center,rgba(38,55,80,0.48)_0%,transparent_70%)]">
-        <style>{`.rsm-svg,.rsm-geographies,.rsm-geography,.rsm-zoomable-group,.rsm-svg *{outline:none!important;}.rsm-svg:focus,.rsm-zoomable-group:focus{outline:none!important;}@keyframes bfHalo{0%,100%{opacity:.12}50%{opacity:.4}}.bf-halo{animation:bfHalo 2.2s ease-in-out infinite;}.bf-badge{transition:transform .12s ease;transform-box:fill-box;transform-origin:center;}.bf-badge:hover{transform:scale(1.25);}.bf-geo{outline:none;}.bf-geo:hover{fill:rgba(255,255,255,0.07);stroke:rgba(255,255,255,0.25);stroke-width:.5;}.bf-geo-active{cursor:pointer;}.bf-geo-active:hover,.bf-geo-active:active{fill:#e30613;}`}</style>
+      <div className="relative overflow-hidden">
+        <style>{`@keyframes bfHalo{0%,100%{opacity:.12}50%{opacity:.4}}.bf-halo{animation:bfHalo 2.2s ease-in-out infinite;}.bf-badge{transition:transform .12s ease;transform-box:fill-box;transform-origin:center;}.bf-badge:hover{transform:scale(1.25);}.bf-geo:hover{fill:rgba(255,255,255,0.07);stroke:rgba(255,255,255,0.25);stroke-width:.5;}.bf-geo-active{cursor:pointer;}.bf-geo-active:hover,.bf-geo-active:active{fill:#e30613;}.bf-geo-active:focus-visible{stroke:white;stroke-width:1.2;outline:none;}`}</style>
         <ComposableMap projection="geoMercator" projectionConfig={{ scale: 130 }} style={{ width: "100%", height: "auto", outline: "none" }}>
           <ZoomableGroup center={view.center} zoom={view.zoom} maxZoom={8}>
             <Geographies geography={GEO_URL}>
@@ -100,12 +81,16 @@ export default function BelgiansWorldMap({ players = [] }) {
                         geography={geo}
                         onMouseEnter={() => n && setTooltip({ name: entry.label, count: n })}
                         onMouseLeave={() => setTooltip(null)}
-                        onClick={() => n && setSelected((s) => (s === name ? null : name))}
+                        onClick={() => n && onSelect(selected === name ? null : entry)}
+                        role={n ? "button" : undefined}
+                        tabIndex={n ? 0 : -1}
+                        aria-label={n ? `${entry.label} : ${n} joueur${n > 1 ? "s" : ""}` : undefined}
+                        onKeyDown={(event) => { if (n && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); onSelect(selected === name ? null : entry); } }}
                         // react-simple-maps 5 : Geography reçoit des attributs SVG ordinaires
                         // (l'objet { default, hover, pressed } de la v3 était ignoré : pays
                         // tous noirs, sans couleur ni survol). Survol / clic en CSS (.bf-geo).
-                        fill={fillFor(n)}
-                        stroke="rgba(255,255,255,0.1)"
+                        fill={selected === name ? "#e30613" : fillFor(n)}
+                        stroke={selected === name ? "rgba(255,255,255,0.8)" : "rgba(255,255,255,0.1)"}
                         strokeWidth={0.4}
                         className={n ? "bf-geo bf-geo-active" : "bf-geo"}
                       />
@@ -124,7 +109,7 @@ export default function BelgiansWorldMap({ players = [] }) {
                         coordinates={centroid}
                         onMouseEnter={() => setTooltip({ name: entry.label, count: n })}
                         onMouseLeave={() => setTooltip(null)}
-                        onClick={() => setSelected((s) => (s === name ? null : name))}
+                        onClick={() => onSelect(selected === name ? null : entry)}
                         style={{ cursor: "pointer" }}
                       >
                         <circle className="bf-halo" r={badgeR + 2} fill="#e30613" style={{ pointerEvents: "none" }} />
@@ -148,10 +133,10 @@ export default function BelgiansWorldMap({ players = [] }) {
       </div>
 
       {current && (
-        <div className="mt-3">
+        <div className="mt-3 lg:hidden">
           <div className="mb-2 flex items-center justify-between">
             <div className="text-sm font-black">{current.label} <span className="text-muted">— {current.list.length} Belge(s)</span></div>
-            <button onClick={() => setSelected(null)} className="text-[11px] text-muted hover:text-content">Fermer ✕</button>
+            <button onClick={() => onSelect(null)} className="text-[11px] text-muted hover:text-content">Fermer ✕</button>
           </div>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {current.list.map((p) => (
