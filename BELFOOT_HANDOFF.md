@@ -1,3 +1,9 @@
+### 03/11/2026 — Chargement Belges à l’étranger et transferts
+
+- Signalement utilisateur : page Belges à l’étranger très lente. Deux lots de performances maximum sont désormais lus en parallèle ; la lecture des prochains matchs et celle des matchs des performances s’effectuent aussi en parallèle, sans changer le budget API-Football. L’effet réel et la charge Supabase doivent être mesurés après déploiement : le reste du chargement demeure regroupé, donc aucune amélioration chiffrée garantie.
+- Audit affichage transferts Pro League : Rits montre deux départs d’Anderlecht (sans club le 29 juin, Beerschot le 26 août) ; Verschaeren trois (sans club et Sampdoria le 29 juin, Sampdoria le 11 août). Les mouvements bruts et identifiants doivent être examinés avant une règle de rapprochement ; aucune suppression en base.
+- Tests ciblés : 15 réussis ; ESLint sans erreur, avertissements existants images. Aucun SQL ni appel API-Football exécuté.
+
 ### 02/11/2026 — Bandeau et carte des Belges à l’étranger
 
 - Sur desktop, suppression du portrait agrandi dans le bandeau par défaut : deux prochains matchs connus sont mis en avant, avec liens et joueurs concernés. Le bandeau personnalisé avec image reste pris en charge ; sans matchs, un message neutre s’affiche. À la demande de l’utilisateur, la carte reste bien visible mais perd ses encadrements rectangulaires et son fond carré ; elle est intégrée au fond de page, avec un panneau discret des pays filtrant l’annuaire sur grand écran. Sur mobile, ce classement latéral est masqué.

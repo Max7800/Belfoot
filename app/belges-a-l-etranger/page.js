@@ -129,9 +129,11 @@ export default function BelgiansAbroadPage() {
     ]);
     // Clubs des affectations actives inclus : le club actuel peut différer de club_id (transfert).
     const followedTeamIds = [...new Set([...players.flatMap((player) => [player.club_id, player.national_team_id]), ...membershipRows.filter((row) => row.active).map((row) => row.club_id)].filter(Boolean))];
-    const upcomingResult = followedTeamIds.length ? await supabase.from("matches").select(PUBLIC_MATCH_FIELDS).or(`home_club_id.in.(${followedTeamIds.join(",")}),away_club_id.in.(${followedTeamIds.join(",")})`).neq("status", "finished").gte("kickoff", new Date().toISOString()).order("kickoff", { ascending: true }).limit(100) : { data: [] };
+    const [upcomingResult, performanceMatches] = await Promise.all([
+      followedTeamIds.length ? supabase.from("matches").select(PUBLIC_MATCH_FIELDS).or(`home_club_id.in.(${followedTeamIds.join(",")}),away_club_id.in.(${followedTeamIds.join(",")})`).neq("status", "finished").gte("kickoff", new Date().toISOString()).order("kickoff", { ascending: true }).limit(100) : Promise.resolve({ data: [] }),
+      loadMatchesByIds(supabase, (performanceResult.data || []).map((row) => row.match_id)),
+    ]);
     if (upcomingResult.error) throw upcomingResult.error;
-    const performanceMatches = await loadMatchesByIds(supabase, (performanceResult.data || []).map((row) => row.match_id));
     const matchMap = new Map([...(upcomingResult.data || []), ...performanceMatches].map((match) => [match.id, match]));
     // Charger UNIQUEMENT les clubs référencés (joueurs + sélections + adversaires des
     // matchs + clubs des stats), par paquets → fini les « Club à renseigner » dus au
