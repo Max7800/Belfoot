@@ -1,3 +1,8 @@
+### 03/11/2026 — Chargements du calendrier, du classement et du direct
+
+- Les pages attendent leurs compétitions et saisons avant d'afficher un état vide ; erreurs et données non publiées restent distinguées. La réponse tardive d'une ancienne compétition ne remplace plus la saison choisie. Le direct attend les compétitions avant d'afficher ses matchs.
+- Tests ciblés des états publics et des horaires de vote ; vérifier également les interactions réelles en navigateur après déploiement. Aucun changement des données ni de la synchronisation de production.
+
 ### 03/11/2026 — États de vote et coefficient UEFA
 
 - Le onze affiche un état cohérent avec son statut et ses heures d'ouverture et de fermeture, actualisé aux échéances ; les compositions partagées n'annoncent plus à tort un vote fermé. L'ordre par défaut privilégie les votes réellement ouverts puis à venir. Les règles serveur et les données ne changent pas.
