@@ -1,3 +1,8 @@
+### 03/11/2026 — Carte panoramique des Belges
+
+- La carte utilise un format large sur ordinateur avec cadrages adaptés et une version plus haute sur petit écran. Les destinations principales ou, après sélection, quatre fiches joueurs et l'accès à la liste filtrée sont placés sous la carte. La sélection du Royaume-Uni conserve des liens distincts pour ses nations ; les interactions existantes sont conservées.
+- Un test vérifie le cadrage européen par projection. Les captures et essais réels desktop/mobile restent nécessaires avant publication : la preview Vercel ne dispose pas de l'URL Supabase. Aucun appel API-Football ou changement de données.
+
 ### 03/11/2026 — Carte des Belges sur ordinateur
 
 - Sur desktop, la carte conserve sa taille et pilote un panneau latéral : sélection sur la carte ou dans le classement, quelques joueurs et liens vers les listes filtrées. Sur mobile, les joueurs sélectionnés restent sous la carte. Les nations britanniques sont regroupées et explicitement indiquées en Royaume-Uni ; accès clavier ajouté aux pays actifs.
