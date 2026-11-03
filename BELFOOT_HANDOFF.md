@@ -1,3 +1,9 @@
+### 03/11/2026 — Classement de forme partagé
+
+- Accueil et page Belges utilisent le même chargement et calcul : joueurs à l'étranger, clubs courants, performances de club et cinq matchs au maximum dans les 45 derniers jours. Les statistiques anciennes ou de sélection ne contribuent pas au classement. L'accueil charge ce bloc séparément du reste et indique les erreurs.
+- Les choix éditoriaux distincts de joueur mis en avant restent possibles en administration et peuvent produire une différence d'affichage. En l'absence de matchs récents, le joueur en avant peut utiliser ses chiffres de saison avec mention. L'accueil effectue désormais des lectures Supabase supplémentaires : leur coût et la latence restent à mesurer en conditions réelles ; aucun appel API-Football ni synchronisation.
+- Branche basée sur la PR #111. Tests locaux complets et build à vérifier dans la CI ; pas de fusion automatique.
+
 ### 03/11/2026 — Chargement Belges à l’étranger et transferts
 
 - Signalement utilisateur : page Belges à l’étranger très lente. Deux lots de performances maximum sont désormais lus en parallèle ; la lecture des prochains matchs et celle des matchs des performances s’effectuent aussi en parallèle, sans changer le budget API-Football. L’effet réel et la charge Supabase doivent être mesurés après déploiement : le reste du chargement demeure regroupé, donc aucune amélioration chiffrée garantie.
