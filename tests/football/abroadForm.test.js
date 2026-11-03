@@ -29,4 +29,16 @@ describe("classement partagé des Belges en forme", () => {
     expect(result.form[0]).toMatchObject({ goals: 2, recentCount: 1, rating: 8 });
     expect(result.enriched.map((item) => item.player.id)).not.toContain("c");
   });
+  it("limite le total à cinq matchs et ignore un match futur", () => {
+    const now = Date.now();
+    const matches = Array.from({ length: 6 }, (_, i) => ({ id: String(i), kickoff: new Date(now - (i + 1) * 86400000).toISOString() }));
+    matches.push({ id: "future", kickoff: new Date(now + 86400000).toISOString() });
+    const result = buildAbroadForm({
+      players: [{ id: "a", name: "Alice", club_id: "fr", nationality: "Belgium", country: "France" }],
+      clubs: { fr: { id: "fr", name: "Paris", ext: { country: "France" } } },
+      competitions: {}, stats: {}, memberships: {}, matches,
+      performances: matches.map((match) => ({ player_id: "a", club_id: "fr", match_id: match.id, minutes: 90, goals: 1 })),
+    });
+    expect(result.form[0]).toMatchObject({ goals: 5, recentCount: 5 });
+  });
 });
