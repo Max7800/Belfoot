@@ -7,7 +7,7 @@ import { seasonYear } from "@/modules/football/season";
 import { readAll, readChunks } from "@/lib/readAll";
 import { dedupeTransfers } from "@/lib/transferLabels";
 import { chunkIds, loadPlayersByIds } from "@/lib/publicFootballData";
-import { matchesTransferQuery, summarizeTransfers } from "@/lib/transfersView";
+import { collapseFreeAgentTransitions, matchesTransferQuery, summarizeTransfers } from "@/lib/transfersView";
 
 // Page Transferts : bilan chiffré, vue par club (par défaut) ou fil chronologique.
 // Refonte après l'audit du 28/10/2026 (lib/transfersView.js).
@@ -47,7 +47,7 @@ function TransferLine({ item, clubs, photos, side = null }) {
       </div>
       <div className="flex flex-shrink-0 flex-col items-end gap-1">
         {item.label && <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${KIND_STYLE[item.kind]}`}>{item.label}</span>}
-        <span className="text-[10px] text-muted">{fmtDate(item.transfer_date)}</span>
+        <span className="text-[10px] text-muted">{item.transfer_date_uncertain ? "Date à confirmer" : fmtDate(item.transfer_date)}</span>
       </div>
     </div>
   );
@@ -91,7 +91,7 @@ export default function CompetitionTransfers({ competition }) {
       if (!ids.size) { setRows([]); setClubs({}); setPhotos({}); setLoading(false); return; }
       const idList = [...ids].join(",");
       const { data } = await readAll(() => supabase.from("player_transfers")
-        .select("id,player_id,player_name,from_club_id,to_club_id,from_club_name,to_club_name,transfer_date,transfer_type")
+        .select("id,player_id,player_name,from_club_id,to_club_id,to_club_external_id,from_club_name,to_club_name,transfer_date,transfer_type,source")
         .eq("season_start_year", year)
         .or(`from_club_id.in.(${idList}),to_club_id.in.(${idList})`)
         .order("transfer_date", { ascending: false }));
@@ -104,7 +104,7 @@ export default function CompetitionTransfers({ competition }) {
         loadPlayersByIds(supabase, playerIds),
       ]);
       const clubMap = Object.fromEntries((clubResult.data || []).map((club) => [club.id, club]));
-      setRows(dedupeTransfers(raw, clubMap));
+      setRows(dedupeTransfers(collapseFreeAgentTransitions(raw), clubMap));
       setClubs(clubMap);
       setPhotos(Object.fromEntries(players.map((player) => [player.id, player.photo_url])));
       setLoading(false);
