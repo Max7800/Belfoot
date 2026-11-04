@@ -1,3 +1,9 @@
+### 04/11/2026 — Automatisation des vainqueurs : fondation non raccordée
+
+- `mapFixture` conserve désormais les indicateurs fournisseur de victoire et les tirs au but, lorsqu'ils sont présents. Ces données ne sont pas rétroactives : les anciens matchs ne les ont pas nécessairement. Toute future synchronisation dépendra de la couverture API et consommera les appels existants.
+- `cupWinnerCandidate` propose uniquement une finale unique et explicite d'une coupe lorsque l'appelant a établi que les données sont complètes ; score ou tirs au but cohérents, équipes reliées et statut final explicite. Les données contradictoires, forfaits, finales multiples, ligues et données incomplètes restent à vérifier. La fonction est pure et n'est pas encore raccordée à un job, à l'admin ou au palmarès : aucun vainqueur n'est enregistré automatiquement.
+- Avant toute mise en service : établir comment prouver l'exhaustivité d'une saison (l'indicateur `complete` ne la prouve pas à lui seul), gérer les finales aller-retour et championnats à playoffs, proposer un suivi et préserver les corrections manuelles, tests d'intégration et mesure du budget API. Ne pas lancer de synchronisation de production sans accord.
+
 ### 04/11/2026 — Historique éditorial des vainqueurs
 
 - La migration 0042 ajoute `competitions.winners_history` (liste JSON vide par défaut). Elle doit être appliquée avant toute saisie ; aucune migration n'a été exécutée en production. La synchronisation existante ne renseigne pas ce champ.
