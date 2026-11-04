@@ -1,3 +1,9 @@
+### 04/11/2026 — Statut des matchs dans le bandeau d'accueil
+
+- À la demande de l'utilisateur, les pastilles V/N/D sont également retirées du bandeau des scores de l'accueil ; les matchs terminés conservent « FIN », les couleurs de score et la mise en avant des équipes suivies. Tests ciblés 13 réussis, lint sans erreur.
+- Karetsas : contrôle en base communiqué par l'utilisateur : fiche `70561371-efe6-41d7-85c9-fd5794aefad9`, nationalités Grèce et Belgique, sélection null et `national_team_locked=true` ; Grèce senior masculine `fa6c6a58-677d-4ee1-9e3d-e14ca7d394fc`, API 1117. Correction ciblée proposée au propriétaire, non exécutée par l'agent.
+- Homme du match : la documentation API-Football confirme les notes du match mais aucun champ officiel de récompense n'a été confirmé ; une meilleure note doit être présentée comme telle, avec gestion des absences et égalités.
+
 ### 04/11/2026 — Lisibilité des compositions sur les fiches match
 
 - Noms sur fond sombre et sur deux lignes au besoin ; terrain mobile plus haut. Le nom complet reste disponible au survol et pour les lecteurs d’écran. Liens et données inchangés.

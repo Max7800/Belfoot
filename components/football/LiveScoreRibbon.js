@@ -93,10 +93,11 @@ export default function LiveScoreRibbon({ config = {}, competitions = [], clubs:
     {loading ? <div className="grid gap-2 p-3 sm:p-4 lg:grid-cols-2">{[0, 1, 2, 3].map((item) => <div key={item} className="h-14 animate-pulse rounded-xl bg-white/5" />)}</div>
       : shown.length ? <div className="p-3 sm:p-4">
         <div className="grid overflow-hidden rounded-2xl border border-white/10 bg-black/15 lg:grid-cols-2 lg:divide-x lg:divide-white/10">
-          {[shown.filter((_, index) => index % 2 === 0), shown.filter((_, index) => index % 2 === 1)].map((column, index) => column.length > 0 && <div key={index} className="divide-y divide-white/10">{column.map((match) => <ScoreRow key={match.id} match={match} clubs={clubs} competition={competitionMap[match.competition_id]} highlighted={Boolean(followedSide(match))} followedSide={followedSide(match)} latestEvent={latestEvents[match.id]} />)}</div>)}
+          {[shown.filter((_, index) => index % 2 === 0), shown.filter((_, index) => index % 2 === 1)].map((column, index) => column.length > 0 && <div key={index} className="divide-y divide-white/10">{column.map((match) => <ScoreRow key={match.id} match={match} clubs={clubs} competition={competitionMap[match.competition_id]} highlighted={Boolean(followedSide(match))} latestEvent={latestEvents[match.id]} />)}</div>)}
         </div>
         {pool.length > shown.length && <Link href="/direct" className="mt-2 flex items-center justify-center gap-1 rounded-xl border border-dashed border-white/15 py-2 text-xs font-bold text-white/70 hover:border-white/30 hover:text-white">Voir les {pool.length - shown.length} autres matchs<ArrowRight size={12} /></Link>}
       </div>
         : <div className="flex min-h-28 items-center justify-center gap-2 p-4 text-sm font-semibold text-white/60"><Radio size={16} />Aucun match programmé pour le moment.</div>}
   </section>;
 }
+
