@@ -1,9 +1,10 @@
 import React from "react";
+import Link from "next/link";
 import { recentCompetitionWinners } from "@/lib/competitionWinners";
 
 function WinnerRow({ item }) {
   return <li className="flex items-center justify-between gap-4 border-t border-line/10 py-3 first:border-t-0">
-    <div><span className="block text-xs font-bold text-muted">{item.season}</span><strong className="text-sm text-content">{item.winner}</strong></div>
+    <div><span className="block text-xs font-bold text-muted">{item.season}</span>{item.club_id ? <Link href={`/clubs/${item.club_id}`} className="text-sm font-bold text-content hover:text-accent">{item.winner} →</Link> : <strong className="text-sm text-content">{item.winner}</strong>}</div>
     {item.source && <a href={item.source} target="_blank" rel="noopener noreferrer" className="shrink-0 text-xs text-muted underline hover:text-content">Source <span className="sr-only">pour {item.winner}, {item.season} (nouvel onglet)</span>↗</a>}
   </li>;
 }

@@ -8,7 +8,7 @@ import { slugify } from "@/lib/slugify";
 import { editorialFieldsAfterEdit } from "@/lib/playerIdentity";
 import { auditAdminAction, blockedDeleteText, deleteConfirmationText, deleteImpact, identityChanges, identityConfirmationText, isGuardedDelete, typedConfirmationMatches } from "@/lib/adminGuards";
 import { useSearchParams } from "next/navigation";
-import { validateCompetitionWinners } from "@/lib/competitionWinners";
+import { editCompetitionWinner, validateCompetitionWinners } from "@/lib/competitionWinners";
 import CompetitionWinnerSuggestions from "@/components/admin/CompetitionWinnerSuggestions";
 
 const POS = { Goalkeeper: 0, Defender: 1, Midfielder: 2, Attacker: 3 };
@@ -291,7 +291,7 @@ function Field({ f, value, onChange, options }) {
   }
   if (f.type === "competitionWinners") {
     const arr = Array.isArray(value) ? value : [];
-    const upd = (index, key, nextValue) => onChange(arr.map((item, i) => i === index ? { ...item, [key]: nextValue } : item));
+    const upd = (index, key, nextValue) => onChange(arr.map((item, i) => i === index ? editCompetitionWinner(item, key, nextValue) : item));
     return <div className="sm:col-span-2">{label}<p className="mb-2 text-xs text-muted">Une ligne par saison confirmée. Source facultative : lien vers une page fiable. Ne pas renseigner une saison non attribuée.</p><div className="space-y-2">{arr.map((item, index) => <div key={index} className="grid gap-2 rounded-xl border border-line/10 bg-surface/40 p-2 sm:grid-cols-[120px_1fr_1fr_auto]">
       <input aria-label={`Saison ${index + 1}`} value={item.season || ""} onChange={(e) => upd(index, "season", e.target.value)} placeholder="2025-2026" className={box} />
       <input aria-label={`Vainqueur ${index + 1}`} value={item.winner || ""} onChange={(e) => upd(index, "winner", e.target.value)} placeholder="Vainqueur" className={box} />

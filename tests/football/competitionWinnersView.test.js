@@ -17,4 +17,9 @@ describe("affichage du palmarès", () => {
     expect(html).toContain("Voir les saisons précédentes (1)");
     expect(html).toContain("rel=\"noopener noreferrer\"");
   });
+  it("relie une équipe identifiée à sa fiche, sans lien inventé pour un nom libre", () => {
+    const html = renderToStaticMarkup(React.createElement(CompetitionWinners, { history: [{ season: "2025", winner: "Club A", club_id: "f012418d-b844-431b-82b6-aafce85b2ef0" }, { season: "2024", winner: "Club B" }] }));
+    expect(html).toContain('href="/clubs/f012418d-b844-431b-82b6-aafce85b2ef0"');
+    expect(html).not.toContain("/clubs/undefined");
+  });
 });

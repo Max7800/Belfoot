@@ -1,3 +1,9 @@
+### 04/11/2026 — Liens entre palmarès et fiches clubs
+
+- Les propositions vérifiées conservent l'identifiant du club dans `winners_history` ; la vue publique relie les vainqueurs identifiés à leur fiche. Un vainqueur renseigné en texte libre reste sans lien. La modification manuelle du nom efface l'identifiant pour éviter un lien erroné ; les UUID mal formés sont refusés.
+- Le nom affiché reste un instantané éditorial et ne suit pas automatiquement les renommages ; aucun palmarès club n'est synchronisé ou recalculé. En cas de suppression du club, le lien peut devenir invalide : envisager une relation normalisée avant d'automatiser davantage.
+- 23 tests ciblés réussis, dont migration PostgreSQL locale, vue et validation ; lint sans erreur (un avertissement existant). Pas de migration ni synchronisation en production.
+
 ### 04/11/2026 — Propositions de champions et finales aller-retour
 
 - L'analyse admin propose également une finale de coupe aller-retour si exactement deux rencontres identifiées opposent les mêmes équipes dans l'ordre, avec scores confirmés ; les tirs au but de la seconde manche sont pris en compte. En cas d'égalité cumulée sans tirs au but, aucune règle historique de buts à l'extérieur n'est supposée. Liens vers les deux manches.
@@ -20,7 +26,7 @@
 
 - La migration 0042 ajoute `competitions.winners_history` (liste JSON vide par défaut). Elle doit être appliquée avant toute saisie ; aucune migration n'a été exécutée en production. La synchronisation existante ne renseigne pas ce champ.
 - Administration des compétitions : saison, vainqueur et source facultative ; validation des saisons, doublons et liens. La vue d'ensemble affiche les cinq vainqueurs récents, puis les saisons antérieures ; les lignes invalides ou ambiguës sont masquées. Aucune déduction automatique depuis les classements ou finales, et aucune donnée historique initiale n'est fournie.
-- Limites : saisie manuelle et noms texte sans lien vers les fiches clubs ; les palmarès des clubs ne sont pas synchronisés avec cet historique. Le rendu mobile et desktop reste à vérifier ; le remplissage automatique depuis une source fiable nécessite un chantier distinct.
+- Limites : saisie manuelle ; les propositions identifiées sont désormais liées aux fiches clubs comme décrit ci-dessus, mais les palmarès des clubs ne sont pas synchronisés avec cet historique. Le rendu mobile et desktop reste à vérifier ; le remplissage automatique depuis une source fiable nécessite un chantier distinct.
 - Les couleurs de maillots via une source gratuite sont reportées ; la PR #118 sur la lisibilité du terrain reste indépendante.
 
 ### 03/11/2026 — Chargements du calendrier, du classement et du direct
