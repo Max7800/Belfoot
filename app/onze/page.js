@@ -4,6 +4,7 @@ import { Star, X, Trophy, Share2 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/lib/auth";
 import { formationSlots, CATEGORY_LABEL, FORMATION_OPTIONS } from "@/lib/votw";
+import { voteWindow, voteWindowLabel } from "@/lib/voteWindow";
 
 // ── Style du terrain, regroupé ici ─────────────────────────────────────────
 // Le design collera au site plus tard : pour le re-styler, tout est ici (fond,
@@ -43,11 +44,20 @@ export default function OnzePage() {
   const [sharedComposition, setSharedComposition] = useState(null);
   const [requestedKind, setRequestedKind] = useState("week");
   const [matchInfo, setMatchInfo] = useState(null);
+  const [clock, setClock] = useState(() => Date.now());
+
+  useEffect(() => {
+    const next = sessions.flatMap((item) => [item.opens_at, item.closes_at]).map((value) => value ? Date.parse(value) : NaN).filter((time) => Number.isFinite(time) && time > clock).sort((a, b) => a - b)[0];
+    if (!next) return;
+    const timer = setTimeout(() => setClock(Date.now()), Math.min(next - clock + 50, 2147483647));
+    return () => clearTimeout(timer);
+  }, [sessions, clock]);
 
   const preMatch = sess?.kind === "pre_match" || requestedKind === "pre_match";
   const slots = formationSlots(activeFormation || sess?.formation || "4-3-3");
   const activePicks = sharedComposition?.picks || picks;
-  const votable = !sharedComposition && !!sess && sess.status === "open" && (!sess.opens_at || new Date(sess.opens_at) <= new Date()) && (!sess.closes_at || new Date(sess.closes_at) > new Date());
+  const voteState = voteWindow(sess, clock);
+  const votable = !sharedComposition && voteState === "open";
   const filled = Object.keys(activePicks).length;
   const displayedCount = (votable || sharedComposition) ? filled : Object.keys(view === "belfoot" ? belfoot : results).length;
 
@@ -128,7 +138,7 @@ export default function OnzePage() {
       const all = data || [];
       const list = wanted ? all : wantedMatch ? all.filter((x) => x.kind === "pre_match" && x.match_id === wantedMatch) : all.filter((x) => x.kind !== "pre_match");
       setSessions(list);
-      const s = (wanted && all.find((x) => x.id === wanted)) || list.find((x) => x.status === "open") || list[0] || null;
+      const s = (wanted && all.find((x) => x.id === wanted)) || list.find((x) => voteWindow(x) === "open") || list.find((x) => voteWindow(x) === "upcoming") || list[0] || null;
       setSess(s);
       if (s) await loadData(s, sharedLineup);
       setLoading(false);
@@ -225,7 +235,7 @@ export default function OnzePage() {
         <span className="text-sm text-muted">{preMatch ? `${matchInfo?.home?.name || "Belgique"} – ${matchInfo?.away?.name || "adversaire"}` : `Journée ${sess.matchday}${sess.season_label ? ` · ${sess.season_label}` : ""}`} · {activeFormation}</span>
         {sessions.length > 1 && (
           <select value={sess.id} onChange={(e) => selectSession(e.target.value)} title="Revoir une journée" className="rounded-lg border border-line/10 bg-surface2 px-2 py-1 text-xs text-content">
-            {sessions.map((s) => <option key={s.id} value={s.id}>Journée {s.matchday}{s.season_label ? ` · ${s.season_label}` : ""}{s.status === "open" ? " — en cours" : s.status === "published" ? " — publié" : ""}</option>)}
+            {sessions.map((s) => <option key={s.id} value={s.id}>Journée {s.matchday}{s.season_label ? ` · ${s.season_label}` : ""} — {voteWindowLabel(voteWindow(s, clock))}</option>)}
           </select>
         )}
         <button onClick={share} title="Partager cette composition" className="inline-flex items-center gap-1 rounded-lg border border-line/15 px-2 py-1 text-xs font-bold text-muted hover:border-accent/40 hover:text-content"><Share2 className="h-3.5 w-3.5" />Partager</button>
@@ -237,7 +247,7 @@ export default function OnzePage() {
       {!userId && !sharedComposition && <p className="rounded-xl border border-amber-400/25 bg-amber-400/5 p-3 text-sm text-amber-200">Connecte-toi pour composer et enregistrer ton XI.</p>}
       {preMatch && votable && <div className="flex gap-1 overflow-x-auto rounded-xl border border-line/10 bg-surface p-1">{FORMATION_OPTIONS.map((formation) => <button key={formation} onClick={() => changeFormation(formation)} className={`shrink-0 rounded-lg px-4 py-2 text-sm font-black ${activeFormation === formation ? "bg-red-500 text-white" : "text-muted hover:bg-white/[0.04] hover:text-white"}`}>{formation}</button>)}</div>}
       {sharedComposition && <a href={`/onze?match=${sess.match_id}`} className="block rounded-xl border border-sky-400/25 bg-sky-400/5 p-3 text-center text-sm font-bold text-sky-200">Composer mon propre onze</a>}
-      {!votable && Object.keys(results).length === 0 && <p className="rounded-xl border border-line/15 bg-surface p-3 text-sm text-muted"><Trophy className="mr-2 inline h-4 w-4" />Le vote est fermé. Le résultat sera publié ici.</p>}
+      {!sharedComposition && !votable && Object.keys(results).length === 0 && <p className="rounded-xl border border-line/15 bg-surface p-3 text-sm text-muted"><Trophy className="mr-2 inline h-4 w-4" />{voteState === "upcoming" ? "Le vote n’a pas encore ouvert." : voteState === "published" ? "Aucun résultat n’est disponible pour cette journée." : voteState === "unavailable" ? "Le statut du vote est indisponible." : "Le vote est fermé. Le résultat sera publié ici."}</p>}
       {!votable && Object.keys(results).length > 0 && <p className="rounded-xl border border-amber-400/20 bg-amber-400/5 p-3 text-sm text-amber-200"><Trophy className="mr-2 inline h-4 w-4" />Voici le 11 élu par les lecteurs pour cette journée.</p>}
 
       {!votable && Object.keys(belfoot).length > 0 && (

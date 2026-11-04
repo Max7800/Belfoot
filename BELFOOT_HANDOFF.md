@@ -1,3 +1,14 @@
+### 03/11/2026 — Chargements du calendrier, du classement et du direct
+
+- Les pages attendent leurs compétitions et saisons avant d'afficher un état vide ; erreurs et données non publiées restent distinguées. La réponse tardive d'une ancienne compétition ne remplace plus la saison choisie. Le direct attend les compétitions avant d'afficher ses matchs.
+- Tests ciblés des états publics et des horaires de vote ; vérifier également les interactions réelles en navigateur après déploiement. Aucun changement des données ni de la synchronisation de production.
+
+### 03/11/2026 — États de vote et coefficient UEFA
+
+- Le onze affiche un état cohérent avec son statut et ses heures d'ouverture et de fermeture, actualisé aux échéances ; les compositions partagées n'annoncent plus à tort un vote fermé. L'ordre par défaut privilégie les votes réellement ouverts puis à venir. Les règles serveur et les données ne changent pas.
+- Le coefficient UEFA est une saisie manuelle. Une valeur très élevée ou non numérique est signalée « Valeur à vérifier » au public et dans l'admin, sans insérer une décimale supposée ni modifier les données. La valeur 59450 observée doit être vérifiée et corrigée manuellement d'après une source officielle avant affichage fiable ; l'historique et la date d'actualisation restent à concevoir.
+- Aucun appel API-Football, changement de données ou synchronisation de production.
+
 ### 03/11/2026 — Carte panoramique des Belges
 
 - La carte utilise un format large sur ordinateur avec cadrages adaptés et une version plus haute sur petit écran. Les destinations principales ou, après sélection, quatre fiches joueurs et l'accès à la liste filtrée sont placés sous la carte. La sélection du Royaume-Uni conserve des liens distincts pour ses nations ; les interactions existantes sont conservées.
