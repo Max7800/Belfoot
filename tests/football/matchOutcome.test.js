@@ -30,12 +30,13 @@ describe("page Direct : repères", () => {
     expect(component).toContain("outcome={outcome.home}");
     expect(component).toContain("outcome={outcome.away}");
   });
-  it("pastille V / N / D du camp belge suivi", () => {
+  it("Direct ne passe pas de camp suivi pour afficher les pastilles V / N / D", () => {
     expect(component).toContain("const result = followedSide ? sideResult(match, followedSide) : null;");
-    expect(component).toContain("followedSide={followedSide(match)}");
+    expect(fs.readFileSync("components/football/LiveMatchCenter.js", "utf8")).not.toContain("followedSide={followedSide(match)}");
   });
   it("« Aujourd'hui » repérable même non choisi, jamais grisé", () => {
     expect(component).toContain("const today = day.offset === 0;");
     expect(component).toContain("${count || today ? \"\" : \"opacity-45\"}");
   });
 });
+

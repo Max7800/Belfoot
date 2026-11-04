@@ -1,3 +1,8 @@
+### 04/11/2026 — Statut des matchs sur la page Direct
+
+- À la demande de l'utilisateur, la page Direct ne présente plus de pastilles V/N/D ambiguës sous le statut ; les matchs terminés gardent « FIN ». La mise en avant des équipes suivies et les scores colorés restent en place. Le bandeau d'accueil utilise toujours son comportement existant.
+- Tests ciblés Direct et accueil : 25 réussis ; lint sans erreur (un avertissement image existant). Aucun appel API-Football ni changement de données.
+
 ### 03/11/2026 — Chargements du calendrier, du classement et du direct
 
 - Les pages attendent leurs compétitions et saisons avant d'afficher un état vide ; erreurs et données non publiées restent distinguées. La réponse tardive d'une ancienne compétition ne remplace plus la saison choisie. Le direct attend les compétitions avant d'afficher ses matchs.
