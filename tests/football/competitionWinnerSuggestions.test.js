@@ -12,6 +12,11 @@ describe("analyse administrative des finales en base", () => {
   it("écarte une double finale et une équipe inconnue", async () => {
     const m = { competition_id: "c", season_id: "s", round_raw: "Final", status: "finished", home_club_id: "a", away_club_id: "b", home_score: 2, away_score: 1, ext: { status_short: "FT" } };
     const db = createFakeSupabase({ seasons: [{ id: "s", label: "2024", competition_id: "c" }], matches: [{ ...m, id: "m1" }, { ...m, id: "m2" }], clubs: [] });
-    expect(await loadCupWinnerSuggestions(db, { id: "c", competition_type: "cup", ext: { full_competition_seasons: { "2024": "date" } } })).toMatchObject([{ status: "needs_review", reason: "finale_ambigue" }]);
+    expect(await loadCupWinnerSuggestions(db, { id: "c", competition_type: "cup", ext: { full_competition_seasons: { "2024": "date" } } })).toMatchObject([{ status: "needs_review", reason: "ordre_manches_inconnu" }]);
+  });
+  it("propose un champion marqué explicitement seulement si tous les matchs sont terminés", async () => {
+    const db = createFakeSupabase({ seasons: [{ id: "s", label: "2024", competition_id: "c" }], clubs: [{ id: "a", name: "Club A" }], matches: [{ id: "m", competition_id: "c", season_id: "s", status: "finished" }] });
+    const comp = { id: "c", competition_type: "league", ext: { full_competition_seasons: { "2024": "date" }, standings_by_season: { "2024": [{ rows: [{ rank: 1, club: "a", played: 1, description: "Champion" }] }] } } };
+    expect(await loadCupWinnerSuggestions(db, comp)).toMatchObject([{ status: "candidate", winner: "Club A" }]);
   });
 });

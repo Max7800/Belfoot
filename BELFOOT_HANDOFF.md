@@ -1,3 +1,9 @@
+### 04/11/2026 — Propositions de champions et finales aller-retour
+
+- L'analyse admin propose également une finale de coupe aller-retour si exactement deux rencontres identifiées opposent les mêmes équipes dans l'ordre, avec scores confirmés ; les tirs au but de la seconde manche sont pris en compte. En cas d'égalité cumulée sans tirs au but, aucune règle historique de buts à l'extérieur n'est supposée. Liens vers les deux manches.
+- Pour un championnat uniquement, une proposition exige un classement de la saison avec une unique ligne classée première explicitement marquée `Champion` ou `Winner`, au moins un match et tous les matchs en base terminés. Le marqueur d'import terminé et les matchs en base ne prouvent pas que le fournisseur est complet ; l'admin doit vérifier chaque proposition avant publication. Les formats hybrides et les cas non marqués restent à vérifier.
+- Aucun appel API-Football ni écriture à l'analyse. Validation locale : 21 tests ciblés réussis et lint sans erreur. Pas de CI complète, déploiement, migration ou synchronisation de production.
+
 ### 04/11/2026 — Propositions de vainqueurs en administration
 
 - L'édition d'une compétition de type coupe peut analyser, à la demande, jusqu'à 12 saisons et leurs finales déjà stockées ; aucun appel API-Football ni écriture lors de l'analyse. Un import de base est requis mais n'est pas une garantie d'exhaustivité du fournisseur. Les propositions sont à vérifier, peuvent être ajoutées individuellement ou en lot au formulaire, et ne remplacent pas une saison déjà renseignée ; l'enregistrement reste manuel.
