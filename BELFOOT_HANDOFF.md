@@ -1,3 +1,9 @@
+### 04/11/2026 — Lisibilité des compositions sur les fiches match
+
+- Noms sur fond sombre et sur deux lignes au besoin ; terrain mobile plus haut. Le nom complet reste disponible au survol et pour les lecteurs d’écran. Liens et données inchangés.
+- Contrôles locaux : ESLint et tests ciblés des compositions. Vérifier visuellement plusieurs formations, noms longs et formats desktop/mobile avant fusion ; les noms les plus longs peuvent rester tronqués sur le terrain, la liste complète reste accessible dans l’onglet compositions.
+- Aucun appel API-Football ni synchronisation de production.
+
 ### 03/11/2026 — Chargements du calendrier, du classement et du direct
 
 - Les pages attendent leurs compétitions et saisons avant d'afficher un état vide ; erreurs et données non publiées restent distinguées. La réponse tardive d'une ancienne compétition ne remplace plus la saison choisie. Le direct attend les compétitions avant d'afficher ses matchs.

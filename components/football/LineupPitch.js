@@ -28,10 +28,14 @@ function Marker({ row, colors }) {
       {row.rating != null && <b className={`absolute -right-3 -top-1 rounded px-1 text-[9px] leading-4 tabular-nums ${ratingBadge(row.rating)}`}>{Number(row.rating).toFixed(1)}</b>}
       {(row.goals > 0 || row.yellow > 0 || row.red > 0) && <span className="absolute -bottom-1 -right-3 flex gap-0.5 text-[9px] leading-none">{row.goals > 0 && <span title={`${row.goals} but(s)`}>⚽{row.goals > 1 ? row.goals : ""}</span>}{row.red > 0 ? <span title="Carton rouge" className="inline-block h-2.5 w-1.5 rounded-[1px] bg-red-500" /> : row.yellow > 0 && <span title="Carton jaune" className="inline-block h-2.5 w-1.5 rounded-[1px] bg-yellow-300" />}</span>}
     </span>
-    <span className="mt-0.5 max-w-full truncate px-0.5 text-[10px] font-semibold leading-tight text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.8)]">{shortName(row.player_name)}</span>
+    <span aria-hidden="true" className="mt-1 block w-full min-w-0 rounded-md bg-slate-950/90 px-1 py-0.5 text-center text-[11px] font-bold leading-[1.15] text-white shadow-sm sm:text-xs">
+      <span className="line-clamp-2 break-words">{shortName(row.player_name) || "Joueur"}</span>
+    </span>
+    <span className="sr-only">{row.player_name || "Joueur"}</span>
   </>;
-  const cls = "flex min-w-0 max-w-[5rem] flex-1 flex-col items-center justify-center transition hover:scale-105";
-  return row.player_id ? <Link href={`/players/${row.player_id}`} className={cls} title={row.player_name}>{body}</Link> : <div className={cls} title={row.player_name || ""}>{body}</div>;
+  const cls = "flex min-w-0 max-w-[5.5rem] flex-1 flex-col items-center justify-center transition hover:scale-105 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white";
+  const name = row.player_name || "Joueur";
+  return row.player_id ? <Link href={`/players/${row.player_id}`} className={cls} title={name}>{body}</Link> : <div className={cls} title={name}>{body}</div>;
 }
 
 const withFallback = (colors, side) => ({
@@ -69,9 +73,10 @@ export default function LineupPitch({ home, away }) {
       <Markings />
       <div className="absolute inset-0 flex flex-row px-[2%] py-[3%]"><Half team={home} side="home" /><Half team={away} side="away" /></div>
     </div>
-    <div className={`${PITCH} aspect-[64/100] md:hidden`} style={STRIPES(180)}>
+    <div className={`${PITCH} aspect-[64/100] min-h-[650px] md:hidden`} style={STRIPES(180)}>
       <Markings vertical />
       <div className="absolute inset-0 flex flex-col px-[2%] py-[3%]"><Half team={home} side="home" vertical /><Half team={away} side="away" vertical /></div>
     </div>
   </>;
 }
+
