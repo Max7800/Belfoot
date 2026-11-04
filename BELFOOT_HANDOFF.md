@@ -1,3 +1,9 @@
+### 04/11/2026 — Lisibilité des compositions sur les fiches match
+
+- Noms sur fond sombre et sur deux lignes au besoin ; terrain mobile plus haut. Le nom complet reste disponible au survol et pour les lecteurs d’écran. Liens et données inchangés.
+- Contrôles locaux : ESLint et tests ciblés des compositions. Vérifier visuellement plusieurs formations, noms longs et formats desktop/mobile avant fusion ; les noms les plus longs peuvent rester tronqués sur le terrain, la liste complète reste accessible dans l’onglet compositions.
+- Aucun appel API-Football ni synchronisation de production.
+
 ### 04/11/2026 — Statut des matchs sur la page Direct
 
 - À la demande de l'utilisateur, la page Direct ne présente plus de pastilles V/N/D ambiguës sous le statut ; les matchs terminés gardent « FIN ». La mise en avant des équipes suivies et les scores colorés restent en place. Le bandeau d'accueil utilise toujours son comportement existant.
