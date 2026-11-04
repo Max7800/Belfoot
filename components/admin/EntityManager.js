@@ -8,6 +8,7 @@ import { slugify } from "@/lib/slugify";
 import { editorialFieldsAfterEdit } from "@/lib/playerIdentity";
 import { auditAdminAction, blockedDeleteText, deleteConfirmationText, deleteImpact, identityChanges, identityConfirmationText, isGuardedDelete, typedConfirmationMatches } from "@/lib/adminGuards";
 import { useSearchParams } from "next/navigation";
+import { validateCompetitionWinners } from "@/lib/competitionWinners";
 
 const POS = { Goalkeeper: 0, Defender: 1, Midfielder: 2, Attacker: 3 };
 
@@ -70,6 +71,10 @@ export default function EntityManager({ spec }) {
   const save = async () => {
     setStatus("saving");
     const row = { ...editing };
+    if (table === "competitions" && row.winners_history != null) {
+      const error = validateCompetitionWinners(row.winners_history);
+      if (error) { setStatus("error"); alert(error); return; }
+    }
     // Champs éditoriaux (ex. nom et photo des joueurs) : une correction manuelle
     // est marquée dans ext pour ne plus être écrasée par les synchronisations.
     if (spec.editorialFields?.length && row.id) {
@@ -282,6 +287,16 @@ function Field({ f, value, onChange, options }) {
       </div>
     ))}<button type="button" onClick={addPhase} className="rounded border border-line/20 px-3 py-1.5 text-xs text-muted hover:text-content">+ Ajouter une phase</button>{Object.keys(obj).length === 0 && <span className="ml-3 text-xs text-muted">Aucune zone : aucun rang ne sera coloré.</span>}</div></div>);
   }
+  if (f.type === "competitionWinners") {
+    const arr = Array.isArray(value) ? value : [];
+    const upd = (index, key, nextValue) => onChange(arr.map((item, i) => i === index ? { ...item, [key]: nextValue } : item));
+    return <div className="sm:col-span-2">{label}<p className="mb-2 text-xs text-muted">Une ligne par saison confirmée. Source facultative : lien vers une page fiable. Ne pas renseigner une saison non attribuée.</p><div className="space-y-2">{arr.map((item, index) => <div key={index} className="grid gap-2 rounded-xl border border-line/10 bg-surface/40 p-2 sm:grid-cols-[120px_1fr_1fr_auto]">
+      <input aria-label={`Saison ${index + 1}`} value={item.season || ""} onChange={(e) => upd(index, "season", e.target.value)} placeholder="2025-2026" className={box} />
+      <input aria-label={`Vainqueur ${index + 1}`} value={item.winner || ""} onChange={(e) => upd(index, "winner", e.target.value)} placeholder="Vainqueur" className={box} />
+      <input aria-label={`Source ${index + 1}`} type="url" value={item.source || ""} onChange={(e) => upd(index, "source", e.target.value)} placeholder="Lien source (facultatif)" className={box} />
+      <button type="button" onClick={() => onChange(arr.filter((_, i) => i !== index))} className="rounded px-2 text-red-400 hover:bg-red-500/10">Supprimer</button>
+    </div>)}<button type="button" onClick={() => onChange([...arr, { season: "", winner: "", source: "" }])} className="rounded border border-line/20 px-3 py-1.5 text-xs text-muted hover:text-content">+ Ajouter un vainqueur</button></div></div>;
+  }
   if (f.type === "honours") {
     const arr = Array.isArray(value) ? value : [];
     const upd = (index, key, nextValue) => onChange(arr.map((item, itemIndex) => itemIndex === index ? { ...item, [key]: nextValue } : item));
@@ -297,3 +312,4 @@ function Field({ f, value, onChange, options }) {
   if (f.type === "textarea") return <div>{label}<textarea value={value || ""} onChange={(e) => onChange(e.target.value)} rows={3} className={box} /></div>;
   return <div>{label}<input value={value || ""} onChange={(e) => onChange(e.target.value)} className={box} /></div>;
 }
+

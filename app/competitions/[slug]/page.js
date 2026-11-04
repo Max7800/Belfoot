@@ -26,6 +26,7 @@ import { useStatsSections } from "@/lib/statsSections";
 import { publicSeasonState } from "@/lib/publicSeasons";
 import { useCompetitionMatchUpdates } from "@/lib/useCompetitionMatchUpdates";
 import SeasonNotice from "@/components/football/SeasonNotice";
+import CompetitionWinners from "@/components/football/CompetitionWinners";
 import { isNationsLeagueCompetition, nationsLeagueGroups } from "@/lib/nationsLeague";
 import { mergeGroupStagePhases, phaseGroups } from "@/lib/groupedStandings";
 import { PUBLIC_PLAYER_FIELDS, PUBLIC_PLAYER_STATS_FIELDS, loadClubsForMatches, loadMatchStatsForMatches, loadPlayersByIds, loadSeasonMatches } from "@/lib/publicFootballData";
@@ -439,6 +440,7 @@ export default function CompetitionPage() {
 
       {!seasonLoading && tab === "overview" && (
         <div className="space-y-6">
+          <CompetitionWinners history={comp.winners_history} />
           <div className="grid gap-4 lg:grid-cols-3">
             {partialCompetition ? (
               <Card title="Classement à venir">

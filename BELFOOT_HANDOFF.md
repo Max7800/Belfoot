@@ -1,3 +1,10 @@
+### 04/11/2026 — Historique éditorial des vainqueurs
+
+- La migration 0042 ajoute `competitions.winners_history` (liste JSON vide par défaut). Elle doit être appliquée avant toute saisie ; aucune migration n'a été exécutée en production. La synchronisation existante ne renseigne pas ce champ.
+- Administration des compétitions : saison, vainqueur et source facultative ; validation des saisons, doublons et liens. La vue d'ensemble affiche les cinq vainqueurs récents, puis les saisons antérieures ; les lignes invalides ou ambiguës sont masquées. Aucune déduction automatique depuis les classements ou finales, et aucune donnée historique initiale n'est fournie.
+- Limites : saisie manuelle et noms texte sans lien vers les fiches clubs ; les palmarès des clubs ne sont pas synchronisés avec cet historique. Le rendu mobile et desktop reste à vérifier ; le remplissage automatique depuis une source fiable nécessite un chantier distinct.
+- Les couleurs de maillots via une source gratuite sont reportées ; la PR #118 sur la lisibilité du terrain reste indépendante.
+
 ### 03/11/2026 — Chargements du calendrier, du classement et du direct
 
 - Les pages attendent leurs compétitions et saisons avant d'afficher un état vide ; erreurs et données non publiées restent distinguées. La réponse tardive d'une ancienne compétition ne remplace plus la saison choisie. Le direct attend les compétitions avant d'afficher ses matchs.
