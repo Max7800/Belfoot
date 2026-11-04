@@ -9,6 +9,7 @@ import { editorialFieldsAfterEdit } from "@/lib/playerIdentity";
 import { auditAdminAction, blockedDeleteText, deleteConfirmationText, deleteImpact, identityChanges, identityConfirmationText, isGuardedDelete, typedConfirmationMatches } from "@/lib/adminGuards";
 import { useSearchParams } from "next/navigation";
 import { validateCompetitionWinners } from "@/lib/competitionWinners";
+import CompetitionWinnerSuggestions from "@/components/admin/CompetitionWinnerSuggestions";
 
 const POS = { Goalkeeper: 0, Defender: 1, Midfielder: 2, Attacker: 3 };
 
@@ -156,6 +157,7 @@ export default function EntityManager({ spec }) {
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
           {fields.map((f) => <Field key={f.key} f={f} value={editing[f.key]} onChange={(v) => setV(f.key, v)} options={rel[f.table]} />)}
+          {table === "competitions" && <CompetitionWinnerSuggestions key={editing.id || "new"} competition={editing} history={editing.winners_history} onAdd={(item) => setV("winners_history", [...(Array.isArray(editing.winners_history) ? editing.winners_history : []), item])} onAddMany={(items) => setV("winners_history", [...(Array.isArray(editing.winners_history) ? editing.winners_history : []), ...items])} />}
         </div>
         {hasSource && (
           <div className="mt-4 rounded-lg border border-line/10 p-3 text-sm">
