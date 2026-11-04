@@ -88,7 +88,7 @@ export default function LiveMatchCenter({ competitions = [] }) {
   // Mis en avant : la Belgique, et les clubs de Belges suivis hors des compétitions
   // belges (en Pro League, chaque match a des Belges : le repère n'y voudrait rien dire).
   // Camp suivi d'un match (« home », « away » ou null) : la Belgique, sinon le club
-  // d'un Belge suivi hors des compétitions belges. Sert à la mise en avant et à V / N / D.
+  // d'un Belge suivi hors des compétitions belges. Sert à la mise en avant.
   const followedSide = useCallback((match) => {
     if (isBelgiumTeam(clubs[match.home_club_id])) return "home";
     if (isBelgiumTeam(clubs[match.away_club_id])) return "away";
@@ -129,9 +129,10 @@ export default function LiveMatchCenter({ competitions = [] }) {
       {loading ? <div className="space-y-2">{[0, 1, 2, 3].map((item) => <div key={item} className="h-10 animate-pulse rounded-xl bg-surface2" />)}</div>
         : groups.length ? <div className="grid items-start gap-4 lg:grid-cols-2">{groups.map(({ competition, matches: groupMatches }) => <section key={competition.id || "other"} className="overflow-hidden rounded-2xl border border-line/10 bg-bg/30">
           <header className="flex items-center gap-2 border-b border-line/10 px-3 py-2">{competition.logo_url && <img src={competition.logo_url} alt="" loading="lazy" className="h-5 w-5 object-contain" />}<h3 className="min-w-0 flex-1 truncate text-sm font-black">{competition.name || "Autres matchs"}</h3><span className="text-[10px] text-muted">{groupMatches.length} match{groupMatches.length > 1 ? "s" : ""}</span></header>
-          <div className="divide-y divide-line/10">{[...groupMatches].sort((a, b) => Number(highlighted(b)) - Number(highlighted(a)) || new Date(a.kickoff || 0) - new Date(b.kickoff || 0)).map((match) => <ScoreRow key={match.id} match={match} clubs={clubs} highlighted={highlighted(match)} followedSide={followedSide(match)} latestEvent={latestEvents[match.id]} />)}</div>
+          <div className="divide-y divide-line/10">{[...groupMatches].sort((a, b) => Number(highlighted(b)) - Number(highlighted(a)) || new Date(a.kickoff || 0) - new Date(b.kickoff || 0)).map((match) => <ScoreRow key={match.id} match={match} clubs={clubs} highlighted={highlighted(match)} latestEvent={latestEvents[match.id]} />)}</div>
         </section>)}</div>
           : <div className="py-8 text-center"><Radio className="mx-auto h-7 w-7 text-muted/50" /><p className="mt-2 text-sm font-semibold">{belgiansOnly ? "Aucun match de la Belgique ou de Belges ce jour-là" : view === "live" ? "Aucun match en direct" : "Aucun match ce jour-là"}</p><p className="mt-1 text-xs text-muted">Choisis un autre jour dans la barre ci-dessus.</p></div>}
     </div>
   </section>;
 }
+
