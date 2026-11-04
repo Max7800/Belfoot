@@ -189,7 +189,7 @@ export default function BelgiansAbroadPage() {
       {data.loading && <div className="grid gap-4 sm:grid-cols-2"><div className="h-48 animate-pulse rounded-2xl bg-surface" /><div className="h-48 animate-pulse rounded-2xl bg-surface" /></div>}
       {!data.loading && data.error && <p className="rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">Impossible de charger les Belges à l'étranger : {data.error}</p>}
       {!data.loading && !data.error && <>
-        {view.enriched.length > 0 && <div className="space-y-9"><FeaturedPlayer item={view.featured} /><section aria-label="Découvrir les Belges dans le monde" className="space-y-4">
+        {view.enriched.length > 0 && <div className="space-y-9"><FeaturedPlayer item={view.featured} />{config.sections.filter((section) => section.enabled && ["today", "recap"].includes(section.key)).map((section) => <section key={section.key}><SectionHeader section={section} />{content[section.key]}</section>)}<section aria-label="Découvrir les Belges dans le monde" className="space-y-4">
           <BelgiansWorldMap players={view.enriched} selection={mapSelection} onSelect={setMapSelection} />
           <div aria-live="polite" className="rounded-2xl border border-white/[0.07] bg-surface/35 p-4 sm:p-5">
             {mapSelection ? <>
@@ -202,9 +202,10 @@ export default function BelgiansAbroadPage() {
             </>}
             <p className="mt-3 text-[11px] leading-4 text-muted">Sur la carte, les nations du Royaume-Uni sont regroupées sous une seule pastille.</p>
           </div>
-        </section>{config.sections.find((section) => section.key === "form")?.enabled !== false && <section><SectionHeader section={config.sections.find((section) => section.key === "form")} />{content.form}</section>}{config.sections.filter((section) => section.enabled && !["players", "form"].includes(section.key)).map((section) => <section key={section.key}><SectionHeader section={section} />{content[section.key]}</section>)}</div>}
+        </section>{config.sections.find((section) => section.key === "form")?.enabled !== false && <section><SectionHeader section={config.sections.find((section) => section.key === "form")} />{content.form}</section>}{config.sections.filter((section) => section.enabled && !["players", "form", "today", "recap"].includes(section.key)).map((section) => <section key={section.key}><SectionHeader section={section} />{content[section.key]}</section>)}</div>}
         {config.sections.find((section) => section.key === "players")?.enabled !== false && <section className={view.enriched.length > 0 ? "mt-9" : ""}>{content.players}</section>}
       </>}
     </div>
   );
 }
+

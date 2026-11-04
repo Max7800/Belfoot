@@ -1,3 +1,9 @@
+### 04/11/2026 — Matchs et performances des Belges à l'étranger
+
+- À la demande de l'utilisateur, les modules prochains matchs et dernières performances sont placés avant la carte, après le joueur mis en avant. Leur visibilité et leur ordre relatif restent administrables ; les autres blocs restent après la carte, l'annuaire en bas. Aucun appel API supplémentaire.
+- Le site affiche actuellement K. Karetsas (`70561371-efe6-41d7-85c9-fd5794aefad9`) avec les nationalités belge et grecque, mais sans sélection représentée et avec le statut « binational ». L'UEFA le liste avec la Grèce. Diagnostic et correction en base restent à faire : identifier de façon certaine la sélection grecque et respecter tout verrou ; ne pas modifier ses nationalités. Aucune modification de données effectuée.
+- Tests locaux ciblés : 8 réussis ; lint sans erreur avec avertissements images existants. Vérification responsive et CI à faire.
+
 ### 04/11/2026 — Lisibilité des compositions sur les fiches match
 
 - Noms sur fond sombre et sur deux lignes au besoin ; terrain mobile plus haut. Le nom complet reste disponible au survol et pour les lecteurs d’écran. Liens et données inchangés.
