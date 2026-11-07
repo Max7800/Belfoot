@@ -21,8 +21,10 @@ describe("ce que le balayage peut écrire", () => {
     expect(scanWrites({ current: onPsg, clubId: "ajax", stats: { appearances: 1 }, seasonLabel: S, activeClubId: "psg" }).updateStats).toBe(false);
     const onAjax = { ext: { league_stats: ere() } };
     expect(scanWrites({ current: onAjax, clubId: "psg", stats: { appearances: 3 }, seasonLabel: S, activeClubId: "psg" }).updateStats).toBe(true);
-    // Ni l'un ni l'autre n'est le club actif : remplacement autorisé.
-    expect(scanWrites({ current: onAjax, clubId: "az", stats: { appearances: 1 }, seasonLabel: S, activeClubId: "psg" }).updateStats).toBe(true);
+    // Aucun club tiers ne doit modifier les chiffres du club actif.
+    expect(scanWrites({ current: onAjax, clubId: "az", stats: { appearances: 1 }, seasonLabel: S, activeClubId: "psg" }).updateStats).toBe(false);
+    // Cas Cuypers : les chiffres existants viennent déjà de l'ancien club.
+    expect(scanWrites({ current: onAjax, clubId: "ajax", stats: { appearances: 13 }, seasonLabel: S, activeClubId: "psg" })).toEqual({ updateClub: false, updateStats: false });
   });
   it("sans club actif, même saison : le championnat le plus joué reste ; nouvelle saison ou même club : remplacé", () => {
     const played = { ext: { league_stats: ere({ appearances: 15 }) } };
@@ -62,3 +64,4 @@ describe("balayage réel : cas Godts", () => {
     expect(db.rows("players").find((row) => row.id === "p-7")).toMatchObject({ club_id: "ajax", ext: { league_stats: { league: "Eredivisie", appearances: 1 } } });
   });
 });
+

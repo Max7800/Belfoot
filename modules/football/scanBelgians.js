@@ -70,6 +70,10 @@ const youthTeam = (name) => /\b(u\d{2}|ii|b|jong|reserves?|youth|academy)\b/i.te
 //    actif ; sans club actif, même saison, on garde le championnat le plus joué.
 // Sans club actif, le club suit les chiffres gardés (jamais un club et les chiffres d'un autre).
 export function scanWrites({ current = null, clubId = null, stats = {}, seasonLabel, activeClubId = null }) {
+  // Un ancien club ne doit pas actualiser les chiffres de la fiche lorsqu'une
+  // affectation active désigne une autre équipe, même si les anciens chiffres
+  // proviennent déjà de ce club.
+  if (activeClubId && clubId && activeClubId !== clubId) return { updateClub: false, updateStats: false };
   const previous = current?.ext?.league_stats;
   let updateStats = true;
   if (previous && previous.season === seasonLabel && previous.club_id !== clubId) {
@@ -171,3 +175,4 @@ export async function scanBelgians(db, ctx = {}) {
     progress: { current: leagueIndex, total: leagues.length, unit: "championnats" },
   };
 }
+

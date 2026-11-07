@@ -1,3 +1,9 @@
+## Suivi du 7 novembre 2026 — Cuypers et statistiques d’ancien club
+
+- Une affectation active interdit au balayage des championnats de remplacer les chiffres par ceux d’un autre club, y compris lorsque les chiffres déjà présents viennent de cet ancien club. Test ciblé : `npm test -- tests/football/scanKeepsCurrentClub.test.js` (5 tests réussis).
+- Cuypers : les diagnostics de production indiquent Chicago sur la fiche et une affectation Monterrey inactive. Aucun changement de base ni synchronisation de production exécuté ; cette correction ne règle pas à elle seule la fiche ni les chiffres déjà présents. D’autres synchronisations peuvent modifier le club.
+- Le suivi des Belges peut être sauté si le passage principal atteint 32 secondes avant son démarrage ; la trace « temps du passage épuisé » ne prouve pas un dépassement du suivi lui-même. À traiter séparément et vérifier en production.
+
 ### 04/11/2026 — Lisibilité des compositions sur les fiches match
 
 - Noms sur fond sombre et sur deux lignes au besoin ; terrain mobile plus haut. Le nom complet reste disponible au survol et pour les lecteurs d’écran. Liens et données inchangés.
