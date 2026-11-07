@@ -1,3 +1,10 @@
+## Suivi indépendant des Belges — 7 novembre 2026
+
+- `competition-refresh?pass=abroad` exécute le suivi indépendamment des autres compétitions, avec auth, préflight et verrou `runJob` existants ; simulation `dryRun=1` sans job. Un passage principal ne le double pas si un passage dédié a réussi depuis moins de 45 min et le reprend sinon.
+- Préparation `supabase/abroad_follow_cron_setup.sql` : programme :05/:25/:45 UTC et au plus 12 appels/passage (864/jour théoriques). Installation uniquement après déploiement vérifié et validation de l'utilisateur ; aucun lancement production n'a été effectué.
+- Le suivi existant conserve des checkpoints mais n'est pas intégralement résistant à une coupure au milieu d'un appel : ne pas promettre aucune répétition ni aucune interruption. 92 tests ciblés réussis localement.
+- Cuypers : club actuel et statistiques existantes encore non corrigés en base. Chicago ne doit pas être affiché comme club actuel ; préserver et attribuer les chiffres à Chicago. Le championnat mexicain n'est pas actuellement balayé. Auditer toutes les écritures avant une correction durable.
+
 ## Complément — suivi des Belges à l'étranger
 
 - Après un passage sauté pour manque de temps, le suivi passe prioritairement au tick principal suivant ; les checkpoints des autres travaux sont conservés. Le passage dédié aux détails et la simulation restent inchangés.

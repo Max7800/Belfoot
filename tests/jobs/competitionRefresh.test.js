@@ -270,6 +270,46 @@ describe("cron competition-refresh — passage dédié aux détails (?pass=detai
 });
 
 describe("cron competition-refresh — suivi des Belges à l'étranger", () => {
+  it("passage dédié : le suivi fonctionne même sans compétition visible", async () => {
+    state.db = seed({ competitions: [], seasons: [], plan: planFor({}) });
+    const response = await GET(new Request("http://localhost/api/cron/competition-refresh?pass=abroad", { headers: { authorization: `Bearer ${SECRET}` } }));
+    expect(response.status).toBe(200);
+    expect((await response.json()).pass).toBe("abroad");
+    expect(state.runs.map((run) => run.key)).toEqual(["football.abroad-follow"]);
+    expect(state.db.rows("site_settings")[0].data.football_abroad_dedicated_last.ok).toBe(true);
+  });
+  it("passage dédié simulé : aucun job ni écriture", async () => {
+    state.db = seed({ competitions: [], seasons: [], plan: planFor({}) });
+    const response = await GET(new Request("http://localhost/api/cron/competition-refresh?pass=abroad&dryRun=1", { headers: { authorization: `Bearer ${SECRET}` } }));
+    expect(await response.json()).toMatchObject({ ok: true, dryRun: true, requestLimit: 12 });
+    expect(state.runs).toEqual([]);
+    expect(state.db.rows("site_settings")[0].data.football_abroad_dedicated_last).toBeUndefined();
+  });
+  it("passage dédié récent : le passage principal ne lance pas le suivi une seconde fois", async () => {
+    state.db = seed({ competitions: [PRO], seasons: baseSeasons, plan: basePlan });
+    state.db.rows("site_settings")[0].data.football_abroad_dedicated_last = { ok: true, at: new Date(NOW - 60000).toISOString() };
+    const body = await tick();
+    expect(state.runs.filter((run) => run.key === "football.abroad-follow")).toHaveLength(0);
+    expect(body.abroad).toMatchObject({ delegated: true });
+  });
+  it("passage dédié ancien ou en échec : le passage principal reprend le suivi", async () => {
+    for (const last of [
+      { ok: true, at: new Date(NOW - 46 * 60000).toISOString() },
+      { ok: false, at: new Date(NOW - 60000).toISOString() },
+    ]) {
+      state.runs = [];
+      state.db = seed({ competitions: [PRO], seasons: baseSeasons, plan: basePlan });
+      state.db.rows("site_settings")[0].data.football_abroad_dedicated_last = last;
+      await tick();
+      expect(state.runs.filter((run) => run.key === "football.abroad-follow")).toHaveLength(1);
+    }
+  });
+  it("passage dédié refuse une requête non autorisée", async () => {
+    state.db = seed({ competitions: [], seasons: [], plan: planFor({}) });
+    const response = await GET(new Request("http://localhost/api/cron/competition-refresh?pass=abroad"));
+    expect(response.status).toBe(401);
+    expect(state.runs).toEqual([]);
+  });
   it("lancé après les détails et avant les entraîneurs, périmètre global, 12 appels, échéance à 48 s", async () => {
     state.db = seed({ competitions: [PRO], seasons: baseSeasons, plan: basePlan });
     await tick();
@@ -281,3 +321,4 @@ describe("cron competition-refresh — suivi des Belges à l'étranger", () => {
     expect(state.db.rows("site_settings")[0].data.football_abroad_follow_last).toMatchObject({ ok: true });
   });
 });
+
