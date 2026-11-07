@@ -1,5 +1,5 @@
 import { getProvider } from "./providers";
-import { clearUnassignedPlayerStats, upsertPlayerMembership } from "./playerMemberships";
+import { clearUnassignedPlayerStats, conflictsWithLockedClub, upsertPlayerMembership } from "./playerMemberships";
 import { seasonYear } from "./season";
 import { birthExtPatch, providerIdentityPatch } from "@/lib/playerIdentity";
 import { playerSnapshotPatch } from "@/lib/playerSnapshot";
@@ -40,10 +40,11 @@ export async function discoverBelgians(db, competition, ctx = {}) {
       const primaryClub = !["reserve", "u23", "youth", "women"].includes(club.team_type);
       // Sélection nationale : pas d'affectation de club ni de « club actuel ».
       const nationalTeam = isNationalTeam(club, competition);
+      const protectedElsewhere = !nationalTeam && existing?.id ? await conflictsWithLockedClub(db, existing.id, club.id, season) : false;
       // Même règle que les effectifs : une double nationalité ou une valeur fixée
       // dans l'administration n'est jamais réduite à la seule nationalité de l'API.
       const identity = providerIdentityPatch(existing, { nationality: p.nationality, birth_date: p.birth_date, name: p.name, photo_url: p.photo_url });
-      const patch = { source: competition.provider, external_id: p.external_id, ...identity, ...birthExtPatch(existing, p), position: p.position, ...(nationalTeam ? {} : playerSnapshotPatch({ existing, club, competition, season, primaryClub })), synced_at: new Date().toISOString() };
+      const patch = { source: competition.provider, external_id: p.external_id, ...identity, ...birthExtPatch(existing, p), position: p.position, ...(nationalTeam || protectedElsewhere ? {} : playerSnapshotPatch({ existing, club, competition, season, primaryClub })), synced_at: new Date().toISOString() };
       let playerId = existing?.id;
       if (existing && !existing.locked) {
         const { error } = await db.from("players").update(patch).eq("id", existing.id);
@@ -61,6 +62,8 @@ export async function discoverBelgians(db, competition, ctx = {}) {
         externalId: p.external_id,
         position: p.position,
         isPrimary: primaryClub,
+        active: !protectedElsewhere,
+        preserveExisting: protectedElsewhere,
         ext: p.ext || {},
       });
       if (playerId && p.stats) {

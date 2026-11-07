@@ -1,3 +1,9 @@
+## Protection des clubs verrouillés — 8 novembre 2026
+
+- L'affectation active verrouillée d'un club est prise en compte par les imports effectif, découverte, import ciblé, transfert et résolution des clubs de sélection. Une autre équipe ne peut pas remplacer l'instantané dans ces chemins ; les stats et les transferts restent importés, les affectations concurrentes ne sont pas activées. Les sélections nationales verrouillées ne bloquent pas un club. Chargement groupé pour les effectifs.
+- Le verrou est éditorial : lors d'un futur transfert réel il faudra déverrouiller/actualiser l'affectation pour permettre un changement. Ces vérifications applicatives ne sont pas atomiques avec les écritures ; une concurrence déjà en vol ou un autre chemin d'écriture non couvert reste un risque. Les imports ciblés et résolution de sélection demandent encore des tests spécifiques.
+- 65 tests ciblés réussis et ESLint sans erreur sur les modules modifiés. PR non fusionnée, aucune synchronisation production lancée.
+
 ## Complément — affichage des chiffres archivés
 
 - La fiche joueur lit les instantanés `league_stats_previous_clubs`, charge leurs clubs et les affiche par saison et championnat via `withLeagueStats`. Les lignes déjà importées pour la même saison et compétition ne sont pas dupliquées. Les données de Chicago restent attribuées à Chicago ; test synthétique Cuypers/Monterrey.

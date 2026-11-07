@@ -1,5 +1,5 @@
 import { getProvider } from "./providers";
-import { clearUnassignedPlayerStats, upsertPlayerMembership } from "./playerMemberships";
+import { clearUnassignedPlayerStats, loadLockedClubs, upsertPlayerMembership } from "./playerMemberships";
 import { loadCompetitionSeasonClubIds } from "./seasonClubs";
 import { birthExtPatch, providerIdentityPatch } from "@/lib/playerIdentity";
 import { playerSnapshotPatch } from "@/lib/playerSnapshot";
@@ -90,6 +90,7 @@ export async function syncSquads(db, competition, ctx = {}) {
       : { data: [], error: null };
     if (existingRowsError) throw existingRowsError;
     const existingByExternalId = new Map((existingRows || []).map((player) => [String(player.external_id), player]));
+    const lockedClubs = nationalTeam ? new Map() : await loadLockedClubs(db, (existingRows || []).map((player) => player.id), season);
 
     if (authoritativeCurrentSquad && !nationalTeam) {
       const { data: currentMemberships, error: membershipsError } = await db.from("player_team_seasons")
@@ -112,11 +113,12 @@ export async function syncSquads(db, competition, ctx = {}) {
       const existing = existingByExternalId.get(String(p.external_id));
       const primaryClub = !["reserve", "u23", "youth", "women"].includes(club.team_type);
       const currentMember = nationalTeam || !authoritativeCurrentSquad || currentExternalIds.has(String(p.external_id));
+      const protectedElsewhere = [...(lockedClubs.get(existing?.id) || [])].some((id) => id !== club.id);
       // Nationalité et date de naissance : jamais effacées par une valeur absente de
       // l'API (l'effectif actuel /players/squads n'en fournit pas), jamais remplacées
       // si elles ont été fixées dans l'administration.
       const identity = providerIdentityPatch(existing, { nationality: p.nationality, birth_date: p.birth_date, name: p.name, photo_url: p.photo_url });
-      const patch = { source: competition.provider, external_id: p.external_id, ...identity, ...birthExtPatch(existing, p), ...(currentMember ? { position: p.position, age: p.age } : {}), ...(nationalTeam || !currentMember ? {} : playerSnapshotPatch({ existing, club, competition, season, primaryClub })), synced_at: now };
+      const patch = { source: competition.provider, external_id: p.external_id, ...identity, ...birthExtPatch(existing, p), ...(currentMember ? { position: p.position, age: p.age } : {}), ...(nationalTeam || !currentMember || protectedElsewhere ? {} : playerSnapshotPatch({ existing, club, competition, season, primaryClub })), synced_at: now };
       let pid = existing?.id;
       if (existing && !existing.locked) {
         const { error } = await db.from("players").update(patch).eq("id", existing.id);
@@ -141,7 +143,8 @@ export async function syncSquads(db, competition, ctx = {}) {
           position: p.position,
           shirtNumber: p.number ?? null,
           isPrimary: primaryClub,
-          active: currentMember,
+          active: currentMember && !protectedElsewhere,
+          preserveExisting: protectedElsewhere,
           ext: p.ext || {},
           syncedAt: now,
         }),

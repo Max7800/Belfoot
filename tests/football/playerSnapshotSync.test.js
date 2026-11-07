@@ -3,6 +3,7 @@ import { registerProvider } from "@/modules/football/providers";
 import { syncSquads } from "@/modules/football/syncSquads";
 import { discoverBelgians } from "@/modules/football/discoverPlayers";
 import { syncTransfers } from "@/modules/football/syncTransfers";
+import { conflictsWithLockedClub } from "@/modules/football/playerMemberships";
 import { createFakeSupabase } from "../helpers/fakeSupabase";
 
 // Saison courante calculée comme les synchronisations (bascule au 1er juillet).
@@ -68,6 +69,27 @@ beforeEach(() => {
 });
 
 describe("P0-3 — cron des coupes d'Europe", () => {
+  it("une sélection protégée ne bloque pas un club ; un club protégé autorise son propre import", async () => {
+    const db = seedDb();
+    db.rows("player_team_seasons").push(
+      { player_id: "p-bounida", club_id: "nat-ma", season_start_year: YEAR, active: true, locked: true },
+      { player_id: "p-bounida", club_id: "club-ajax", season_start_year: YEAR, active: true, locked: true },
+    );
+    expect(await conflictsWithLockedClub(db, "p-bounida", "club-ajax", YEAR)).toBe(false);
+    expect(await conflictsWithLockedClub(db, "p-bounida", "club-psv", YEAR)).toBe(true);
+    expect(await conflictsWithLockedClub(db, "p-bounida", "club-psv", YEAR - 1)).toBe(false);
+  });
+  it("un ancien effectif ou une découverte ne remplace pas une affectation protégée", async () => {
+    const db = seedDb();
+    Object.assign(player(db, "p-bounida"), { club_id: "club-psv", country: "Mexico", competition: null });
+    db.rows("player_team_seasons").push({ id: "protected", player_id: "p-bounida", club_id: "club-psv", season: `${YEAR}-${YEAR + 1}`, season_start_year: YEAR, active: true, locked: true, is_primary: true });
+    await syncSquads(db, { ...EREDIVISIE }, { season: String(YEAR) });
+    await discoverBelgians(db, { ...EREDIVISIE }, { season: String(YEAR) });
+    expect(player(db, "p-bounida")).toMatchObject({ club_id: "club-psv", country: "Mexico", competition: null });
+    expect(db.rows("player_team_seasons").find((row) => row.id === "protected")).toMatchObject({ active: true, locked: true });
+    expect(db.rows("player_team_seasons").filter((row) => row.player_id === "p-bounida" && row.club_id === "club-ajax").every((row) => !row.active)).toBe(true);
+    expect(db.rows("player_season_stats").some((row) => row.player_id === "p-bounida" && row.club_id === "club-ajax")).toBe(true);
+  });
   it("la Conference League n'écrase plus le pays ni le championnat, même répétée", async () => {
     const db = seedDb();
     for (let run = 1; run <= 3; run++) {
@@ -109,6 +131,18 @@ describe("P0-3 — cron des coupes d'Europe", () => {
 });
 
 describe("P0-3 — mercato d'archive", () => {
+  it("un transfert incompatible est conservé dans l'historique mais ne change pas le club protégé", async () => {
+    registerProvider({ key: PROVIDER, async fetchTeamTransfers(club) {
+      if (club.external_id !== "1") return [];
+      return [{ player_external_id: "396202", player_name: "Rayane Bounida", transfer_date: `${YEAR}-08-10`, transfer_type: "Transfer", from_club_external_id: "1", from_club_name: "Ajax", to_club_external_id: "2", to_club_name: "Adversaire", ext: {} }];
+    } });
+    const db = seedDb();
+    db.rows("player_team_seasons").push({ id: "protected", player_id: "p-bounida", club_id: "club-ajax", season: `${YEAR}-${YEAR + 1}`, season_start_year: YEAR, active: true, locked: true });
+    await syncTransfers(db, { ...EREDIVISIE }, { season: String(YEAR), startClubIndex: 0 });
+    expect(player(db, "p-bounida").club_id).toBe("club-ajax");
+    expect(db.rows("player_team_seasons").find((row) => row.id === "protected").active).toBe(true);
+    expect(db.rows("player_transfers")).toHaveLength(1);
+  });
   it("un transfert d'une saison passée ne réécrit pas le club actuel", async () => {
     registerProvider({
       key: PROVIDER,

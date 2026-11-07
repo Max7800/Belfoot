@@ -2,7 +2,7 @@ import { getProvider } from "./providers";
 import { loadByExternalIds, upsertExternal } from "./sync";
 import { classifyNationalTeams } from "./nationalClassification";
 import { ensureSeason, seasonLabel, seasonYear } from "./season";
-import { clearUnassignedPlayerStats, upsertPlayerMembership } from "./playerMemberships";
+import { clearUnassignedPlayerStats, conflictsWithLockedClub, upsertPlayerMembership } from "./playerMemberships";
 import { birthExtPatch, providerIdentityPatch } from "@/lib/playerIdentity";
 import { playerSnapshotPatch } from "@/lib/playerSnapshot";
 
@@ -80,6 +80,7 @@ export async function syncTeamTest(db, competition, ctx = {}) {
   for (const player of belgians) {
     const { data: existing, error: existingError } = await db.from("players").select("id,locked,club_id,nationality,country,competition,ext").eq("source", competition.provider).eq("external_id", player.external_id).maybeSingle();
     if (existingError) throw existingError;
+    const protectedElsewhere = existing?.id ? await conflictsWithLockedClub(db, existing.id, teamClubId, season) : false;
     const patch = {
       source: competition.provider,
       external_id: player.external_id,
@@ -89,7 +90,7 @@ export async function syncTeamTest(db, competition, ctx = {}) {
       age: player.age,
       // Instantané « club actuel » : mêmes règles que les effectifs (championnat
       // national de la saison courante seulement ; aucun pays inventé).
-      ...playerSnapshotPatch({ existing, club: teamClub || { id: teamClubId }, competition: snapshotCompetition, season, primaryClub: true }),
+      ...(protectedElsewhere ? {} : playerSnapshotPatch({ existing, club: teamClub || { id: teamClubId }, competition: snapshotCompetition, season, primaryClub: true })),
       tracked: true,
       active: true,
       synced_at: syncedAt,
@@ -118,6 +119,8 @@ export async function syncTeamTest(db, competition, ctx = {}) {
       externalId: player.external_id,
       position: player.position,
       shirtNumber: player.number ?? null,
+      active: !protectedElsewhere,
+      preserveExisting: protectedElsewhere,
       ext: player.ext || {},
       syncedAt,
     });

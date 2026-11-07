@@ -1,5 +1,5 @@
 import { getProvider } from "./providers";
-import { upsertPlayerMembership } from "./playerMemberships";
+import { conflictsWithLockedClub, upsertPlayerMembership } from "./playerMemberships";
 import { loadCompetitionSeasonClubIds } from "./seasonClubs";
 import { loadByExternalIds } from "./sync";
 import { isCurrentSeason } from "@/lib/playerSnapshot";
@@ -112,6 +112,9 @@ export async function syncTransfers(db, competition, ctx = {}) {
       imported++;
 
       if (!player || player.locked) continue;
+      // Conserver le transfert enregistré, mais ne pas réaffecter le joueur
+      // lorsque son club actif a été explicitement protégé.
+      if (currentSeason && await conflictsWithLockedClub(db, player.id, toClub?.id || null, season)) continue;
       if (fromClub && fromClub.id !== toClub?.id) {
         const { error } = await db.from("player_team_seasons").update({ active: false, left_at: transfer.transfer_date, synced_at: now, updated_at: now })
           .eq("player_id", player.id).eq("club_id", fromClub.id).eq("season_start_year", season).eq("locked", false)
