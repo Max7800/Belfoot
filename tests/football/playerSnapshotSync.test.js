@@ -3,6 +3,9 @@ import { registerProvider } from "@/modules/football/providers";
 import { syncSquads } from "@/modules/football/syncSquads";
 import { discoverBelgians } from "@/modules/football/discoverPlayers";
 import { syncTransfers } from "@/modules/football/syncTransfers";
+import { syncTeamTest } from "@/modules/football/syncTeamTest";
+import { resolveNationalPlayerClubs } from "@/modules/football/resolveNationalPlayerClubs";
+import { conflictsWithLockedClub } from "@/modules/football/playerMemberships";
 import { createFakeSupabase } from "../helpers/fakeSupabase";
 
 // Saison courante calculée comme les synchronisations (bascule au 1er juillet).
@@ -68,6 +71,27 @@ beforeEach(() => {
 });
 
 describe("P0-3 — cron des coupes d'Europe", () => {
+  it("une sélection protégée ne bloque pas un club ; un club protégé autorise son propre import", async () => {
+    const db = seedDb();
+    db.rows("player_team_seasons").push(
+      { player_id: "p-bounida", club_id: "nat-ma", season_start_year: YEAR, active: true, locked: true },
+      { player_id: "p-bounida", club_id: "club-ajax", season_start_year: YEAR, active: true, locked: true },
+    );
+    expect(await conflictsWithLockedClub(db, "p-bounida", "club-ajax", YEAR)).toBe(false);
+    expect(await conflictsWithLockedClub(db, "p-bounida", "club-psv", YEAR)).toBe(true);
+    expect(await conflictsWithLockedClub(db, "p-bounida", "club-psv", YEAR - 1)).toBe(false);
+  });
+  it("un ancien effectif ou une découverte ne remplace pas une affectation protégée", async () => {
+    const db = seedDb();
+    Object.assign(player(db, "p-bounida"), { club_id: "club-psv", country: "Mexico", competition: null });
+    db.rows("player_team_seasons").push({ id: "protected", player_id: "p-bounida", club_id: "club-psv", season: `${YEAR}-${YEAR + 1}`, season_start_year: YEAR, active: true, locked: true, is_primary: true });
+    await syncSquads(db, { ...EREDIVISIE }, { season: String(YEAR) });
+    await discoverBelgians(db, { ...EREDIVISIE }, { season: String(YEAR) });
+    expect(player(db, "p-bounida")).toMatchObject({ club_id: "club-psv", country: "Mexico", competition: null });
+    expect(db.rows("player_team_seasons").find((row) => row.id === "protected")).toMatchObject({ active: true, locked: true });
+    expect(db.rows("player_team_seasons").filter((row) => row.player_id === "p-bounida" && row.club_id === "club-ajax").every((row) => !row.active)).toBe(true);
+    expect(db.rows("player_season_stats").some((row) => row.player_id === "p-bounida" && row.club_id === "club-ajax")).toBe(true);
+  });
   it("la Conference League n'écrase plus le pays ni le championnat, même répétée", async () => {
     const db = seedDb();
     for (let run = 1; run <= 3; run++) {
@@ -109,6 +133,18 @@ describe("P0-3 — cron des coupes d'Europe", () => {
 });
 
 describe("P0-3 — mercato d'archive", () => {
+  it("un transfert incompatible est conservé dans l'historique mais ne change pas le club protégé", async () => {
+    registerProvider({ key: PROVIDER, async fetchTeamTransfers(club) {
+      if (club.external_id !== "1") return [];
+      return [{ player_external_id: "396202", player_name: "Rayane Bounida", transfer_date: `${YEAR}-08-10`, transfer_type: "Transfer", from_club_external_id: "1", from_club_name: "Ajax", to_club_external_id: "2", to_club_name: "Adversaire", ext: {} }];
+    } });
+    const db = seedDb();
+    db.rows("player_team_seasons").push({ id: "protected", player_id: "p-bounida", club_id: "club-ajax", season: `${YEAR}-${YEAR + 1}`, season_start_year: YEAR, active: true, locked: true });
+    await syncTransfers(db, { ...EREDIVISIE }, { season: String(YEAR), startClubIndex: 0 });
+    expect(player(db, "p-bounida").club_id).toBe("club-ajax");
+    expect(db.rows("player_team_seasons").find((row) => row.id === "protected").active).toBe(true);
+    expect(db.rows("player_transfers")).toHaveLength(1);
+  });
   it("un transfert d'une saison passée ne réécrit pas le club actuel", async () => {
     registerProvider({
       key: PROVIDER,
@@ -124,5 +160,42 @@ describe("P0-3 — mercato d'archive", () => {
     expect(player(db, "p-mokio").club_id).toBe("club-ajax");
     expect(db.rows("player_transfers")[0]).toMatchObject({ to_club_id: "club-psv", season_start_year: YEAR - 1 });
     expect(db.rows("player_team_seasons").find((row) => row.player_id === "p-mokio" && row.club_id === "club-psv")).toMatchObject({ membership_type: "loan" });
+  });
+});
+
+describe("imports ciblés et affectation protégée", () => {
+  it("l'import ciblé d'un ancien club ne remplace pas le club protégé", async () => {
+    const db = seedDb();
+    Object.assign(player(db, "p-bounida"), { club_id: "club-psv", country: "Mexico", competition: null });
+    db.rows("player_team_seasons").push({ id: "protected", player_id: "p-bounida", club_id: "club-psv", season_start_year: YEAR, active: true, locked: true });
+    registerProvider({
+      key: PROVIDER,
+      async fetchClubById() { return { external_id: "1", name: "Ajax" }; },
+      async fetchTeamMatches() { return []; },
+      async fetchSquadPlayers() { return [apiPlayer("396202", "Rayane Bounida", "Belgium")]; },
+    });
+    await syncTeamTest(db, EREDIVISIE, { teamExternalId: "1", season: String(YEAR) });
+    expect(player(db, "p-bounida")).toMatchObject({ club_id: "club-psv", country: "Mexico", competition: null });
+    expect(db.rows("player_team_seasons").find((row) => row.club_id === "club-ajax")).toMatchObject({ active: false });
+    expect(db.rows("player_season_stats")).toEqual(expect.arrayContaining([expect.objectContaining({ player_id: "p-bounida", club_id: "club-ajax" })]));
+  });
+
+  it("la résolution depuis une sélection ne remplace pas le club protégé", async () => {
+    const db = createFakeSupabase({
+      clubs: [
+        { id: "be", source: "apifootball", external_id: "100", name: "Belgique", team_type: "national" },
+        { id: "old", source: "apifootball", external_id: "1", name: "Ancien club", team_type: "first_team" },
+        { id: "new", source: "apifootball", external_id: "2", name: "Nouveau club", team_type: "first_team" },
+      ],
+      national_team_callups: [{ national_team_id: "be", player_id: "p1", season: `${YEAR}-${YEAR + 1}`, active: true }],
+      players: [{ id: "p1", source: "apifootball", external_id: "7", name: "Joueur", club_id: "new", country: "Mexico", competition: null, locked: false }],
+      player_team_seasons: [{ player_id: "p1", club_id: "new", season_start_year: YEAR, active: true, locked: true }],
+    });
+    registerProvider({ key: "apifootball", async fetchPlayerClubSeason() {
+      return { club: { external_id: "1", name: "Ancien club" }, nationalLeague: true, country: "USA", competition: "MLS" };
+    } });
+    await resolveNationalPlayerClubs(db, { teamExternalId: "100", season: `${YEAR}-${YEAR + 1}` });
+    expect(db.rows("players")[0]).toMatchObject({ club_id: "new", country: "Mexico", competition: null });
+    expect(db.rows("player_team_seasons")).toHaveLength(1);
   });
 });

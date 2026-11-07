@@ -159,7 +159,8 @@ export default function PlayerPage() {
       for (const match of oldMatches || []) matchesById.set(match.id, match);
     }
     const matches = [...matchesById.values()];
-    const clubIds = [...new Set([...matches.flatMap((match) => [match.home_club_id, match.away_club_id]), ...memberships.map((row) => row.club_id), ...statsRows.map((row) => row.club_id), player.ext?.league_stats?.club_id, player.national_team_id].filter(Boolean))];
+    const archivedClubIds = Array.isArray(player.ext?.league_stats_previous_clubs) ? player.ext.league_stats_previous_clubs.map((row) => row?.club_id) : [];
+    const clubIds = [...new Set([...matches.flatMap((match) => [match.home_club_id, match.away_club_id]), ...memberships.map((row) => row.club_id), ...statsRows.map((row) => row.club_id), ...archivedClubIds, player.ext?.league_stats?.club_id, player.national_team_id].filter(Boolean))];
     const competitionIds = [...new Set([...statsRows.map((row) => row.competition_id), ...matches.map((row) => row.competition_id)].filter(Boolean))];
     const [clubsResult, competitionsResult, routesResult] = await Promise.all([
       clubIds.length ? supabase.from("clubs").select("id,name,logo_url,team_type,national_category,ext").in("id", clubIds) : Promise.resolve({ data: [] }),
@@ -398,3 +399,4 @@ export default function PlayerPage() {
     </div>
   );
 }
+

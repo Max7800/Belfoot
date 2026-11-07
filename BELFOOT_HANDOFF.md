@@ -1,3 +1,34 @@
+## Migration préparée — protection transactionnelle des clubs
+
+- Migration `0042_locked_player_club.sql` en PR, non appliquée : sérialise les écritures d'affectation via le verrou de la fiche joueur et refuse un changement de club ou une affectation première active incompatible avec une affectation première verrouillée pour la saison courante. Elle couvre aussi les écritures hors des imports applicatifs. Les sélections et saisons d'archive ne sont pas bloquées.
+- Un transfert éditorial nécessite de désactiver/déverrouiller d'abord l'affectation protégée. Migration globale : revoir ses effets sur les flux et l'ordre de déploiement avant installation. Ne pas lancer sans accord ; pas de migration ni sync production réalisée.
+- Tests PostgreSQL PGlite séquentiels et 70 tests ciblés réussis localement. Les véritables sessions PostgreSQL concurrentes n'ont pas encore été testées ; ne pas prétendre que la concurrence de production est validée. La réponse réelle API-Football pour la Liga MX reste à vérifier.
+
+## Vérification des imports ciblés — 8 novembre 2026
+
+- Deux tests intégrés couvrent maintenant l'import ciblé d'un ancien club et la résolution du club depuis une sélection en présence d'une affectation active protégée. 67 tests ciblés réussis localement, ESLint sans erreur. Ces tests complètent et remplacent la réserve sur leur absence ci-dessous.
+- Le contrôle reste applicatif, séparé des écritures : il ne garantit pas la protection contre toutes les courses concurrentes. Aucun import de production n'a été lancé.
+
+## Protection des clubs verrouillés — 8 novembre 2026
+
+- L'affectation active verrouillée d'un club est prise en compte par les imports effectif, découverte, import ciblé, transfert et résolution des clubs de sélection. Une autre équipe ne peut pas remplacer l'instantané dans ces chemins ; les stats et les transferts restent importés, les affectations concurrentes ne sont pas activées. Les sélections nationales verrouillées ne bloquent pas un club. Chargement groupé pour les effectifs.
+- Le verrou est éditorial : lors d'un futur transfert réel il faudra déverrouiller/actualiser l'affectation pour permettre un changement. Ces vérifications applicatives ne sont pas atomiques avec les écritures ; une concurrence déjà en vol ou un autre chemin d'écriture non couvert reste un risque. Les imports ciblés et résolution de sélection demandent encore des tests spécifiques.
+- 65 tests ciblés réussis et ESLint sans erreur sur les modules modifiés. PR non fusionnée, aucune synchronisation production lancée.
+
+## Complément — affichage des chiffres archivés
+
+- La fiche joueur lit les instantanés `league_stats_previous_clubs`, charge leurs clubs et les affiche par saison et championnat via `withLeagueStats`. Les lignes déjà importées pour la même saison et compétition ne sont pas dupliquées. Les données de Chicago restent attribuées à Chicago ; test synthétique Cuypers/Monterrey.
+- Cette note remplace la mention ci-dessous selon laquelle l'archive n'était pas affichée. Les autres écritures du club restent à auditer ; aucune synchronisation de production lancée. 40 tests ciblés ont réussi localement.
+
+## Cuypers et suivi après transfert — 7 novembre 2026
+
+- En production, l'utilisateur a corrigé H. Cuypers (27104) : fiche Monterrey, pays Mexico, affectation 2026-2027 active et protégée ; championnat encore vide. Aucun import production lancé par l'assistant.
+- Liga MX (262) ajoutée en FIN de la liste du balayage pour conserver les index des checkpoints. Saison API à vérifier sur les données réelles ; pas de garantie de délai de passage ni de couverture fournisseur.
+- En cas de changement de club, l'ancien instantané league_stats est conservé dans ext.league_stats_previous_clubs, dédoublonné par club/saison/championnat. Il s'agit d'une archive de données non encore présentée dans le parcours ; ne pas prétendre que les 13 buts de Chicago sont affichés dans l'historique.
+- Une affectation active empêche le balayage de mettre à jour les chiffres depuis un autre club. Le suivi écarte les cibles dont le championnat appartient explicitement à un autre club, en attendant les nouvelles données.
+- La modification d'un club par les autres synchronisations reste à auditer : la protection n'est pas universelle. Une coupure pendant le suivi peut toujours nécessiter une reprise.
+- Diagnostic du 7/11 : suivi globalement régulier, trou observé de 17h à 19h UTC, cause inconnue. Sur la demande de l'utilisateur, le projet de cron séparé a été retiré de cette PR en attente de preuves supplémentaires ; pas de changement de cron en production.
+
 ### 04/11/2026 — Lisibilité des compositions sur les fiches match
 
 - Noms sur fond sombre et sur deux lignes au besoin ; terrain mobile plus haut. Le nom complet reste disponible au survol et pour les lecteurs d’écran. Liens et données inchangés.

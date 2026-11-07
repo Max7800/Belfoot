@@ -1,7 +1,7 @@
 import { getProvider } from "./providers";
 import { upsertExternal } from "./sync";
 import { seasonLabel, seasonYear } from "./season";
-import { upsertPlayerMembership } from "./playerMemberships";
+import { conflictsWithLockedClub, upsertPlayerMembership } from "./playerMemberships";
 import { isNationalTeam } from "./nationalClassification";
 
 export async function resolveNationalPlayerClubs(db, ctx = {}) {
@@ -37,6 +37,7 @@ export async function resolveNationalPlayerClubs(db, ctx = {}) {
     if (clubError || !club) throw clubError || new Error(`${info.club.name}: club local introuvable`);
     // Une autre sélection (jeunes, autre pays) n'est jamais retenue comme club.
     if (isNationalTeam(club)) { unresolved.push(player.name); continue; }
+    if (await conflictsWithLockedClub(db, player.id, club.id, season)) { unresolved.push(player.name); continue; }
     const { error: updateError } = await db.from("players").update({
       club_id: club.id,
       // Pays/championnat seulement s'ils désignent le championnat national du club :
