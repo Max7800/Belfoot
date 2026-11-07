@@ -44,6 +44,8 @@ export function followTargets(players = [], clubs = {}) {
     const stats = player.ext?.league_stats;
     const club = clubs[player.club_id];
     if (!stats?.league_id || !club?.external_id) continue;
+    // Le championnat de l'ancien club ne décrit pas le nouveau club.
+    if (stats.club_id && String(stats.club_id) !== String(player.club_id)) continue;
     const known = SCAN_LEAGUES.find((league) => league.id === String(stats.league_id));
     const entry = leagues.get(String(stats.league_id)) || { id: String(stats.league_id), name: stats.league || known?.name || "Championnat", country: stats.country || known?.country || null, logo: stats.league_logo || null, calendar: Boolean(known?.calendar), clubs: new Set() };
     entry.clubs.add(String(club.external_id));

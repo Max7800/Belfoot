@@ -37,6 +37,19 @@ afterAll(() => { delete process.env.CRON_SECRET; vi.useRealTimers(); });
 beforeEach(() => { vi.setSystemTime(NOW); state.runs = []; state.durationMs = 15000; state.failOn = null; state.savesDuringRun = []; });
 
 describe("competition-refresh — budget de temps (coupure à 60 s)", () => {
+  it("après un suivi sauté, le passage suivant lui donne la priorité une seule fois", async () => {
+    state.db = seed(8);
+    await call(competitionRoute, "/api/cron/competition-refresh");
+    expect(state.db.rows("site_settings")[0].data.football_abroad_follow_last.skipped).toBe("temps du passage épuisé");
+    state.runs = [];
+    vi.setSystemTime(NOW + 20 * 60000);
+    await call(competitionRoute, "/api/cron/competition-refresh");
+    expect(state.runs[0].key).toBe("football.abroad-follow");
+    expect(state.runs.filter((run) => run.key === "football.abroad-follow")).toHaveLength(1);
+    expect(state.runs.some((run) => run.key === "football.sync")).toBe(true);
+    expect(state.db.rows("site_settings")[0].data.football_abroad_follow_last.ok).toBe(true);
+  });
+
   it("aucune nouvelle synchro au-delà du budget : les suivantes sont reportées, pas perdues", async () => {
     state.db = seed(8); // 8 synchros de 15 s = 120 s : la fonction aurait été coupée
     const body = await call(competitionRoute, "/api/cron/competition-refresh");

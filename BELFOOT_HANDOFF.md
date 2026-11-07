@@ -1,3 +1,9 @@
+## Complément — suivi des Belges à l'étranger
+
+- Après un passage sauté pour manque de temps, le suivi passe prioritairement au tick principal suivant ; les checkpoints des autres travaux sont conservés. Le passage dédié aux détails et la simulation restent inchangés.
+- Les statistiques identifiées comme appartenant à un autre club ne servent plus à chercher des matchs du nouveau club dans l'ancien championnat. Tant que le nouveau championnat n'est pas connu, le suivi doit être complété avant d'annoncer sa couverture.
+- 85 tests ciblés réussis localement ; CI à vérifier. Cuypers et les autres écritures du club restent à corriger, aucune modification de production effectuée.
+
 ## Suivi du 7 novembre 2026 — Cuypers et statistiques d’ancien club
 
 - Une affectation active interdit au balayage des championnats de remplacer les chiffres par ceux d’un autre club, y compris lorsque les chiffres déjà présents viennent de cet ancien club. Test ciblé : `npm test -- tests/football/scanKeepsCurrentClub.test.js` (5 tests réussis).
