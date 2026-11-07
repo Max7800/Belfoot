@@ -1,3 +1,8 @@
+## Vérification des imports ciblés — 8 novembre 2026
+
+- Deux tests intégrés couvrent maintenant l'import ciblé d'un ancien club et la résolution du club depuis une sélection en présence d'une affectation active protégée. 67 tests ciblés réussis localement, ESLint sans erreur. Ces tests complètent et remplacent la réserve sur leur absence ci-dessous.
+- Le contrôle reste applicatif, séparé des écritures : il ne garantit pas la protection contre toutes les courses concurrentes. Aucun import de production n'a été lancé.
+
 ## Protection des clubs verrouillés — 8 novembre 2026
 
 - L'affectation active verrouillée d'un club est prise en compte par les imports effectif, découverte, import ciblé, transfert et résolution des clubs de sélection. Une autre équipe ne peut pas remplacer l'instantané dans ces chemins ; les stats et les transferts restent importés, les affectations concurrentes ne sont pas activées. Les sélections nationales verrouillées ne bloquent pas un club. Chargement groupé pour les effectifs.
