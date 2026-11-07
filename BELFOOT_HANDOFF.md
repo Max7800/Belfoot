@@ -1,3 +1,9 @@
+## Migration préparée — protection transactionnelle des clubs
+
+- Migration `0042_locked_player_club.sql` en PR, non appliquée : sérialise les écritures d'affectation via le verrou de la fiche joueur et refuse un changement de club ou une affectation première active incompatible avec une affectation première verrouillée pour la saison courante. Elle couvre aussi les écritures hors des imports applicatifs. Les sélections et saisons d'archive ne sont pas bloquées.
+- Un transfert éditorial nécessite de désactiver/déverrouiller d'abord l'affectation protégée. Migration globale : revoir ses effets sur les flux et l'ordre de déploiement avant installation. Ne pas lancer sans accord ; pas de migration ni sync production réalisée.
+- Tests PostgreSQL PGlite séquentiels et 70 tests ciblés réussis localement. Les véritables sessions PostgreSQL concurrentes n'ont pas encore été testées ; ne pas prétendre que la concurrence de production est validée. La réponse réelle API-Football pour la Liga MX reste à vérifier.
+
 ## Vérification des imports ciblés — 8 novembre 2026
 
 - Deux tests intégrés couvrent maintenant l'import ciblé d'un ancien club et la résolution du club depuis une sélection en présence d'une affectation active protégée. 67 tests ciblés réussis localement, ESLint sans erreur. Ces tests complètent et remplacent la réserve sur leur absence ci-dessous.
