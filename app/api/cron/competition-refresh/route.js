@@ -40,7 +40,6 @@ const DEDICATED_DETAIL_FRESH_MS = 45 * 60000;
 const ABROAD_START_BEFORE_MS = 32000;
 const ABROAD_DEADLINE_MS = 48000;
 const ABROAD_CALLS = 12;
-const DEDICATED_ABROAD_FRESH_MS = 45 * 60000;
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -97,24 +96,9 @@ export async function GET(request) {
   const outOfTime = () => Date.now() - startedAt > REFRESH_TIME_BUDGET_MS;
   const dryRun = new URL(request.url).searchParams.get("dryRun") === "1";
   const detailsOnly = new URL(request.url).searchParams.get("pass") === "details";
-  const abroadOnly = new URL(request.url).searchParams.get("pass") === "abroad";
 
   try {
     const { data: settings } = await db.from("site_settings").select("data").eq("id", 1).maybeSingle();
-    // Un passage autonome ne dépend ni des compétitions visibles ni de leur durée.
-    if (abroadOnly) {
-      if (dryRun) return Response.json({ ok: true, dryRun: true, pass: "abroad", requestLimit: ABROAD_CALLS });
-      let outcome;
-      try {
-        const result = await runJob("football.abroad-follow", { db, globalScope: true, requestLimit: ABROAD_CALLS, deadline: startedAt + ABROAD_DEADLINE_MS, apifootballKey: process.env.APIFOOTBALL_KEY });
-        outcome = { ok: true, detail: String(result?.detail || "").slice(0, 300) };
-      } catch (error) {
-        outcome = { ok: false, error: String(error?.message || error).slice(0, 300) };
-      }
-      const last = { at: new Date().toISOString(), elapsedMs: Date.now() - startedAt, ...outcome };
-      await updateSiteSettings(db, { football_abroad_follow_last: last, football_abroad_dedicated_last: last });
-      return Response.json({ pass: "abroad", ...last }, { status: outcome.ok ? 200 : 500 });
-    }
     const strategy = { ...DEFAULTS, ...(settings?.data?.football_competition_refresh || {}) };
     const windowBefore = clamp(strategy.window_before_hours, 6, 168, DEFAULTS.window_before_hours);
     const windowAfter = clamp(strategy.window_after_hours, 1, 24, DEFAULTS.window_after_hours);
@@ -231,25 +215,6 @@ export async function GET(request) {
     // révision (lib/siteSettings.js) : rien d'autre dans site_settings n'est
     // écrasé, même si l'admin ou le job de renouvellement écrit en même temps.
     const persistState = () => updateSiteSettings(db, { football_competition_refresh_state: refreshState, football_competition_stats_state: statsState, football_campaign_rollover_state: rolloverState, football_coach_refresh_state: coachState, football_match_details_state: detailState });
-
-    // Après un passage sauté faute de temps, donner la priorité au suivi une fois
-    // au tick suivant. Les autres travaux gardent leur checkpoint et reprennent.
-    let abroad = null;
-    const runAbroad = async () => {
-      if (Date.now() - startedAt <= ABROAD_START_BEFORE_MS) {
-        try {
-          const result = await runJob("football.abroad-follow", { db, globalScope: true, requestLimit: ABROAD_CALLS, deadline: startedAt + ABROAD_DEADLINE_MS, apifootballKey: process.env.APIFOOTBALL_KEY });
-          abroad = { ok: true, detail: String(result?.detail || "").slice(0, 300) };
-        } catch (error) {
-          abroad = { ok: false, error: String(error?.message || error).slice(0, 300) };
-        }
-      } else abroad = { ok: false, skipped: "temps du passage épuisé" };
-      await updateSiteSettings(db, { football_abroad_follow_last: { at: new Date().toISOString(), elapsedMs: Date.now() - startedAt, ...abroad } });
-    };
-    const dedicatedAbroad = settings?.data?.football_abroad_dedicated_last;
-    const dedicatedAt = Date.parse(dedicatedAbroad?.at || "");
-    const dedicatedFresh = dedicatedAbroad?.ok === true && Number.isFinite(dedicatedAt) && now.getTime() - dedicatedAt >= 0 && now.getTime() - dedicatedAt < DEDICATED_ABROAD_FRESH_MS;
-    if (!detailsOnly && !dedicatedFresh && settings?.data?.football_abroad_follow_last?.skipped === "temps du passage épuisé") await runAbroad();
 
     let used = 0;
     let timeLimited = 0;
@@ -382,8 +347,17 @@ export async function GET(request) {
     // ── Belges à l'étranger : suivi match par match (job global), avant les
     // entraîneurs (une vérification par semaine leur suffit) : sinon le
     // rattrapage des détails ne lui laissait jamais de créneau (28/10/2026).
-    if (!abroad && !dedicatedFresh) await runAbroad();
-    else if (!abroad) abroad = { ok: true, delegated: true, detail: "suivi assuré par le passage dédié" };
+    let abroad = null;
+    if (Date.now() - startedAt <= ABROAD_START_BEFORE_MS) {
+      try {
+        const result = await runJob("football.abroad-follow", { db, globalScope: true, requestLimit: ABROAD_CALLS, deadline: startedAt + ABROAD_DEADLINE_MS, apifootballKey: process.env.APIFOOTBALL_KEY });
+        abroad = { ok: true, detail: String(result?.detail || "").slice(0, 300) };
+      } catch (error) {
+        abroad = { ok: false, error: String(error?.message || error).slice(0, 300) };
+      }
+    } else abroad = { ok: false, skipped: "temps du passage épuisé" };
+    // Dernier passage lisible sans l'historique des jobs (réservé à l'admin).
+    await updateSiteSettings(db, { football_abroad_follow_last: { at: new Date().toISOString(), elapsedMs: Date.now() - startedAt, ...abroad } });
 
     // ── Entraîneurs : compétitions de clubs autorisées, une par passage ─────
     let coaches = null;
@@ -431,4 +405,3 @@ export async function GET(request) {
 }
 
 export const POST = GET;
-

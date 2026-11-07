@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { scanBelgians, scanWrites } from "@/modules/football/scanBelgians";
+import { scanBelgians, scanWrites, SCAN_LEAGUES, scanSeason } from "@/modules/football/scanBelgians";
 import { registerProvider } from "@/modules/football/providers";
 import { createFakeSupabase } from "../helpers/fakeSupabase";
 
@@ -33,6 +33,30 @@ describe("ce que le balayage peut écrire", () => {
     expect(scanWrites({ current: { ext: { league_stats: ere({ season: "2025-2026", appearances: 30 }) } }, clubId: "psg", stats: { appearances: 1 }, seasonLabel: S }).updateStats).toBe(true);
     expect(scanWrites({ current: played, clubId: "ajax", stats: { appearances: 16 }, seasonLabel: S }).updateStats).toBe(true);
     expect(scanWrites({ current: null, clubId: "ajax", seasonLabel: S }).updateStats).toBe(true);
+  });
+});
+
+describe("transfert vers le Mexique", () => {
+  it("importe les chiffres du nouveau club et conserve ceux de l'ancien", async () => {
+    const mexico = SCAN_LEAGUES.find((league) => league.id === "262");
+    expect(mexico).toMatchObject({ name: "Liga MX", country: "Mexico" });
+    expect(scanSeason(mexico, new Date("2026-11-07T12:00:00Z"))).toBe(2026);
+    const chicagoStats = { season: S, league: "MLS", league_id: "253", club_id: "chicago", appearances: 11, goals: 13 };
+    const db = createFakeSupabase({
+      clubs: [{ id: "monterrey", source: "apifootball", external_id: "2282", name: "Monterrey", team_type: "first_team", locked: false, ext: {} }],
+      players: [{ id: "cuypers", source: "apifootball", external_id: "27104", name: "H. Cuypers", nationality: "Belgium", club_id: "monterrey", locked: false, tracked: true, ext: { league_stats: chicagoStats } }],
+      player_team_seasons: [{ player_id: "cuypers", club_id: "monterrey", season_start_year: 2026, active: true, locked: true }],
+    });
+    registerProvider({ key: "apifootball", async fetchLeaguePlayersPage() {
+      return { pages: 1, players: [{ external_id: "27104", name: "H. Cuypers", nationality: "Belgium", team: { external_id: "2282", name: "Monterrey" }, stats: { appearances: 3, goals: 2 } }] };
+    } });
+    await scanBelgians(db, { leagues: [mexico], now: new Date("2026-11-07T12:00:00Z"), requestLimit: 1 });
+    const player = db.rows("players")[0];
+    expect(player).toMatchObject({ club_id: "monterrey", country: "Mexico", competition: "Liga MX" });
+    expect(player.ext.league_stats).toMatchObject({ club_id: "monterrey", league_id: "262", appearances: 3, goals: 2 });
+    expect(player.ext.league_stats_previous_clubs).toEqual([chicagoStats]);
+    await scanBelgians(db, { leagues: [mexico], now: new Date("2026-11-07T12:00:00Z"), requestLimit: 1 });
+    expect(db.rows("players")[0].ext.league_stats_previous_clubs).toEqual([chicagoStats]);
   });
 });
 

@@ -45,6 +45,8 @@ export const SCAN_LEAGUES = [
   { id: "301", name: "Pro League", country: "United-Arab-Emirates" },
   { id: "253", name: "MLS", country: "USA", calendar: true },
   { id: "98", name: "J1 League", country: "Japan", calendar: true },
+  // Toujours ajouter en fin de liste : les checkpoints mémorisent un index.
+  { id: "262", name: "Liga MX", country: "Mexico" },
 ];
 export const SCAN_PAGES_PER_RUN = 8;
 
@@ -85,6 +87,15 @@ export function scanWrites({ current = null, clubId = null, stats = {}, seasonLa
   return { updateClub, updateStats };
 }
 
+// Un instantané remplacé après transfert peut être la seule trace des chiffres
+// de l'ancien club. Le conserver avec son club et sa saison, sans doublonner.
+export function archivePreviousLeagueStats(ext = {}, nextStats) {
+  const previous = ext?.league_stats;
+  if (!previous?.club_id || !nextStats?.club_id || previous.club_id === nextStats.club_id) return ext?.league_stats_previous_clubs;
+  const history = Array.isArray(ext?.league_stats_previous_clubs) ? ext.league_stats_previous_clubs : [];
+  return [...history.filter((row) => !(row?.club_id === previous.club_id && row?.season === previous.season && String(row?.league_id || "") === String(previous.league_id || ""))), previous];
+}
+
 async function savePlayers(db, providerKey, league, season, found, now) {
   if (!found.length) return { saved: 0, created: 0 };
   const teams = [...new Map(found.filter((player) => player.team).map((player) => [player.team.external_id, player.team])).values()];
@@ -114,6 +125,7 @@ async function savePlayers(db, providerKey, league, season, found, now) {
     const birth = birthExtPatch(current, player).ext?.birth || current?.ext?.birth;
     const writes = scanWrites({ current, clubId: club?.id || null, stats: player.stats, seasonLabel, activeClubId: current ? activeClubOf.get(current.id) || null : null });
     const leagueStats = { season: seasonLabel, league: league.name, league_id: league.id, league_logo: league.logo || null, country: league.country, club_id: club?.id || null, ...player.stats };
+    const previousClubs = writes.updateStats ? archivePreviousLeagueStats(current?.ext, leagueStats) : undefined;
     const patch = {
       source: providerKey,
       external_id: player.external_id,
@@ -121,7 +133,7 @@ async function savePlayers(db, providerKey, league, season, found, now) {
       ...(player.position ? { position: player.position } : {}),
       ...(player.age != null ? { age: player.age } : {}),
       ...(club && writes.updateClub ? playerSnapshotPatch({ existing: current, club, competition, season: seasonLabel, primaryClub: !youthTeam(player.team?.name) && club.team_type !== "national", now }) : {}),
-      ext: { ...(current?.ext || {}), ...(birth ? { birth } : {}), ...(writes.updateStats ? { league_stats: leagueStats } : {}) },
+      ext: { ...(current?.ext || {}), ...(birth ? { birth } : {}), ...(previousClubs ? { league_stats_previous_clubs: previousClubs } : {}), ...(writes.updateStats ? { league_stats: leagueStats } : {}) },
       tracked: true,
       active: true,
       synced_at: now.toISOString(),

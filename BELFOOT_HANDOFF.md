@@ -1,21 +1,11 @@
-## Suivi indépendant des Belges — 7 novembre 2026
+## Cuypers et suivi après transfert — 7 novembre 2026
 
-- `competition-refresh?pass=abroad` exécute le suivi indépendamment des autres compétitions, avec auth, préflight et verrou `runJob` existants ; simulation `dryRun=1` sans job. Un passage principal ne le double pas si un passage dédié a réussi depuis moins de 45 min et le reprend sinon.
-- Préparation `supabase/abroad_follow_cron_setup.sql` : programme :05/:25/:45 UTC et au plus 12 appels/passage (864/jour théoriques). Installation uniquement après déploiement vérifié et validation de l'utilisateur ; aucun lancement production n'a été effectué.
-- Le suivi existant conserve des checkpoints mais n'est pas intégralement résistant à une coupure au milieu d'un appel : ne pas promettre aucune répétition ni aucune interruption. 92 tests ciblés réussis localement.
-- Cuypers : club actuel et statistiques existantes encore non corrigés en base. Chicago ne doit pas être affiché comme club actuel ; préserver et attribuer les chiffres à Chicago. Le championnat mexicain n'est pas actuellement balayé. Auditer toutes les écritures avant une correction durable.
-
-## Complément — suivi des Belges à l'étranger
-
-- Après un passage sauté pour manque de temps, le suivi passe prioritairement au tick principal suivant ; les checkpoints des autres travaux sont conservés. Le passage dédié aux détails et la simulation restent inchangés.
-- Les statistiques identifiées comme appartenant à un autre club ne servent plus à chercher des matchs du nouveau club dans l'ancien championnat. Tant que le nouveau championnat n'est pas connu, le suivi doit être complété avant d'annoncer sa couverture.
-- 85 tests ciblés réussis localement ; CI à vérifier. Cuypers et les autres écritures du club restent à corriger, aucune modification de production effectuée.
-
-## Suivi du 7 novembre 2026 — Cuypers et statistiques d’ancien club
-
-- Une affectation active interdit au balayage des championnats de remplacer les chiffres par ceux d’un autre club, y compris lorsque les chiffres déjà présents viennent de cet ancien club. Test ciblé : `npm test -- tests/football/scanKeepsCurrentClub.test.js` (5 tests réussis).
-- Cuypers : les diagnostics de production indiquent Chicago sur la fiche et une affectation Monterrey inactive. Aucun changement de base ni synchronisation de production exécuté ; cette correction ne règle pas à elle seule la fiche ni les chiffres déjà présents. D’autres synchronisations peuvent modifier le club.
-- Le suivi des Belges peut être sauté si le passage principal atteint 32 secondes avant son démarrage ; la trace « temps du passage épuisé » ne prouve pas un dépassement du suivi lui-même. À traiter séparément et vérifier en production.
+- En production, l'utilisateur a corrigé H. Cuypers (27104) : fiche Monterrey, pays Mexico, affectation 2026-2027 active et protégée ; championnat encore vide. Aucun import production lancé par l'assistant.
+- Liga MX (262) ajoutée en FIN de la liste du balayage pour conserver les index des checkpoints. Saison API à vérifier sur les données réelles ; pas de garantie de délai de passage ni de couverture fournisseur.
+- En cas de changement de club, l'ancien instantané league_stats est conservé dans ext.league_stats_previous_clubs, dédoublonné par club/saison/championnat. Il s'agit d'une archive de données non encore présentée dans le parcours ; ne pas prétendre que les 13 buts de Chicago sont affichés dans l'historique.
+- Une affectation active empêche le balayage de mettre à jour les chiffres depuis un autre club. Le suivi écarte les cibles dont le championnat appartient explicitement à un autre club, en attendant les nouvelles données.
+- La modification d'un club par les autres synchronisations reste à auditer : la protection n'est pas universelle. Une coupure pendant le suivi peut toujours nécessiter une reprise.
+- Diagnostic du 7/11 : suivi globalement régulier, trou observé de 17h à 19h UTC, cause inconnue. Sur la demande de l'utilisateur, le projet de cron séparé a été retiré de cette PR en attente de preuves supplémentaires ; pas de changement de cron en production.
 
 ### 04/11/2026 — Lisibilité des compositions sur les fiches match
 
