@@ -1,3 +1,8 @@
+## Complément — affichage des chiffres archivés
+
+- La fiche joueur lit les instantanés `league_stats_previous_clubs`, charge leurs clubs et les affiche par saison et championnat via `withLeagueStats`. Les lignes déjà importées pour la même saison et compétition ne sont pas dupliquées. Les données de Chicago restent attribuées à Chicago ; test synthétique Cuypers/Monterrey.
+- Cette note remplace la mention ci-dessous selon laquelle l'archive n'était pas affichée. Les autres écritures du club restent à auditer ; aucune synchronisation de production lancée. 40 tests ciblés ont réussi localement.
+
 ## Cuypers et suivi après transfert — 7 novembre 2026
 
 - En production, l'utilisateur a corrigé H. Cuypers (27104) : fiche Monterrey, pays Mexico, affectation 2026-2027 active et protégée ; championnat encore vide. Aucun import production lancé par l'assistant.

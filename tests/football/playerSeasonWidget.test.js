@@ -71,6 +71,19 @@ describe("saison affichée", () => {
 describe("chiffres du balayage sur la fiche joueur", () => {
   const league = { season: "2026-2027", league: "Eredivisie", league_id: "88", league_logo: "ere.png", country: "Netherlands", club_id: "ajax", appearances: 9, lineups: 8, minutes: 700, goals: 2, assists: 3, yellow: 1, red: 0, rating: 7.1 };
   const player = { club_id: "ajax", ext: { league_stats: league } };
+  it("affiche l'archive de l'ancien club sans la confondre avec le nouveau", () => {
+    const current = { season: "2026-2027", league: "Liga MX", league_id: "262", club_id: "monterrey", appearances: 3, goals: 2 };
+    const chicago = { season: "2026-2027", league: "MLS", league_id: "253", club_id: "chicago", appearances: 11, goals: 13 };
+    const result = withLeagueStats([], { club_id: "monterrey", ext: { league_stats: current, league_stats_previous_clubs: [chicago] } }, {});
+    expect(result.stats).toEqual(expect.arrayContaining([
+      expect.objectContaining({ club_id: "monterrey", competition_id: "league-262", goals: 2 }),
+      expect.objectContaining({ club_id: "chicago", competition_id: "league-253", goals: 13 }),
+    ]));
+    expect(new Set(result.stats.map((row) => row.id)).size).toBe(2);
+    const existing = [{ id: "import", club_id: "chicago", competition_id: "mls", season: "2026", appearances: 11, goals: 13 }];
+    const deduped = withLeagueStats(existing, { club_id: "monterrey", ext: { league_stats_previous_clubs: [chicago] } }, { mls: { id: "mls", external_id: "253" } });
+    expect(deduped.stats).toEqual(existing);
+  });
   it("championnat non importé : ligne de saison et compétition ajoutées (logo, portée étrangère)", () => {
     const { stats, competitions } = withLeagueStats([stat("ucl", { appearances: 3 })], player, { ucl: { id: "ucl", name: "Champions League" } });
     expect(stats.at(-1)).toMatchObject({ competition_id: "league-88", club_id: "ajax", season: "2026", appearances: 9, goals: 2, assists: 3, rating: 7.1 });
