@@ -186,8 +186,12 @@ export async function syncNationalTeam(db, ctx = {}) {
   // saison : sans ça, un joueur convoqué une saison passée (ex. parti dans une autre
   // sélection) resterait « actif » à vie. L'historique est conservé (lignes gardées,
   // active=false) ; les convocations verrouillées manuellement ne sont pas touchées.
-  const { error: deactivateError } = await db.from("national_team_callups").update({ active: false, updated_at: syncedAt }).eq("national_team_id", nationalTeamId).eq("source", providerKey).eq("locked", false);
-  if (deactivateError) throw deactivateError;
+  // Une réponse vide peut refléter une couverture manquante ou temporaire :
+  // ne jamais effacer l'effectif précédent sur cette seule information.
+  if (squad.length) {
+    const { error: deactivateError } = await db.from("national_team_callups").update({ active: false, updated_at: syncedAt }).eq("national_team_id", nationalTeamId).eq("source", providerKey).eq("locked", false);
+    if (deactivateError) throw deactivateError;
+  }
 
   let callups = 0;
   for (const member of squad) {
@@ -236,6 +240,7 @@ export async function syncNationalTeam(db, ctx = {}) {
   const listPreview = (items) => items.slice(0, 5).join(" ; ") + (items.length > 5 ? ` ; +${items.length - 5}` : "");
   const seasonSummary = [...seasonCounts.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([label, count]) => `${label} ×${count}`).join(", ");
   const notes = [`saisons API : ${seasonSummary || "aucune"}`];
+  if (!squad.length) notes.push("avertissement : effectif API vide, convocations précédentes conservées");
   const existingWithoutSeason = withoutSeason.length - newWithoutSeason.length;
   if (existingWithoutSeason) notes.push(`avertissement : ${existingWithoutSeason} match(s) existant(s) sans saison API exploitable : saison actuelle conservée`);
   if (newWithoutSeason.length) notes.push(`avertissement : ${newWithoutSeason.length} nouveau(x) match(s) inséré(s) sans saison : ${listPreview(newWithoutSeason.map((match) => `${match.home_name || "?"}–${match.away_name || "?"} du ${String(match.kickoff || "").slice(0, 10) || "?"}`))}`);
@@ -243,3 +248,4 @@ export async function syncNationalTeam(db, ctx = {}) {
   if (lockedIgnored) notes.push(`matchs verrouillés ignorés : ${lockedIgnored}`);
   return `${team.name} (${category.toUpperCase()}) : ${resolvedMatches.length} matchs, ${competitionMap.size} compétitions (${competitionNames.join(", ") || "aucune"}) et ${callups} joueurs (${season}) · ${notes.join(" · ")}`;
 }
+

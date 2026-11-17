@@ -189,6 +189,17 @@ describe("syncNationalTeam — comportements existants préservés", () => {
     expect(callups.find((row) => row.player_id === player.id)).toMatchObject({ season: "2026-2027", active: true, national_team_id: "club-be" });
   });
 
+  it("un effectif API vide conserve les convocations existantes et signale le problème", async () => {
+    const db = createFakeSupabase({
+      clubs: [{ id: "club-be", source: "apifootball", external_id: "1", name: "Belgique", team_type: "national", locked: false }],
+      national_team_callups: [{ id: "callup-old", national_team_id: "club-be", player_id: "player-old", season: "2025-2026", active: true, source: "apifootball", locked: false }],
+    });
+    squad = [];
+    const detail = await syncNationalTeam(db, CRON_CTX);
+    expect(db.rows("national_team_callups")[0].active).toBe(true);
+    expect(detail).toContain("effectif API vide, convocations précédentes conservées");
+  });
+
   it("crée les compétitions internationales comme avant", async () => {
     fixtures = [rawFixture({ id: 101, date: "2024-09-07T18:45:00+00:00", season: 2024, ...NL })];
     const db = createFakeSupabase();
@@ -222,3 +233,4 @@ describe("syncNationalTeam — comportements existants préservés", () => {
     expect(secondDetail).not.toContain("nouveau(x) match(s)");
   });
 });
+

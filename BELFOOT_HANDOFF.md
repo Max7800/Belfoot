@@ -1,3 +1,10 @@
+## Audit sélections et classements — 18 novembre 2026
+
+- Le cron national-refresh lance `football.national-team` sur les sélections suivies et autorisées (4 h en fenêtre, 20 h hors fenêtre par défaut). La source `/players/squads` est l'effectif courant du fournisseur : aucune garantie que ce soit la liste officielle d'un rassemblement. Cause exacte de la liste ancienne non vérifiée en production.
+- Une réponse effectif vide n'efface plus les convocations existantes et produit un avertissement. Ce garde-fou ne corrige pas une liste fournisseur ancienne ou incomplète.
+- `refreshTargets` exclut explicitement les compétitions internationales du passage automatique `football.squads` : leurs lignes player_season_stats et classements peuvent rester périmés. Prévoir un import distinct, borné, reprenable, respectant couverture et plan d'import ; vérifier les saisons API et distinguer l'absence de données de zéro. Les endpoints API top scorers/assists ne couvrent que le top 20 et ne remplacent pas toutes les statistiques.
+- Aucune synchronisation de production lancée. 17 tests ciblés et ESLint sans erreur en local. À compléter : diagnostic du cron et source en production, disponibilité par compétition, mise à jour atomique des convocations, plan de tests et suivi admin.
+
 ### 04/11/2026 — Lisibilité des compositions sur les fiches match
 
 - Noms sur fond sombre et sur deux lignes au besoin ; terrain mobile plus haut. Le nom complet reste disponible au survol et pour les lecteurs d’écran. Liens et données inchangés.
