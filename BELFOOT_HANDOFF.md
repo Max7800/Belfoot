@@ -1,3 +1,10 @@
+## Comparaison RBFA en lecture seule — 18 novembre 2026
+
+- Pages officielles RBFA A et U21 lues en lecture seule ; observation ponctuelle le 17/11 UTC : 26 et 24 joueurs. La page ne fournit pas de date fiable de l'annonce, Last-Modified concerne le document, et un rapprochement n'est pas une preuve officielle.
+- `rbfaSelections.js` parse la structure réelle (HTML ancien mal imbriqué, iso-8859-1), refuse listes vides/incomplètes/doublons, compare date de naissance + nom et refuse les ambiguïtés. Aucun ajout ou retrait si des identités sont incertaines. L'absence ne peut pas être déduite lorsque des identités manquent.
+- Route admin authentifiée GET `rbfa-selection-preview` et panneau Synchros : comparaison exclusivement en lecture, sans appel API-Football, aucune écriture. Aucune publication automatique ni historique d'annonces ; l'automatisation et l'identification des joueurs absents demeurent à concevoir et tester.
+- 70 tests ciblés et ESLint sans erreur en local ; CI à vérifier. Aucun import en production ni fusion.
+
 ## Import des convocations — suite du 18 novembre 2026
 
 - L'import enregistre les nouveaux joueurs et leurs convocations avant de désactiver les anciennes ; une réponse vide ou une erreur d'enregistrement ne vide pas l'effectif précédent. Les lignes verrouillées ou de source manuelle de la même saison ne sont pas écrasées ; les désactivations concernent seulement les anciennes lignes API non verrouillées. Cette séquence limite les dégâts mais n'est pas une transaction atomique : une interruption peut laisser temporairement un mélange ancien/nouveau.
