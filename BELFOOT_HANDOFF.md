@@ -1,3 +1,9 @@
+## Import des convocations — suite du 18 novembre 2026
+
+- L'import enregistre les nouveaux joueurs et leurs convocations avant de désactiver les anciennes ; une réponse vide ou une erreur d'enregistrement ne vide pas l'effectif précédent. Les lignes verrouillées ou de source manuelle de la même saison ne sont pas écrasées ; les désactivations concernent seulement les anciennes lignes API non verrouillées. Cette séquence limite les dégâts mais n'est pas une transaction atomique : une interruption peut laisser temporairement un mélange ancien/nouveau.
+- Tests : réponse vide, échec pendant l'import, verrou, source manuelle, répétition et saison ; 106 tests ciblés et ESLint réussis localement. Aucun appel API ni synchronisation en production.
+- La RBFA publie une page officielle des joueurs (https://static.rbfa.be/project/publiek/rencintstat/spelers_fr_145.htm) qui inclut dates de naissance et clubs, source potentielle de comparaison. Sa fraîcheur, ses droits d'usage, sa relation exacte à la liste d'un rassemblement et la correspondance des identités doivent être validés avant automatisation ; pas de scraping ou modification production ajouté.
+
 ## Statistiques internationales automatiques — 18 novembre 2026
 
 - `competition-refresh` rend éligibles les compétitions internationales API-Football avec `ext.coverage.players === true`, saison publique et plan d'import autorisé. Après un match récent ou en reprise, le job existant `football.squads` traite une sélection par passage ; entraîneurs internationaux exclus du job coaches. Le quota et les checkpoints existants restent utilisés.

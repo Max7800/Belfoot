@@ -5,6 +5,7 @@ import { frenchNationName } from "@/lib/frenchNations";
 import { resolveNationalMatchSeason } from "./nationalMatchSeasons";
 import { nationalTeamTraits } from "./nationalClassification";
 import { providerIdentityPatch } from "@/lib/playerIdentity";
+import { readAll } from "@/lib/readAll";
 
 // Seulement le nom et la photo : la nationalité suit ici sa propre règle (sélection).
 function nameAndPhoto(existing, member) {
@@ -181,17 +182,14 @@ export async function syncNationalTeam(db, ctx = {}) {
   });
   await upsertExternal(db, "matches", providerKey, resolvedMatches, ["competition_id", "season_id", "home_club_id", "away_club_id", "home_score", "away_score", "status", "minute", "kickoff", "matchday", "round_raw", "phase", "round_number", "provider"]);
 
-  // Désactive TOUTES les convocations de la sélection (toutes saisons confondues) avant de
-  // réactiver l'effectif actuel. L'affichage lit les convocations actives sans filtre de
-  // saison : sans ça, un joueur convoqué une saison passée (ex. parti dans une autre
-  // sélection) resterait « actif » à vie. L'historique est conservé (lignes gardées,
-  // active=false) ; les convocations verrouillées manuellement ne sont pas touchées.
-  // Une réponse vide peut refléter une couverture manquante ou temporaire :
-  // ne jamais effacer l'effectif précédent sur cette seule information.
-  if (squad.length) {
-    const { error: deactivateError } = await db.from("national_team_callups").update({ active: false, updated_at: syncedAt }).eq("national_team_id", nationalTeamId).eq("source", providerKey).eq("locked", false);
-    if (deactivateError) throw deactivateError;
-  }
+  // Préserver les anciennes lignes tant que l'ensemble du nouvel effectif
+  // n'a pas été enregistré. Une réponse vide n'est pas une liste officielle vide.
+  const { data: existingCallups, error: callupsError } = squad.length
+    ? await readAll(() => db.from("national_team_callups").select("id,player_id,season,source,locked,active").eq("national_team_id", nationalTeamId))
+    : { data: [], error: null };
+  if (callupsError) throw callupsError;
+  const callupByPlayerSeason = new Map((existingCallups || []).map((row) => [`${row.player_id}:${row.season}`, row]));
+  const retainedIds = new Set();
 
   let callups = 0;
   for (const member of squad) {
@@ -219,7 +217,14 @@ export async function syncNationalTeam(db, ctx = {}) {
       const { error } = await db.from("players").update(playerPatch).eq("id", existing.id);
       if (error) throw new Error(`${member.name}: ${error.message}`);
     }
-    const { error: callupError } = await db.from("national_team_callups").upsert({
+    const callupKey = `${playerId}:${selectedSeason}`;
+    const currentCallup = callupByPlayerSeason.get(callupKey);
+    if (currentCallup?.locked || (currentCallup && currentCallup.source !== providerKey)) {
+      retainedIds.add(currentCallup.id);
+      callups++;
+      continue;
+    }
+    const callupPatch = {
       national_team_id: nationalTeamId,
       player_id: playerId,
       season: selectedSeason,
@@ -231,9 +236,23 @@ export async function syncNationalTeam(db, ctx = {}) {
       ext: member.ext || member,
       synced_at: syncedAt,
       updated_at: syncedAt,
-    }, { onConflict: "national_team_id,player_id,season" });
+    };
+    const query = currentCallup
+      ? db.from("national_team_callups").update(callupPatch).eq("id", currentCallup.id).eq("locked", false).eq("source", providerKey)
+      : db.from("national_team_callups").insert({ ...callupPatch, locked: false });
+    const { data: savedCallup, error: callupError } = await query.select("id").maybeSingle();
     if (callupError) throw new Error(`${member.name}: ${callupError.message}`);
+    if (!savedCallup?.id) throw new Error(`${member.name}: convocation modifiée pendant la synchronisation`);
+    retainedIds.add(savedCallup.id);
+    callupByPlayerSeason.set(callupKey, { id: savedCallup.id, player_id: playerId, season: selectedSeason, source: providerKey, locked: false });
     callups++;
+  }
+
+  const staleIds = (existingCallups || []).filter((row) => row.active && row.source === providerKey && !row.locked && !retainedIds.has(row.id)).map((row) => row.id);
+  for (let offset = 0; offset < staleIds.length; offset += 400) {
+    const { error } = await db.from("national_team_callups").update({ active: false, updated_at: syncedAt })
+      .in("id", staleIds.slice(offset, offset + 400)).eq("national_team_id", nationalTeamId).eq("source", providerKey).eq("locked", false);
+    if (error) throw error;
   }
 
   const competitionNames = [...new Set(matches.map((match) => match.league_name).filter(Boolean))];
