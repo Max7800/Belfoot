@@ -1,3 +1,9 @@
+## Statistiques internationales automatiques — 18 novembre 2026
+
+- `competition-refresh` rend éligibles les compétitions internationales API-Football avec `ext.coverage.players === true`, saison publique et plan d'import autorisé. Après un match récent ou en reprise, le job existant `football.squads` traite une sélection par passage ; entraîneurs internationaux exclus du job coaches. Le quota et les checkpoints existants restent utilisés.
+- Les statistiques alimentent `player_season_stats` et les classements existants ; elles ne touchent ni au club actuel ni aux convocations. Les compétitions sans couverture explicite ne sont pas traitées. Le fournisseur plafonne actuellement fetchSquadPlayers à trois pages par équipe : les données peuvent rester partielles ; disponibilité et saison effectives des qualifs U17 à vérifier avant de promettre un classement complet.
+- 98 tests ciblés réussis et ESLint sans erreur en local. Pas de synchronisation de production ni fusion. Le diagnostic de la liste actuelle des Diables reste à faire ; le fournisseur peut renvoyer un effectif courant différent de la liste officielle.
+
 ## Audit sélections et classements — 18 novembre 2026
 
 - Le cron national-refresh lance `football.national-team` sur les sélections suivies et autorisées (4 h en fenêtre, 20 h hors fenêtre par défaut). La source `/players/squads` est l'effectif courant du fournisseur : aucune garantie que ce soit la liste officielle d'un rassemblement. Cause exacte de la liste ancienne non vérifiée en production.
