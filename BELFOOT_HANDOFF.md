@@ -1,3 +1,8 @@
+## Validation simultanée PostgreSQL — 18 novembre 2026
+
+- Ajout d'un service PostgreSQL 16 isolé dans la CI et d'un test sur deux sessions : un ancien worker API tente d'écrire pendant la transaction RBFA. Le test vérifie le refus de l'écriture et la liste finale. Base strictement locale et éphémère ; le SQL de préparation a été vérifié avec PGlite. Résultat CI à consulter impérativement avant déploiement.
+- Déploiement preview Vercel ab6a688 en échec : variables NEXT_PUBLIC_SUPABASE_URL et NEXT_PUBLIC_SUPABASE_ANON_KEY configurées uniquement pour production. Production actuelle encore sur main 7cec5a7. Accès direct Supabase indisponible ; aucune migration ni synchronisation de production réalisée. L'utilisateur a autorisé l'activation, après vérifications et accès effectifs.
+
 ## Raccordement transactionnel des convocations — 18 novembre 2026
 
 - Si 0043 est installée, syncNationalTeam agrège les joueurs puis applique la transaction API ; en erreur il ne retombe jamais sur une écriture directe. Sans migration, le chemin historique reste utilisé. Une réponse API vide ne désactive toujours rien.
