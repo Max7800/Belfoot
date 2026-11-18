@@ -1,3 +1,9 @@
+## Transactions coordonnées préparées — 18 novembre 2026
+
+- La migration 0043 prépare aussi `apply_api_callups_atomic` : les fonctions RBFA et API prennent le même verrou transactionnel, et une liste RBFA active bloque l'application d'un ancien effectif API. L'API vide et les conflits protégés sont traités sans suppression. Tests PGlite couvrent les deux ordres séquentiels API/RBFA, les protections et le rollback ; pas encore de test multi-connexions concurrents.
+- Aucune fonction n'est appelée par l'application. Pour terminer : brancher les DEUX chemins de façon cohérente (y compris reprise et gestion des fonctions absentes), vérifier les anciens processus en vol et la disponibilité/validité des sources, exécuter des tests concurrents réels. Ne pas activer un seul chemin en isolant l'autre : l'ancien import JS peut encore écrire après la transaction. La migration n'a pas été installée et aucune synchronisation de production n'a été lancée.
+- 970 tests locaux et ESLint ciblé réussis ; CI à vérifier.
+
 ## Transaction RBFA préparée — 18 novembre 2026
 
 - Migration 0043 ajoute `apply_rbfa_callups_atomic`, réservée à service_role et non appelée par l'application. Elle verrouille les convocations pendant la transaction, relit le snapshot courant, impose une observation récente et complète, des identités uniques existantes et l'absence de conflits manuels/verrouillés, puis applique en une transaction. Une erreur annule toutes les modifications. Elle ne crée ni joueur ni club.

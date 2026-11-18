@@ -17,7 +17,7 @@ beforeAll(async () => {
     create table clubs(id uuid primary key,source text,external_id text,team_type text);
     create table players(id uuid primary key);
     create table site_settings(id integer primary key,data jsonb);
-    create table national_team_callups(id uuid primary key default gen_random_uuid(),national_team_id uuid,player_id uuid,season text,active boolean,source text,external_id text,ext jsonb,locked boolean default false,synced_at timestamptz,updated_at timestamptz,unique(national_team_id,player_id,season));`);
+    create table national_team_callups(id uuid primary key default gen_random_uuid(),national_team_id uuid,player_id uuid,season text,active boolean,source text,external_id text,position text,shirt_number integer,ext jsonb,locked boolean default false,synced_at timestamptz,updated_at timestamptz,unique(national_team_id,player_id,season));`);
   const sql = await readFile(new URL("../../modules/football/migrations/0043_rbfa_callups_atomic.sql", import.meta.url), "utf8");
   await db.exec(sql);
   await db.exec(sql);
@@ -71,5 +71,22 @@ describe("écriture atomique des convocations RBFA", () => {
       const result = await db.query("select player_id,active from national_team_callups");
       expect(result.rows).toEqual([{ player_id: ids[11], active: true }]);
     } finally { await db.exec("drop trigger test_reject on national_team_callups; drop function test_reject_callup()"); }
+  });
+  it("la liste API ne réintroduit pas un ancien joueur après une liste RBFA", async () => {
+    const api = [{ playerId: ids[11], externalId: "api-12", position: "Midfielder", number: 10 }];
+    const apiCall = () => db.query("select public.apply_api_callups_atomic($1,$2,$3::jsonb) as result", [team, "2026-2027", JSON.stringify(api)]);
+    expect((await apiCall()).rows[0].result).toMatchObject({ skipped: false, written: 1 });
+    await apply();
+    expect((await apiCall()).rows[0].result).toMatchObject({ skipped: true, reason: "rbfa_priority" });
+    const rows = (await db.query("select player_id,active from national_team_callups where player_id=$1", [ids[11]])).rows;
+    expect(rows).toEqual([{ player_id: ids[11], active: false }]);
+    expect((await db.query("select count(*)::int as n from national_team_callups where active")).rows[0].n).toBe(11);
+  });
+  it("la liste API vide ne désactive rien et les lignes manuelles restent protégées", async () => {
+    await db.query("insert into national_team_callups(national_team_id,player_id,season,active,source,locked) values ($1,$2,'2026-2027',true,'manual',true)", [team, ids[11]]);
+    await expect(db.query("select public.apply_api_callups_atomic($1,$2,'[]'::jsonb)", [team, "2026-2027"])).rejects.toThrow(/vide/);
+    const people = [{ playerId: ids[0], externalId: "api-1" }];
+    await db.query("select public.apply_api_callups_atomic($1,$2,$3::jsonb)", [team, "2026-2027", JSON.stringify(people)]);
+    expect((await db.query("select active,source from national_team_callups where player_id=$1", [ids[11]])).rows[0]).toEqual({ active: true, source: "manual" });
   });
 });

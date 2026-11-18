@@ -71,7 +71,47 @@ begin
 end;
 $$;
 
+-- Les futurs imports API doivent aussi passer par cette fonction avant que
+-- l'écriture RBFA soit activée. Le verrou partagé sérialise les deux sources.
+create or replace function public.apply_api_callups_atomic(p_team uuid, p_season text, p_people jsonb)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  n integer;
+  changed integer;
+  removed integer;
+begin
+  if p_season is null or p_season !~ '^\d{4}-\d{4}$' or substring(p_season from 6 for 4)::integer <> substring(p_season from 1 for 4)::integer + 1 then raise exception 'Saison invalide'; end if;
+  if not exists (select 1 from public.clubs where id=p_team and team_type='national') then raise exception 'Sélection introuvable'; end if;
+  if jsonb_typeof(p_people) is distinct from 'array' then raise exception 'Liste API invalide'; end if;
+  n := jsonb_array_length(p_people);
+  if n < 1 or n > 100 then raise exception 'Liste API vide ou trop volumineuse'; end if;
+  if exists (select 1 from jsonb_array_elements(p_people) r where coalesce(r->>'playerId','') !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' or coalesce(r->>'externalId','') = '') then raise exception 'Identité API invalide'; end if;
+  if (select count(distinct r->>'playerId') from jsonb_array_elements(p_people) r) <> n then raise exception 'Identités API dupliquées'; end if;
+  if (select count(*) from public.players p where p.id in (select (r->>'playerId')::uuid from jsonb_array_elements(p_people) r)) <> n then raise exception 'Fiche joueur introuvable'; end if;
+  lock table public.national_team_callups in share row exclusive mode;
+  -- Une liste RBFA appliquée reste prioritaire même si l'API est en retard.
+  if exists (select 1 from public.national_team_callups where national_team_id=p_team and source='rbfa' and active) then
+    return jsonb_build_object('skipped',true,'reason','rbfa_priority');
+  end if;
+  insert into public.national_team_callups (national_team_id,player_id,season,active,source,external_id,position,shirt_number,ext,locked,synced_at,updated_at)
+  select p_team,(r->>'playerId')::uuid,p_season,true,'apifootball',r->>'externalId',r->>'position',nullif(r->>'number','')::integer,coalesce(r->'ext','{}'::jsonb),false,now(),now()
+    from jsonb_array_elements(p_people) r
+  on conflict (national_team_id,player_id,season) do update set
+    active=true, external_id=excluded.external_id,position=excluded.position,shirt_number=excluded.shirt_number,
+    ext=excluded.ext,synced_at=now(),updated_at=now()
+    where not national_team_callups.locked and national_team_callups.source='apifootball';
+  get diagnostics changed = row_count;
+  update public.national_team_callups c set active=false,updated_at=now()
+    where c.national_team_id=p_team and c.active and not c.locked and c.source='apifootball'
+      and (c.season <> p_season or c.player_id not in (select (r->>'playerId')::uuid from jsonb_array_elements(p_people) r));
+  get diagnostics removed = row_count;
+  return jsonb_build_object('skipped',false,'written',changed,'deactivated',removed);
+end;
+$$;
+
 revoke all on function public.apply_rbfa_callups_atomic(uuid,text,text) from public, anon, authenticated;
 grant execute on function public.apply_rbfa_callups_atomic(uuid,text,text) to service_role;
+revoke all on function public.apply_api_callups_atomic(uuid,text,jsonb) from public, anon, authenticated;
+grant execute on function public.apply_api_callups_atomic(uuid,text,jsonb) to service_role;
 insert into public.schema_migrations (module,version) values ('football','0043_rbfa_callups_atomic') on conflict do nothing;
 commit;
