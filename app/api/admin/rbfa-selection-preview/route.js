@@ -2,6 +2,7 @@ import { getAdmin } from "@/lib/supabaseAdmin";
 import { readAll } from "@/lib/readAll";
 import { compareRbfaSelection, parseRbfaSelection, RBFA_SELECTION_SOURCES } from "@/modules/football/rbfaSelections";
 import { RBFA_MONITOR_KEY } from "@/modules/football/rbfaMonitor";
+import { planRbfaCallups } from "@/modules/football/rbfaCallupPlan";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -51,10 +52,13 @@ export async function GET(request) {
     ]);
     if (teamResult.error || playerResult.error) throw teamResult.error || playerResult.error;
     if (!teamResult.data) return new Response("Sélection belge introuvable", { status: 404 });
-    const callups = await readAll(() => db.from("national_team_callups").select("id,player_id").eq("national_team_id", teamResult.data.id).eq("active", true));
+    const callups = await readAll(() => db.from("national_team_callups").select("id,player_id,season,source,locked,active").eq("national_team_id", teamResult.data.id));
     if (callups.error) throw callups.error;
-    const currentIds = [...new Set((callups.data || []).map((row) => row.player_id).filter(Boolean))];
+    const currentIds = [...new Set((callups.data || []).filter((row) => row.active).map((row) => row.player_id).filter(Boolean))];
     const compared = compareRbfaSelection(official, playerResult.data || [], currentIds);
+    const now = new Date();
+    const year = now.getUTCFullYear() - (now.getUTCMonth() < 6 ? 1 : 0);
+    const plan = planRbfaCallups({ officialCount: official.length, matched: compared.matched, existing: callups.data || [], season: `${year}-${year + 1}` });
     const currentPlayers = currentIds.length
       ? await readAll(() => db.from("players").select("id,name").in("id", currentIds))
       : { data: [], error: null };
@@ -63,7 +67,7 @@ export async function GET(request) {
     return Response.json({
       team: teamResult.data.name, category, source: RBFA_SELECTION_SOURCES[category], observedAt: new Date().toISOString(),
       lastModified: response.headers.get("last-modified") || null,
-      officialCount: official.length, ...compared,
+      officialCount: official.length, ...compared, plan,
       removalCandidates: compared.removals?.map((id) => ({ playerId: id, name: currentNames.get(id) || "Joueur non trouvé" })) || null,
       note: "Comparaison indicative : date de publication de la sélection non confirmée, aucune donnée modifiée.",
     }, { headers: { "Cache-Control": "no-store" } });

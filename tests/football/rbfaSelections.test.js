@@ -19,6 +19,8 @@ describe("lecture et comparaison des listes RBFA", () => {
     expect(result).toMatchObject({ complete: true, additions: [{ playerId: "p1" }], removals: ["p-old"] });
     expect(compareRbfaSelection(rbfa, [{ id: "p1", name: "H. Cuypers", birth_date: null }], ["p-old"])).toMatchObject({ complete: false, removals: null });
     expect(compareRbfaSelection(rbfa, [{ id: "p1", name: "H. Autre", birth_date: "1997-02-07" }], ["p-old"])).toMatchObject({ complete: false, removals: null });
+    expect(compareRbfaSelection(rbfa, [{ id: "p1", name: "Harry Cuypers", birth_date: "1997-02-07" }], [])).toMatchObject({ complete: false, additions: [] });
+    expect(compareRbfaSelection(rbfa, [{ id: "p1", name: "Hugo Cuypers", birth_date: "1997-02-07" }], [])).toMatchObject({ complete: true, additions: [{ playerId: "p1" }] });
   });
   it("ne choisit jamais entre homonymes ni deux identités sur la même fiche", () => {
     const one = { id: "p1", name: "H. Cuypers", birth_date: "1997-02-07" };

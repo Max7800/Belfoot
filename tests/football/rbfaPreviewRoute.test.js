@@ -57,4 +57,16 @@ describe("comparaison RBFA en lecture seule", () => {
     expect(body.unresolved).toHaveLength(10);
     expect(state.db.rows("national_team_callups")).toEqual([{ id: "c1", player_id: "old", national_team_id: "team", active: true }]);
   });
+  it("signale un verrou incompatible même si toute la liste est identifiée", async () => {
+    const html = Array.from({ length: 11 }, (_, i) => entry(String(i + 1), `Alain Joueur${i}`, `${String(i + 1).padStart(2, "0")}-02-2000`)).join("");
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(html)));
+    const players = Array.from({ length: 11 }, (_, i) => ({ id: `p${i}`, name: `Alain Joueur${i}`, birth_date: `2000-02-${String(i + 1).padStart(2, "0")}` }));
+    state.db = createFakeSupabase({ profiles: [{ id: "admin", role: "admin" }], clubs: [{ id: "team", source: "apifootball", external_id: "1", name: "Belgique", team_type: "national" }], players, national_team_callups: [{ id: "locked", player_id: "old", national_team_id: "team", season: "2026-2027", active: true, locked: true, source: "manual" }] });
+    state.db.auth = { getUser: async () => ({ data: { user: { id: "admin" } }, error: null }) };
+    const response = await GET(request());
+    const body = await response.json();
+    expect(body.complete).toBe(true);
+    expect(body.plan).toMatchObject({ ready: false, protectedConflicts: ["locked"] });
+    expect(state.db.rows("national_team_callups")[0].active).toBe(true);
+  });
 });

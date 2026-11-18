@@ -52,7 +52,12 @@ export function compareRbfaSelection(official = [], players = [], activePlayerId
     const candidates = players.filter((player) => {
       if (!player?.id || String(player.birth_date || "").slice(0, 10) !== person.birthDate) return false;
       const name = normalize(player.name).split(" ");
-      return name[0]?.[0] === officialName[0]?.[0] && name.at(-1) === officialName.at(-1);
+      const given = name[0] || "";
+      const officialGiven = officialName[0] || "";
+      // Une initiale reste compatible avec le prénom complet, mais deux
+      // prénoms complets différents ne doivent jamais être rapprochés.
+      const givenMatches = given.length === 1 ? given === officialGiven[0] : given === officialGiven;
+      return givenMatches && name.at(-1) === officialName.at(-1);
     });
     if (candidates.length !== 1) { unresolved.push({ ...person, reason: candidates.length ? "identité ambiguë" : "aucune identité vérifiée" }); continue; }
     const match = { official: person, playerId: candidates[0].id, playerName: candidates[0].name };

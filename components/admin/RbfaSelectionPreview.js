@@ -64,6 +64,7 @@ export default function RbfaSelectionPreview() {
     {result && <div aria-live="polite" className="mt-3 space-y-2 text-xs leading-5">
       <p><b>{result.officialCount}</b> joueurs sur la page RBFA · <b>{result.matched.length}</b> correspondance(s) candidate(s) · <b>{result.unresolved.length}</b> identité(s) à vérifier.</p>
       <p className="text-muted">La date de l’annonce n’est pas connue ; les noms proposés ne sont pas une validation officielle de correspondance. <a className="underline" href={result.source} target="_blank" rel="noreferrer">Voir la source RBFA</a></p>
+      {result.plan && <p className={result.plan.ready ? "text-emerald-300" : "text-amber-300"}>Préparation en lecture seule : {result.plan.ready ? `${result.plan.additions.length} ajout(s), ${result.plan.reactivations.length} réactivation(s), ${result.plan.removals.length} retrait(s) possibles.` : result.plan.reason + "."} Aucune écriture n’est effectuée.</p>}
       {!!result.additions.length && <p><b>Présents dans la source, absents de Belfoot :</b> {result.additions.map((row) => row.official.name).join(", ")}.</p>}
       {!!result.unresolved.length && <p className="text-amber-300"><b>À identifier :</b> {result.unresolved.map((row) => row.name).join(", ")}.</p>}
       {result.removalCandidates === null ? <p className="text-muted">Les absences ne sont pas calculées tant que toutes les identités ne sont pas résolues.</p> : !!result.removalCandidates.length && <p><b>Présents sur Belfoot, absents de la source :</b> {result.removalCandidates.map((row) => row.name).join(", ")}.</p>}

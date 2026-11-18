@@ -1,3 +1,10 @@
+## Préparation sécurisée des convocations — 18 novembre 2026
+
+- `rbfaCallupPlan` calcule en lecture seule les ajouts, réactivations et retraits candidats. Refuse les listes incomplètes, identifiants dupliqués et conflits avec convocations manuelles/verrouillées. L'administration affiche le résultat lors de la comparaison RBFA ; aucune écriture en base n'a été ajoutée.
+- Le rapprochement nom+date n'accepte plus deux prénoms complets différents avec la même initiale. Les initiales restent compatibles, sous réserve d'unicité ; ce n'est pas un identifiant officiel partagé.
+- Une réelle mise à jour automatique exige encore une transaction en base et une sérialisation avec tous les imports API-Football ; ne pas appeler le plan comme s'il était atomique. La source peut représenter le dernier rassemblement et les catégories autres que A/U21 ne sont pas couvertes. Aucun déploiement ou synchronisation de production.
+- 960 tests locaux avant ajout d'un test d'intégration route supplémentaire ; celui-ci réussit séparément. ESLint ciblé réussi ; CI à vérifier.
+
 ## Liens joueurs et clubs RBFA — 18 novembre 2026
 
 - À chaque lecture RBFA A/U21 valide, recherche des fiches Belfoot par date de naissance, nom et unicité dans les deux sens ; les ambiguïtés et absences restent sans lien et sont retentées au passage suivant. Aucun nouveau joueur ni club n'est créé et aucun champ de joueur ou de convocation n'est modifié. Une correspondance automatique reste une inférence, pas un identifiant officiel commun.
