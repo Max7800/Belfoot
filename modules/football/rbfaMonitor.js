@@ -1,9 +1,10 @@
 import { updateSiteSettings } from "@/lib/siteSettings";
 import { parseRbfaSelection, RBFA_SELECTION_SOURCES } from "@/modules/football/rbfaSelections";
 import { resolveRbfaPlayerLinks } from "@/modules/football/rbfaPlayerLinks";
+import { applyRbfaCallups, atomicCallupsAvailable } from "@/modules/football/callupTransactions";
 
 // Un changement détecté est un changement de page, pas nécessairement une annonce.
-// Les listes ne sont jamais appliquées aux convocations depuis ce module.
+// L'application en base exige la migration et un rapprochement complet.
 export const RBFA_MONITOR_KEY = "football_rbfa_monitor";
 const INTERVAL = 60 * 60 * 1000;
 const MAX_BYTES = 512000;
@@ -69,5 +70,30 @@ export async function monitorRbfaSelection(db, settings, { now = new Date(), fet
       : { ...observedRbfaState(previous, roster, finishedAt), attemptedAt: startedAt, linkError };
     return { [RBFA_MONITOR_KEY]: { ...state, [category]: next } };
   });
-  return { category, ok: !failure, superseded: !saved, error: failure, linkError };
+  let application = null;
+  if (saved && !failure && !linkError) {
+    const complete = roster.every((person) => person.playerId) && new Set(roster.map((person) => person.playerId)).size === roster.length;
+    if (!complete) application = { state: "identites_incompletes" };
+    else {
+      try {
+        if (!await atomicCallupsAvailable(db)) application = { state: "migration_absente" };
+        else {
+          const teamExternalId = category === "senior" ? "1" : "8183";
+          const team = await db.from("clubs").select("id").eq("source", "apifootball").eq("external_id", teamExternalId).eq("team_type", "national").maybeSingle();
+          if (team.error || !team.data) throw team.error || new Error("Sélection belge introuvable");
+          const date = new Date(finishedAt);
+          const year = date.getUTCFullYear() - (date.getUTCMonth() < 6 ? 1 : 0);
+          const result = await applyRbfaCallups(db, team.data.id, `${year}-${year + 1}`, finishedAt);
+          application = { state: "appliquee", players: result.players, at: new Date().toISOString() };
+        }
+      } catch (error) { application = { state: "erreur", error: String(error?.message || error).slice(0, 200) }; }
+    }
+    // Une observation plus récente ne doit jamais hériter de ce résultat.
+    await updateSiteSettings(db, (current) => {
+      const state = current[RBFA_MONITOR_KEY] || {};
+      if (state[category]?.observedAt !== finishedAt) return null;
+      return { [RBFA_MONITOR_KEY]: { ...state, [category]: { ...state[category], application } } };
+    });
+  }
+  return { category, ok: !failure && application?.state !== "erreur", superseded: !saved, error: failure, linkError, application };
 }

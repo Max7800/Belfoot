@@ -6,6 +6,7 @@ import { resolveNationalMatchSeason } from "./nationalMatchSeasons";
 import { nationalTeamTraits } from "./nationalClassification";
 import { providerIdentityPatch } from "@/lib/playerIdentity";
 import { readAll } from "@/lib/readAll";
+import { applyApiCallups, atomicCallupsAvailable } from "@/modules/football/callupTransactions";
 
 // Seulement le nom et la photo : la nationalité suit ici sa propre règle (sélection).
 function nameAndPhoto(existing, member) {
@@ -184,7 +185,10 @@ export async function syncNationalTeam(db, ctx = {}) {
 
   // Préserver les anciennes lignes tant que l'ensemble du nouvel effectif
   // n'a pas été enregistré. Une réponse vide n'est pas une liste officielle vide.
-  const { data: existingCallups, error: callupsError } = squad.length
+  const atomicCallups = squad.length ? await atomicCallupsAvailable(db) : false;
+  const atomicPeople = [];
+  let atomicResult = null;
+  const { data: existingCallups, error: callupsError } = squad.length && !atomicCallups
     ? await readAll(() => db.from("national_team_callups").select("id,player_id,season,source,locked,active").eq("national_team_id", nationalTeamId))
     : { data: [], error: null };
   if (callupsError) throw callupsError;
@@ -217,6 +221,11 @@ export async function syncNationalTeam(db, ctx = {}) {
       const { error } = await db.from("players").update(playerPatch).eq("id", existing.id);
       if (error) throw new Error(`${member.name}: ${error.message}`);
     }
+    if (atomicCallups) {
+      atomicPeople.push({ playerId, externalId: member.external_id, number: member.number ?? null, position: member.position ?? null, ext: member.ext || member });
+      callups++;
+      continue;
+    }
     const callupKey = `${playerId}:${selectedSeason}`;
     const currentCallup = callupByPlayerSeason.get(callupKey);
     if (currentCallup?.locked || (currentCallup && currentCallup.source !== providerKey)) {
@@ -248,6 +257,7 @@ export async function syncNationalTeam(db, ctx = {}) {
     callups++;
   }
 
+  if (atomicCallups) atomicResult = await applyApiCallups(db, nationalTeamId, selectedSeason, atomicPeople);
   const staleIds = (existingCallups || []).filter((row) => row.active && row.source === providerKey && !row.locked && !retainedIds.has(row.id)).map((row) => row.id);
   for (let offset = 0; offset < staleIds.length; offset += 400) {
     const { error } = await db.from("national_team_callups").update({ active: false, updated_at: syncedAt })
@@ -259,6 +269,7 @@ export async function syncNationalTeam(db, ctx = {}) {
   const listPreview = (items) => items.slice(0, 5).join(" ; ") + (items.length > 5 ? ` ; +${items.length - 5}` : "");
   const seasonSummary = [...seasonCounts.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([label, count]) => `${label} ×${count}`).join(", ");
   const notes = [`saisons API : ${seasonSummary || "aucune"}`];
+  if (atomicResult?.skipped) notes.push("convocations API ignorées : liste RBFA prioritaire");
   if (!squad.length) notes.push("avertissement : effectif API vide, convocations précédentes conservées");
   const existingWithoutSeason = withoutSeason.length - newWithoutSeason.length;
   if (existingWithoutSeason) notes.push(`avertissement : ${existingWithoutSeason} match(s) existant(s) sans saison API exploitable : saison actuelle conservée`);

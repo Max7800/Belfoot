@@ -1,3 +1,10 @@
+## Raccordement transactionnel des convocations — 18 novembre 2026
+
+- Si 0043 est installée, syncNationalTeam agrège les joueurs puis applique la transaction API ; en erreur il ne retombe jamais sur une écriture directe. Sans migration, le chemin historique reste utilisé. Une réponse API vide ne désactive toujours rien.
+- Après observation RBFA valide et résolution complète des identités, le monitor vérifie la migration, localise la sélection A/U21 et appelle la transaction. L'administration reçoit l'état appliqué, identités incomplètes, migration absente ou erreur ; un snapshot plus récent ne reçoit pas l'état d'une ancienne observation. Nouvelle tentative au prochain contrôle.
+- La migration ajoute un trigger qui refuse les insertions/mises à jour directes API après établissement de l'autorité RBFA, notamment les anciens workers ; les transactions utilisent le verrou commun. La priorité RBFA ne s'efface pas automatiquement ; prévoir un retour arrière contrôlé. Les tests PGlite vérifient l'ancien worker séquentiellement mais PAS une concurrence multi-connexions réelle.
+- Risques non levés : la source peut correspondre au dernier rassemblement, l'identification par nom/date est une inférence, la disponibilité réelle et la couverture des identités sont inconnues ; migration 0043 non installée, aucun import ni changement en production. 976 tests locaux et ESLint ciblé réussis ; CI à vérifier. Ne pas fusionner/activer sans accord et validation de concurrence et de déploiement.
+
 ## Priorité RBFA même sur les lignes protégées — 18 novembre 2026
 
 - La migration 0043 mémorise une autorité RBFA après application transactionnelle, même lorsque toutes les convocations étaient manuelles et ne pouvaient pas être converties. La transaction API prend le même verrou et consulte cette autorité avant toute écriture. Test PostgreSQL ajouté pour ce cas ; 971 tests locaux et ESLint ciblé réussis.

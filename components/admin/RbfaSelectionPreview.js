@@ -52,7 +52,8 @@ export default function RbfaSelectionPreview() {
         return <p key={key}>{label} : {!state?.attemptedAt ? "en attente de la première vérification" : state.error ? `dernière vérification en échec (${state.error})` : `${state.players?.length || 0} joueurs observés · vérifié le ${new Date(state.observedAt).toLocaleString("fr-BE")}${state.changedAt ? ` · changement détecté le ${new Date(state.changedAt).toLocaleString("fr-BE")}` : ""}`}.</p>;
       })}
       {monitor[category]?.players && <p>{monitor[category].players.filter((row) => row.playerId).length}/{monitor[category].players.length} fiches Belfoot reliées{monitor[category].linkError ? ` · liaison indisponible : ${monitor[category].linkError}` : ""}.</p>}
-      <p>La RBFA décrit cette page comme l’effectif du dernier rassemblement : elle peut donc être en retard sur une nouvelle annonce. Aucune convocation n’est modifiée automatiquement.</p>
+      {monitor[category]?.application && <p>Convocations : {({ appliquee: "liste appliquée", identites_incompletes: "en attente d’identités", migration_absente: "migration 0043 absente", erreur: `échec : ${monitor[category].application.error}` })[monitor[category].application.state] || "statut inconnu"}.</p>}
+      <p>La RBFA décrit cette page comme l’effectif du dernier rassemblement : elle peut donc être en retard sur une nouvelle annonce.</p>
     </div>}
     <div className="mt-3 flex flex-wrap gap-2">
       <select aria-label="Sélection belge" value={category} disabled={busy} onChange={(event) => { setCategory(event.target.value); setResult(null); }} className="rounded border border-line/10 bg-surface2 px-2 py-1.5 text-sm">

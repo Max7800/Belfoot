@@ -49,6 +49,23 @@ beforeEach(() => {
   registerFakeProvider();
 });
 
+describe("syncNationalTeam — migration transactionnelle", () => {
+  it("transmet le lot complet à la transaction et respecte la priorité RBFA", async () => {
+    const db = createFakeSupabase({ schema_migrations: [{ module: "football", version: "0043_rbfa_callups_atomic" }] }, { rpc: { apply_api_callups_atomic: async () => ({ data: { skipped: true, reason: "rbfa_priority" }, error: null }) } });
+    const detail = await syncNationalTeam(db, CRON_CTX);
+    expect(detail).toContain("liste RBFA prioritaire");
+    expect(db.rpcCalls).toHaveLength(1);
+    expect(db.rpcCalls[0]).toMatchObject({ name: "apply_api_callups_atomic", args: { p_season: "2026-2027", p_people: [{ externalId: "100" }] } });
+    expect(db.rows("national_team_callups")).toHaveLength(0);
+  });
+  it("ne retombe pas sur une écriture directe si la transaction échoue", async () => {
+    const existing = { id: "old", player_id: "old-player", national_team_id: "team", season: "2026-2027", source: "apifootball", active: true, locked: false };
+    const db = createFakeSupabase({ schema_migrations: [{ module: "football", version: "0043_rbfa_callups_atomic" }], clubs: [{ id: "team", source: "apifootball", external_id: "1", name: "Belgique", team_type: "national", locked: false }], national_team_callups: [existing] }, { rpc: { apply_api_callups_atomic: async () => ({ data: null, error: { message: "panne simulée" } }) } });
+    await expect(syncNationalTeam(db, CRON_CTX)).rejects.toThrow(/panne simulée/);
+    expect(db.rows("national_team_callups")).toEqual([existing]);
+  });
+});
+
 describe("syncNationalTeam — saison de chaque match", () => {
   it("rattache chaque match à SA saison API, jamais à la saison du cron", async () => {
     fixtures = [

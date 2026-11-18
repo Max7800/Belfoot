@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { createFakeSupabase } from "../helpers/fakeSupabase";
 
 const state = vi.hoisted(() => ({ current: {} }));
 vi.mock("@/lib/siteSettings", () => ({ updateSiteSettings: async (_db, patch) => {
@@ -66,5 +67,23 @@ describe("surveillance RBFA", () => {
     const result = await monitorRbfaSelection(null, {}, { now: new Date("2026-11-18T12:00:00Z"), fetcher: async () => new Response(html) });
     expect(result.superseded).toBe(true);
     expect(state.current[RBFA_MONITOR_KEY].senior).toEqual(newer);
+  });
+  it("applique un effectif complet une seule fois via la transaction quand la migration existe", async () => {
+    state.current = {};
+    const html = Array.from({ length: 11 }, (_, i) => entry(i + 1)).join("");
+    const db = createFakeSupabase({ schema_migrations: [{ module: "football", version: "0043_rbfa_callups_atomic" }], clubs: [{ id: "team", source: "apifootball", external_id: "1", team_type: "national" }] }, { rpc: { apply_rbfa_callups_atomic: async () => ({ data: { players: 11 }, error: null }) } });
+    const resolveLinks = async () => new Map(Array.from({ length: 11 }, (_, i) => [String(i + 1), `p${i + 1}`]));
+    const result = await monitorRbfaSelection(db, {}, { fetcher: async () => new Response(html), resolveLinks });
+    expect(result.application).toMatchObject({ state: "appliquee", players: 11 });
+    expect(db.rpcCalls.filter((call) => call.name === "apply_rbfa_callups_atomic")).toHaveLength(1);
+  });
+  it("signale la migration absente sans modifier les convocations", async () => {
+    state.current = {};
+    const html = Array.from({ length: 11 }, (_, i) => entry(i + 1)).join("");
+    const db = createFakeSupabase();
+    const resolveLinks = async () => new Map(Array.from({ length: 11 }, (_, i) => [String(i + 1), `p${i + 1}`]));
+    const result = await monitorRbfaSelection(db, {}, { fetcher: async () => new Response(html), resolveLinks });
+    expect(result.application.state).toBe("migration_absente");
+    expect(db.rpcCalls).toHaveLength(0);
   });
 });

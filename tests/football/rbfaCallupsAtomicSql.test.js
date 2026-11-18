@@ -82,6 +82,13 @@ describe("écriture atomique des convocations RBFA", () => {
     expect(rows).toEqual([{ player_id: ids[11], active: false }]);
     expect((await db.query("select count(*)::int as n from national_team_callups where active")).rows[0].n).toBe(11);
   });
+  it("refuse aussi les écritures directes d'un ancien worker après RBFA", async () => {
+    await db.query("insert into national_team_callups(national_team_id,player_id,season,active,source,locked) values ($1,$2,'2026-2027',true,'apifootball',false)", [team, ids[11]]);
+    await apply();
+    await expect(db.query("insert into national_team_callups(national_team_id,player_id,season,active,source,locked) values ($1,$2,'2026-2027',true,'apifootball',false)", [team, ids[11]])).rejects.toThrow(/ancienne écriture API refusée/);
+    await expect(db.query("update national_team_callups set active=true where national_team_id=$1 and player_id=$2", [team, ids[11]])).rejects.toThrow(/ancienne écriture API refusée/);
+    expect((await db.query("select count(*)::int as n from national_team_callups where active")).rows[0].n).toBe(11);
+  });
   it("la liste API vide ne désactive rien et les lignes manuelles restent protégées", async () => {
     await db.query("insert into national_team_callups(national_team_id,player_id,season,active,source,locked) values ($1,$2,'2026-2027',true,'manual',true)", [team, ids[11]]);
     await expect(db.query("select public.apply_api_callups_atomic($1,$2,'[]'::jsonb)", [team, "2026-2027"])).rejects.toThrow(/vide/);

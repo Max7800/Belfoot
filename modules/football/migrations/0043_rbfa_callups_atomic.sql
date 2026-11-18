@@ -10,6 +10,22 @@ alter table public.national_team_rbfa_authority enable row level security;
 revoke all on table public.national_team_rbfa_authority from public, anon, authenticated;
 grant select,insert,update,delete on table public.national_team_rbfa_authority to service_role;
 
+-- Bloque aussi les anciens workers API démarrés avant le déploiement. Les
+-- corrections explicitement manuelles restent autorisées.
+create or replace function public.guard_rbfa_callups_from_legacy_api()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if new.source = 'apifootball'
+    and current_setting('belfoot.rbfa_callups_writer', true) is distinct from 'on'
+    and exists (select 1 from public.national_team_rbfa_authority where national_team_id = new.national_team_id)
+  then raise exception 'Convocations RBFA prioritaires : ancienne écriture API refusée'; end if;
+  return new;
+end;
+$$;
+drop trigger if exists guard_rbfa_callups_from_legacy_api on public.national_team_callups;
+create trigger guard_rbfa_callups_from_legacy_api before insert or update on public.national_team_callups
+for each row execute function public.guard_rbfa_callups_from_legacy_api();
+
 create or replace function public.apply_rbfa_callups_atomic(p_team uuid, p_season text, p_observed_at text)
 returns jsonb language plpgsql security definer set search_path = public as $$
 declare
@@ -63,6 +79,7 @@ begin
       or (not c.active and c.season = p_season and c.player_id in (select (r->>'playerId')::uuid from jsonb_array_elements(people) r)));
   if conflicting > 0 then raise exception 'Convocations manuelles ou verrouillées en conflit'; end if;
 
+  perform set_config('belfoot.rbfa_callups_writer','on',true);
   insert into public.national_team_callups (national_team_id,player_id,season,active,source,external_id,ext,locked,synced_at,updated_at)
   select p_team,(r->>'playerId')::uuid,p_season,true,'rbfa',r->>'sourceId',jsonb_build_object('rbfa_observed_at',p_observed_at),false,now(),now()
     from jsonb_array_elements(people) r
@@ -123,5 +140,6 @@ revoke all on function public.apply_rbfa_callups_atomic(uuid,text,text) from pub
 grant execute on function public.apply_rbfa_callups_atomic(uuid,text,text) to service_role;
 revoke all on function public.apply_api_callups_atomic(uuid,text,jsonb) from public, anon, authenticated;
 grant execute on function public.apply_api_callups_atomic(uuid,text,jsonb) to service_role;
+revoke all on function public.guard_rbfa_callups_from_legacy_api() from public, anon, authenticated;
 insert into public.schema_migrations (module,version) values ('football','0043_rbfa_callups_atomic') on conflict do nothing;
 commit;
