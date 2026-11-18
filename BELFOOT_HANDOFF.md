@@ -1,3 +1,9 @@
+## Affichage automatique des listes RBFA — 18 novembre 2026
+
+- La page Diables et la page sélection complète présentent la dernière liste RBFA A/U21 observée par le cron existant, quand elle est valide ; l'interface indique la date de vérification et précise qu'elle peut concerner le dernier rassemblement. La source doit être mise à jour par la RBFA : aucune garantie sur sa rapidité après annonce.
+- Repli sur les convocations Belfoot en l'absence de liste valide. Correspondance de catégorie strictement bornée aux identifiants API-Football 1 et 8183. Les joueurs de la source sont affichés par nom et club, sans association hasardeuse à une fiche Belfoot ; photos, liens, filtres par poste et autres usages de national_team_callups ne sont pas mis à jour par cette vue. Les autres jeunes ne sont pas encore couverts.
+- Aucun changement ni fusion de production, aucune migration et aucun appel provider déclenché. Le cron doit être actif et l'accès à RBFA fonctionnel en production ; aucune vérification en conditions réelles n'a été possible. 953 tests locaux et ESLint ciblé sans erreur. CI à vérifier.
+
 ## Surveillance des pages RBFA — 18 novembre 2026
 
 - `national-refresh` surveille en parallèle les pages RBFA A/U21, au maximum une source par passage et une tentative par source/heure ; délai réseau de 5 s, aucun appel API-Football. Cela suppose que le cron national existant fonctionne ; aucun lancement ni vérification de production effectué.
