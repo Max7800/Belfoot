@@ -41,6 +41,24 @@ describe("surveillance RBFA", () => {
     expect(state.current[RBFA_MONITOR_KEY].senior.players).toHaveLength(11);
     expect(state.current.national_team_callups).toBe("intact");
   });
+  it("enregistre les identités reliées, puis réessaie au passage suivant", async () => {
+    state.current = {};
+    const html = Array.from({ length: 11 }, (_, i) => entry(i + 1)).join("");
+    const resolveLinks = vi.fn(async () => new Map([["1", "player-1"]]));
+    const result = await monitorRbfaSelection(null, state.current, { now: new Date("2026-11-18T12:00:00Z"), fetcher: async () => new Response(html), resolveLinks });
+    expect(result.ok).toBe(true);
+    expect(state.current[RBFA_MONITOR_KEY].senior.players[0].playerId).toBe("player-1");
+    expect(state.current[RBFA_MONITOR_KEY].senior.players[1].playerId).toBeUndefined();
+    expect(resolveLinks).toHaveBeenCalledOnce();
+  });
+  it("conserve la liste RBFA si la recherche de fiches échoue", async () => {
+    state.current = {};
+    const html = Array.from({ length: 11 }, (_, i) => entry(i + 1)).join("");
+    const result = await monitorRbfaSelection(null, state.current, { now: new Date("2026-11-18T12:00:00Z"), fetcher: async () => new Response(html), resolveLinks: async () => { throw new Error("base indisponible"); } });
+    expect(result).toMatchObject({ ok: true, linkError: "base indisponible" });
+    expect(state.current[RBFA_MONITOR_KEY].senior.players).toHaveLength(11);
+    expect(state.current[RBFA_MONITOR_KEY].senior.linkError).toBe("base indisponible");
+  });
   it("ne remplace pas une observation commencée plus récemment", async () => {
     const newer = { attemptedAt: "2026-11-18T12:01:00.000Z", players: [person("new")] };
     state.current = { [RBFA_MONITOR_KEY]: { senior: newer } };

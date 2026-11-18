@@ -51,6 +51,7 @@ export default function RbfaSelectionPreview() {
         const label = key === "senior" ? "Diables Rouges" : "Belgique U21";
         return <p key={key}>{label} : {!state?.attemptedAt ? "en attente de la première vérification" : state.error ? `dernière vérification en échec (${state.error})` : `${state.players?.length || 0} joueurs observés · vérifié le ${new Date(state.observedAt).toLocaleString("fr-BE")}${state.changedAt ? ` · changement détecté le ${new Date(state.changedAt).toLocaleString("fr-BE")}` : ""}`}.</p>;
       })}
+      {monitor[category]?.players && <p>{monitor[category].players.filter((row) => row.playerId).length}/{monitor[category].players.length} fiches Belfoot reliées{monitor[category].linkError ? ` · liaison indisponible : ${monitor[category].linkError}` : ""}.</p>}
       <p>La RBFA décrit cette page comme l’effectif du dernier rassemblement : elle peut donc être en retard sur une nouvelle annonce. Aucune convocation n’est modifiée automatiquement.</p>
     </div>}
     <div className="mt-3 flex flex-wrap gap-2">

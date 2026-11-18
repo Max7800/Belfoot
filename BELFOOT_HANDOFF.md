@@ -1,3 +1,9 @@
+## Liens joueurs et clubs RBFA — 18 novembre 2026
+
+- À chaque lecture RBFA A/U21 valide, recherche des fiches Belfoot par date de naissance, nom et unicité dans les deux sens ; les ambiguïtés et absences restent sans lien et sont retentées au passage suivant. Aucun nouveau joueur ni club n'est créé et aucun champ de joueur ou de convocation n'est modifié. Une correspondance automatique reste une inférence, pas un identifiant officiel commun.
+- Le snapshot garde uniquement l'identifiant Belfoot résolu, et la page lit les photos, postes et clubs actuels depuis Belfoot. Liens vers les fiches joueur et club ; si le nom de club RBFA diffère, les deux noms sont explicitement affichés. L'admin montre le nombre de fiches reliées et les éventuelles erreurs. En cas d'échec de résolution, la liste source reste disponible sans lien et une nouvelle tentative aura lieu.
+- Limites : aucune validation de la couverture des dates de naissance en production, aucune garantie de parution immédiate à l'annonce, aucune mise à jour de national_team_callups ou des autres catégories jeunes. Les identités non résolues n'ont ni photo ni lien. Aucun accès ni synchronisation de production. 957 tests locaux et ESLint ciblé sans erreur ; CI à vérifier.
+
 ## Affichage automatique des listes RBFA — 18 novembre 2026
 
 - La page Diables et la page sélection complète présentent la dernière liste RBFA A/U21 observée par le cron existant, quand elle est valide ; l'interface indique la date de vérification et précise qu'elle peut concerner le dernier rassemblement. La source doit être mise à jour par la RBFA : aucune garantie sur sa rapidité après annonce.

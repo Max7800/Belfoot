@@ -1,5 +1,6 @@
 import { updateSiteSettings } from "@/lib/siteSettings";
 import { parseRbfaSelection, RBFA_SELECTION_SOURCES } from "@/modules/football/rbfaSelections";
+import { resolveRbfaPlayerLinks } from "@/modules/football/rbfaPlayerLinks";
 
 // Un changement détecté est un changement de page, pas nécessairement une annonce.
 // Les listes ne sont jamais appliquées aux convocations depuis ce module.
@@ -15,7 +16,7 @@ export function nextRbfaCategory(state = {}, now = Date.now()) {
 }
 
 export function observedRbfaState(previous, players, observedAt) {
-  const roster = players.map(({ sourceId, name, club }) => ({ sourceId, name, club }));
+  const roster = players.map(({ sourceId, name, club, playerId }) => ({ sourceId, name, club, ...(playerId ? { playerId } : {}) }));
   const ids = (rows) => rows.map((person) => person.sourceId).sort().join(",");
   const changed = !!previous?.players && ids(previous.players) !== ids(roster);
   const history = changed
@@ -44,12 +45,18 @@ async function fetchRoster(category, fetcher) {
   return parseRbfaSelection(new TextDecoder("windows-1252").decode(bytes));
 }
 
-export async function monitorRbfaSelection(db, settings, { now = new Date(), fetcher = fetch } = {}) {
+export async function monitorRbfaSelection(db, settings, { now = new Date(), fetcher = fetch, resolveLinks = resolveRbfaPlayerLinks } = {}) {
   const category = nextRbfaCategory(settings?.[RBFA_MONITOR_KEY], now.getTime());
   if (!category) return { skipped: true };
   const startedAt = now.toISOString();
-  let roster = null; let failure = null;
-  try { roster = await fetchRoster(category, fetcher); }
+  let roster = null; let failure = null; let linkError = null;
+  try {
+    roster = await fetchRoster(category, fetcher);
+    try {
+      const links = await resolveLinks(db, roster);
+      roster = roster.map((person) => ({ ...person, playerId: links.get(person.sourceId) || null }));
+    } catch (error) { linkError = String(error?.message || error).slice(0, 200); }
+  }
   catch (error) { failure = String(error?.message || error).slice(0, 200); }
   const finishedAt = new Date().toISOString();
   const saved = await updateSiteSettings(db, (current) => {
@@ -59,8 +66,8 @@ export async function monitorRbfaSelection(db, settings, { now = new Date(), fet
     if (previous.attemptedAt && previous.attemptedAt >= startedAt) return null;
     const next = failure
       ? { ...previous, attemptedAt: startedAt, error: failure }
-      : { ...observedRbfaState(previous, roster, finishedAt), attemptedAt: startedAt };
+      : { ...observedRbfaState(previous, roster, finishedAt), attemptedAt: startedAt, linkError };
     return { [RBFA_MONITOR_KEY]: { ...state, [category]: next } };
   });
-  return { category, ok: !failure, superseded: !saved, error: failure };
+  return { category, ok: !failure, superseded: !saved, error: failure, linkError };
 }
