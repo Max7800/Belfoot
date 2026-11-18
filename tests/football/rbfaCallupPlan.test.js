@@ -21,4 +21,9 @@ describe("préparation des convocations RBFA", () => {
     const rows = [{ id: "manual", player_id: "outside", season: base.season, source: "manual", active: true }, { id: "locked", player_id: "p0", season: base.season, source: "apifootball", active: false, locked: true }];
     expect(planRbfaCallups({ ...base, existing: rows })).toMatchObject({ ready: false, protectedConflicts: ["manual", "locked"] });
   });
+  it("prévoit de clôturer l'ancienne saison même pour un joueur reconvoqué", () => {
+    const existing = [{ id: "previous", player_id: "p0", season: "2025-2026", source: "apifootball", active: true }];
+    expect(planRbfaCallups({ ...base, existing })).toMatchObject({ ready: true, removals: ["previous"] });
+    expect(planRbfaCallups({ ...base, existing: [{ ...existing[0], locked: true }] })).toMatchObject({ ready: false, protectedConflicts: ["previous"] });
+  });
 });

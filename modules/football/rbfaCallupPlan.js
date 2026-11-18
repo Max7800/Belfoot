@@ -12,7 +12,7 @@ export function planRbfaCallups({ officialCount, matched, existing, season }) {
   const mutableRows = rows.filter((row) => !row.locked && (row.source === "apifootball" || row.source === "rbfa"));
   const additions = ids.filter((id) => !rows.some((row) => row.player_id === id && row.season === season));
   const reactivations = mutableRows.filter((row) => row.season === season && wanted.has(row.player_id) && !row.active).map((row) => row.id);
-  const removals = mutableRows.filter((row) => row.active && !wanted.has(row.player_id)).map((row) => row.id);
-  const protectedConflicts = protectedRows.filter((row) => (row.active && !wanted.has(row.player_id)) || (row.season === season && !row.active && wanted.has(row.player_id))).map((row) => row.id);
+  const removals = mutableRows.filter((row) => row.active && (!wanted.has(row.player_id) || row.season !== season)).map((row) => row.id);
+  const protectedConflicts = protectedRows.filter((row) => (row.active && (!wanted.has(row.player_id) || row.season !== season)) || (row.season === season && !row.active && wanted.has(row.player_id))).map((row) => row.id);
   return { ready: protectedConflicts.length === 0, reason: protectedConflicts.length ? "Des convocations manuelles ou verrouillées nécessitent une vérification" : null, additions, reactivations, removals, protectedConflicts };
 }
