@@ -1,3 +1,10 @@
+## Surveillance des pages RBFA — 18 novembre 2026
+
+- `national-refresh` surveille en parallèle les pages RBFA A/U21, au maximum une source par passage et une tentative par source/heure ; délai réseau de 5 s, aucun appel API-Football. Cela suppose que le cron national existant fonctionne ; aucun lancement ni vérification de production effectué.
+- Stockage CAS dans `site_settings.football_rbfa_monitor` : dernière liste valide, trois versions précédentes, date de vérification et éventuelle erreur. En cas de page incomplète ou d'échec, la dernière observation est conservée. Un état de surveillance apparaît dans l'administration. Les changements reflètent des identifiants de joueurs différents, pas nécessairement une annonce.
+- La page officielle A précise qu'elle présente le dernier rassemblement (https://www.rbfa.be/en/national-teams/red-devils/red-devils-team-selection). Elle peut donc ne pas correspondre à une annonce récente. Les actualités RBFA mentionnent séparément les annonces A/U21/U17 (https://www.rbfa.be/en/news), mais leur accès et leurs formats complets ne sont pas validés. Ne pas présenter cette surveillance comme une mise à jour automatique des convocations : aucune écriture des convocations ni annonce publique n'a été ajoutée ; source des nouvelles listes, identité et publication atomique restent à résoudre, notamment pour les autres jeunes.
+- 950 tests locaux réussis, ESLint ciblé réussi ; CI et accès depuis la production restent à vérifier. Aucun merge ni import en production.
+
 ## Comparaison RBFA en lecture seule — 18 novembre 2026
 
 - Pages officielles RBFA A et U21 lues en lecture seule ; observation ponctuelle le 17/11 UTC : 26 et 24 joueurs. La page ne fournit pas de date fiable de l'annonce, Last-Modified concerne le document, et un rapprochement n'est pas une preuve officielle.

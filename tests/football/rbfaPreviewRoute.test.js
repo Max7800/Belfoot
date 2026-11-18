@@ -24,6 +24,14 @@ describe("comparaison RBFA en lecture seule", () => {
     expect((await GET(request())).status).toBe(403);
     expect(fetchSpy).not.toHaveBeenCalled();
   });
+  it("réserve aussi le statut automatique aux administrateurs", async () => {
+    state.db = createFakeSupabase({ profiles: [{ id: "user", role: "member" }], site_settings: [{ id: 1, data: { football_rbfa_monitor: { senior: { error: "test" } } } }] });
+    state.db.auth = { getUser: async () => ({ data: { user: { id: "user" } }, error: null }) };
+    expect((await GET(request("?status=1"))).status).toBe(403);
+    state.db.rows("profiles")[0].role = "admin";
+    const response = await GET(request("?status=1"));
+    expect(await response.json()).toMatchObject({ monitor: { senior: { error: "test" } } });
+  });
   it("refuse une page source vide sans modifier les données", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("page indisponible")));
     state.db = createFakeSupabase({ profiles: [{ id: "admin", role: "admin" }], national_team_callups: [{ id: "c1", active: true }] });

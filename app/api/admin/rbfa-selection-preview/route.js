@@ -1,6 +1,7 @@
 import { getAdmin } from "@/lib/supabaseAdmin";
 import { readAll } from "@/lib/readAll";
 import { compareRbfaSelection, parseRbfaSelection, RBFA_SELECTION_SOURCES } from "@/modules/football/rbfaSelections";
+import { RBFA_MONITOR_KEY } from "@/modules/football/rbfaMonitor";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -18,6 +19,11 @@ export async function GET(request) {
     const { data: profile, error: profileError } = await db.from("profiles").select("role").eq("id", user.id).maybeSingle();
     if (profileError) throw profileError;
     if (profile?.role !== "admin") return new Response("Forbidden", { status: 403 });
+    if (new URL(request.url).searchParams.get("status") === "1") {
+      const { data, error } = await db.from("site_settings").select("data").eq("id", 1).maybeSingle();
+      if (error) throw error;
+      return Response.json({ monitor: data?.data?.[RBFA_MONITOR_KEY] || {} }, { headers: { "Cache-Control": "no-store" } });
+    }
     const category = new URL(request.url).searchParams.get("category");
     if (!Object.hasOwn(TEAM_IDS, category || "")) return new Response("Sélection non prise en charge", { status: 400 });
 

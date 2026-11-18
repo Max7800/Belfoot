@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
 // Lecture seule : les propositions restent à vérifier avant toute modification.
@@ -9,6 +9,23 @@ export default function RbfaSelectionPreview() {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
+  const [monitor, setMonitor] = useState(null);
+
+  useEffect(() => {
+    let active = true;
+    async function loadStatus() {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) return;
+        const response = await fetch("/api/admin/rbfa-selection-preview?status=1", { headers: { Authorization: `Bearer ${session.access_token}` }, cache: "no-store" });
+        if (!response.ok) throw new Error("Statut indisponible");
+        const data = await response.json();
+        if (active) setMonitor(data.monitor || {});
+      } catch { if (active) setMonitor({ unavailable: true }); }
+    }
+    loadStatus();
+    return () => { active = false; };
+  }, []);
 
   async function compare() {
     setBusy(true); setError(""); setResult(null);
@@ -28,6 +45,14 @@ export default function RbfaSelectionPreview() {
   return <section className="mb-4 rounded-xl border border-line/10 bg-surface/60 p-3">
     <h3 className="text-sm font-bold">Sélections belges · comparaison RBFA</h3>
     <p className="mt-1 text-xs text-muted">Compare les joueurs avec la page de la fédération. Aucun joueur n’est ajouté ou retiré et aucun appel API-Football n’est consommé.</p>
+    {monitor && <div className="mt-2 text-xs text-muted" aria-live="polite">
+      {monitor.unavailable ? "Statut de surveillance indisponible." : ["senior", "u21"].map((key) => {
+        const state = monitor[key];
+        const label = key === "senior" ? "Diables Rouges" : "Belgique U21";
+        return <p key={key}>{label} : {!state?.attemptedAt ? "en attente de la première vérification" : state.error ? `dernière vérification en échec (${state.error})` : `${state.players?.length || 0} joueurs observés · vérifié le ${new Date(state.observedAt).toLocaleString("fr-BE")}${state.changedAt ? ` · changement détecté le ${new Date(state.changedAt).toLocaleString("fr-BE")}` : ""}`}.</p>;
+      })}
+      <p>La RBFA décrit cette page comme l’effectif du dernier rassemblement : elle peut donc être en retard sur une nouvelle annonce. Aucune convocation n’est modifiée automatiquement.</p>
+    </div>}
     <div className="mt-3 flex flex-wrap gap-2">
       <select aria-label="Sélection belge" value={category} disabled={busy} onChange={(event) => { setCategory(event.target.value); setResult(null); }} className="rounded border border-line/10 bg-surface2 px-2 py-1.5 text-sm">
         <option value="senior">Diables Rouges</option><option value="u21">Belgique U21</option>

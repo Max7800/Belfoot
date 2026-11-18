@@ -10,6 +10,7 @@ import { frenchTeamName } from "@/lib/frenchNations";
 // aucun réseau, aucun service réel (getAdmin est remplacé).
 const state = vi.hoisted(() => ({ db: null }));
 vi.mock("@/lib/supabaseAdmin", () => ({ getAdmin: () => state.db }));
+vi.mock("@/modules/football/rbfaMonitor", () => ({ monitorRbfaSelection: async () => ({ skipped: true }) }));
 const { GET } = await import("@/app/api/cron/national-refresh/route");
 
 const P = "apifootball";
