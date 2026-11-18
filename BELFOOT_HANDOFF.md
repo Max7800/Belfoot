@@ -1,3 +1,8 @@
+## Priorité RBFA même sur les lignes protégées — 18 novembre 2026
+
+- La migration 0043 mémorise une autorité RBFA après application transactionnelle, même lorsque toutes les convocations étaient manuelles et ne pouvaient pas être converties. La transaction API prend le même verrou et consulte cette autorité avant toute écriture. Test PostgreSQL ajouté pour ce cas ; 971 tests locaux et ESLint ciblé réussis.
+- Cette autorité ne s'efface pas automatiquement : prévoir une procédure explicite et sécurisée de retour à l'API avant activation. Aucun chemin applicatif ne doit appeler ces fonctions isolément ; concurrence réelle multi-connexions, reprise et processus anciens restent à traiter. Migration non installée, aucun changement ni appel de production.
+
 ## Transactions coordonnées préparées — 18 novembre 2026
 
 - La migration 0043 prépare aussi `apply_api_callups_atomic` : les fonctions RBFA et API prennent le même verrou transactionnel, et une liste RBFA active bloque l'application d'un ancien effectif API. L'API vide et les conflits protégés sont traités sans suppression. Tests PGlite couvrent les deux ordres séquentiels API/RBFA, les protections et le rollback ; pas encore de test multi-connexions concurrents.

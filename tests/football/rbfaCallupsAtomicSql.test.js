@@ -24,7 +24,7 @@ beforeAll(async () => {
 });
 afterAll(async () => { await db?.close(); });
 beforeEach(async () => {
-  await db.exec("truncate national_team_callups, site_settings, players, clubs");
+  await db.exec("truncate national_team_rbfa_authority, national_team_callups, site_settings, players, clubs");
   await db.query("insert into clubs values ($1,'apifootball','1','national'),($2,'apifootball','1777','national')", [team, other]);
   for (const id of ids) await db.query("insert into players values ($1)", [id]);
   await db.query("insert into site_settings values (1,$1::jsonb)", [JSON.stringify({ football_rbfa_monitor: { senior: { observedAt: observed, players: roster } } })]);
@@ -88,5 +88,12 @@ describe("écriture atomique des convocations RBFA", () => {
     const people = [{ playerId: ids[0], externalId: "api-1" }];
     await db.query("select public.apply_api_callups_atomic($1,$2,$3::jsonb)", [team, "2026-2027", JSON.stringify(people)]);
     expect((await db.query("select active,source from national_team_callups where player_id=$1", [ids[11]])).rows[0]).toEqual({ active: true, source: "manual" });
+  });
+  it("conserve la priorité RBFA même quand toutes les lignes sont manuelles", async () => {
+    for (const id of ids.slice(0, 11)) await db.query("insert into national_team_callups(national_team_id,player_id,season,active,source,locked) values ($1,$2,'2026-2027',true,'manual',true)", [team, id]);
+    expect((await apply()).rows[0].result).toMatchObject({ written: 0 });
+    const api = [{ playerId: ids[11], externalId: "api-12" }];
+    const result = await db.query("select public.apply_api_callups_atomic($1,$2,$3::jsonb) as result", [team, "2026-2027", JSON.stringify(api)]);
+    expect(result.rows[0].result).toMatchObject({ skipped: true, reason: "rbfa_priority" });
   });
 });

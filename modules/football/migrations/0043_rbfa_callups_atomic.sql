@@ -2,6 +2,14 @@
 -- l'application tant que les imports API-Football ne sont pas coordonnés.
 begin;
 
+create table if not exists public.national_team_rbfa_authority (
+  national_team_id uuid primary key references public.clubs(id) on delete cascade,
+  observed_at timestamptz not null
+);
+alter table public.national_team_rbfa_authority enable row level security;
+revoke all on table public.national_team_rbfa_authority from public, anon, authenticated;
+grant select,insert,update,delete on table public.national_team_rbfa_authority to service_role;
+
 create or replace function public.apply_rbfa_callups_atomic(p_team uuid, p_season text, p_observed_at text)
 returns jsonb language plpgsql security definer set search_path = public as $$
 declare
@@ -67,6 +75,8 @@ begin
     where c.national_team_id=p_team and c.active and not c.locked and c.source in ('apifootball','rbfa')
       and (c.season <> p_season or c.player_id not in (select (r->>'playerId')::uuid from jsonb_array_elements(people) r));
   get diagnostics removed = row_count;
+  insert into public.national_team_rbfa_authority(national_team_id,observed_at) values (p_team,p_observed_at::timestamptz)
+    on conflict (national_team_id) do update set observed_at=excluded.observed_at;
   return jsonb_build_object('players',n,'written',changed,'deactivated',removed);
 end;
 $$;
@@ -90,7 +100,7 @@ begin
   if (select count(*) from public.players p where p.id in (select (r->>'playerId')::uuid from jsonb_array_elements(p_people) r)) <> n then raise exception 'Fiche joueur introuvable'; end if;
   lock table public.national_team_callups in share row exclusive mode;
   -- Une liste RBFA appliquée reste prioritaire même si l'API est en retard.
-  if exists (select 1 from public.national_team_callups where national_team_id=p_team and source='rbfa' and active) then
+  if exists (select 1 from public.national_team_rbfa_authority where national_team_id=p_team) then
     return jsonb_build_object('skipped',true,'reason','rbfa_priority');
   end if;
   insert into public.national_team_callups (national_team_id,player_id,season,active,source,external_id,position,shirt_number,ext,locked,synced_at,updated_at)
