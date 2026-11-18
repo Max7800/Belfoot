@@ -294,7 +294,7 @@ export default function NationalTeamsPage() {
       </ModuleCard>}
 
       {sectionConfig.squad?.enabled && <ModuleCard>
-        <PanelHeader icon={Users} title={sectionConfig.squad.label} subtitle={sectionConfig.squad.subtitle} accent={sectionConfig.squad.accent} action={(rbfaSquad?.players.length || squad.length) > 4 ? `${config.labels.show_all_players} (${rbfaSquad?.players.length || squad.length})` : null} actionHref={`/diables-rouges/selection?equipe=${selectedId}`} />
+        <PanelHeader icon={Users} title={sectionConfig.squad.label} subtitle={rbfaSquad ? "La liste de joueurs publiée par la RBFA." : sectionConfig.squad.subtitle} accent={sectionConfig.squad.accent} action={(rbfaSquad?.players.length || squad.length) > 4 ? `${config.labels.show_all_players} (${rbfaSquad?.players.length || squad.length})` : null} actionHref={`/diables-rouges/selection?equipe=${selectedId}`} />
         {!rbfaLoaded ? <p className="text-sm text-muted">Chargement de la sélection…</p> : rbfaSquad ? <RbfaSquad snapshot={rbfaSquad} compact /> : squad.length ? <>
           <div className="sm:hidden"><SquadNamesPreview rows={squad} accent={sectionConfig.squad.accent} /></div>
           <SquadPreview rows={squad} accent={sectionConfig.squad.accent} className="hidden sm:grid" />

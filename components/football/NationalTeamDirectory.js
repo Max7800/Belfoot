@@ -128,7 +128,7 @@ export default function NationalTeamDirectory({ mode }) {
     <header className="rounded-3xl border border-red-400/20 bg-gradient-to-br from-red-950/35 via-surface to-bg p-5 sm:p-8">
       <div className="text-[10px] font-black uppercase tracking-[.22em] text-amber-300">Sélections belges</div>
       <div className="mt-2 flex flex-wrap items-center gap-3"><h1 className="text-3xl font-black uppercase sm:text-5xl">{mode === "matches" ? "Tous les matchs" : "La sélection complète"}</h1>{selectedTeam && <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs font-bold text-slate-300">{categoryLabel(selectedTeam)}</span>}</div>
-      <p className="mt-3 max-w-2xl text-sm leading-6 text-muted">{mode === "matches" ? "Le calendrier complet de la Belgique, avec la compétition de chaque rencontre clairement identifiée." : "Tous les joueurs actuellement appelés, regroupés par poste avec leur club actuel."}</p>
+      <p className="mt-3 max-w-2xl text-sm leading-6 text-muted">{mode === "matches" ? "Le calendrier complet de la Belgique, avec la compétition de chaque rencontre clairement identifiée." : rbfaSquad ? "Les joueurs de la liste publiée par la RBFA." : "Les joueurs enregistrés dans la sélection, regroupés par poste."}</p>
       <div className="mt-5"><TeamSelector teams={teams} selectedId={selectedId} onSelect={setSelectedId} /></div>
     </header>
 
