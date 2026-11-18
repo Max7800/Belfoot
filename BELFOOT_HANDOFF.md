@@ -1,3 +1,9 @@
+## Transaction RBFA préparée — 18 novembre 2026
+
+- Migration 0043 ajoute `apply_rbfa_callups_atomic`, réservée à service_role et non appelée par l'application. Elle verrouille les convocations pendant la transaction, relit le snapshot courant, impose une observation récente et complète, des identités uniques existantes et l'absence de conflits manuels/verrouillés, puis applique en une transaction. Une erreur annule toutes les modifications. Elle ne crée ni joueur ni club.
+- Attention : verrouiller pendant la transaction ne suffit pas à empêcher un import API-Football ultérieur de réintroduire son ancien effectif. Ne PAS brancher/activer la fonction avant d'avoir coordonné tous les écrivains (y compris jobs déjà en cours), testé la concurrence et défini le repli si migration absente. La correspondance RBFA est inférée et la page peut correspondre au dernier rassemblement ; la disponibilité réelle des identités est inconnue.
+- 968 tests locaux réussis, dont tests PostgreSQL PGlite de rejeu, autorisations, échecs, anciennes données et annulation forcée ; ESLint ciblé réussi. CI à vérifier. Migration non installée, aucun changement ou synchronisation en production.
+
 ## Préparation sécurisée des convocations — 18 novembre 2026
 
 - `rbfaCallupPlan` calcule en lecture seule les ajouts, réactivations et retraits candidats. Refuse les listes incomplètes, identifiants dupliqués et conflits avec convocations manuelles/verrouillées. L'administration affiche le résultat lors de la comparaison RBFA ; aucune écriture en base n'a été ajoutée.
