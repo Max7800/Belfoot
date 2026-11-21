@@ -1,3 +1,11 @@
+## Reprise du 21 novembre 2026 — convocations et Mondial U17
+
+- L'utilisateur autorise la mise en production de la PR #124 et souhaite finir les convocations avant de poursuivre le Mondial U17. La branche fix/national-squad-empty pointe sur 6981d97 ; tests, lint, build et test de concurrence PostgreSQL CI réussis pour ce commit. Aucun merge ni déploiement de cette PR réalisé au moment de cette note.
+- Le résultat SQL fourni par l'utilisateur est `migration_deja_installee=false, table_convocations=true, table_reglages=true`. Cela vérifie la version exacte 0043_rbfa_callups_atomic, pas tous les prérequis, ni l'absence d'une autre version 0043. Le connecteur Supabase n'est pas disponible dans cette conversation. Ne pas prétendre que la migration a été installée ; vérifier la base cible, les autres migrations 0043, les fonctions/objets existants avant application et procéder suivant l'autorisation déjà donnée. Vérifier le résultat et le déploiement.
+- Prévisualisation Vercel en échec car les variables publiques Supabase sont configurées pour production uniquement. La production précédemment observée est main 7cec5a7 ; ne pas supposer que le build preview défaillant prouve une panne de production.
+- En attente ensuite : Coupe du monde U17 Qatar 2026 (début 19 novembre). Aucun résultat du diagnostic de la compétition en base n'a encore été fourni ; nom, identité fournisseur, couverture effective 2026, saison, autorisation du plan d'import et état public restent à vérifier avant import. Ne pas confondre cette tâche avec la migration des convocations.
+- Attention au contenu opérationnel : la page RBFA peut refléter le dernier rassemblement ; le rapprochement nom/date est inféré ; l'autorité RBFA ne s'efface pas automatiquement. Contrôler les logs et effectifs réels après activation. L'utilisateur souhaite changer de conversation après transmission.
+
 ## Validation simultanée PostgreSQL — 18 novembre 2026
 
 - Ajout d'un service PostgreSQL 16 isolé dans la CI et d'un test sur deux sessions : un ancien worker API tente d'écrire pendant la transaction RBFA. Le test vérifie le refus de l'écriture et la liste finale. Base strictement locale et éphémère ; le SQL de préparation a été vérifié avec PGlite. Résultat CI à consulter impérativement avant déploiement.
