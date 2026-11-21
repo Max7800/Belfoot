@@ -25,6 +25,9 @@ const DETAIL_START_BEFORE_MS = 20000;
 const DETAIL_FIRST_START_BEFORE_MS = 24000;
 const DETAIL_CALLS = 4;
 const EVENTS_PER_STEP = 2;
+// Une passe de réparation des liens existants, même si les détails étaient
+// déjà marqués complets par une version antérieure.
+const DETAIL_RELINK_VERSION = 1;
 // Passage dédié (?pass=details, programmé à part 10 min après le passage
 // principal) : un match par lot et un seul lot par passage principal ne
 // suffisaient pas (≈ 3 matchs par heure, retard jamais résorbé, 28/10/2026).
@@ -314,7 +317,7 @@ export async function GET(request) {
       const state = detailState[competition.id] || {};
       const doneAt = Date.parse(state.doneAt || "") || 0;
       // À jour : on ne repasse qu'après un nouveau match terminé.
-      if (state.seasonId === seasonOf[competition.id].id && doneAt && !(latestFinished[competition.id] > doneAt)) continue;
+      if (state.seasonId === seasonOf[competition.id].id && state.relinkVersion === DETAIL_RELINK_VERSION && doneAt && !(latestFinished[competition.id] > doneAt)) continue;
       try { await assertImportTargetAllowed(db, "football.lineups", { competitionId: competition.id, season: seasonOf[competition.id].label }, JOB_CATALOG["football.lineups"]); }
       catch { continue; }
       detailCandidates.push(competition);
@@ -338,7 +341,7 @@ export async function GET(request) {
         details.push({ competition: competition.name, ok: false, error: String(error?.message || error).slice(0, 200) });
       }
       const previous = detailState[competition.id] || {};
-      detailState[competition.id] = { seasonId: seasonOf[competition.id].id, attemptAt: now.toISOString(), doneAt: complete ? now.toISOString() : previous.seasonId === seasonOf[competition.id].id ? previous.doneAt || null : null };
+      detailState[competition.id] = { seasonId: seasonOf[competition.id].id, attemptAt: now.toISOString(), doneAt: complete ? now.toISOString() : previous.seasonId === seasonOf[competition.id].id ? previous.doneAt || null : null, relinkVersion: complete ? DETAIL_RELINK_VERSION : previous.relinkVersion || null };
       // Encore des matchs à détailler : la compétition repasse en fin de file.
       if (!complete && details.at(-1).ok) detailCandidates.push(competition);
       await persistState();
