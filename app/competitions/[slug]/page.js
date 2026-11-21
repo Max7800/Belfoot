@@ -162,7 +162,7 @@ export default function CompetitionPage() {
     // rafale plus large faisait dépasser le délai d'exécution de la base (26/10).
     const clubIds = Object.keys(clubMap);
     const [statsResult, membershipResult, transferResult] = await Promise.all([
-      readAll(() => {
+      unpublishedSeasons ? Promise.resolve({ data: [], error: null }) : readAll(() => {
         const query = supabase.from("player_season_stats").select(PUBLIC_PLAYER_STATS_FIELDS).eq("competition_id", comp.id);
         return activeYear ? query.ilike("season", `${activeYear}%`) : query;
       }),
@@ -199,7 +199,7 @@ export default function CompetitionPage() {
     const transferRows = transferResult.error ? [] : dedupeTransfers((transferResult.data || []).filter((transfer) => competitionClubIds.has(transfer.from_club_id) || competitionClubIds.has(transfer.to_club_id))).slice(0, 5);
     if (!alive) return;
     setMatches(seasonMatches); setClubsMap(clubMap); setPlayers(playerRows); setPlayerStats(statsRows); setPlayerMemberships(membershipRows); setTransfers(transferRows); setMatchPlayerStats(exactMatchStats); setSeasonLoading(false);
-  })().catch((loadError) => { if (alive) { setSeasonLoading(false); setDataError(loadError.message || String(loadError)); } }); return () => { alive = false; }; }, [comp?.id, activeSeason, seasons.length]);
+  })().catch((loadError) => { if (alive) { setSeasonLoading(false); setDataError(loadError.message || String(loadError)); } }); return () => { alive = false; }; }, [comp?.id, activeSeason, seasons.length, unpublishedSeasons]);
 
   const pss = useMemo(() => {
     const activeSeason = seasonKey(seasonLabel);

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Users } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { rbfaPublicSnapshot } from "@/lib/rbfaPublicSelection";
-import { positionLabel } from "@/lib/positions";
+import { groupByPosition, positionLabel } from "@/lib/positions";
 
 const SOURCES = {
   senior: "https://static.rbfa.be/project/publiek/rencintstat/spelers_fr_145.htm",
@@ -44,10 +44,13 @@ export function useRbfaSquad(team) {
 
 export default function RbfaSquad({ snapshot, compact = false }) {
   const rows = compact ? snapshot.players.slice(0, 8) : snapshot.players;
+  const groups = groupByPosition(rows, (row) => snapshot.playerDetails?.[row.playerId]?.position);
   const checked = new Date(snapshot.observedAt).toLocaleDateString("fr-BE", { day: "numeric", month: "short", year: "numeric" });
   return <div>
     <p className="mb-3 text-xs leading-5 text-muted">Liste publiée par la RBFA · vérifiée le {checked}. Elle peut concerner le dernier rassemblement. <a className="underline hover:text-white" href={SOURCES[snapshot.category]} target="_blank" rel="noreferrer">Voir la source</a></p>
-    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{rows.map((row) => {
+    <div className="space-y-5">{groups.map((group) => <section key={group.key}>
+      {group.key !== "OTHER" && <h3 className="mb-2 text-xs font-black uppercase tracking-wider text-amber-300">{group.label} · {group.rows.length}</h3>}
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{group.rows.map((row) => {
       const player = snapshot.playerDetails?.[row.playerId];
       const club = snapshot.clubDetails?.[player?.club_id];
       return <div key={row.sourceId} className="flex min-w-0 items-center gap-3 rounded-xl border border-line/10 bg-surface/70 p-3">
@@ -57,6 +60,6 @@ export default function RbfaSquad({ snapshot, compact = false }) {
           {club ? <p className="truncate text-xs text-muted"><Link href={`/clubs/${club.id}`} className="hover:text-amber-300">{club.name}</Link>{row.club.toLocaleLowerCase() !== club.name.toLocaleLowerCase() && <span> · RBFA : {row.club}</span>}</p> : <p className="truncate text-xs text-muted">{row.club}</p>}
         </div>
       </div>;
-    })}</div>
+    })}</div></section>)}</div>
   </div>;
 }
