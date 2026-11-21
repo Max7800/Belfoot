@@ -28,7 +28,8 @@ import { useCompetitionMatchUpdates } from "@/lib/useCompetitionMatchUpdates";
 import SeasonNotice from "@/components/football/SeasonNotice";
 import { isNationsLeagueCompetition, nationsLeagueGroups } from "@/lib/nationsLeague";
 import { mergeGroupStagePhases, phaseGroups } from "@/lib/groupedStandings";
-import { PUBLIC_PLAYER_FIELDS, PUBLIC_PLAYER_STATS_FIELDS, loadClubsForMatches, loadMatchStatsForMatches, loadPlayersByIds, loadSeasonMatches, missingMatchPlayerIds } from "@/lib/publicFootballData";
+import { PUBLIC_PLAYER_FIELDS, PUBLIC_PLAYER_STATS_FIELDS, loadClubsForMatches, loadGoalEventsForMatches, loadMatchStatsForMatches, loadPlayersByIds, loadSeasonMatches, missingMatchPlayerIds } from "@/lib/publicFootballData";
+import { eventRankings } from "@/lib/eventRankings";
 import { playerAge } from "@/lib/playerAge";
 import { preferAssignedPlayerStats } from "@/lib/playerStats";
 import { nationalityBadges } from "@/lib/nationalities";
@@ -96,6 +97,7 @@ export default function CompetitionPage() {
   const [tab, setTab] = useState("overview");
   const [seasons, setSeasons] = useState([]); const [seasonLabel, setSeasonLabel] = useState("");
   const [unpublishedSeasons, setUnpublishedSeasons] = useState(false);
+  const [goalEvents, setGoalEvents] = useState([]);
   const [matches, setMatches] = useState([]);
   const [clubsMap, setClubsMap] = useState({});
   const [players, setPlayers] = useState([]); const [playerStats, setPlayerStats] = useState([]); const [playerMemberships, setPlayerMemberships] = useState([]);
@@ -151,7 +153,7 @@ export default function CompetitionPage() {
   // Scores, fins de match et corrections arrivent en direct : classements et groupes sont recalculés.
   useCompetitionMatchUpdates(comp?.id, activeSeason?.id || null, setMatches);
   useEffect(() => { if (!comp?.id || (seasons.length && !activeSeason)) return; let alive = true; (async () => {
-    setSeasonLoading(true); setDataError(""); setMatches([]); setClubsMap({}); setPlayers([]); setPlayerStats([]); setPlayerMemberships([]); setTransfers([]); setMatchPlayerStats([]); setPhase(null); setRound("all");
+    setSeasonLoading(true); setDataError(""); setMatches([]); setClubsMap({}); setPlayers([]); setPlayerStats([]); setPlayerMemberships([]); setTransfers([]); setMatchPlayerStats([]); setGoalEvents([]); setPhase(null); setRound("all");
     const seasonMatches = await loadSeasonMatches(supabase, comp.id, activeSeason?.id);
     const clubMap = await loadClubsForMatches(supabase, seasonMatches);
     const activeYear = seasonKey(activeSeason?.label);
@@ -189,6 +191,8 @@ export default function CompetitionPage() {
       // Matchs terminés ou en cours seulement : un match à venir n'a aucune performance.
       loadMatchStatsForMatches(supabase, seasonMatches.filter((match) => ["finished", "live"].includes(match.status)).map((match) => match.id)),
     ]);
+    const useEvents = comp.ext?.coverage?.players === false && comp.ext?.coverage?.top_scorers === false && comp.ext?.coverage?.top_assists === false;
+    const events = useEvents ? await loadGoalEventsForMatches(supabase, seasonMatches.filter((match) => match.status === "finished").map((match) => match.id)) : [];
     const missingPlayerIds = missingMatchPlayerIds(loadedPlayers, exactMatchStats);
     let playerRows = missingPlayerIds.length ? [...loadedPlayers, ...await loadPlayersByIds(supabase, missingPlayerIds)] : loadedPlayers;
     if (!playerRows.length && clubIds.length) {
@@ -199,8 +203,8 @@ export default function CompetitionPage() {
     const competitionClubIds = new Set(clubIds);
     const transferRows = transferResult.error ? [] : dedupeTransfers((transferResult.data || []).filter((transfer) => competitionClubIds.has(transfer.from_club_id) || competitionClubIds.has(transfer.to_club_id))).slice(0, 5);
     if (!alive) return;
-    setMatches(seasonMatches); setClubsMap(clubMap); setPlayers(playerRows); setPlayerStats(statsRows); setPlayerMemberships(membershipRows); setTransfers(transferRows); setMatchPlayerStats(exactMatchStats); setSeasonLoading(false);
-  })().catch((loadError) => { if (alive) { setSeasonLoading(false); setDataError(loadError.message || String(loadError)); } }); return () => { alive = false; }; }, [comp?.id, activeSeason, seasons.length, unpublishedSeasons]);
+    setMatches(seasonMatches); setClubsMap(clubMap); setPlayers(playerRows); setPlayerStats(statsRows); setPlayerMemberships(membershipRows); setTransfers(transferRows); setMatchPlayerStats(exactMatchStats); setGoalEvents(events); setSeasonLoading(false);
+  })().catch((loadError) => { if (alive) { setSeasonLoading(false); setDataError(loadError.message || String(loadError)); } }); return () => { alive = false; }; }, [comp?.id, comp?.ext?.coverage?.players, comp?.ext?.coverage?.top_assists, comp?.ext?.coverage?.top_scorers, activeSeason, seasons.length, unpublishedSeasons]);
 
   const pss = useMemo(() => {
     const activeSeason = seasonKey(seasonLabel);
@@ -259,6 +263,8 @@ export default function CompetitionPage() {
   const rosterClubId = (player) => membershipByPlayer.get(player.id)?.club_id || playerClubId(player);
   const withStats = visiblePlayers.map((p) => ({ p, st: pss[p.id] })).filter((x) => x.st);
   const topBy = (key) => withStats.filter((x) => x.st[key] != null).sort((a, b) => (b.st[key] || 0) - (a.st[key] || 0)).slice(0, 10);
+  const fromEvents = comp?.ext?.coverage?.players === false && comp?.ext?.coverage?.top_scorers === false && comp?.ext?.coverage?.top_assists === false;
+  const eventLeaders = eventRankings(goalEvents);
   const maxApp = Math.max(0, ...withStats.map((x) => x.st.appearances || 0));
   const ratingThreshold = comp?.rating_min ?? Math.max(5, Math.round(maxApp * 0.4));
   const topRating = withStats.filter((x) => x.st.rating != null && (x.st.appearances || 0) >= ratingThreshold).sort((a, b) => b.st.rating - a.st.rating).slice(0, 10);
@@ -382,6 +388,10 @@ export default function CompetitionPage() {
   }
 
   function StatsBlock({ section }) {
+    if (fromEvents && ["scorers", "assists"].includes(section.key)) {
+      const rows = eventLeaders[section.key];
+      return <div id={section.key === "scorers" ? "buteurs" : "passeurs"} className="rounded-2xl border border-line/10 bg-surface p-4"><h3 className="font-black">{section.label}</h3><p className="mt-1 text-xs text-muted">Classement indicatif calculé à partir des événements disponibles, potentiellement incomplet.</p><ol className="mt-3 space-y-2">{rows.map((row, index) => <li key={row.key} className="flex items-center gap-2 text-sm"><span className="text-muted">{index + 1}.</span><span className="min-w-0 flex-1">{row.name}<span className="block text-xs text-muted">{clubsMap[row.clubId]?.name || "Sélection"}</span></span><b>{row.total}</b></li>)}</ol>{!rows.length && <p className="mt-3 text-sm text-muted">Aucun événement exploitable.</p>}</div>;
+    }
     if (section.key === "overview") return (
       <div className="sm:col-span-2 lg:col-span-3">
         <div className="mb-3 flex items-center gap-2"><span className="h-4 w-1 rounded-full" style={{ background: section.accent }} /><h3 className="font-black">{section.label}</h3></div>
@@ -522,11 +532,10 @@ export default function CompetitionPage() {
           <div>
             <div className="mb-2 flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-muted"><span className="h-3 w-1 rounded bg-accent" />{L("comp.leaders", "Les leaders")}</div>
             <div className="grid gap-3 sm:grid-cols-3">
-              <LeaderCard title={L("comp.topscorer", "Meilleur buteur")} x={topScorer} unit={topScorer?.st.goals} onClick={() => goStats("buteurs")} variant="topscorer" />
-              <LeaderCard title={L("comp.topassist", "Meilleur passeur")} x={topAssist} unit={topAssist?.st.assists} onClick={() => goStats("passeurs")} variant="topassist" />
+              {fromEvents ? ["scorers", "assists"].map((key) => <button key={key} onClick={() => goStats(key === "scorers" ? "buteurs" : "passeurs")} className="rounded-2xl border border-line/10 bg-surface p-4 text-left"><span className="text-xs font-bold text-muted">{key === "scorers" ? "Buteurs" : "Passeurs"} · données indicatives</span><span className="mt-2 block font-black">{eventLeaders[key][0]?.name || "—"}</span><span className="text-sm text-muted">{eventLeaders[key][0]?.total ?? ""}</span></button>) : <><LeaderCard title={L("comp.topscorer", "Meilleur buteur")} x={topScorer} unit={topScorer?.st.goals} onClick={() => goStats("buteurs")} variant="topscorer" /><LeaderCard title={L("comp.topassist", "Meilleur passeur")} x={topAssist} unit={topAssist?.st.assists} onClick={() => goStats("passeurs")} variant="topassist" /></>}
               <LeaderCard title={L("comp.cleansheets", "Matchs sans encaisser")} x={topCS} unit={topCS?.v} onClick={() => goStats("cleansheets")} variant="cleansheet" />
             </div>
-            {!withStats.length && <p className="mt-2 rounded-xl border border-dashed border-line/15 bg-surface/30 px-3 py-2 text-xs text-muted">Les fonds personnalisés restent visibles. Les noms et chiffres apparaîtront après l’import des effectifs et des statistiques.</p>}
+            {fromEvents ? <p className="mt-2 rounded-xl border border-amber-400/20 bg-amber-400/5 px-3 py-2 text-xs text-muted">Classements indicatifs issus des événements enregistrés, susceptibles d’être incomplets. Les buts contre leur camp sont exclus.</p> : !withStats.length && <p className="mt-2 rounded-xl border border-dashed border-line/15 bg-surface/30 px-3 py-2 text-xs text-muted">Les fonds personnalisés restent visibles. Les noms et chiffres apparaîtront après l’import des effectifs et des statistiques.</p>}
           </div>
 
           {transfers.length > 0 && <div>
