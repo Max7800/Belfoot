@@ -5,6 +5,7 @@ import { JOB_CATALOG } from "@/lib/jobCatalog";
 import { REFRESH_TIME_BUDGET_MS, refreshTargets } from "@/lib/competitionRefresh";
 import { coachRefreshCandidate, rolloverDue, watchedCompetitionIds } from "@/lib/campaignRollover";
 import { updateSiteSettings } from "@/lib/siteSettings";
+import { readAll } from "@/lib/readAll";
 
 // Renouvellement des campagnes (après les résultats, avant les statistiques) :
 // une compétition au plus par passage,
@@ -27,7 +28,7 @@ const DETAIL_CALLS = 4;
 const EVENTS_PER_STEP = 2;
 // Une passe de réparation des liens existants, même si les détails étaient
 // déjà marqués complets par une version antérieure.
-const DETAIL_RELINK_VERSION = 1;
+const DETAIL_RELINK_VERSION = 2;
 // Passage dédié (?pass=details, programmé à part 10 min après le passage
 // principal) : un match par lot et un seul lot par passage principal ne
 // suffisaient pas (≈ 3 matchs par heure, retard jamais résorbé, 28/10/2026).
@@ -166,16 +167,15 @@ export async function GET(request) {
     const [upcomingResult, liveResult, finishedResult] = await Promise.all([
       db.from("matches").select("competition_id,season_id").in("season_id", seasonIds).gte("kickoff", from).lte("kickoff", to),
       db.from("matches").select("competition_id,season_id").in("season_id", seasonIds).eq("status", "live"),
-      db.from("matches").select("competition_id,season_id,kickoff").in("season_id", seasonIds).eq("status", "finished").gte("kickoff", statsFrom),
+      readAll(() => db.from("matches").select("id,competition_id,season_id,kickoff").in("season_id", seasonIds).eq("status", "finished").gte("kickoff", statsFrom)),
     ]);
     if (upcomingResult.error) throw upcomingResult.error;
     if (liveResult.error) throw liveResult.error;
     if (finishedResult.error) throw finishedResult.error;
     const inWindow = new Set([...(upcomingResult.data || []), ...(liveResult.data || [])].map((match) => match.competition_id));
-    const latestFinished = {};
+    const finishedIds = {};
     for (const match of finishedResult.data || []) {
-      const time = new Date(match.kickoff).getTime();
-      if (!latestFinished[match.competition_id] || time > latestFinished[match.competition_id]) latestFinished[match.competition_id] = time;
+      (finishedIds[match.competition_id] ||= []).push(match.id);
     }
 
     // ── Passage 1 : résultats / classements ──────────────────────────────────
@@ -197,8 +197,8 @@ export async function GET(request) {
       // Les anciens checkpoints sans saison sont réinitialisés prudemment.
       const state = stored.seasonId === seasonOf[competition.id].id ? stored : {};
       const resuming = Number(state.clubIndex) > 0;
-      const last = state.lastStatsAt ? new Date(state.lastStatsAt).getTime() : 0;
-      const hasNewMatch = latestFinished[competition.id] && latestFinished[competition.id] > last;
+      const seen = new Set(state.seenFinishedIds || []);
+      const hasNewMatch = (finishedIds[competition.id] || []).some((id) => !seen.has(id));
       if (resuming || hasNewMatch) dueStats.push({ competition, resuming });
     }
     // Finir d'abord les reprises en cours, puis les nouvelles.
@@ -283,6 +283,9 @@ export async function GET(request) {
       const state = stored.seasonId === seasonOf[competition.id].id ? stored : {};
       const startClubIndex = Number(state.clubIndex) || 0;
       const cycleStartedAt = state.cycleStartedAt || now.toISOString();
+      // Snapshot immuable du début du cycle : un match terminé entre deux lots
+      // reste absent de ce snapshot et déclenchera un nouveau cycle.
+      const cycleFinishedIds = state.cycleFinishedIds || (startClubIndex ? [] : (finishedIds[competition.id] || []));
       try {
         const result = await runJob("football.squads", {
           db, competitionId: competition.id, season: seasonOf[competition.id].label,
@@ -294,8 +297,8 @@ export async function GET(request) {
         });
         statsUsed += statsPerCall;
         const complete = typeof result !== "object" || result.complete !== false;
-        if (complete) statsState[competition.id] = { seasonId: seasonOf[competition.id].id, lastStatsAt: cycleStartedAt, clubIndex: 0 };
-        else statsState[competition.id] = { seasonId: seasonOf[competition.id].id, lastStatsAt: state.lastStatsAt || null, cycleStartedAt, clubIndex: Number(result.progress?.current) || startClubIndex };
+        if (complete) statsState[competition.id] = { seasonId: seasonOf[competition.id].id, lastStatsAt: cycleStartedAt, clubIndex: 0, seenFinishedIds: cycleFinishedIds };
+        else statsState[competition.id] = { seasonId: seasonOf[competition.id].id, lastStatsAt: state.lastStatsAt || null, cycleStartedAt, cycleFinishedIds, seenFinishedIds: state.seenFinishedIds || [], clubIndex: Number(result.progress?.current) || startClubIndex };
         results.push({ pass: "stats", competition: competition.name, ok: true, complete, progress: result?.progress || null });
         await persistState();
       } catch (error) {
@@ -317,7 +320,9 @@ export async function GET(request) {
       const state = detailState[competition.id] || {};
       const doneAt = Date.parse(state.doneAt || "") || 0;
       // À jour : on ne repasse qu'après un nouveau match terminé.
-      if (state.seasonId === seasonOf[competition.id].id && state.relinkVersion === DETAIL_RELINK_VERSION && doneAt && !(latestFinished[competition.id] > doneAt)) continue;
+      const known = new Set(state.seenFinishedIds || []);
+      const hasUnseenMatch = (finishedIds[competition.id] || []).some((id) => !known.has(id));
+      if (state.seasonId === seasonOf[competition.id].id && state.relinkVersion === DETAIL_RELINK_VERSION && doneAt && !state.cycleFinishedIds && !hasUnseenMatch) continue;
       try { await assertImportTargetAllowed(db, "football.lineups", { competitionId: competition.id, season: seasonOf[competition.id].label }, JOB_CATALOG["football.lineups"]); }
       catch { continue; }
       detailCandidates.push(competition);
@@ -341,7 +346,9 @@ export async function GET(request) {
         details.push({ competition: competition.name, ok: false, error: String(error?.message || error).slice(0, 200) });
       }
       const previous = detailState[competition.id] || {};
-      detailState[competition.id] = { seasonId: seasonOf[competition.id].id, attemptAt: now.toISOString(), doneAt: complete ? now.toISOString() : previous.seasonId === seasonOf[competition.id].id ? previous.doneAt || null : null, relinkVersion: complete ? DETAIL_RELINK_VERSION : previous.relinkVersion || null };
+      const sameSeason = previous.seasonId === seasonOf[competition.id].id;
+      const cycleFinishedIds = sameSeason && previous.cycleFinishedIds ? previous.cycleFinishedIds : (finishedIds[competition.id] || []);
+      detailState[competition.id] = { seasonId: seasonOf[competition.id].id, attemptAt: now.toISOString(), doneAt: complete ? now.toISOString() : sameSeason ? previous.doneAt || null : null, relinkVersion: complete ? DETAIL_RELINK_VERSION : sameSeason ? previous.relinkVersion || null : null, seenFinishedIds: complete ? cycleFinishedIds : sameSeason ? previous.seenFinishedIds || [] : [], ...(complete ? {} : { cycleFinishedIds }) };
       // Encore des matchs à détailler : la compétition repasse en fin de file.
       if (!complete && details.at(-1).ok) detailCandidates.push(competition);
       await persistState();
