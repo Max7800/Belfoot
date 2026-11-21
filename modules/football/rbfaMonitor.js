@@ -71,7 +71,9 @@ export async function monitorRbfaSelection(db, settings, { now = new Date(), fet
     return { [RBFA_MONITOR_KEY]: { ...state, [category]: next } };
   });
   let application = null;
-  if (saved && !failure && !linkError) {
+  // La fonction SQL existante ne reconnaît que A et U21 ; les autres
+  // catégories sont exposées comme instantanés, sans toucher aux convocations.
+  if (saved && !failure && !linkError && ["senior", "u21"].includes(category)) {
     const complete = roster.every((person) => person.playerId) && new Set(roster.map((person) => person.playerId)).size === roster.length;
     if (!complete) application = { state: "identites_incompletes" };
     else {
@@ -96,4 +98,19 @@ export async function monitorRbfaSelection(db, settings, { now = new Date(), fet
     });
   }
   return { category, ok: !failure && application?.state !== "erreur", superseded: !saved, error: failure, linkError, application };
+}
+
+// Trois catégories au maximum par passage : rotation équitable sans solliciter
+// API-Football ni laisser les nouveaux groupes attendre plusieurs heures.
+export async function monitorRbfaSelections(db, settings, { now = new Date(), limit = 3, ...options } = {}) {
+  const shadow = { ...settings, [RBFA_MONITOR_KEY]: { ...(settings?.[RBFA_MONITOR_KEY] || {}) } };
+  const results = [];
+  for (let i = 0; i < Math.min(Math.max(limit, 1), 3); i++) {
+    const category = nextRbfaCategory(shadow[RBFA_MONITOR_KEY], now.getTime());
+    if (!category) break;
+    const result = await monitorRbfaSelection(db, shadow, { now, ...options });
+    results.push(result);
+    shadow[RBFA_MONITOR_KEY][category] = { ...(shadow[RBFA_MONITOR_KEY][category] || {}), attemptedAt: now.toISOString() };
+  }
+  return results.length ? { results, ok: results.every((result) => result.ok) } : { skipped: true };
 }

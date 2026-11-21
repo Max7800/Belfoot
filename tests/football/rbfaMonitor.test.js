@@ -8,7 +8,7 @@ vi.mock("@/lib/siteSettings", () => ({ updateSiteSettings: async (_db, patch) =>
   state.current = { ...state.current, ...changes };
   return state.current;
 } }));
-const { nextRbfaCategory, observedRbfaState, monitorRbfaSelection, RBFA_MONITOR_KEY } = await import("@/modules/football/rbfaMonitor");
+const { nextRbfaCategory, observedRbfaState, monitorRbfaSelection, monitorRbfaSelections, RBFA_MONITOR_KEY } = await import("@/modules/football/rbfaMonitor");
 const person = (sourceId) => ({ sourceId, name: `Joueur ${sourceId}`, club: "Club" });
 const entry = (id) => `<CENTER><A HREF=/project/publiek/jrinterfr/speler_PH_${id}.htm><IMG SRC=x></CENTER><BR><CENTER>Joueur ${id}<BR>01-02-2000<BR>Club<BR></A>`;
 
@@ -17,7 +17,7 @@ describe("surveillance RBFA", () => {
     const now = Date.parse("2026-11-18T12:00:00Z");
     expect(nextRbfaCategory({}, now)).toBe("senior");
     expect(nextRbfaCategory({ senior: { attemptedAt: "2026-11-18T11:30:00Z" } }, now)).toBe("u21");
-    expect(nextRbfaCategory({ senior: { attemptedAt: "2026-11-18T11:30:00Z" }, u21: { attemptedAt: "2026-11-18T11:30:00Z" } }, now)).toBeNull();
+    expect(nextRbfaCategory({ senior: { attemptedAt: "2026-11-18T11:30:00Z" }, u21: { attemptedAt: "2026-11-18T11:30:00Z" } }, now)).toBe("u19");
   });
   it("archive seulement un changement de joueurs, pas un simple réordonnancement", () => {
     const initial = observedRbfaState(null, [person("1"), person("2")], "2026-11-18T10:00:00Z");
@@ -86,4 +86,25 @@ describe("surveillance RBFA", () => {
     expect(result.application.state).toBe("migration_absente");
     expect(db.rpcCalls).toHaveLength(0);
   });
+  it("observe une catégorie jeune sans modifier les convocations ni la transaction A/U21", async () => {
+    const recent = { attemptedAt: "2026-11-18T11:30:00Z" };
+    state.current = { [RBFA_MONITOR_KEY]: { senior: recent, u21: recent } };
+    const html = Array.from({ length: 21 }, (_, i) => entry(i + 1)).join("");
+    const db = createFakeSupabase();
+    const resolveLinks = async () => new Map(Array.from({ length: 21 }, (_, i) => [String(i + 1), `p${i + 1}`]));
+    const result = await monitorRbfaSelection(db, state.current, { now: new Date("2026-11-18T12:00:00Z"), fetcher: async () => new Response(html), resolveLinks });
+    expect(result).toMatchObject({ category: "u19", ok: true });
+    expect(state.current[RBFA_MONITOR_KEY].u19.players).toHaveLength(21);
+    expect(db.rpcCalls).toHaveLength(0);
+  });
+
+  it("parcourt au maximum trois catégories différentes dans un passage", async () => {
+    state.current = {};
+    const html = Array.from({ length: 21 }, (_, i) => entry(i + 1)).join("");
+    const fetcher = vi.fn(async () => new Response(html));
+    const result = await monitorRbfaSelections(null, {}, { now: new Date("2026-11-18T12:00:00Z"), fetcher, resolveLinks: async () => new Map() });
+    expect(result.results.map((row) => row.category)).toEqual(["senior", "u21", "u19"]);
+    expect(fetcher).toHaveBeenCalledTimes(3);
+  });
+
 });

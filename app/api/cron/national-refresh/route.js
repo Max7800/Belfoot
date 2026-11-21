@@ -3,7 +3,7 @@ import { assertImportTargetAllowed } from "@/lib/importPlan";
 import { JOB_CATALOG } from "@/lib/jobCatalog";
 import { getAdmin } from "@/lib/supabaseAdmin";
 import { COMPETITION_COLLISION } from "@/modules/football/sync";
-import { monitorRbfaSelection } from "@/modules/football/rbfaMonitor";
+import { monitorRbfaSelections } from "@/modules/football/rbfaMonitor";
 import { syncFifaRanking } from "@/modules/football/fifaRankingSync";
 import { syncFifaTournamentSquad } from "@/modules/football/fifaTournamentSquads";
 
@@ -121,8 +121,8 @@ export async function GET(request) {
     }
 
     // Surveillance indépendante, sans appel API-Football ni modification des
-    // convocations. Un seul document par passage et délai réseau borné.
-    const rbfaMonitorPromise = monitorRbfaSelection(db, settings?.data || {}, { now })
+    // convocations. Trois documents au maximum par passage et délais réseau bornés.
+    const rbfaMonitorPromise = monitorRbfaSelections(db, settings?.data || {}, { now })
       .catch((error) => ({ ok: false, error: String(error?.message || error).slice(0, 200) }));
     const fifaRankingPromise = syncFifaRanking(db, settings?.data || {}, { now })
       .catch(() => ({ ok: false, error: "Synchronisation du classement indisponible" }));

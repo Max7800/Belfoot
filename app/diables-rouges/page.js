@@ -308,7 +308,7 @@ export default function NationalTeamsPage() {
       </ModuleCard>}
 
       {sectionConfig.squad?.enabled && <ModuleCard>
-        <PanelHeader icon={Users} title={sectionConfig.squad.label} subtitle={fifaSquad ? "La sélection belge pour la Coupe du monde U17." : rbfaSquad ? "La liste de joueurs publiée par la RBFA." : sectionConfig.squad.subtitle} accent={sectionConfig.squad.accent} action={(fifaSquad?.players.length || rbfaSquad?.players.length || squad.length) > 4 ? `${config.labels.show_all_players} (${rbfaSquad?.players.length || squad.length})` : null} actionHref={`/diables-rouges/selection?equipe=${selectedId}`} />
+        <PanelHeader icon={Users} title={sectionConfig.squad.label} subtitle={fifaSquad ? "La sélection belge pour la Coupe du monde U17." : rbfaSquad ? "La liste de joueurs publiée par la RBFA." : sectionConfig.squad.subtitle} accent={sectionConfig.squad.accent} action={(fifaSquad?.players.length || rbfaSquad?.players.length || squad.length) > 4 ? `${config.labels.show_all_players} (${fifaSquad?.players.length || rbfaSquad?.players.length || squad.length})` : null} actionHref={`/diables-rouges/selection?equipe=${selectedId}`} />
         {!rbfaLoaded || !fifaSquadLoaded ? <p className="text-sm text-muted">Chargement de la sélection…</p> : fifaSquad ? <FifaTournamentSquad snapshot={fifaSquad} compact /> : rbfaSquad ? <RbfaSquadSummary snapshot={rbfaSquad} accent={sectionConfig.squad.accent} /> : squad.length ? <>
           <div className="sm:hidden"><SquadNamesPreview rows={squad} accent={sectionConfig.squad.accent} /></div>
           <SquadPreview rows={squad} accent={sectionConfig.squad.accent} className="hidden sm:grid" />

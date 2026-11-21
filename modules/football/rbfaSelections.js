@@ -2,10 +2,8 @@ import sanitizeHtml from "sanitize-html";
 
 // Pages publiques de la fédération : un instantané de joueurs, sans date
 // explicite de publication ni garantie de lien avec une annonce donnée.
-export const RBFA_SELECTION_SOURCES = {
-  senior: "https://static.rbfa.be/project/publiek/rencintstat/spelers_fr_145.htm",
-  u21: "https://static.rbfa.be/project/publiek/rencintstat/spelers_fr_141.htm",
-};
+import { RBFA_SOURCES, rbfaSourceUrl } from "@/lib/rbfaSources";
+export const RBFA_SELECTION_SOURCES = Object.fromEntries(Object.keys(RBFA_SOURCES).map((category) => [category, rbfaSourceUrl(category)]));
 
 const normalize = (value) => String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 
@@ -25,8 +23,8 @@ export function parseRbfaSelection(html, { minimum = 11, maximum = 60 } = {}) {
     allowedTags: ["a", "br"],
     allowedAttributes: { a: ["href"] },
   });
-  const links = [...clean.matchAll(/<a href="\/project\/publiek\/jrinterfr\/speler_PH_(\d+)\.htm">/gi)];
-  const pattern = /<a href="\/project\/publiek\/jrinterfr\/speler_PH_(\d+)\.htm"><\/a>\s*<br\s*\/?>\s*([^<]{1,160})<br\s*\/?>\s*(\d{2})-(\d{2})-(\d{4})\s*<br\s*\/?>\s*([^<]{1,160})<br\s*\/?>/gi;
+  const links = [...clean.matchAll(/<a href="\/project\/publiek\/jrinterfr\/speler_P[HF]_(\d+)\.htm">/gi)];
+  const pattern = /<a href="\/project\/publiek\/jrinterfr\/speler_P[HF]_(\d+)\.htm"><\/a>\s*<br\s*\/?>\s*([^<]{1,160})<br\s*\/?>\s*(\d{2})-(\d{2})-(\d{4})\s*<br\s*\/?>\s*([^<]{1,160})<br\s*\/?>/gi;
   for (const match of clean.matchAll(pattern)) {
     const born = birthDate(match[3], match[4], match[5]);
     if (!born) throw new Error("Date de naissance RBFA invalide");

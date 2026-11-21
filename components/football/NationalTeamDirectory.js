@@ -64,7 +64,6 @@ export default function NationalTeamDirectory({ mode }) {
   useEffect(() => {
     supabase.from("clubs").select("id,name,logo_url,national_category,national_gender,source,external_id").eq("team_type", "national").eq("national_followed", true).then(({ data, error: teamsError }) => {
       if (teamsError) { setError(teamsError.message); setLoading(false); return; }
-      // Même règle que la page Diables : genre et âge distincts, féminines de jeunes masquées.
       const sorted = sortNationalTeams(data || []);
       setTeams(sorted);
       const requested = sorted.find((team) => team.id === requestedTeamId);

@@ -8,6 +8,10 @@ describe("lecture et comparaison des listes RBFA", () => {
   it("lit les pages RBFA même si les balises sont mal imbriquées", () => {
     expect(parseRbfaSelection(entry("1", "Hugo Cuypers", "07-02-1997", "Monterrey"), { minimum: 1 })).toEqual(rbfa);
   });
+  it("lit également les fiches des Red Flames", () => {
+    const html = entry("1", "Joueuse Exemple", "07-02-1997", "Club").replace("speler_PH_", "speler_PF_");
+    expect(parseRbfaSelection(html, { minimum: 1 })[0]).toMatchObject({ sourceId: "1", name: "Joueuse Exemple" });
+  });
   it("refuse les listes vides, incomplètes, les doublons et les dates invalides", () => {
     expect(() => parseRbfaSelection("indisponible")).toThrow(/incomplète/);
     expect(() => parseRbfaSelection(entry("1", "Hugo Cuypers", "07-02-1997", "Club").repeat(2), { minimum: 1 })).toThrow(/ambiguë/);
