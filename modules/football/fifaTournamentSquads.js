@@ -52,8 +52,9 @@ export async function readBelgiumPdf(bytes) {
 }
 
 export async function syncFifaTournamentSquad(db, settings, { now = new Date(), fetcher = fetch, reader = readBelgiumPdf } = {}) {
-  if (now.getTime() >= FIFA_U17_ARCHIVE_AFTER) return { skipped: true, reason: "tournoi archivé" };
   const previous = settings?.[FIFA_U17_KEY] || {};
+  // Après archivage, un échec permanent ne doit pas empêcher toute reprise.
+  if (now.getTime() >= FIFA_U17_ARCHIVE_AFTER && previous.players?.length === 21) return { skipped: true, reason: "tournoi archivé" };
   if (now.getTime() - (Date.parse(previous.attemptedAt) || 0) < DAY) return { skipped: true, reason: "intervalle" };
   const attemptedAt = now.toISOString(); let snapshot, error;
   try {
