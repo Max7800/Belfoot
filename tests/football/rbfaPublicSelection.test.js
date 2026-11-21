@@ -11,7 +11,9 @@ describe("liste RBFA publique", () => {
     expect(rbfaCategoryForTeam(senior)).toBe("senior");
     expect(rbfaCategoryForTeam(u21)).toBe("u21");
     expect(rbfaCategoryForTeam({ source: "manual", external_id: "1" })).toBeNull();
-    expect(rbfaCategoryForTeam({ source: "apifootball", external_id: "1777" })).toBeNull();
+    expect(rbfaCategoryForTeam({ source: "apifootball", external_id: "1777" })).toBe("women");
+    expect(rbfaCategoryForTeam({ source: "apifootball", external_id: "17942" })).toBe("u17");
+    expect(rbfaCategoryForTeam({ source: "apifootball", external_id: "22425" })).toBe("u18");
     expect(rbfaPublicSnapshot({ senior: snapshot }, u21)).toBeNull();
   });
   it("accepte une liste complète sans exiger une fiche joueur Belfoot", () => {
