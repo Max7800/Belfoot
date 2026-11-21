@@ -35,7 +35,7 @@ const base = () => ({
   settings: {
     football_import_plan: plan,
     football_competition_refresh_state: { "c-pl": hoursAgo(3), "c-u21": hoursAgo(40) },
-    football_competition_stats_state: { "c-pl": { lastStatsAt: hoursAgo(5), clubIndex: 0 } },
+    football_competition_stats_state: { "c-pl": { seasonId: "s1", lastStatsAt: hoursAgo(5), clubIndex: 0 } },
     football_campaign_rollover_state: { "c-u21": { checkedAt: hoursAgo(2), ok: false, error: "quota" } },
   },
   nationalTeams: [
@@ -62,13 +62,16 @@ describe("buildSyncOverview", () => {
     expect(byId(overview.competitions, "c-empty")).toMatchObject({ season: null, status: "no-season" });
   });
 
-  it("statistiques : clubs au niveau « Archive enrichie » seulement", async () => {
+  it("statistiques : plan et couverture identiques au cron, y compris pour les sélections", async () => {
     const overview = await buildSyncOverview(base());
     expect(byId(overview.competitions, "c-pl").stats).toEqual({ lastStatsAt: hoursAgo(5), clubIndex: 0 });
     expect(byId(overview.competitions, "c-u21").stats).toBeNull(); // compétition internationale
     const complete = base();
     complete.settings.football_import_plan = { ...plan, competitions: { ...plan.competitions, "c-u21": { enabled: true, seasons: { "2027-2028": { enabled: true, scope: "complete" } } } } };
-    expect(byId((await buildSyncOverview(complete)).competitions, "c-u21").stats).toBeNull(); // même au niveau complet
+    expect(byId((await buildSyncOverview(complete)).competitions, "c-u21").stats).toBeNull(); // couverture inconnue
+    complete.competitions.find((competition) => competition.id === "c-u21").ext = { coverage: { players: true } };
+    complete.settings.football_competition_stats_state["c-u21"] = { seasonId: "s2", lastStatsAt: hoursAgo(4), clubIndex: 2 };
+    expect(byId((await buildSyncOverview(complete)).competitions, "c-u21").stats).toEqual({ lastStatsAt: hoursAgo(4), clubIndex: 2 });
   });
 
   it("nouvelle saison prête, plus récente que la saison par défaut : à activer", async () => {
@@ -83,9 +86,10 @@ describe("buildSyncOverview", () => {
   it("statistiques figées : jamais rafraîchies ou depuis plus de 7 jours ; lot en cours : pas d'alerte", async () => {
     const texts = async (statsState) => { const input = base(); input.settings.football_competition_stats_state = statsState; return (await buildSyncOverview(input)).alerts.map((alert) => alert.text); };
     expect(await texts({})).toContain("Pro League : statistiques joueurs jamais rafraîchies par le cron.");
-    expect(await texts({ "c-pl": { lastStatsAt: hoursAgo(24 * 21), clubIndex: 0 } })).toContain("Pro League : statistiques joueurs non rafraîchies depuis 21 jours.");
-    expect((await texts({ "c-pl": { lastStatsAt: hoursAgo(24 * 6), clubIndex: 0 } })).some((text) => text.includes("statistiques"))).toBe(false);
-    expect((await texts({ "c-pl": { lastStatsAt: null, clubIndex: 6 } })).some((text) => text.includes("statistiques"))).toBe(false);
+    expect(await texts({ "c-pl": { seasonId: "s1", lastStatsAt: hoursAgo(24 * 21), clubIndex: 0 } })).toContain("Pro League : statistiques joueurs non rafraîchies depuis 21 jours.");
+    expect((await texts({ "c-pl": { seasonId: "s1", lastStatsAt: hoursAgo(24 * 6), clubIndex: 0 } })).some((text) => text.includes("statistiques"))).toBe(false);
+    expect((await texts({ "c-pl": { seasonId: "s1", lastStatsAt: null, clubIndex: 6 } })).some((text) => text.includes("statistiques"))).toBe(false);
+    expect(await texts({ "c-pl": { seasonId: "ancienne", lastStatsAt: hoursAgo(1), clubIndex: 6 } })).toContain("Pro League : statistiques joueurs jamais rafraîchies par le cron.");
   });
 
   it("saison prête mais déjà publique : rien à activer", async () => {
