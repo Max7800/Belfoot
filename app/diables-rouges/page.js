@@ -173,12 +173,15 @@ export default function NationalTeamsPage() {
     setRatingSquad([]);
     setPreMatchSessions([]);
     (async () => {
-      const [matchesResult, callupsResult] = await Promise.all([
-        supabase.from("matches").select("*").or(`home_club_id.eq.${selectedId},away_club_id.eq.${selectedId}`).order("kickoff", { ascending: true }).limit(120),
+      const cutoff = new Date().toISOString();
+      const teamFilter = `home_club_id.eq.${selectedId},away_club_id.eq.${selectedId}`;
+      const [pastMatches, futureMatches, callupsResult] = await Promise.all([
+        supabase.from("matches").select("*").or(teamFilter).lt("kickoff", cutoff).order("kickoff", { ascending: false }).limit(120),
+        supabase.from("matches").select("*").or(teamFilter).gte("kickoff", cutoff).order("kickoff", { ascending: true }).limit(30),
         supabase.from("national_team_callups").select("*").eq("national_team_id", selectedId).eq("active", true).order("updated_at", { ascending: false }),
       ]);
-      if (matchesResult.error || callupsResult.error) throw matchesResult.error || callupsResult.error;
-      const matchRows = matchesResult.data || [];
+      if (pastMatches.error || futureMatches.error || callupsResult.error) throw pastMatches.error || futureMatches.error || callupsResult.error;
+      const matchRows = [...(pastMatches.data || []), ...(futureMatches.data || [])];
       const callups = callupsResult.data || [];
       const clubIds = [...new Set(matchRows.flatMap((match) => [match.home_club_id, match.away_club_id]).filter(Boolean))];
       const competitionIds = [...new Set(matchRows.map((match) => match.competition_id).filter(Boolean))];
