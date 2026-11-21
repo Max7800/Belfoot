@@ -5,20 +5,21 @@ import { computeStandings } from "@/lib/standings";
 import { isKnockoutPhase } from "@/lib/competitionType";
 import { selectionGroupStanding } from "@/lib/selectionGroup";
 import { groupDisplayLabel } from "@/lib/groupedStandings";
-import { sortNationalCompetitions } from "@/lib/nationalCompetitionOrder";
+import { prioritizeResultCompetition } from "@/lib/nationalCompetitionOrder";
 
 // Classement du GROUPE de la sélection, par compétition (Nations League, qualif CDM…).
 // IMPORTANT : tout est scopé sur la SAISON EN COURS (l'édition du match le plus récent),
 // sinon on mélange les éditions (ex. NL 2024 + NL 2026 = groupe incohérent).
 // Le groupe = la sélection + ses adversaires de cette édition ; le classement est calculé
 // sur tous les matchs intra-groupe de cette saison. Les amicaux sont ignorés.
-export default function NationalGroupStandings({ teamId, matches, competitions }) {
+export default function NationalGroupStandings({ teamId, matches, competitions, preferredCompetitionId }) {
   const [tables, setTables] = useState([]);
   const [showOlder, setShowOlder] = useState(false);
 
   useEffect(() => {
     if (!teamId || !matches?.length) { setTables([]); return; }
     let active = true;
+    setTables([]);
     setShowOlder(false);
     (async () => {
       const byComp = {};
@@ -65,10 +66,13 @@ export default function NationalGroupStandings({ teamId, matches, competitions }
       if (!out.length) { if (active) setTables([]); return; }
       const { data: clubs } = await supabase.from("clubs").select("id,name,logo_url").in("id", [...clubIds]);
       const clubMap = Object.fromEntries((clubs || []).map((c) => [c.id, c]));
-      if (active) setTables(sortNationalCompetitions(out).map((t) => ({ ...t, clubMap })));
+      if (active) {
+        const ordered = prioritizeResultCompetition(out, preferredCompetitionId);
+        setTables(ordered.map((t) => ({ ...t, clubMap })));
+      }
     })().catch(() => { if (active) setTables([]); });
     return () => { active = false; };
-  }, [teamId, matches]);
+  }, [teamId, matches, preferredCompetitionId]);
 
   if (!tables.length) return null;
 
