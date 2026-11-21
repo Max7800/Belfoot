@@ -2981,3 +2981,9 @@ Fonctionnalités Belfoot qui seraient de bons candidats à généraliser dans le
   doublons provider** du Plan d’import. Il est en lecture seule ; aucun import, appel API ou fusion
   ne doit être lancé avant lecture de son rapport.
 - Aucun SQL, aucune migration et aucun appel API-Football ne sont nécessaires pour ce lot.
+
+# Suivi des compétitions internationales — 21 novembre 2026
+
+- Les classements récupèrent les fiches manquantes référencées seulement par les performances de match, sans appel API-Football. Les données dépendent de la couverture du fournisseur et des identifiants résolus.
+- Les checkpoints du cron des détails sont associés à la saison publique : un ancien passage ne bloque plus le traitement d'une nouvelle saison. Les anciens checkpoints sont revérifiés une fois sans supprimer les marqueurs de matchs synchronisés.
+- Vérifier séparément en production la couverture et l'exécution du cron pour la Coupe du monde U17 : aucune synchronisation de production n'a été lancée depuis cette branche. Les compteurs ne prouvent pas que le fournisseur retourne des statistiques complètes.

@@ -309,7 +309,7 @@ export async function GET(request) {
       const state = detailState[competition.id] || {};
       const doneAt = Date.parse(state.doneAt || "") || 0;
       // À jour : on ne repasse qu'après un nouveau match terminé.
-      if (doneAt && !(latestFinished[competition.id] > doneAt)) continue;
+      if (state.seasonId === seasonOf[competition.id].id && doneAt && !(latestFinished[competition.id] > doneAt)) continue;
       try { await assertImportTargetAllowed(db, "football.lineups", { competitionId: competition.id, season: seasonOf[competition.id].label }, JOB_CATALOG["football.lineups"]); }
       catch { continue; }
       detailCandidates.push(competition);
@@ -332,7 +332,8 @@ export async function GET(request) {
       } catch (error) {
         details.push({ competition: competition.name, ok: false, error: String(error?.message || error).slice(0, 200) });
       }
-      detailState[competition.id] = { attemptAt: now.toISOString(), doneAt: complete ? now.toISOString() : detailState[competition.id]?.doneAt || null };
+      const previous = detailState[competition.id] || {};
+      detailState[competition.id] = { seasonId: seasonOf[competition.id].id, attemptAt: now.toISOString(), doneAt: complete ? now.toISOString() : previous.seasonId === seasonOf[competition.id].id ? previous.doneAt || null : null };
       // Encore des matchs à détailler : la compétition repasse en fin de file.
       if (!complete && details.at(-1).ok) detailCandidates.push(competition);
       await persistState();
