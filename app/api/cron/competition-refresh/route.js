@@ -117,7 +117,7 @@ export async function GET(request) {
     const calendarSeason = currentSeasonLabel(now);
 
     const { data: visible, error: compError } = await db.from("competitions")
-      .select("id,name,provider,public_visible,competition_scope")
+      .select("id,name,provider,public_visible,competition_scope,ext")
       .not("provider", "is", null)
       .neq("public_visible", false);
     if (compError) throw compError;
@@ -278,7 +278,9 @@ export async function GET(request) {
       try {
         const result = await runJob("football.squads", {
           db, competitionId: competition.id, season: seasonOf[competition.id].label,
-          clubBatchSize: statsClubBatch, requestLimit: statsPerCall,
+          // Sélections : un seul participant par lot, pour limiter la durée
+          // d'un appel et reprendre au participant suivant en cas de coupure.
+          clubBatchSize: competition.competition_scope === "international" ? 1 : statsClubBatch, requestLimit: statsPerCall,
           resumeState: { competitionIndex: 0, clubIndex: startClubIndex },
           apifootballKey: process.env.APIFOOTBALL_KEY,
         });
@@ -361,7 +363,7 @@ export async function GET(request) {
 
     // ── Entraîneurs : compétitions de clubs autorisées, une par passage ─────
     let coaches = null;
-    const coachCandidate = outOfTime() ? null : coachRefreshCandidate([...statsAllowedFor], coachState, now.getTime());
+    const coachCandidate = outOfTime() ? null : coachRefreshCandidate(comps.filter((competition) => competition.competition_scope !== "international" && statsAllowedFor.has(competition.id)).map((competition) => competition.id), coachState, now.getTime());
     if (coachCandidate) {
       const competition = comps.find((item) => item.id === coachCandidate);
       const state = coachState[coachCandidate] || {};
@@ -405,3 +407,4 @@ export async function GET(request) {
 }
 
 export const POST = GET;
+

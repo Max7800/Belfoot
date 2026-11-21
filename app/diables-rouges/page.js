@@ -7,6 +7,7 @@ import { useNationalTeamsConfig } from "@/lib/nationalTeams";
 import { useRankings } from "@/lib/rankings";
 import DiableRatings from "@/components/football/DiableRatings";
 import NationalGroupStandings from "@/components/football/NationalGroupStandings";
+import RbfaSquad, { useRbfaSquad } from "@/components/football/RbfaSquad";
 import { groupByPosition, positionLabel } from "@/lib/positions";
 import { matchStatusMeta } from "@/lib/matchStatus";
 import { nationalityBadges } from "@/lib/nationalities";
@@ -140,7 +141,7 @@ export default function NationalTeamsPage() {
     // sans team_type=national : on les remonte afin de ne jamais perdre le
     // lien vers leurs matchs et convocations historiques.
     (async () => {
-      const fields = "id,name,short_name,logo_url,national_category,national_gender,fifa_ranking,national_followed,ext";
+      const fields = "id,name,short_name,logo_url,national_category,national_gender,fifa_ranking,national_followed,ext,source,external_id";
       const [nationalResult, legacyResult] = await Promise.all([
         readAll(() => supabase.from("clubs").select(fields).eq("team_type", "national")),
         supabase.from("clubs").select(fields).or("name.ilike.Belgium%,name.ilike.Belgique%,name.ilike.%Diables%,name.ilike.%Flames%"),
@@ -230,6 +231,7 @@ export default function NationalTeamsPage() {
   }, [selectedId]);
 
   const selectedTeam = teams.find((team) => team.id === selectedId);
+  const { loaded: rbfaLoaded, snapshot: rbfaSquad } = useRbfaSquad(selectedTeam);
   const genders = [...new Set(teams.map((team) => team.national_gender || "men"))];
   const teamsForGender = teams.filter((team) => (team.national_gender || "men") === (selectedGender || "men"));
   const now = Date.now();
@@ -292,8 +294,8 @@ export default function NationalTeamsPage() {
       </ModuleCard>}
 
       {sectionConfig.squad?.enabled && <ModuleCard>
-        <PanelHeader icon={Users} title={sectionConfig.squad.label} subtitle={sectionConfig.squad.subtitle} accent={sectionConfig.squad.accent} action={squad.length > 4 ? `${config.labels.show_all_players} (${squad.length})` : null} actionHref={`/diables-rouges/selection?equipe=${selectedId}`} />
-        {squad.length ? <>
+        <PanelHeader icon={Users} title={sectionConfig.squad.label} subtitle={rbfaSquad ? "La liste de joueurs publiée par la RBFA." : sectionConfig.squad.subtitle} accent={sectionConfig.squad.accent} action={(rbfaSquad?.players.length || squad.length) > 4 ? `${config.labels.show_all_players} (${rbfaSquad?.players.length || squad.length})` : null} actionHref={`/diables-rouges/selection?equipe=${selectedId}`} />
+        {!rbfaLoaded ? <p className="text-sm text-muted">Chargement de la sélection…</p> : rbfaSquad ? <RbfaSquad snapshot={rbfaSquad} compact /> : squad.length ? <>
           <div className="sm:hidden"><SquadNamesPreview rows={squad} accent={sectionConfig.squad.accent} /></div>
           <SquadPreview rows={squad} accent={sectionConfig.squad.accent} className="hidden sm:grid" />
         </> : <p className="text-sm text-muted">La liste des joueurs n’est pas encore disponible.</p>}

@@ -20,6 +20,7 @@ import { uefaPointsDisplay } from "@/lib/rankingDisplay";
 import { invalidateTilesCache, TILE_SCOPES } from "@/lib/tiles";
 import { COMPETITION_SCOPES, groupCompetitionsByScope } from "@/lib/competitionScopes";
 import { healthItems, historyRows, resumableRuns, syncSections } from "@/lib/adminSync";
+import RbfaSelectionPreview from "./RbfaSelectionPreview";
 
 // Écriture sûre de site_settings (lib/siteSettings.js) : ne remplace que les
 // clés données, sans effacer une écriture concurrente (cron, job, autre onglet).
@@ -241,6 +242,7 @@ export function JobsPanel() {
   </section>;
   return (<div>
     <h2 className="mb-1 text-lg font-bold">Synchronisations</h2>
+    <RbfaSelectionPreview />
     <p className="mb-4 text-xs leading-5 text-muted">Résultats, statistiques, compositions, faits, entraîneurs, nouvelles campagnes et Belges à l&apos;étranger se mettent à jour tout seuls. Ici : leur état, et les quelques actions qui restent à lancer à la main.</p>
 
     <section className="mb-4">
@@ -786,3 +788,4 @@ export function RankingsPanel() {
     </div>
   );
 }
+

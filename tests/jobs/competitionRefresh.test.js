@@ -7,7 +7,7 @@ import { coachRefreshCandidate } from "@/lib/campaignRollover";
 // remplacé : on vérifie QUELS jobs seraient lancés, avec quelle saison.
 const state = vi.hoisted(() => ({ db: null, runs: [], coachResult: null, detailResults: {} }));
 vi.mock("@/lib/supabaseAdmin", () => ({ getAdmin: () => state.db }));
-vi.mock("@/lib/jobs", () => ({ runJob: async (key, ctx) => { state.runs.push({ key, competitionId: ctx.competitionId, season: ctx.season, resumeState: ctx.resumeState, globalScope: ctx.globalScope, requestLimit: ctx.requestLimit, deadline: ctx.deadline }); if (state.detailResults[key]) return state.detailResults[key]; return key === "football.squads" ? { complete: true } : key === "football.coaches" && state.coachResult ? state.coachResult : "ok"; } }));
+vi.mock("@/lib/jobs", () => ({ runJob: async (key, ctx) => { state.runs.push({ key, competitionId: ctx.competitionId, season: ctx.season, resumeState: ctx.resumeState, globalScope: ctx.globalScope, requestLimit: ctx.requestLimit, clubBatchSize: ctx.clubBatchSize, deadline: ctx.deadline }); if (state.detailResults[key]) return state.detailResults[key]; return key === "football.squads" ? { complete: true } : key === "football.coaches" && state.coachResult ? state.coachResult : "ok"; } }));
 const { GET } = await import("@/app/api/cron/competition-refresh/route");
 
 const SECRET = "secret-de-test";
@@ -42,6 +42,15 @@ const detailRuns = () => state.runs.filter((r) => r.key === "football.lineups" |
 const coachRuns = () => state.runs.filter((r) => r.key === "football.coaches");
 
 describe("refreshTargets — règle pure", () => {
+  it("statistiques internationales uniquement si la couverture joueurs est explicite", () => {
+    const competitions = [
+      comp("yes", "Qualifs U17", "international", { ext: { coverage: { players: true } } }),
+      comp("no", "Sans couverture", "international", { ext: { coverage: { players: false } } }),
+      comp("unknown", "Couverture inconnue", "international"),
+    ];
+    const seasons = competitions.map((item) => season(`s-${item.id}`, item.id, "2026-2027"));
+    expect(refreshTargets(competitions, seasons).targets.map((item) => item.statsEligible)).toEqual([true, false, false]);
+  });
   it("saison publique de chaque compétition (active, sinon la plus récente publiée)", () => {
     expect(refreshSeasonFor([season("a", "c", "2025-2026", "ready"), season("b", "c", "2027-2028", "ready")]).label).toBe("2027-2028");
     expect(refreshSeasonFor([season("a", "c", "2025-2026"), season("b", "c", "2027-2028", "ready")]).label).toBe("2025-2026");
@@ -55,6 +64,26 @@ describe("refreshTargets — règle pure", () => {
 });
 
 describe("cron competition-refresh — toutes les compétitions visibles", () => {
+  it("rattrape les statistiques d'une sélection couverte après un match sans lancer ses entraîneurs", async () => {
+    const covered = comp("c-u17", "Qualifs U17", "international", { ext: { coverage: { players: true } } });
+    const seasons = [season("s-u17", "c-u17", "2026-2027")];
+    const plan = planFor({ "c-u17": allow("2026-2027", "complete") });
+    state.db = seed({ competitions: [covered], seasons, plan, matches: [finished("m-u17", "s-u17", "c-u17", 2)] });
+    const body = await tick();
+    expect(state.runs.filter((run) => run.key === "football.squads")).toEqual([expect.objectContaining({ competitionId: "c-u17", season: "2026-2027", requestLimit: 12, clubBatchSize: 1 })]);
+    expect(state.runs.some((run) => run.key === "football.coaches")).toBe(false);
+    expect(body.stats.advanced).toBe(1);
+  });
+  it("reprend la compétition internationale au participant enregistré", async () => {
+    const covered = comp("c-u17", "Qualifs U17", "international", { ext: { coverage: { players: true } } });
+    state.db = seed({ competitions: [covered], seasons: [season("s-u17", "c-u17", "2026-2027")], plan: planFor({ "c-u17": allow("2026-2027", "complete") }), matches: [finished("m-u17", "s-u17", "c-u17", 2)] });
+    state.detailResults["football.squads"] = { complete: false, progress: { current: 1 } };
+    await tick();
+    state.runs = [];
+    state.detailResults["football.squads"] = { complete: true };
+    await tick();
+    expect(state.runs.find((run) => run.key === "football.squads")).toMatchObject({ resumeState: { competitionIndex: 0, clubIndex: 1 }, clubBatchSize: 1 });
+  });
   it("chaque compétition synchronisée sur SA saison publique, pas l'année du calendrier", async () => {
     state.db = seed({ competitions: [PRO, U21, NL], seasons: baseSeasons, plan: basePlan });
     const body = await tick();
@@ -281,3 +310,4 @@ describe("cron competition-refresh — suivi des Belges à l'étranger", () => {
     expect(state.db.rows("site_settings")[0].data.football_abroad_follow_last).toMatchObject({ ok: true });
   });
 });
+
