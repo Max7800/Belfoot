@@ -263,7 +263,8 @@ export default function NationalTeamsPage() {
     : null;
   // Classement FIFA de la Belgique : seulement pour l'équipe A masculine.
   const showFifa = isSeniorMenTeam(selectedTeam);
-  const fifaRank = selectedTeam?.fifa_ranking || rankings.fifa.find((row) => row.isBelgium)?.rank || "—";
+  const fifaRank = rankings.fifa.find((row) => row.isBelgium)?.rank || selectedTeam?.fifa_ranking || "—";
+  const featuredClubs = showFifa && rankings.fifaSource && clubs[selectedId] ? { ...clubs, [selectedId]: { ...clubs[selectedId], fifa_ranking: fifaRank } } : clubs;
   const annual = annualRecord?.teamId === selectedId && annualRecord?.year === year ? annualRecord : null;
   const statTiles = [[annual?.matches ?? "—", config.labels.stats_matches, "text-white"], [annual?.scoredMatches ? annual.wins : "—", config.labels.stats_wins, "text-emerald-400"], [annual?.scoredMatches ? annual.goals : "—", config.labels.stats_goals, "text-white"], ...(showFifa ? [[fifaRank, config.labels.stats_fifa, "text-amber-300"]] : [])];
   const sectionConfig = Object.fromEntries(config.sections.map((section) => [section.key, section]));
@@ -287,7 +288,7 @@ export default function NationalTeamsPage() {
       <div className="order-1 min-w-0 space-y-4 lg:col-span-8">
         <ModuleCard>
           <PanelHeader icon={CalendarDays} title={config.labels.featured} />
-          <FeaturedMatch match={featured} clubs={clubs} competitions={competitions} />
+          <FeaturedMatch match={featured} clubs={featuredClubs} competitions={competitions} />
         </ModuleCard>
         <div className={`grid gap-2 ${statTiles.length === 4 ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-3"}`}>
           {statTiles.map(([value, label, color]) => <div key={label} className="rounded-2xl border border-line/10 bg-surface/60 px-2 py-4 text-center sm:py-5"><b className={`block text-xl sm:text-2xl ${color}`}>{value}</b><span className="mt-1 block text-[8px] font-bold uppercase tracking-wider text-muted sm:text-[9px]">{label}</span></div>)}
@@ -317,6 +318,7 @@ export default function NationalTeamsPage() {
         <NationalGroupStandings teamId={selectedId} matches={matches} competitions={competitions} />
         {showFifa && rankings.fifa.length > 0 && <ModuleCard>
           <PanelHeader icon={Trophy} title={config.labels.fifa} />
+          {rankings.fifaCheckedAt && <p className="mb-2 text-xs text-muted">Source : {rankings.fifaSource} · publication du {new Date(rankings.fifaPublishedAt).toLocaleDateString("fr-BE")} · vérifié le {new Date(rankings.fifaCheckedAt).toLocaleDateString("fr-BE")}</p>}
           <div className="divide-y divide-line/10 overflow-hidden rounded-xl border border-line/10 bg-black/10">{rankings.fifa.map((row, index) => <div key={index} className={`flex items-center justify-between px-3 py-1.5 text-sm lg:py-2.5 ${row.isBelgium ? "bg-gradient-to-r from-red-500/20 to-amber-300/[0.06] font-black text-white" : "text-slate-300"}`}><span className="flex min-w-0 items-center gap-2.5"><span className={`inline-block w-5 shrink-0 text-center text-xs font-black tabular-nums ${Number(row.rank) <= 3 ? "text-amber-300" : "text-slate-500"}`}>{row.rank}</span><CountryFlag nation={row.nation} /><span className="truncate">{row.nation}</span></span><span className={`ml-2 w-[78px] shrink-0 text-right text-[11px] tabular-nums ${row.isBelgium ? "text-amber-200" : "text-muted"}`}>{row.points !== "" ? <>{row.points} <span className="text-[9px]">pts</span></> : "—"}</span></div>)}</div>
         </ModuleCard>}
         {showFifa && results[0] && ratingSquad.length > 0 && <DiableRatings match={results[0]} squad={ratingSquad} title={config.labels.ratings} showAllLabel={config.labels.show_all_players} showLessLabel={config.labels.show_less_players} compact />}
