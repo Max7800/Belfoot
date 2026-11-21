@@ -735,9 +735,11 @@ export function ProposePanel() {
 export function RankingsPanel() {
   const [cfg, setCfg] = useState(() => normalizeRankings());
   const [status, setStatus] = useState("idle");
+  const [autoFifa, setAutoFifa] = useState(true);
+  const [autoState, setAutoState] = useState(null);
   useEffect(() => {
     supabase.from("site_settings").select("data").eq("id", 1).maybeSingle()
-      .then(({ data }) => setCfg(normalizeRankings(data?.data?.rankings)));
+      .then(({ data }) => { setCfg(normalizeRankings(data?.data?.rankings)); setAutoFifa(data?.data?.football_fifa_rankings_enabled !== false); setAutoState(data?.data?.football_fifa_rankings_auto || null); });
   }, []);
   const box = "rounded border border-line/10 bg-surface2 px-2 py-1.5 text-sm text-content";
   const setFifa = (i, patch) => setCfg((c) => ({ ...c, fifa: c.fifa.map((r, j) => (j === i ? { ...r, ...patch } : r)) }));
@@ -747,13 +749,15 @@ export function RankingsPanel() {
   const setUefa = (k, v) => setCfg((c) => ({ ...c, uefa: { ...c.uefa, [k]: v } }));
   const save = async () => {
     setStatus("saving");
-    const { error } = await saveSettings({ rankings: cfg });
+    const { error } = await saveSettings({ rankings: cfg, football_fifa_rankings_enabled: autoFifa });
     setStatus(error ? "error" : "saved");
   };
   return (
     <div>
-      <h2 className="mb-2 text-lg font-bold">Classements Belgique (saisie manuelle)</h2>
-      <p className="mb-4 text-xs text-muted">Le classement FIFA et le coefficient UEFA ne sont dans aucune API : à tenir à jour ici (FIFA ~1×/mois, UEFA après les semaines de coupe).</p>
+      <h2 className="mb-2 text-lg font-bold">Classements Belgique</h2>
+      <p className="mb-4 text-xs text-muted">Le classement FIFA peut être synchronisé avec Sportradar si l'accès est configuré. Le tableau manuel reste disponible ; le coefficient UEFA est saisi ici.</p>
+      <label className="mb-3 flex items-center gap-2 text-sm"><input type="checkbox" checked={autoFifa} onChange={(e) => setAutoFifa(e.target.checked)} />Utiliser le classement FIFA automatique lorsqu'il est disponible</label>
+      <p className="mb-4 text-xs text-muted">{autoState?.checkedAt ? `Dernière vérification réussie : ${new Date(autoState.checkedAt).toLocaleString("fr-BE")}.` : "Aucun classement automatique reçu."}{autoState?.error ? " Dernière tentative en erreur ; le dernier classement valide est conservé." : ""} Lorsque le mode automatique est actif et disponible, les données manuelles restent enregistrées mais ne sont pas affichées.</p>
 
       <div className="mb-6">
         <div className="mb-2 flex items-center justify-between"><span className="text-xs font-semibold text-muted">Classement FIFA — nations autour de la Belgique</span><button onClick={addFifa} className="rounded border border-line/20 px-2 py-1 text-xs hover:border-accent/40">+ Ajouter une nation</button></div>
