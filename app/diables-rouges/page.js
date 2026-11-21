@@ -7,7 +7,7 @@ import { useNationalTeamsConfig } from "@/lib/nationalTeams";
 import { useRankings } from "@/lib/rankings";
 import DiableRatings from "@/components/football/DiableRatings";
 import NationalGroupStandings from "@/components/football/NationalGroupStandings";
-import RbfaSquad, { useRbfaSquad } from "@/components/football/RbfaSquad";
+import { RbfaSquadSummary, useRbfaSquad } from "@/components/football/RbfaSquad";
 import { groupByPosition, positionLabel } from "@/lib/positions";
 import { matchStatusMeta } from "@/lib/matchStatus";
 import { nationalityBadges } from "@/lib/nationalities";
@@ -295,7 +295,7 @@ export default function NationalTeamsPage() {
 
       {sectionConfig.squad?.enabled && <ModuleCard>
         <PanelHeader icon={Users} title={sectionConfig.squad.label} subtitle={rbfaSquad ? "La liste de joueurs publiée par la RBFA." : sectionConfig.squad.subtitle} accent={sectionConfig.squad.accent} action={(rbfaSquad?.players.length || squad.length) > 4 ? `${config.labels.show_all_players} (${rbfaSquad?.players.length || squad.length})` : null} actionHref={`/diables-rouges/selection?equipe=${selectedId}`} />
-        {!rbfaLoaded ? <p className="text-sm text-muted">Chargement de la sélection…</p> : rbfaSquad ? <RbfaSquad snapshot={rbfaSquad} compact /> : squad.length ? <>
+        {!rbfaLoaded ? <p className="text-sm text-muted">Chargement de la sélection…</p> : rbfaSquad ? <RbfaSquadSummary snapshot={rbfaSquad} accent={sectionConfig.squad.accent} /> : squad.length ? <>
           <div className="sm:hidden"><SquadNamesPreview rows={squad} accent={sectionConfig.squad.accent} /></div>
           <SquadPreview rows={squad} accent={sectionConfig.squad.accent} className="hidden sm:grid" />
         </> : <p className="text-sm text-muted">La liste des joueurs n’est pas encore disponible.</p>}

@@ -4,8 +4,8 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Users } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
-import { rbfaPublicSnapshot } from "@/lib/rbfaPublicSelection";
-import { groupByPosition, positionLabel } from "@/lib/positions";
+import { rbfaPublicSnapshot, rbfaSquadGroups } from "@/lib/rbfaPublicSelection";
+import { positionLabel } from "@/lib/positions";
 
 const SOURCES = {
   senior: "https://static.rbfa.be/project/publiek/rencintstat/spelers_fr_145.htm",
@@ -42,9 +42,17 @@ export function useRbfaSquad(team) {
   return { loaded: state.loaded, snapshot: snapshot && { ...snapshot, playerDetails: state.players, clubDetails: state.clubs } };
 }
 
-export default function RbfaSquad({ snapshot, compact = false }) {
-  const rows = compact ? snapshot.players.slice(0, 8) : snapshot.players;
-  const groups = groupByPosition(rows, (row) => snapshot.playerDetails?.[row.playerId]?.position);
+export function RbfaSquadSummary({ snapshot, accent }) {
+  const groups = rbfaSquadGroups(snapshot);
+  const checked = new Date(snapshot.observedAt).toLocaleDateString("fr-BE", { day: "numeric", month: "short", year: "numeric" });
+  return <div><p className="mb-3 text-xs leading-5 text-muted">Liste publiée par la RBFA · vérifiée le {checked}. Elle peut concerner le dernier rassemblement. <a className="underline hover:text-white" href={SOURCES[snapshot.category]} target="_blank" rel="noreferrer">Voir la source</a></p><div className="space-y-3">{groups.map((group) => <div key={group.key} className="rounded-xl border border-line/10 bg-bg/35 px-3 py-2.5">
+    {group.key !== "OTHER" && <div className="mb-1.5 flex items-center gap-2"><span className="h-3.5 w-1 rounded-full" style={{ backgroundColor: accent }} /><h3 className="text-[10px] font-black uppercase tracking-wider text-muted">{group.label} · {group.rows.length}</h3></div>}
+    <p className="text-sm font-semibold leading-6 text-slate-200">{group.rows.map((row) => row.name).join(" · ")}</p>
+  </div>)}</div></div>;
+}
+
+export default function RbfaSquad({ snapshot }) {
+  const groups = rbfaSquadGroups(snapshot);
   const checked = new Date(snapshot.observedAt).toLocaleDateString("fr-BE", { day: "numeric", month: "short", year: "numeric" });
   return <div>
     <p className="mb-3 text-xs leading-5 text-muted">Liste publiée par la RBFA · vérifiée le {checked}. Elle peut concerner le dernier rassemblement. <a className="underline hover:text-white" href={SOURCES[snapshot.category]} target="_blank" rel="noreferrer">Voir la source</a></p>
