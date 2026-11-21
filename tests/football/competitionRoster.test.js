@@ -9,4 +9,18 @@ describe("joueurs identifiés par sélection", () => {
     expect([...teams.get("b").keys()]).toEqual(["p2"]);
     expect(teams.size).toBe(2);
   });
+  it("affiche les noms non reliés par identifiant fournisseur, sans inventer de fiche ni fusionner des homonymes", () => {
+    const rows = [
+      { club_id: "a", source: "api", player_external_id: "1", player_name: "A" },
+      { club_id: "a", source: "api", player_external_id: "1", player_name: "A" },
+      { club_id: "a", source: "api", player_external_id: "2", player_name: "A" },
+      { club_id: "a", source: "api", player_external_id: "3", player_name: "B" },
+      { club_id: "a", source: "api", player_external_id: "3", player_id: "p3", player_name: "B" },
+      { club_id: "a", player_name: "Sans identifiant" },
+    ];
+    const roster = [...matchRosterByTeam(rows, [{ id: "p3", name: "B" }]).get("a").values()];
+    expect(roster).toHaveLength(3);
+    expect(roster.filter((p) => !p.id).map((p) => p.name)).toEqual(["A", "A"]);
+    expect(roster.find((p) => p.id === "p3").name).toBe("B");
+  });
 });
