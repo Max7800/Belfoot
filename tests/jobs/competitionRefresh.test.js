@@ -18,10 +18,10 @@ const season = (id, competitionId, label, status = "active", extra = {}) => ({ i
 const planFor = (entries) => ({ version: 4, seasons: [{ label: "2024-2025", enabled: false }, { label: "2025-2026", enabled: true }, { label: "2026-2027", enabled: true }, { label: "2027-2028", role: "added", enabled: true }], competitions: entries });
 const allow = (label, scope = "complete") => ({ enabled: true, seasons: { [label]: { enabled: true, scope } } });
 
-function seed({ competitions, seasons, plan, matches = [], refreshState = {}, coachState, detailState }) {
+function seed({ competitions, seasons, plan, matches = [], refreshState = {}, coachState, detailState, statsState }) {
   return createFakeSupabase({
     competitions, seasons, matches,
-    site_settings: [{ id: 1, data: { football_import_plan: plan, football_competition_refresh_state: refreshState, ...(coachState ? { football_coach_refresh_state: coachState } : {}), ...(detailState ? { football_match_details_state: detailState } : {}) } }],
+    site_settings: [{ id: 1, data: { football_import_plan: plan, football_competition_refresh_state: refreshState, ...(coachState ? { football_coach_refresh_state: coachState } : {}), ...(detailState ? { football_match_details_state: detailState } : {}), ...(statsState ? { football_competition_stats_state: statsState } : {}) } }],
   });
 }
 const PRO = comp("c-144", "Pro League", "belgique");
@@ -83,6 +83,22 @@ describe("cron competition-refresh — toutes les compétitions visibles", () =>
     state.detailResults["football.squads"] = { complete: true };
     await tick();
     expect(state.runs.find((run) => run.key === "football.squads")).toMatchObject({ resumeState: { competitionIndex: 0, clubIndex: 1 }, clubBatchSize: 1 });
+  });
+  it("ne reprend pas le curseur d'une ancienne saison", async () => {
+    const covered = comp("c-u17", "Qualifs U17", "international", { ext: { coverage: { players: true } } });
+    state.db = seed({ competitions: [covered], seasons: [season("s-u17", "c-u17", "2026-2027")], plan: planFor({ "c-u17": allow("2026-2027") }), matches: [finished("m1", "s-u17", "c-u17", 2)], statsState: { "c-u17": { seasonId: "ancienne", clubIndex: 42, lastStatsAt: new Date(NOW).toISOString() } } });
+    await tick();
+    expect(state.runs.find((run) => run.key === "football.squads").resumeState.clubIndex).toBe(0);
+    expect(state.db.rows("site_settings")[0].data.football_competition_stats_state["c-u17"].seasonId).toBe("s-u17");
+  });
+  it("un match ajouté pendant un cycle de plusieurs lots déclenche un nouveau cycle", async () => {
+    const covered = comp("c-u17", "Qualifs U17", "international", { ext: { coverage: { players: true } } });
+    state.db = seed({ competitions: [covered], seasons: [season("s-u17", "c-u17", "2026-2027")], plan: planFor({ "c-u17": allow("2026-2027") }), matches: [finished("m1", "s-u17", "c-u17", 2)], statsState: { "c-u17": { seasonId: "s-u17", clubIndex: 1, cycleStartedAt: new Date(NOW - 3 * H).toISOString() } } });
+    await tick();
+    expect(state.db.rows("site_settings")[0].data.football_competition_stats_state["c-u17"].lastStatsAt).toBe(new Date(NOW - 3 * H).toISOString());
+    state.runs = [];
+    await tick();
+    expect(state.runs.find((run) => run.key === "football.squads").resumeState.clubIndex).toBe(0);
   });
   it("chaque compétition synchronisée sur SA saison publique, pas l'année du calendrier", async () => {
     state.db = seed({ competitions: [PRO, U21, NL], seasons: baseSeasons, plan: basePlan });

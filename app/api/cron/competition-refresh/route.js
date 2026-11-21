@@ -189,7 +189,10 @@ export async function GET(request) {
     const dueStats = [];
     for (const competition of comps) {
       if (!statsAllowedFor.has(competition.id)) continue;
-      const state = statsState[competition.id] || {};
+      const stored = statsState[competition.id] || {};
+      // Un curseur n'est valable que pour la saison où il a été créé.
+      // Les anciens checkpoints sans saison sont réinitialisés prudemment.
+      const state = stored.seasonId === seasonOf[competition.id].id ? stored : {};
       const resuming = Number(state.clubIndex) > 0;
       const last = state.lastStatsAt ? new Date(state.lastStatsAt).getTime() : 0;
       const hasNewMatch = latestFinished[competition.id] && latestFinished[competition.id] > last;
@@ -273,8 +276,10 @@ export async function GET(request) {
     for (const { competition } of pickedStats) {
       if (statsUsed + statsPerCall > reservedStatsCalls) break;
       if (outOfTime()) break;
-      const state = statsState[competition.id] || {};
+      const stored = statsState[competition.id] || {};
+      const state = stored.seasonId === seasonOf[competition.id].id ? stored : {};
       const startClubIndex = Number(state.clubIndex) || 0;
+      const cycleStartedAt = state.cycleStartedAt || now.toISOString();
       try {
         const result = await runJob("football.squads", {
           db, competitionId: competition.id, season: seasonOf[competition.id].label,
@@ -286,8 +291,8 @@ export async function GET(request) {
         });
         statsUsed += statsPerCall;
         const complete = typeof result !== "object" || result.complete !== false;
-        if (complete) statsState[competition.id] = { lastStatsAt: now.toISOString(), clubIndex: 0 };
-        else statsState[competition.id] = { lastStatsAt: state.lastStatsAt || null, clubIndex: Number(result.progress?.current) || startClubIndex };
+        if (complete) statsState[competition.id] = { seasonId: seasonOf[competition.id].id, lastStatsAt: cycleStartedAt, clubIndex: 0 };
+        else statsState[competition.id] = { seasonId: seasonOf[competition.id].id, lastStatsAt: state.lastStatsAt || null, cycleStartedAt, clubIndex: Number(result.progress?.current) || startClubIndex };
         results.push({ pass: "stats", competition: competition.name, ok: true, complete, progress: result?.progress || null });
         await persistState();
       } catch (error) {
