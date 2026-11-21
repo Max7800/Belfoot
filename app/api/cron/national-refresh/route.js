@@ -4,6 +4,7 @@ import { JOB_CATALOG } from "@/lib/jobCatalog";
 import { getAdmin } from "@/lib/supabaseAdmin";
 import { COMPETITION_COLLISION } from "@/modules/football/sync";
 import { monitorRbfaSelection } from "@/modules/football/rbfaMonitor";
+import { syncFifaRanking } from "@/modules/football/fifaRankingSync";
 
 export const dynamic = "force-dynamic";
 // Vercel Hobby : 60 s max par Function. Le travail réel est borné (lots + budget).
@@ -122,6 +123,8 @@ export async function GET(request) {
     // convocations. Un seul document par passage et délai réseau borné.
     const rbfaMonitorPromise = monitorRbfaSelection(db, settings?.data || {}, { now })
       .catch((error) => ({ ok: false, error: String(error?.message || error).slice(0, 200) }));
+    const fifaRankingPromise = syncFifaRanking(db, settings?.data || {}, { now })
+      .catch(() => ({ ok: false, error: "Synchronisation du classement indisponible" }));
 
     let used = 0;
     const results = [];
@@ -153,8 +156,8 @@ export async function GET(request) {
     // Direct : active le live_enabled des compétitions INTERNATIONALES avec un match de
     // sélection suivie proche, et le désactive sur celles sans match proche (ménage après
     // rassemblement). On ne touche qu'aux compétitions de sélections, jamais aux clubs.
-    const [liveToggle, rbfaMonitor] = await Promise.all([
-      syncSelectionLiveFlags(db, teamIds, teamIn, now, strategy), rbfaMonitorPromise,
+    const [liveToggle, rbfaMonitor, fifaRanking] = await Promise.all([
+      syncSelectionLiveFlags(db, teamIds, teamIn, now, strategy), rbfaMonitorPromise, fifaRankingPromise,
     ]);
 
     const attempted = results.filter((result) => !result.skipped);
@@ -163,7 +166,7 @@ export async function GET(request) {
       season, window: { from, to },
       followed: teams.length, due: due.length, heldAfterCollision, refreshed: attempted.filter((result) => result.ok).length,
       skipped: results.filter((result) => result.skipped).length,
-      estimatedCalls: used, liveToggle, rbfaMonitor, results,
+      estimatedCalls: used, liveToggle, rbfaMonitor, fifaRanking, results,
     }, { status: attempted.length === 0 || attempted.some((result) => result.ok) ? 200 : 500 });
   } catch (error) {
     return Response.json({ ok: false, error: String(error?.message || error).slice(0, 500) }, { status: 500 });
