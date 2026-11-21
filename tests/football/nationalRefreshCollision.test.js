@@ -12,6 +12,7 @@ const state = vi.hoisted(() => ({ db: null }));
 vi.mock("@/lib/supabaseAdmin", () => ({ getAdmin: () => state.db }));
 vi.mock("@/modules/football/rbfaMonitor", () => ({ monitorRbfaSelection: async () => ({ skipped: true }) }));
 vi.mock("@/modules/football/fifaRankingSync", () => ({ syncFifaRanking: async () => ({ skipped: true }) }));
+vi.mock("@/modules/football/fifaTournamentSquads", () => ({ syncFifaTournamentSquad: async () => ({ skipped: true }) }));
 const { GET } = await import("@/app/api/cron/national-refresh/route");
 
 const P = "apifootball";

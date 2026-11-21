@@ -8,6 +8,7 @@ import { useRankings } from "@/lib/rankings";
 import DiableRatings from "@/components/football/DiableRatings";
 import NationalGroupStandings from "@/components/football/NationalGroupStandings";
 import { RbfaSquadSummary, useRbfaSquad } from "@/components/football/RbfaSquad";
+import { FifaTournamentSquad, useFifaTournamentSquad } from "@/components/football/FifaTournamentSquad";
 import { groupByPosition, positionLabel } from "@/lib/positions";
 import { matchStatusMeta } from "@/lib/matchStatus";
 import { nationalityBadges } from "@/lib/nationalities";
@@ -252,6 +253,7 @@ export default function NationalTeamsPage() {
 
   const selectedTeam = teams.find((team) => team.id === selectedId);
   const { loaded: rbfaLoaded, snapshot: rbfaSquad } = useRbfaSquad(selectedTeam);
+  const { loaded: fifaSquadLoaded, snapshot: fifaSquad } = useFifaTournamentSquad({ teamId: selectedId, current: true });
   const genders = [...new Set(teams.map((team) => team.national_gender || "men"))];
   const teamsForGender = teams.filter((team) => (team.national_gender || "men") === (selectedGender || "men"));
   const now = Date.now();
@@ -306,8 +308,8 @@ export default function NationalTeamsPage() {
       </ModuleCard>}
 
       {sectionConfig.squad?.enabled && <ModuleCard>
-        <PanelHeader icon={Users} title={sectionConfig.squad.label} subtitle={rbfaSquad ? "La liste de joueurs publiée par la RBFA." : sectionConfig.squad.subtitle} accent={sectionConfig.squad.accent} action={(rbfaSquad?.players.length || squad.length) > 4 ? `${config.labels.show_all_players} (${rbfaSquad?.players.length || squad.length})` : null} actionHref={`/diables-rouges/selection?equipe=${selectedId}`} />
-        {!rbfaLoaded ? <p className="text-sm text-muted">Chargement de la sélection…</p> : rbfaSquad ? <RbfaSquadSummary snapshot={rbfaSquad} accent={sectionConfig.squad.accent} /> : squad.length ? <>
+        <PanelHeader icon={Users} title={sectionConfig.squad.label} subtitle={fifaSquad ? "La sélection belge pour la Coupe du monde U17." : rbfaSquad ? "La liste de joueurs publiée par la RBFA." : sectionConfig.squad.subtitle} accent={sectionConfig.squad.accent} action={(fifaSquad?.players.length || rbfaSquad?.players.length || squad.length) > 4 ? `${config.labels.show_all_players} (${rbfaSquad?.players.length || squad.length})` : null} actionHref={`/diables-rouges/selection?equipe=${selectedId}`} />
+        {!rbfaLoaded || !fifaSquadLoaded ? <p className="text-sm text-muted">Chargement de la sélection…</p> : fifaSquad ? <FifaTournamentSquad snapshot={fifaSquad} compact /> : rbfaSquad ? <RbfaSquadSummary snapshot={rbfaSquad} accent={sectionConfig.squad.accent} /> : squad.length ? <>
           <div className="sm:hidden"><SquadNamesPreview rows={squad} accent={sectionConfig.squad.accent} /></div>
           <SquadPreview rows={squad} accent={sectionConfig.squad.accent} className="hidden sm:grid" />
         </> : <p className="text-sm text-muted">La liste des joueurs n’est pas encore disponible.</p>}
