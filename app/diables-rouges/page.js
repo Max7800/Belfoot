@@ -14,6 +14,7 @@ import { nationalityBadges } from "@/lib/nationalities";
 import { categoryLabel, isBelgianNationalTeam, isSeniorMenTeam, pickNationalTabs } from "@/lib/nationalCategories";
 import AdminHint from "@/components/AdminHint";
 import { readAll } from "@/lib/readAll";
+import { belgianCalendarYear, nationalMatchRecord } from "@/lib/nationalMatchRecord";
 
 const COUNTRY_CODES = {
   Belgium: "be", Belgique: "be", France: "fr", Netherlands: "nl", "Pays-Bas": "nl", Germany: "de", Allemagne: "de", England: "gb-eng", Angleterre: "gb-eng", Spain: "es", Espagne: "es", Italy: "it", Italie: "it", Portugal: "pt", Croatia: "hr", Croatie: "hr", Denmark: "dk", Danemark: "dk", Sweden: "se", Suède: "se", Norway: "no", Norvège: "no", Finland: "fi", Finlande: "fi", Switzerland: "ch", Suisse: "ch", Austria: "at", Autriche: "at", Poland: "pl", Pologne: "pl", Ukraine: "ua", Scotland: "gb-sct", Écosse: "gb-sct", Wales: "gb-wls", "Pays de Galles": "gb-wls", Ireland: "ie", Irlande: "ie", Greece: "gr", Grèce: "gr", Turkey: "tr", Turquie: "tr", Romania: "ro", Roumanie: "ro", Hungary: "hu", Hongrie: "hu", Serbia: "rs", Serbie: "rs", Albania: "al", Albanie: "al", Slovakia: "sk", Slovaquie: "sk", Slovenia: "si", Slovénie: "si", Czechia: "cz", Tchéquie: "cz", "Czech Republic": "cz", Luxembourg: "lu", Kazakhstan: "kz", Kosovo: "xk", Morocco: "ma", Maroc: "ma", Brazil: "br", Brésil: "br", Argentina: "ar", Argentine: "ar", Uruguay: "uy", Colombia: "co", Colombie: "co", Mexico: "mx", Mexique: "mx", USA: "us", "États-Unis": "us", Canada: "ca", Japan: "jp", Japon: "jp", Senegal: "sn", Sénégal: "sn", Nigeria: "ng", Algeria: "dz", Algérie: "dz", Egypt: "eg", Égypte: "eg", Australia: "au", Australie: "au", Iran: "ir", Korea: "kr", "Corée du Sud": "kr",
@@ -127,6 +128,7 @@ export default function NationalTeamsPage() {
   const [selectedGender, setSelectedGender] = useState("");
   const [selectedId, setSelectedId] = useState("");
   const [matches, setMatches] = useState([]);
+  const [annualRecord, setAnnualRecord] = useState(null);
   const [clubs, setClubs] = useState({});
   const [competitions, setCompetitions] = useState({});
   const [squad, setSquad] = useState([]);
@@ -233,6 +235,21 @@ export default function NationalTeamsPage() {
     })().catch(() => { setSchemaMissing(true); setLoading(false); });
   }, [selectedId]);
 
+  const { year, from: yearFrom, to: yearTo } = belgianCalendarYear();
+  useEffect(() => {
+    if (!selectedId) return;
+    let active = true;
+    setAnnualRecord(null);
+    (async () => {
+      const { data, error } = await readAll(() => supabase.from("matches")
+        .select("id,status,home_club_id,away_club_id,home_score,away_score")
+        .or(`home_club_id.eq.${selectedId},away_club_id.eq.${selectedId}`)
+        .eq("status", "finished").gte("kickoff", yearFrom).lt("kickoff", yearTo));
+      if (active) setAnnualRecord({ teamId: selectedId, year, ...(error ? { error: true } : nationalMatchRecord(data || [], selectedId)) });
+    })().catch(() => { if (active) setAnnualRecord({ teamId: selectedId, year, error: true }); });
+    return () => { active = false; };
+  }, [selectedId, year, yearFrom, yearTo]);
+
   const selectedTeam = teams.find((team) => team.id === selectedId);
   const { loaded: rbfaLoaded, snapshot: rbfaSquad } = useRbfaSquad(selectedTeam);
   const genders = [...new Set(teams.map((team) => team.national_gender || "men"))];
@@ -247,18 +264,8 @@ export default function NationalTeamsPage() {
   // Classement FIFA de la Belgique : seulement pour l'équipe A masculine.
   const showFifa = isSeniorMenTeam(selectedTeam);
   const fifaRank = selectedTeam?.fifa_ranking || rankings.fifa.find((row) => row.isBelgium)?.rank || "—";
-  const record = useMemo(() => {
-    if (!selectedId) return { wins: 0, draws: 0, losses: 0, goals: 0 };
-    return results.reduce((total, match) => {
-      const home = match.home_club_id === selectedId;
-      const mine = home ? match.home_score : match.away_score;
-      const theirs = home ? match.away_score : match.home_score;
-      total.goals += mine || 0;
-      if (mine > theirs) total.wins++; else if (mine === theirs) total.draws++; else total.losses++;
-      return total;
-    }, { wins: 0, draws: 0, losses: 0, goals: 0 });
-  }, [results, selectedId]);
-  const statTiles = [[results.length, config.labels.stats_matches, "text-white"], [record.wins, config.labels.stats_wins, "text-emerald-400"], [record.goals, config.labels.stats_goals, "text-white"], ...(showFifa ? [[fifaRank, config.labels.stats_fifa, "text-amber-300"]] : [])];
+  const annual = annualRecord?.teamId === selectedId && annualRecord?.year === year ? annualRecord : null;
+  const statTiles = [[annual?.matches ?? "—", config.labels.stats_matches, "text-white"], [annual?.scoredMatches ? annual.wins : "—", config.labels.stats_wins, "text-emerald-400"], [annual?.scoredMatches ? annual.goals : "—", config.labels.stats_goals, "text-white"], ...(showFifa ? [[fifaRank, config.labels.stats_fifa, "text-amber-300"]] : [])];
   const sectionConfig = Object.fromEntries(config.sections.map((section) => [section.key, section]));
   const displayedResults = results.slice(0, 6);
   const otherUpcoming = upcoming.filter((match) => match.id !== featured?.id).slice(0, 2);
@@ -285,6 +292,7 @@ export default function NationalTeamsPage() {
         <div className={`grid gap-2 ${statTiles.length === 4 ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-3"}`}>
           {statTiles.map(([value, label, color]) => <div key={label} className="rounded-2xl border border-line/10 bg-surface/60 px-2 py-4 text-center sm:py-5"><b className={`block text-xl sm:text-2xl ${color}`}>{value}</b><span className="mt-1 block text-[8px] font-bold uppercase tracking-wider text-muted sm:text-[9px]">{label}</span></div>)}
         </div>
+        <p className="text-xs text-muted">{annual?.error ? `Bilan ${year} indisponible.` : `Bilan ${year} : matchs terminés disponibles pour cette sélection.`}{annual && !annual.error && annual.scoredMatches < annual.matches ? ` Victoires et buts calculés sur ${annual.scoredMatches} match(s) dont le score est disponible.` : ""}{showFifa ? " Le classement FIFA est indépendant de ce bilan." : ""}</p>
       {preMatchSession && <Link href={`/onze?match=${featured.id}`} className="group flex flex-col gap-4 overflow-hidden rounded-2xl border border-red-400/25 bg-gradient-to-r from-red-950/60 via-surface to-amber-950/25 p-5 transition hover:border-red-400/55 sm:flex-row sm:items-center">
         <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-amber-300/25 bg-amber-300/10"><Star className="h-5 w-5 text-amber-300" /></div>
         <div className="min-w-0 flex-1"><div className="text-[10px] font-black uppercase tracking-[.18em] text-amber-300">Avant-match communautaire</div><h2 className="mt-1 text-lg font-black text-white">Compose ton 11 des Diables</h2><p className="mt-1 text-xs leading-5 text-muted">Choisis ta tactique et tes titulaires, puis partage ta composition avant le coup d’envoi.</p></div>
