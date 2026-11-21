@@ -225,13 +225,20 @@ describe("cron competition-refresh — détails après match", () => {
     expect(saved["c-850"]).toBeUndefined(); // U21 en « Archive résultats » : jamais de détails
   });
   it("à jour : pas de nouvel appel tant qu'aucun nouveau match n'est terminé", async () => {
-    const detailState = { "c-144": { doneAt: new Date(NOW - 2 * H).toISOString() }, "c-5": { doneAt: new Date(NOW - 2 * H).toISOString() } };
+    const detailState = { "c-144": { seasonId: "s-pro", doneAt: new Date(NOW - 2 * H).toISOString() }, "c-5": { seasonId: "s-nl", doneAt: new Date(NOW - 2 * H).toISOString() } };
     state.db = seed({ competitions: [PRO, NL], seasons: baseSeasons, plan: basePlan, detailState, matches: [finished("m1", "s-pro", "c-144", 5)] });
     await tick();
     expect(detailRuns()).toEqual([]);
     state.db = seed({ competitions: [PRO, NL], seasons: baseSeasons, plan: basePlan, detailState, matches: [finished("m2", "s-pro", "c-144", 1)] });
     await tick();
     expect(detailRuns()).toEqual([["football.lineups", "c-144"], ["football.events", "c-144"]]);
+  });
+  it("un ancien checkpoint ne bloque pas les détails de la nouvelle saison", async () => {
+    const detailState = { "c-144": { seasonId: "ancienne-saison", doneAt: new Date(NOW - H).toISOString() } };
+    state.db = seed({ competitions: [PRO], seasons: baseSeasons, plan: basePlan, detailState, matches: [finished("m1", "s-pro", "c-144", 5)] });
+    await tick();
+    expect(detailRuns()).toEqual([["football.lineups", "c-144"], ["football.events", "c-144"]]);
+    expect(state.db.rows("site_settings")[0].data.football_match_details_state["c-144"].seasonId).toBe("s-pro");
   });
   it("matchs restants : la compétition repasse en fin de file, au plus 6 lots par passage", async () => {
     state.detailResults["football.lineups"] = { complete: false, detail: "1 match(s) restant(s)" };

@@ -28,7 +28,7 @@ import { useCompetitionMatchUpdates } from "@/lib/useCompetitionMatchUpdates";
 import SeasonNotice from "@/components/football/SeasonNotice";
 import { isNationsLeagueCompetition, nationsLeagueGroups } from "@/lib/nationsLeague";
 import { mergeGroupStagePhases, phaseGroups } from "@/lib/groupedStandings";
-import { PUBLIC_PLAYER_FIELDS, PUBLIC_PLAYER_STATS_FIELDS, loadClubsForMatches, loadMatchStatsForMatches, loadPlayersByIds, loadSeasonMatches } from "@/lib/publicFootballData";
+import { PUBLIC_PLAYER_FIELDS, PUBLIC_PLAYER_STATS_FIELDS, loadClubsForMatches, loadMatchStatsForMatches, loadPlayersByIds, loadSeasonMatches, missingMatchPlayerIds } from "@/lib/publicFootballData";
 import { playerAge } from "@/lib/playerAge";
 import { preferAssignedPlayerStats } from "@/lib/playerStats";
 import { nationalityBadges } from "@/lib/nationalities";
@@ -189,7 +189,8 @@ export default function CompetitionPage() {
       // Matchs terminés ou en cours seulement : un match à venir n'a aucune performance.
       loadMatchStatsForMatches(supabase, seasonMatches.filter((match) => ["finished", "live"].includes(match.status)).map((match) => match.id)),
     ]);
-    let playerRows = loadedPlayers;
+    const missingPlayerIds = missingMatchPlayerIds(loadedPlayers, exactMatchStats);
+    let playerRows = missingPlayerIds.length ? [...loadedPlayers, ...await loadPlayersByIds(supabase, missingPlayerIds)] : loadedPlayers;
     if (!playerRows.length && clubIds.length) {
       const fallback = await readAll(() => supabase.from("players").select(PUBLIC_PLAYER_FIELDS).in("club_id", clubIds).order("name"));
       if (fallback.error) throw fallback.error;
