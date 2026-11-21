@@ -1,3 +1,9 @@
+## Mondial U17 et convocations — 21 novembre 2026
+
+- PR #124 fusionnée, commit main 6ad2d346 ; Vercel production dpl_FbS1VHe3itUkfMCe8hp8Yt8rnVGx READY, domaine belfoot.vercel.app associé, /diables-rouges HTTP 200. L'utilisateur a exécuté la migration 0043 et rapporté « Succès » ; absence d'accès direct à sa base, migration et première synchronisation des convocations pas encore vérifiées indépendamment. Voir le corps PR #124. Code déployé ne prouve pas que les convocations sont à jour.
+- Diagnostic communiqué par l'utilisateur : Mondial U17 `d7088941-8ca5-4d6f-aa3d-c3724d44ba2b`, API-Football 587, international, compétition `public_visible=false`, `live_enabled=true`; 2026-2027 `draft`, `public_active=false`, 10 matchs connus, plan compétition et saison désactivés. Valeurs 20/380 dans le plan sont des valeurs génériques inadaptées. Aucune donnée ou réglage U17 modifié en production ; pas d'import lancé. La source FIFA annonce 48 équipes et 104 matchs pour le tournoi entier ; le fournisseur peut publier les phases finales plus tard.
+- Une branche U17 corrige les estimations génériques seulement pour l'édition 2026-2027 de la compétition 587, sans toucher aux valeurs personnalisées ; elle ne publie pas la compétition. Poursuivre : vérifier la couverture API 2026, autoriser l'import sur la bonne saison, synchroniser et contrôler le calendrier, puis utiliser les mécanismes d'activation/publication et vérifier le direct et les données disponibles ; l'utilisateur a autorisé le chantier. Respecter le quota, ne pas dupliquer.
+
 ## Reprise du 21 novembre 2026 — convocations et Mondial U17
 
 - L'utilisateur autorise la mise en production de la PR #124 et souhaite finir les convocations avant de poursuivre le Mondial U17. La branche fix/national-squad-empty pointe sur 6981d97 ; tests, lint, build et test de concurrence PostgreSQL CI réussis pour ce commit. Aucun merge ni déploiement de cette PR réalisé au moment de cette note.
