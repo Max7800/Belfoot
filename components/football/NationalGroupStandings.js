@@ -5,6 +5,7 @@ import { computeStandings } from "@/lib/standings";
 import { isKnockoutPhase } from "@/lib/competitionType";
 import { selectionGroupStanding } from "@/lib/selectionGroup";
 import { groupDisplayLabel } from "@/lib/groupedStandings";
+import { sortNationalCompetitions } from "@/lib/nationalCompetitionOrder";
 
 // Classement du GROUPE de la sélection, par compétition (Nations League, qualif CDM…).
 // IMPORTANT : tout est scopé sur la SAISON EN COURS (l'édition du match le plus récent),
@@ -13,9 +14,12 @@ import { groupDisplayLabel } from "@/lib/groupedStandings";
 // sur tous les matchs intra-groupe de cette saison. Les amicaux sont ignorés.
 export default function NationalGroupStandings({ teamId, matches, competitions }) {
   const [tables, setTables] = useState([]);
+  const [showOlder, setShowOlder] = useState(false);
 
   useEffect(() => {
     if (!teamId || !matches?.length) { setTables([]); return; }
+    let active = true;
+    setShowOlder(false);
     (async () => {
       const byComp = {};
       for (const m of matches) { if (m.competition_id) (byComp[m.competition_id] ||= []).push(m); }
@@ -41,7 +45,7 @@ export default function NationalGroupStandings({ teamId, matches, competitions }
         const official = selectionGroupStanding({ competition, seasonLabel: season?.label, matches: seasonMatches || [], teamId, isKnockout: isKnockoutPhase });
         if (official) {
           official.rows.forEach((r) => clubIds.add(r.club));
-          out.push({ compId, standings: official.rows, label: official.label, source: official.source });
+          out.push({ compId, standings: official.rows, label: official.label, source: official.source, matches: compMatches });
           continue;
         }
         const group = [teamId, ...opponents];
@@ -56,20 +60,21 @@ export default function NationalGroupStandings({ teamId, matches, competitions }
         const standings = computeStandings(groupMatches);
         if (standings.length < 3) continue;
         standings.forEach((r) => clubIds.add(r.club));
-        out.push({ compId, standings });
+        out.push({ compId, standings, matches: compMatches });
       }
-      if (!out.length) { setTables([]); return; }
+      if (!out.length) { if (active) setTables([]); return; }
       const { data: clubs } = await supabase.from("clubs").select("id,name,logo_url").in("id", [...clubIds]);
       const clubMap = Object.fromEntries((clubs || []).map((c) => [c.id, c]));
-      setTables(out.map((t) => ({ ...t, clubMap })));
-    })().catch(() => setTables([]));
+      if (active) setTables(sortNationalCompetitions(out).map((t) => ({ ...t, clubMap })));
+    })().catch(() => { if (active) setTables([]); });
+    return () => { active = false; };
   }, [teamId, matches]);
 
   if (!tables.length) return null;
 
   return (
     <div className="space-y-3">
-      {tables.map((t) => (
+      {(showOlder ? tables : tables.slice(0, 1)).map((t) => (
         <div key={t.compId} className="rounded-2xl border border-line/10 bg-surface/60 p-4">
           <div className="mb-2 text-xs font-black uppercase tracking-wider text-amber-300">{competitions?.[t.compId]?.name || "Classement"} — {t.label ? groupDisplayLabel(t.label, "groupe") : "groupe"}{t.source === "detected" && <span className="ml-2 text-[9px] text-amber-200/70">détecté</span>}</div>
           <div className="divide-y divide-line/10">
@@ -90,6 +95,7 @@ export default function NationalGroupStandings({ teamId, matches, competitions }
           </div>
         </div>
       ))}
+      {tables.length > 1 && <button type="button" onClick={() => setShowOlder((value) => !value)} aria-expanded={showOlder} className="w-full rounded-xl border border-line/15 px-3 py-2 text-xs font-bold text-muted hover:text-white">{showOlder ? "Masquer les autres compétitions" : `Voir les autres compétitions (${tables.length - 1})`}</button>}
     </div>
   );
 }
