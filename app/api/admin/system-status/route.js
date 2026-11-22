@@ -1,10 +1,11 @@
 import { getAdmin } from "@/lib/supabaseAdmin";
+import { syncHealth } from "@/lib/syncHealth";
 
 export const dynamic = "force-dynamic";
 
 const EXPECTED_MIGRATIONS = {
   core: ["0002_profile_role_hardening", "0003_media_storage_hardening", "0004_job_execution_guardrails", "0005_persistent_pipeline_runs"],
-  football: ["0023_season_safe_sync", "0024_player_team_seasons", "0025_membership_backfill_repair", "0026_match_center_live", "0027_national_teams", "0028_followed_national_teams", "0029_national_fifa_ranking", "0030_backfill_seasons", "0031_diable_ratings", "0032_season_rollout", "0033_history_foundations", "0034_match_sync_state", "0035_match_team_stats", "0036_competition_scope", "0037_player_transfers", "0038_player_national_team", "0039_data_retention", "0040_player_history_work"],
+  football: ["0023_season_safe_sync", "0024_player_team_seasons", "0025_membership_backfill_repair", "0026_match_center_live", "0027_national_teams", "0028_followed_national_teams", "0029_national_fifa_ranking", "0030_backfill_seasons", "0031_diable_ratings", "0032_season_rollout", "0033_history_foundations", "0034_match_sync_state", "0035_match_team_stats", "0036_competition_scope", "0037_player_transfers", "0038_player_national_team", "0039_data_retention", "0040_player_history_work", "0041_abroad_recent_performances", "0043_rbfa_callups_atomic", "0044_match_rating_eligibility"],
   votw: ["0001_init", "0002_session_competition", "0003_vote_integrity", "0004_pre_match_lineups"],
 };
 
@@ -33,11 +34,13 @@ export async function GET(request) {
     const auth = await requireAdmin(request, db);
     if (auth.response) return auth.response;
 
-    const [migrationResult, competitionsResult, seasonsResult, playersResult, ...checks] = await Promise.all([
+    const [migrationResult, competitionsResult, seasonsResult, playersResult, settingsResult, jobsResult, ...checks] = await Promise.all([
       db.from("schema_migrations").select("module,version,applied_at").order("applied_at", { ascending: false }),
       db.from("competitions").select("id,live_enabled,public_visible", { count: "exact" }),
       db.from("seasons").select("id,label,import_status,public_active", { count: "exact" }),
       db.from("players").select("id", { count: "exact", head: true }).eq("tracked", true).eq("active", true),
+      db.from("site_settings").select("data").eq("id", 1).maybeSingle(),
+      db.from("job_runs").select("job_key,target_key,status,started_at,finished_at,detail").order("started_at", { ascending: false }).limit(100),
       probe("Garde-fous des synchronisations", db.from("job_runs").select("target_key,request_count,request_limit,heartbeat_at,params").limit(1)),
       probe("Saisons et zones par phase", db.from("seasons").select("zones_by_phase").limit(1)),
       probe("Portail et direct des compétitions", db.from("competitions").select("portal_background_url,live_enabled,live_refresh_seconds").limit(1)),
@@ -83,6 +86,7 @@ export async function GET(request) {
       ],
       migrations,
       checks,
+      sync_health: settingsResult.error || jobsResult.error ? null : syncHealth(settingsResult.data?.data || {}, jobsResult.data || []),
       data: {
         competitions: competitionsResult.count ?? competitions.length,
         public_competitions: competitions.filter((competition) => competition.public_visible !== false).length,
@@ -92,7 +96,7 @@ export async function GET(request) {
         active_seasons: seasons.filter((season) => season.public_active).length,
         tracked_players: playersResult.count ?? 0,
       },
-      errors: [migrationResult.error, competitionsResult.error, seasonsResult.error, playersResult.error].filter(Boolean).map((error) => error.message),
+      errors: [migrationResult.error, competitionsResult.error, seasonsResult.error, playersResult.error, settingsResult.error, jobsResult.error].filter(Boolean).map((error) => error.message),
     });
   } catch (error) {
     return Response.json({ error: error.message || String(error) }, { status: 500 });

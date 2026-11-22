@@ -15,6 +15,8 @@ export default function DiableRatings({ match, squad, title = "Notez les Diables
   const [avgs, setAvgs] = useState({});
   const [motmAgg, setMotmAgg] = useState({});
   const [expanded, setExpanded] = useState(false);
+  const [saveError, setSaveError] = useState("");
+  const [saving, setSaving] = useState(false);
 
   const open = match.status === "finished" && match.kickoff && new Date(match.kickoff).getTime() + 4 * 86400000 > Date.now();
 
@@ -36,18 +38,29 @@ export default function DiableRatings({ match, squad, title = "Notez les Diables
   }, [match.id, userId]);
 
   const rate = async (playerId, rating) => {
-    if (!userId || !open) return;
-    setMyRatings((p) => ({ ...p, [playerId]: rating }));
-    await supabase.from("player_ratings").upsert({ match_id: match.id, member_id: userId, player_id: playerId, rating }, { onConflict: "match_id,member_id,player_id" });
-    loadAgg();
+    if (!userId || !open || saving) return;
+    setSaving(true); setSaveError("");
+    try {
+      const result = rating
+        ? await supabase.from("player_ratings").upsert({ match_id: match.id, member_id: userId, player_id: playerId, rating }, { onConflict: "match_id,member_id,player_id" })
+        : await supabase.from("player_ratings").delete().eq("match_id", match.id).eq("member_id", userId).eq("player_id", playerId);
+      if (result.error) throw result.error;
+      setMyRatings((p) => ({ ...p, [playerId]: rating || "" }));
+      await loadAgg();
+    } catch { setSaveError("La note n’a pas pu être enregistrée. Réessaie."); }
+    finally { setSaving(false); }
   };
   const pickMotm = async (playerId) => {
-    if (!userId || !open) return;
+    if (!userId || !open || saving) return;
     const next = myMotm === playerId ? null : playerId;
-    setMyMotm(next);
-    if (next) await supabase.from("motm_votes").upsert({ match_id: match.id, member_id: userId, player_id: playerId }, { onConflict: "match_id,member_id" });
-    else await supabase.from("motm_votes").delete().eq("match_id", match.id).eq("member_id", userId);
-    loadAgg();
+    setSaving(true); setSaveError("");
+    try {
+      const result = next ? await supabase.from("motm_votes").upsert({ match_id: match.id, member_id: userId, player_id: playerId }, { onConflict: "match_id,member_id" })
+        : await supabase.from("motm_votes").delete().eq("match_id", match.id).eq("member_id", userId);
+      if (result.error) throw result.error;
+      setMyMotm(next); await loadAgg();
+    } catch { setSaveError("Le vote n’a pas pu être enregistré. Réessaie."); }
+    finally { setSaving(false); }
   };
 
   const motmLeader = useMemo(() => {
@@ -74,6 +87,7 @@ export default function DiableRatings({ match, squad, title = "Notez les Diables
       )}
 
       {!userId && open && <p className="mb-3 rounded-lg border border-amber-400/25 bg-amber-400/5 p-2 text-sm text-amber-200">Connecte-toi pour noter les Diables et élire ton Diable du match.</p>}
+      {saveError && <p role="alert" className="mb-3 text-sm text-red-300">{saveError}</p>}
 
       <div className="divide-y divide-line/10">
         {shownSquad.map((row) => {
@@ -83,15 +97,15 @@ export default function DiableRatings({ match, squad, title = "Notez les Diables
             <div key={p.id} className="flex items-center gap-2 py-2 text-sm">
               <Link href={`/players/${p.id}`} className="min-w-0 flex-1 truncate font-semibold hover:text-accent hover:underline">{p.name}</Link>
               {agg && <span className="flex-shrink-0 text-xs text-muted" title={`${agg.votes} note(s)`}>moy. <b className="text-amber-300">{agg.avg_rating}</b></span>}
-              <button onClick={() => pickMotm(p.id)} disabled={!open || !userId} title="Diable du match" className={`flex-shrink-0 rounded p-1 disabled:opacity-40 ${myMotm === p.id ? "text-amber-300" : "text-muted hover:text-amber-300"}`}><Star className="h-4 w-4" fill={myMotm === p.id ? "currentColor" : "none"} /></button>
-              <select value={myRatings[p.id] ?? ""} onChange={(e) => rate(p.id, Number(e.target.value))} disabled={!open || !userId} className="flex-shrink-0 rounded border border-line/10 bg-surface2 px-2 py-1 text-sm disabled:opacity-40">
+              <button onClick={() => pickMotm(p.id)} disabled={!open || !userId || saving} title="Diable du match" className={`flex-shrink-0 rounded p-1 disabled:opacity-40 ${myMotm === p.id ? "text-amber-300" : "text-muted hover:text-amber-300"}`}><Star className="h-4 w-4" fill={myMotm === p.id ? "currentColor" : "none"} /></button>
+              <select value={myRatings[p.id] ?? ""} onChange={(e) => rate(p.id, Number(e.target.value))} disabled={!open || !userId || saving} className="flex-shrink-0 rounded border border-line/10 bg-surface2 px-2 py-1 text-sm disabled:opacity-40">
                 <option value="">–</option>
                 {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => <option key={n} value={n}>{n}</option>)}
               </select>
             </div>
           );
         })}
-        {squad.length === 0 && <p className="py-3 text-sm text-muted">L’effectif de cette sélection n’est pas encore disponible.</p>}
+        {squad.length === 0 && <p className="py-3 text-sm text-muted">Les joueurs ayant participé à ce match ne sont pas encore disponibles.</p>}
       </div>
       {compact && squad.length > compactLimit && <button type="button" onClick={() => setExpanded((value) => !value)} className="mt-3 w-full rounded-xl border border-line/10 px-3 py-2 text-xs font-bold text-muted transition hover:border-red-400/30 hover:text-white">{expanded ? showLessLabel : `${showAllLabel} (${squad.length})`}</button>}
     </div>
