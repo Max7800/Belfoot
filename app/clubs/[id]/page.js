@@ -23,7 +23,7 @@ import { summarizeClubSeason } from "@/lib/clubSeasonWidget";
 import { nationalTeamPagePath } from "@/lib/nationalCategories";
 import { nextClubFixture } from "@/lib/clubOverview";
 import { loadClubsForMatches } from "@/lib/publicFootballData";
-import { selectClubRoster } from "@/lib/clubRoster";
+import { loadClubRosterData, selectClubRoster } from "@/lib/clubRoster";
 
 const POS = { Goalkeeper: 0, Defender: 1, Midfielder: 2, Attacker: 3 };
 const ROLE_LABELS = { first_team: "Équipe première", reserve: "Réserve", u23: "U23", youth: "Jeunes", women: "Équipe féminine", unknown: "Groupe à préciser" };
@@ -89,25 +89,17 @@ export default function ClubPage() {
     // l'archive qui contient le plus de rencontres. Sinon un 2024/25 complet
     // masque durablement l'effectif 2026/27 encore en cours et ses transferts.
     const contextMatch = requestedYear ? requestedContext?.match : [...contexts.values()].sort((a, b) => b.latest - a.latest || b.count - a.count)[0]?.match;
-    const [matchClubs, playerResult, membershipResult, coachResult, linkedResult] = await Promise.all([
+    const [matchClubs, roster, coachResult, linkedResult] = await Promise.all([
       loadClubsForMatches(supabase, clubMatches).then((data) => ({ data, error: false })).catch(() => ({ data: {}, error: true })),
-      readAll(() => supabase.from("players").select("*").eq("club_id", id).order("name")),
-      readAll(() => supabase.from("player_team_seasons").select("*").eq("club_id", id).order("season_start_year", { ascending: false, nullsFirst: false })),
+      loadClubRosterData(supabase, id),
       supabase.from("coaches").select("*").eq("club_id", id),
       supabase.from("clubs").select("id,name,logo_url,team_type,parent_club_id").or(`parent_club_id.eq.${id},id.eq.${c.parent_club_id || "00000000-0000-0000-0000-000000000000"}${c.parent_club_id ? `,parent_club_id.eq.${c.parent_club_id}` : ""}`),
     ]);
     setClubsMap({ ...matchClubs.data, [c.id]: c });
     setMatchClubsError(matchClubs.error);
     const coaches = coachResult.data || [];
-    const membershipRows = membershipResult.error ? [] : (membershipResult.data || []);
-    let rosterPlayers = playerResult.data || [];
-    if (membershipRows.length) {
-      const playerIds = [...new Set(membershipRows.map((row) => row.player_id))];
-      const { data: relatedPlayers, error } = await readAll(() => supabase.from("players").select("*").in("id", playerIds).order("name"));
-      if (!error) rosterPlayers = relatedPlayers || [];
-    }
-    setMemberships(membershipRows);
-    setPlayers(rosterPlayers); setCoach([...coaches].sort((a, b) => Number(!!b.locked) - Number(!!a.locked) || Number(b.source === "manual") - Number(a.source === "manual"))[0] || null); setLinked((linkedResult.data || []).filter((item) => item.id !== id));
+    setMemberships(roster.memberships);
+    setPlayers(roster.players); setCoach([...coaches].sort((a, b) => Number(!!b.locked) - Number(!!a.locked) || Number(b.source === "manual") - Number(a.source === "manual"))[0] || null); setLinked((linkedResult.data || []).filter((item) => item.id !== id));
 
     if (contextMatch) {
       const [competitionResult, seasonResult, allMatchesResult] = await Promise.all([

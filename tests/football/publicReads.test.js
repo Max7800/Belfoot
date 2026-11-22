@@ -91,7 +91,7 @@ describe("pages publiques : lectures des tables volumineuses toujours complètes
     expect(competition).toContain("const [loadedPlayers, exactMatchStats] = await Promise.all([");
     expect(read("app/competitions/page.js")).toContain('readAll(() => supabase.from("matches").select("id,competition_id,phase,round_raw")),');
     const club = read("app/clubs/[id]/page.js");
-    expect(club).toContain('readAll(() => supabase.from("players").select("*").eq("club_id", id).order("name")),');
+    expect(club).toContain('loadClubRosterData(supabase, id)');
     expect(club).toContain('readAll(() => supabase.from("matches").select("*").eq("competition_id", contextMatch.competition_id).eq("season_id", contextMatch.season_id)),');
     expect(read("app/diables-rouges/page.js")).toContain('readAll(() => supabase.from("clubs").select(fields).eq("team_type", "national")),');
     expect(read("components/football/CompetitionTransfers.js")).toContain('const { data } = await readAll(() => supabase.from("player_transfers")');
