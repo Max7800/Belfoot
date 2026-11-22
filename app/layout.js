@@ -27,6 +27,7 @@ export default function RootLayout({ children }) {
   return (
     <html lang={siteConfig.locale} data-theme={siteConfig.theme.defaultMode} style={{ "--accent": hexToChannels(siteConfig.theme.accent) }}>
       <body>
+        <div style={{ background: "#b45309", color: "white", textAlign: "center", padding: "8px", fontWeight: "bold" }}>APERÇU DE TEST — données fictives, aucune connexion à la production</div>
         <ThemeModeProvider>
           <Navbar />
           <main className="mx-auto min-h-[70vh] w-full max-w-6xl px-4 py-8">{children}</main>
