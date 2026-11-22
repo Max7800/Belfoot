@@ -24,6 +24,7 @@ import { useBelgiansAbroadConfig } from "@/lib/belgiansAbroad";
 import { buildAbroadForm, loadAbroadFormData } from "@/lib/abroadForm";
 import { computeStandings } from "@/lib/standings";
 import { supabase } from "@/lib/supabaseClient";
+import { readAll } from "@/lib/readAll";
 import { seasonScopedMatches, sortPublicSeasons } from "@/lib/publicSeasons";
 import { mergeGroupStagePhases, phaseGroups } from "@/lib/groupedStandings";
 import { isKnockoutPhase } from "@/lib/competitionType";
@@ -124,11 +125,14 @@ export default function Home() {
       const activeSeason = sortPublicSeasons(competitionSeasons)[0];
       // Saisons existantes mais aucune publiée : aucun match (jamais de campagnes mélangées).
       if (!activeSeason && competitionSeasons.length) return Promise.resolve({ data: [] });
-      let query = supabase.from("matches").select(PUBLIC_MATCH_FIELDS).eq("competition_id", competition.id).order("kickoff", { ascending: false }).limit(600);
-      if (activeSeason) query = query.eq("season_id", activeSeason.id);
-      return query;
+      return readAll(() => {
+        let query = supabase.from("matches").select(PUBLIC_MATCH_FIELDS).eq("competition_id", competition.id).order("kickoff", { ascending: false });
+        if (activeSeason) query = query.eq("season_id", activeSeason.id);
+        return query;
+      });
     })]);
     const matchesById = new Map((recentMatchResult.data || []).map((match) => [match.id, match]));
+    if (carouselMatchResults.some((result) => result.error)) throw carouselMatchResults.find((result) => result.error).error;
     carouselMatchResults.forEach((result) => (result.data || []).forEach((match) => matchesById.set(match.id, match)));
 
     // Charger UNIQUEMENT les clubs référencés (matchs affichés + joueurs suivis), par

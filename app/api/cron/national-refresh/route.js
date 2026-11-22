@@ -166,7 +166,7 @@ export async function GET(request) {
 
     const attempted = results.filter((result) => !result.skipped);
     return Response.json({
-      ok: attempted.every((result) => result.ok),
+      ok: attempted.every((result) => result.ok) && [rbfaMonitor, fifaRanking, fifaSquad].every((result) => result?.ok !== false),
       season, window: { from, to },
       followed: teams.length, due: due.length, heldAfterCollision, refreshed: attempted.filter((result) => result.ok).length,
       skipped: results.filter((result) => result.skipped).length,
