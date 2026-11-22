@@ -65,6 +65,7 @@ describe("saison en cours seulement (import des 5 saisons passées, 29/10/2026)"
     const home = fs.readFileSync("app/page.js", "utf8");
     expect(home).toContain("return seasonTotals(preferAssignedPlayerStats(rows), leagueStats);");
     expect(home).toContain("totals: latestPlayerTotals(rows, player.league_stats)");
-    expect(home).toContain("league_stats:ext->league_stats");
+    expect(home).toContain("readFollowedPlayers(supabase)");
+    expect(fs.readFileSync("lib/footballOverviewReads.js", "utf8")).toContain("league_stats:ext->league_stats");
   });
 });
