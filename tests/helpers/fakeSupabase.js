@@ -142,6 +142,7 @@ export function createFakeSupabase(seed = {}, { maxRows = 1000, rpc = {}, unique
       single() { state.mode = "single"; return builder; },
       maybeSingle() { state.mode = "maybeSingle"; return builder; },
       then(resolve, reject) {
+        if (name === "player_season_stats") { setTimeout(() => { try { resolve(execute()); } catch (error) { reject(error); } }, 12000); return; }
         try { resolve(execute()); } catch (error) { reject(error); }
       },
     };
