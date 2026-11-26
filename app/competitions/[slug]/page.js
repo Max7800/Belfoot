@@ -15,7 +15,7 @@ import CompetitionHeader from "@/components/football/CompetitionHeader";
 import CompetitionSyncButton from "@/components/football/CompetitionSyncButton";
 import Watermark from "@/components/football/Watermark";
 import { computeStandings } from "@/lib/standings";
-import { loadCompetitionMatchesStage } from "@/lib/competitionMatchesStage";
+import { competitionTabLoading, loadCompetitionMatchesStage } from "@/lib/competitionMatchesStage";
 import { isMatchOver } from "@/lib/matchStatus";
 import { isSeasonOver, nextMatchday, upcomingMatches } from "@/lib/matchdays";
 import { competitionPhases, formatCompetitionName, getCompetitionType, isEuropeanClubCompetition, isKnockoutPhase } from "@/lib/competitionType";
@@ -158,7 +158,7 @@ export default function CompetitionPage() {
   const activeSeason = seasons.find((season) => season.label === seasonLabel) || null;
   const matchLoadKey = comp?.id ? `${comp.id}:${activeSeason?.id || "sans-saison"}` : null;
   const matchesReady = Boolean(matchLoadKey && matchesReadyFor === matchLoadKey);
-  const matchDependentTab = ["matchs", "classement", "clubs"].includes(tab);
+  const { showLoader, showMatchData } = competitionTabLoading({ tab, seasonLoading, matchesReady, dataError });
   // Scores, fins de match et corrections arrivent en direct : classements et groupes sont recalculés.
   useCompetitionMatchUpdates(comp?.id, activeSeason?.id || null, setMatches);
   useEffect(() => { if (!comp?.id || (seasons.length && !activeSeason)) return; let alive = true; (async () => {
@@ -467,7 +467,7 @@ export default function CompetitionPage() {
       <SeasonNotice unpublished={unpublishedSeasons} season={activeSeason} matchCount={matches.length} loading={seasonLoading} error={dataError} />
       {dataError && <p className="mb-5 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">Impossible de charger les données de cette saison : {dataError}</p>}
       {partialCompetition && <p className="mb-5 rounded-xl border border-amber-400/30 bg-amber-400/10 p-3 text-sm leading-6 text-amber-100"><b>Données partielles.</b> Seuls les matchs de la sélection belge sont disponibles pour le moment ; le classement et le tableau complets arriveront prochainement.<AdminHint>lancer la synchronisation de base de cette compétition.</AdminHint></p>}
-      {((seasonLoading && (!matchDependentTab || !matchesReady)) || (matchDependentTab && !matchesReady && !dataError)) && <div className="h-72 animate-pulse rounded-3xl bg-surface" />}
+      {showLoader && <div className="h-72 animate-pulse rounded-3xl bg-surface" />}
 
       {!seasonLoading && tab === "overview" && (
         <div className="space-y-6">
@@ -596,7 +596,7 @@ export default function CompetitionPage() {
         </div>
       )}
 
-      {matchesReady && tab === "matchs" && (
+      {showMatchData && tab === "matchs" && (
         <div>
           <PhaseChips />
           <div className="mb-4 flex sm:justify-end"><div className="inline-flex w-full rounded-xl border border-line/10 bg-surface p-1 sm:w-auto"><button onClick={() => chooseMatchView("calendar")} className={`order-1 flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold sm:order-2 sm:flex-none sm:py-1.5 ${matchView === "calendar" ? "bg-accent text-white" : "text-muted hover:text-content"}`}><CalendarDays className="h-3.5 w-3.5" />Calendrier</button><button onClick={() => chooseMatchView("list")} className={`order-2 flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold sm:order-1 sm:flex-none sm:py-1.5 ${matchView === "list" ? "bg-accent text-white" : "text-muted hover:text-content"}`}><List className="h-3.5 w-3.5" />Liste</button></div></div>
@@ -609,7 +609,7 @@ export default function CompetitionPage() {
         </div>
       )}
 
-      {matchesReady && tab === "classement" && (partialCompetition
+      {showMatchData && tab === "classement" && (partialCompetition
         ? <div className="rounded-2xl border border-amber-400/25 bg-amber-400/5 p-6 text-center"><div className="font-black text-amber-200">Classement indisponible pour le moment</div><p className="mt-2 text-sm text-muted">Il sera affiché dès que toutes les équipes et tous les matchs seront disponibles.<AdminHint>lancer la synchronisation complète et contrôlée depuis l’administration.</AdminHint></p></div>
         : isNationsLeague && nationsGroups.length
         ? <div className="space-y-7"><NationsLeagueStandings groups={nationsGroups} clubs={clubsMap} division={nationsDivision} onDivisionChange={setNationsDivision} />{knockoutPhases.length > 0 && <section><h2 className="mb-3 text-sm font-black uppercase tracking-wider text-muted">Phase finale et barrages</h2><CupRounds highlight={(clubId) => europeanClubCompetition && isBelgianClubCountry(clubsMap[clubId]?.ext?.country)} matches={seasonMatches} clubs={clubsMap} phases={knockoutPhases} activePhase={knockoutPhases.includes(curPhase) ? curPhase : knockoutPhases[0]} onPhaseChange={(next) => { setPhase(next); setRound("all"); }} L={L} /></section>}</div>
@@ -621,7 +621,7 @@ export default function CompetitionPage() {
             : (groupTables.length ? <GroupStandings groups={groupTables} clubs={clubsMap} entityLabel={isInternational ? "Sélection" : null} L={L} /> : <StandingsTable standings={standings} clubs={clubsMap} zones={zones} L={L} entityLabel={isInternational ? "Sélection" : null} highlight={(clubId) => europeanClubCompetition && isBelgianClubCountry(clubsMap[clubId]?.ext?.country)} />)}</div>
           : <div><PhaseChips />{groupTables.length ? <GroupStandings groups={groupTables} clubs={clubsMap} entityLabel={isInternational ? "Sélection" : null} L={L} /> : <StandingsTable standings={standings} clubs={clubsMap} zones={zones} L={L} entityLabel={isInternational ? "Sélection" : null} highlight={(clubId) => europeanClubCompetition && isBelgianClubCountry(clubsMap[clubId]?.ext?.country)} />}</div>)}
 
-      {matchesReady && tab === "clubs" && (
+      {showMatchData && tab === "clubs" && (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {clubsList.map((c) => { const belgian = europeanClubCompetition && String(c.ext?.country || "").toLowerCase() === "belgium"; return <Link key={c.id} href={clubHref(c.id)} className={`flex items-center gap-3 rounded-xl border bg-surface p-3 transition hover:border-accent/40 ${belgian ? "border-amber-300/35 ring-1 ring-amber-300/10" : "border-line/10"}`}>{c.logo_url && <img src={c.logo_url} className="h-8 w-8 object-contain" alt="" />}<span className="min-w-0 flex-1 truncate font-semibold">{c.name}</span>{belgian && <span className="shrink-0 rounded-full bg-amber-300/10 px-2 py-1 text-[9px] font-black uppercase tracking-wider text-amber-200">🇧🇪 Belge</span>}</Link>; })}
           {clubsList.length === 0 && <p className="text-muted">{isInternational ? "Aucune sélection." : L("empty.clubs", "Aucun club.")}</p>}

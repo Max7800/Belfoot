@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { loadCompetitionMatchesStage } from "@/lib/competitionMatchesStage";
+import { competitionTabLoading, loadCompetitionMatchesStage } from "@/lib/competitionMatchesStage";
 
 const deferred = () => {
   let resolve;
@@ -40,5 +40,17 @@ describe("chargement anticipé du calendrier", () => {
     const onReady = vi.fn();
     await expect(loadCompetitionMatchesStage({ loadMatches: async () => { throw new Error("base indisponible"); }, loadClubs: vi.fn(), isCurrent: () => true, onReady })).rejects.toThrow("base indisponible");
     expect(onReady).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("affichage pendant le chargement", () => {
+  it.each(["matchs", "classement", "clubs"])("affiche %s dès la fin de lecture des matchs", (tab) => {
+    expect(competitionTabLoading({ tab, seasonLoading: true, matchesReady: true, dataError: "" })).toEqual({ showLoader: false, showMatchData: true });
+  });
+  it("garde les statistiques en attente et ne masque pas une erreur de calendrier", () => {
+    expect(competitionTabLoading({ tab: "stats", seasonLoading: true, matchesReady: true, dataError: "" }).showLoader).toBe(true);
+    expect(competitionTabLoading({ tab: "matchs", seasonLoading: false, matchesReady: false, dataError: "Erreur" })).toEqual({ showLoader: false, showMatchData: false });
+    expect(competitionTabLoading({ tab: "matchs", seasonLoading: false, matchesReady: false, dataError: "" }).showLoader).toBe(true);
   });
 });
