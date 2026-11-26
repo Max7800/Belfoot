@@ -755,7 +755,7 @@ export function RankingsPanel() {
   return (
     <div>
       <h2 className="mb-2 text-lg font-bold">Classements Belgique</h2>
-      <p className="mb-4 text-xs text-muted">Le classement FIFA est vérifié chaque semaine auprès de la FIFA. Le tableau manuel reste disponible ; le coefficient UEFA est saisi ici.</p>
+      <p className="mb-4 text-xs text-muted">Le classement FIFA est vérifié au plus une fois par jour auprès de la FIFA. Le tableau manuel reste disponible ; le coefficient UEFA est saisi ici.</p>
       <label className="mb-3 flex items-center gap-2 text-sm"><input type="checkbox" checked={autoFifa} onChange={(e) => setAutoFifa(e.target.checked)} />Utiliser le classement FIFA automatique lorsqu'il est disponible</label>
       <p className="mb-4 text-xs text-muted">{autoState?.checkedAt ? `Dernière vérification réussie : ${new Date(autoState.checkedAt).toLocaleString("fr-BE")}.` : "Aucun classement automatique reçu."}{autoState?.error ? " Dernière tentative en erreur ; le dernier classement valide est conservé." : ""} Lorsque le mode automatique est actif et disponible, les données manuelles restent enregistrées mais ne sont pas affichées.</p>
 
