@@ -282,8 +282,8 @@ export default function Home() {
       };
       const phaseCounts = new Map();
       matches.forEach((match) => { const phase = match.phase || match.round_raw || "—"; phaseCounts.set(phase, (phaseCounts.get(phase) || 0) + 1); });
-      const { cup, groupPhase, knockout } = homeCompetitionFormat(competition, matches);
-      const primaryPhase = groupPhase || [...phaseCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+      const { cup, groupPhase, leaguePhase, knockout } = homeCompetitionFormat(competition, matches);
+      const primaryPhase = groupPhase || leaguePhase || [...phaseCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
       const nationsLeague = isNationsLeagueCompetition(competition);
       const displayMatches = knockout || nationsLeague ? matches : (primaryPhase ? matches.filter((match) => (match.phase || match.round_raw || "—") === primaryPhase) : matches);
       const scheduleMatches = cup ? matches : displayMatches;
