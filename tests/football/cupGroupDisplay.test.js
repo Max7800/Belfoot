@@ -21,7 +21,14 @@ describe("coupe avec phase de groupes", () => {
   });
 
   it("reconnaît les groupes du Mondial sur l'accueil même avec des tours éliminatoires", () => {
-    expect(homeCompetitionFormat({ name: "Coupe du monde U17" }, matches)).toEqual({ cup: true, groupPhase: "Group Stage", knockout: false });
+    expect(homeCompetitionFormat({ name: "Coupe du monde U17" }, matches)).toEqual({ cup: true, groupPhase: "Group Stage", leaguePhase: null, knockout: false });
     expect(homeCompetitionFormat(cup, [{ phase: "Final" }]).knockout).toBe(true);
+  });
+
+  it("affiche la phase de ligue sans compter les tours de qualification", () => {
+    const matches = [{ phase: "League Stage", status: "finished" }, { phase: "2nd Qualifying Round", status: "finished" }, { phase: "Final" }];
+    expect(homeCompetitionFormat({ name: "Ligue des champions", competition_type: "cup" }, matches))
+      .toEqual({ cup: true, groupPhase: null, leaguePhase: "League Stage", knockout: false });
+    expect(homeCompetitionFormat(cup, [{ phase: "Phase de ligue" }]).leaguePhase).toBe("Phase de ligue");
   });
 });
