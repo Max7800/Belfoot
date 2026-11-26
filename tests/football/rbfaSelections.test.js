@@ -32,3 +32,25 @@ describe("lecture et comparaison des listes RBFA", () => {
     expect(compareRbfaSelection([...rbfa, { ...rbfa[0], sourceId: "2" }], [one], [])).toMatchObject({ complete: false, additions: [], removals: null });
   });
 });
+
+describe("noms de famille composés RBFA", () => {
+  const cases = [
+    ["Mathias Delorge", "M. Delorge-Knieper", "2004-07-31"],
+    ["Lucas Noubi Ngnokam", "L. Noubi", "2005-01-15"],
+    ["Richie Sagrado Sebastiao", "R. Sagrado", "2004-01-30"],
+  ];
+  it.each(cases)("reconnaît %s et %s avec une date exacte", (name, storedName, birthDate) => {
+    const official = [{ sourceId: "1", name, birthDate }];
+    expect(compareRbfaSelection(official, [{ id: "p", name: storedName, birth_date: birthDate }], []).complete).toBe(true);
+    expect(compareRbfaSelection(official, [{ id: "p", name: storedName, birth_date: "2000-01-01" }], []).complete).toBe(false);
+  });
+  it("refuse d'autres noms composés, les prénoms différents et les doublons", () => {
+    const official = [{ sourceId: "1", name: "Mathias Delorge", birthDate: "2004-07-31" }];
+    const player = { id: "p", name: "M. Delorge-Knieper", birth_date: "2004-07-31" };
+    expect(compareRbfaSelection(official, [{ ...player, name: "Mathieu Delorge-Knieper" }], []).complete).toBe(false);
+    expect(compareRbfaSelection(official, [{ ...player, name: "M. Delorgex-Knieper" }], []).complete).toBe(false);
+    expect(compareRbfaSelection(official, [player, { ...player, id: "p2" }], []).complete).toBe(false);
+    const compound = [{ sourceId: "2", name: "Lucas Noubi Ngnokam", birthDate: "2005-01-15" }];
+    expect(compareRbfaSelection(compound, [{ id: "p", name: "L. Noubi Autre", birth_date: "2005-01-15" }], []).complete).toBe(false);
+  });
+});
