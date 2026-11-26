@@ -2,7 +2,6 @@ import { updateSiteSettings } from "@/lib/siteSettings";
 
 const PAGE = "https://inside.fifa.com/fifa-rankings/world-ranking/men";
 const API = "https://inside.fifa.com/api/live-world-ranking/get-rankings";
-const WEEK = 7 * 24 * 60 * 60 * 1000;
 const DAY = 24 * 60 * 60 * 1000;
 const MAX_BYTES = 2_000_000;
 export const FIFA_RANKING_STATE = "football_fifa_rankings_auto";
@@ -56,8 +55,7 @@ async function getText(url, fetcher) {
 export async function syncFifaRanking(db, settings, { now = new Date(), fetcher = fetch } = {}) {
   if (settings?.football_fifa_rankings_enabled === false) return { skipped: true, reason: "désactivé" };
   const previous = settings?.[FIFA_RANKING_STATE] || {};
-  const interval = previous.error ? DAY : WEEK;
-  if (now.getTime() - (Date.parse(previous.attemptedAt) || 0) < interval) return { skipped: true, reason: "intervalle" };
+  if (now.getTime() - (Date.parse(previous.attemptedAt) || 0) < DAY) return { skipped: true, reason: "intervalle" };
   const attemptedAt = now.toISOString();
   let edition, rows, error;
   try {
