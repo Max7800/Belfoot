@@ -23,7 +23,7 @@ describe("classement FIFA automatique", () => {
     const duplicate = sample(); duplicate.rankings[1].countryCode = "BEL"; expect(() => parseFifaRanking(duplicate)).toThrow();
     const wrongOrder = sample(); wrongOrder.rankings[1].totalPoints = 3000; expect(() => parseFifaRanking(wrongOrder)).toThrow();
   });
-  it("importe une édition complète sans écraser la saisie manuelle puis attend une semaine", async () => {
+  it("importe une édition sans écraser la saisie manuelle et vérifie de nouveau après 24 heures", async () => {
     state.current = { rankings: { fifa: [{ nation: "Manuel" }] } };
     const fetcher = fetcherFor();
     expect(await syncFifaRanking(null, state.current, { now, fetcher })).toMatchObject({ ok: true, teams: 200 });
@@ -31,6 +31,12 @@ describe("classement FIFA automatique", () => {
     expect(state.current[FIFA_RANKING_STATE]).toMatchObject({ source: "FIFA", publishedAt: "2026-11-18T10:01:31.000Z" });
     expect(await syncFifaRanking(null, state.current, { now, fetcher })).toMatchObject({ skipped: true });
     expect(fetcher).toHaveBeenCalledTimes(2);
+    const beforeDeadline = new Date(now.getTime() + 24 * 60 * 60 * 1000 - 1);
+    expect(await syncFifaRanking(null, state.current, { now: beforeDeadline, fetcher })).toMatchObject({ skipped: true });
+    const atDeadline = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+    expect(await syncFifaRanking(null, state.current, { now: atDeadline, fetcher })).toMatchObject({ ok: true });
+    expect(state.current[FIFA_RANKING_STATE].checkedAt).toBe(atDeadline.toISOString());
+    expect(fetcher).toHaveBeenCalledTimes(4);
   });
   it("conserve les données valides et ne retente pas avant 24 heures en cas d'échec", async () => {
     const entries = parseFifaRanking(sample()); state.current = { [FIFA_RANKING_STATE]: { entries, publishedAt: "2026-10-01T00:00:00Z" } };
