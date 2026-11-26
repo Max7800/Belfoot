@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { getCompetitionType, isKnockoutPhase, competitionPhases } from "@/lib/competitionType";
 import { phaseGroups } from "@/lib/groupedStandings";
+import { homeCompetitionFormat } from "@/lib/homeCompetitionFormat";
 
 describe("coupe avec phase de groupes", () => {
   const cup = { competition_type: "cup", ext: { providerType: "Cup" } };
@@ -17,5 +18,10 @@ describe("coupe avec phase de groupes", () => {
 
   it("conserve le tableau classique des coupes sans groupes", () => {
     expect(getCompetitionType(cup, [{ phase: "Round of 16" }, { phase: "Final" }])).toBe("cup");
+  });
+
+  it("reconnaît les groupes du Mondial sur l'accueil même avec des tours éliminatoires", () => {
+    expect(homeCompetitionFormat({ name: "Coupe du monde U17" }, matches)).toEqual({ cup: true, groupPhase: "Group Stage", knockout: false });
+    expect(homeCompetitionFormat(cup, [{ phase: "Final" }]).knockout).toBe(true);
   });
 });

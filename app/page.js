@@ -38,6 +38,7 @@ import { isBelgianFollowed } from "@/lib/playerIdentity";
 import { clubNationalLeagues, resolvePlayerCountry, resolvePlayerLeague } from "@/lib/playerSnapshot";
 import { isNationsLeagueCompetition, nationsLeagueGroups } from "@/lib/nationsLeague";
 import { rankHomeCompetitions } from "@/lib/homeCompetitionPriority";
+import { homeCompetitionFormat } from "@/lib/homeCompetitionFormat";
 import AdminHint from "@/components/AdminHint";
 
 const normal = (value) => String(value || "").trim().toLocaleLowerCase("fr");
@@ -45,7 +46,6 @@ const year = (value) => Number((String(value || "").match(/\d{4}/) || [0])[0]);
 const isBelgian = (value) => normal(value).startsWith("belg");
 // Noms français depuis le 30/10/2026 (« Ligue Conférence » : avec accent).
 const isEurope = (competition) => /(champions|europa|conf[ée]rence)/i.test(competition?.name || "");
-const isKnockoutCompetition = (competition) => /(cup|coupe|beker|pokal)/i.test(`${competition?.name || ""} ${competition?.ext?.type || ""}`);
 const FOLLOWED_BELGIANS_SLIDE_ID = "followed-belgians";
 
 // Saison en cours seulement, chiffres du balayage à défaut (lib/belgiansRankings.js),
@@ -281,23 +281,25 @@ export default function Home() {
         players: view.watched.map(({ item }) => item).filter((item, index, rows) => rows.findIndex((candidate) => candidate.player.id === item.player.id) === index).slice(0, 5),
       };
       const phaseCounts = new Map();
-      matches.forEach((match) => phaseCounts.set(match.phase || "—", (phaseCounts.get(match.phase || "—") || 0) + 1));
-      const primaryPhase = [...phaseCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
-      const knockout = isKnockoutCompetition(competition);
+      matches.forEach((match) => { const phase = match.phase || match.round_raw || "—"; phaseCounts.set(phase, (phaseCounts.get(phase) || 0) + 1); });
+      const { cup, groupPhase, knockout } = homeCompetitionFormat(competition, matches);
+      const primaryPhase = groupPhase || [...phaseCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
       const nationsLeague = isNationsLeagueCompetition(competition);
-      const displayMatches = knockout || nationsLeague ? matches : (primaryPhase ? matches.filter((match) => (match.phase || "—") === primaryPhase) : matches);
-      const finished = displayMatches.filter((match) => isMatchOver(match, now) && match.away_score != null);
+      const displayMatches = knockout || nationsLeague ? matches : (primaryPhase ? matches.filter((match) => (match.phase || match.round_raw || "—") === primaryPhase) : matches);
+      const scheduleMatches = cup ? matches : displayMatches;
+      const finished = scheduleMatches.filter((match) => isMatchOver(match, now) && match.away_score != null);
       return {
         competition,
         href: competitionPath(competition),
         knockout,
+        groupPhase,
         nationsLeague,
         nationsGroups: nationsLeague ? nationsLeagueGroups(competition, activeSeason?.label, matches, data.clubs) : [],
         groups: knockout || nationsLeague ? [] : phaseGroups(competition, activeSeason?.label, displayMatches, data.clubs),
         activeSeason,
-        standings: knockout ? [] : computeStandings(finished),
+        standings: knockout || groupPhase ? [] : computeStandings(displayMatches.filter((match) => isMatchOver(match, now) && match.away_score != null)),
         recent: finished.sort((a, b) => new Date(b.kickoff || 0) - new Date(a.kickoff || 0)).slice(0, 5),
-        upcoming: displayMatches.filter((match) => match.status !== "finished" && new Date(match.kickoff || 0) >= now).sort((a, b) => new Date(a.kickoff || 0) - new Date(b.kickoff || 0)).slice(0, 5),
+        upcoming: scheduleMatches.filter((match) => match.status !== "finished" && new Date(match.kickoff || 0) >= now).sort((a, b) => new Date(a.kickoff || 0) - new Date(b.kickoff || 0)).slice(0, 5),
       };
     });
   }, [config.competition_carousel, data.clubs, data.competitions, data.matches, data.seasons, publicCompetitions, view.watched]);
