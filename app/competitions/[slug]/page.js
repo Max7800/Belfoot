@@ -15,6 +15,7 @@ import CompetitionHeader from "@/components/football/CompetitionHeader";
 import CompetitionSyncButton from "@/components/football/CompetitionSyncButton";
 import Watermark from "@/components/football/Watermark";
 import { computeStandings } from "@/lib/standings";
+import { rankBelgianStandings } from "@/lib/belgianStandings";
 import { competitionTabLoading, loadCompetitionMatchesStage } from "@/lib/competitionMatchesStage";
 import { isMatchOver } from "@/lib/matchStatus";
 import { isSeasonOver, nextMatchday, upcomingMatches } from "@/lib/matchdays";
@@ -269,7 +270,7 @@ export default function CompetitionPage() {
   // Un match compte au classement s'il est terminé, OU s'il a un score final et a
   // commencé il y a > 3 h (règle centralisée dans isMatchOver ; le direct reste exclu).
   const phaseFinished = phaseMatches.filter(isMatchOver);
-  const standings = useMemo(() => phaseIsKnockout ? [] : computeStandings(phaseFinished), [phaseFinished, phaseIsKnockout]);
+  const standings = useMemo(() => phaseIsKnockout ? [] : rankBelgianStandings(computeStandings(phaseFinished), phaseFinished, comp, seasonLabel, curPhase), [phaseFinished, phaseIsKnockout, comp, seasonLabel, curPhase]);
   const rounds = useMemo(() => { const seen = new Map(); for (const m of phaseMatches) { const k = m.round_number != null ? String(m.round_number) : (m.round_raw || "?"); if (!seen.has(k)) seen.set(k, { key: k, num: m.round_number, label: m.round_number != null ? `${L("comp.round", "Journée")} ${m.round_number}` : (m.round_raw || "Tour") }); } return [...seen.values()].sort((a, b) => (a.num ?? 999) - (b.num ?? 999)); }, [phaseMatches]);
   const shownMatches = round === "all" ? phaseMatches : phaseMatches.filter((m) => (m.round_number != null ? String(m.round_number) : (m.round_raw || "?")) === round);
   const grouped = useMemo(() => { const g = {}; for (const m of shownMatches) { const k = m.round_number != null ? String(m.round_number) : (m.round_raw || "?"); (g[k] ||= { label: m.round_number != null ? `${L("comp.round", "Journée")} ${m.round_number}` : (m.round_raw || "Tour"), num: m.round_number, items: [] }).items.push(m); } return Object.values(g).sort((a, b) => (a.num ?? 999) - (b.num ?? 999)); }, [shownMatches]);
