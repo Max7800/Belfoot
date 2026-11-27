@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { CalendarDays, ChevronRight, Globe2, MapPin, Shield, Star, Trophy, Users } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { useNationalTeamsConfig } from "@/lib/nationalTeams";
@@ -13,7 +14,7 @@ import { FifaTournamentSquad, useFifaTournamentSquad } from "@/components/footba
 import { groupByPosition, positionLabel } from "@/lib/positions";
 import { matchStatusMeta } from "@/lib/matchStatus";
 import { nationalityBadges } from "@/lib/nationalities";
-import { categoryLabel, isBelgianNationalTeam, isSeniorMenTeam, pickNationalTabs } from "@/lib/nationalCategories";
+import { categoryLabel, isBelgianNationalTeam, isSeniorMenTeam, pickNationalTabs, requestedNationalTab } from "@/lib/nationalCategories";
 import AdminHint from "@/components/AdminHint";
 import { readAll } from "@/lib/readAll";
 import { belgianCalendarYear, nationalMatchRecord } from "@/lib/nationalMatchRecord";
@@ -123,7 +124,8 @@ function SquadNamesPreview({ rows, accent }) {
   </div>)}</div>;
 }
 
-export default function NationalTeamsPage() {
+function NationalTeamsPageContent() {
+  const requestedTeamId = useSearchParams().get("equipe") || "";
   const config = useNationalTeamsConfig();
   const rankings = useRankings();
   const [teams, setTeams] = useState([]);
@@ -140,6 +142,7 @@ export default function NationalTeamsPage() {
   const [schemaMissing, setSchemaMissing] = useState(false);
 
   useEffect(() => {
+    let active = true;
     // Une équipe A peut être importée avant que son drapeau « suivie » soit
     // renseigné. Certains anciens imports avaient aussi un libellé Belgique
     // sans team_type=national : on les remonte afin de ne jamais perdre le
@@ -151,7 +154,7 @@ export default function NationalTeamsPage() {
         supabase.from("clubs").select(fields).or("name.ilike.Belgium%,name.ilike.Belgique%,name.ilike.%Diables%,name.ilike.%Flames%"),
       ]);
       const error = nationalResult.error || legacyResult.error;
-      if (error) { setSchemaMissing(true); setLoading(false); return; }
+      if (error) { if (active) { setSchemaMissing(true); setLoading(false); } return; }
       const byId = new Map([...(nationalResult.data || []), ...(legacyResult.data || [])].map((team) => [team.id, team]));
       const candidates = [...byId.values()].filter((team) => team.national_followed || isBelgianNationalTeam(team));
       const ids = candidates.map((team) => team.id);
@@ -164,12 +167,15 @@ export default function NationalTeamsPage() {
       for (const callup of callupResult.data || []) if (activity.has(callup.national_team_id)) activity.set(callup.national_team_id, activity.get(callup.national_team_id) + 1);
       // Genre et âge distincts ; féminines de jeunes masquées (lib/nationalCategories.js).
       const sorted = pickNationalTabs(candidates, activity);
+      const requested = requestedNationalTab(sorted, candidates, requestedTeamId);
+      if (!active) return;
       setTeams(sorted);
-      setSelectedGender((current) => current || sorted[0]?.national_gender || "men");
-      setSelectedId((current) => current || sorted[0]?.id || "");
+      setSelectedGender(requested?.national_gender || sorted[0]?.national_gender || "men");
+      setSelectedId(requested?.id || sorted[0]?.id || "");
       if (!sorted.length) setLoading(false);
     })();
-  }, []);
+    return () => { active = false; };
+  }, [requestedTeamId]);
 
   useEffect(() => {
     if (!selectedId) return;
@@ -334,4 +340,8 @@ export default function NationalTeamsPage() {
       </aside>
     </div>}
   </div>;
+}
+
+export default function NationalTeamsPage() {
+  return <Suspense fallback={<div className="h-64 animate-pulse rounded-3xl bg-surface" />}><NationalTeamsPageContent /></Suspense>;
 }
