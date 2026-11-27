@@ -5,6 +5,7 @@ import { Trophy } from "lucide-react";
 import MatchRow from "./MatchRow";
 import { isMatchFinished } from "@/lib/matchStatus";
 import { phaseLabel } from "@/lib/phaseLabels";
+import { confirmedBracketPairs } from "@/lib/bracketConnections";
 
 const STAGES = [
   { rank: 0, test: /(knockout(?: round)? play-?offs?|barrages?)/i, label: "Barrages" },
@@ -104,12 +105,15 @@ function Bracket({ stages, mobile = false, highlight = () => false }) {
       {shown.map((stage, stageIndex) => {
         const count = stage.matches.length;
         const centers = stage.matches.map((_, index) => ((index + 0.5) * height) / count);
+        const incoming = stageIndex > 0 ? confirmedBracketPairs(shown[stageIndex - 1].matches, stage.matches) : [];
+        const outgoing = stageIndex < shown.length - 1 ? confirmedBracketPairs(stage.matches, shown[stageIndex + 1].matches) : [];
         return <section key={stage.rank} className="relative w-[205px] shrink-0 pt-9 sm:w-[220px]">
           <div className="absolute inset-x-0 top-0 flex items-center gap-2 text-xs font-black uppercase tracking-wider text-sky-200"><span className="h-1.5 w-1.5 rounded-full bg-sky-300" />{stage.label}</div>
           {stage.matches.map((match, index) => {
             const top = 36 + centers[index] - cardHeight / 2;
-            const pairHeight = stageIndex < shown.length - 1 && index % 2 === 0 && centers[index + 1] != null ? centers[index + 1] - centers[index] : 0;
-            return <BracketCard key={match.id} match={match} clubs={stage.clubs} top={top} cardHeight={cardHeight} leftConnector={stageIndex > 0} rightConnector={stageIndex < shown.length - 1} pairHeight={pairHeight} highlight={highlight} />;
+            const linkedNext = outgoing[Math.floor(index / 2)] === true;
+            const pairHeight = linkedNext && index % 2 === 0 && centers[index + 1] != null ? centers[index + 1] - centers[index] : 0;
+            return <BracketCard key={match.id} match={match} clubs={stage.clubs} top={top} cardHeight={cardHeight} leftConnector={incoming[index] === true} rightConnector={linkedNext} pairHeight={pairHeight} highlight={highlight} />;
           })}
         </section>;
       })}
