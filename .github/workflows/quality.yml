@@ -37,6 +37,8 @@ jobs:
         uses: actions/checkout@v7
       - name: Tester les ecritures simultanees
         run: bash tests/football/rbfaConcurrency.sh
+      - name: Tester la protection concurrente des clubs
+        run: bash tests/football/lockedPlayerConcurrency.sh
 
   quality:
     runs-on: ubuntu-latest

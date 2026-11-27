@@ -15,20 +15,20 @@ export async function loadLockedClubs(db, playerIds, season) {
   for (let offset = 0; offset < playerIds.length; offset += 400) {
     const response = await readAll(() => db.from("player_team_seasons").select("player_id,club_id")
       .in("player_id", playerIds.slice(offset, offset + 400)).eq("season_start_year", year)
-      .eq("active", true).eq("locked", true));
+      .eq("active", true).eq("locked", true).eq("is_primary", true));
     if (response.error) throw response.error;
     rows.push(...(response.data || []));
   }
   const ids = [...new Set(rows.map((row) => row.club_id).filter(Boolean))];
   if (!ids.length) return result;
-  const national = new Set();
+  const firstTeams = new Set();
   for (let offset = 0; offset < ids.length; offset += 400) {
     const { data: clubs, error: clubsError } = await db.from("clubs").select("id,team_type").in("id", ids.slice(offset, offset + 400));
     if (clubsError) throw clubsError;
-    for (const club of clubs || []) if (club.team_type === "national") national.add(club.id);
+    for (const club of clubs || []) if ((club.team_type || "first_team") === "first_team") firstTeams.add(club.id);
   }
   for (const row of rows) {
-    if (!row.club_id || national.has(row.club_id)) continue;
+    if (!row.club_id || !firstTeams.has(row.club_id)) continue;
     if (!result.has(row.player_id)) result.set(row.player_id, new Set());
     result.get(row.player_id).add(row.club_id);
   }

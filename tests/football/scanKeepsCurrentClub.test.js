@@ -45,7 +45,7 @@ describe("transfert vers le Mexique", () => {
     const db = createFakeSupabase({
       clubs: [{ id: "monterrey", source: "apifootball", external_id: "2282", name: "Monterrey", team_type: "first_team", locked: false, ext: {} }],
       players: [{ id: "cuypers", source: "apifootball", external_id: "27104", name: "H. Cuypers", nationality: "Belgium", club_id: "monterrey", locked: false, tracked: true, ext: { league_stats: chicagoStats } }],
-      player_team_seasons: [{ player_id: "cuypers", club_id: "monterrey", season_start_year: 2026, active: true, locked: true }],
+      player_team_seasons: [{ player_id: "cuypers", club_id: "monterrey", season_start_year: 2026, active: true, locked: true, is_primary: true }],
     });
     registerProvider({ key: "apifootball", async fetchLeaguePlayersPage() {
       return { pages: 1, players: [{ external_id: "27104", name: "H. Cuypers", nationality: "Belgium", team: { external_id: "2282", name: "Monterrey" }, stats: { appearances: 3, goals: 2 } }] };

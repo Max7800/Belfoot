@@ -74,12 +74,21 @@ describe("P0-3 — cron des coupes d'Europe", () => {
   it("une sélection protégée ne bloque pas un club ; un club protégé autorise son propre import", async () => {
     const db = seedDb();
     db.rows("player_team_seasons").push(
-      { player_id: "p-bounida", club_id: "nat-ma", season_start_year: YEAR, active: true, locked: true },
-      { player_id: "p-bounida", club_id: "club-ajax", season_start_year: YEAR, active: true, locked: true },
+      { player_id: "p-bounida", club_id: "nat-ma", season_start_year: YEAR, active: true, locked: true, is_primary: true },
+      { player_id: "p-bounida", club_id: "club-ajax", season_start_year: YEAR, active: true, locked: true, is_primary: true },
     );
     expect(await conflictsWithLockedClub(db, "p-bounida", "club-ajax", YEAR)).toBe(false);
     expect(await conflictsWithLockedClub(db, "p-bounida", "club-psv", YEAR)).toBe(true);
     expect(await conflictsWithLockedClub(db, "p-bounida", "club-psv", YEAR - 1)).toBe(false);
+  });
+  it("une affectation non principale ou de réserve ne bloque pas un club de première équipe", async () => {
+    const db = seedDb();
+    db.rows("clubs").push({ id: "reserve", team_type: "reserve" });
+    db.rows("player_team_seasons").push(
+      { player_id: "p-bounida", club_id: "club-ajax", season_start_year: YEAR, active: true, locked: true, is_primary: false },
+      { player_id: "p-bounida", club_id: "reserve", season_start_year: YEAR, active: true, locked: true, is_primary: true },
+    );
+    expect(await conflictsWithLockedClub(db, "p-bounida", "club-psv", YEAR)).toBe(false);
   });
   it("un ancien effectif ou une découverte ne remplace pas une affectation protégée", async () => {
     const db = seedDb();
@@ -139,7 +148,7 @@ describe("P0-3 — mercato d'archive", () => {
       return [{ player_external_id: "396202", player_name: "Rayane Bounida", transfer_date: `${YEAR}-08-10`, transfer_type: "Transfer", from_club_external_id: "1", from_club_name: "Ajax", to_club_external_id: "2", to_club_name: "Adversaire", ext: {} }];
     } });
     const db = seedDb();
-    db.rows("player_team_seasons").push({ id: "protected", player_id: "p-bounida", club_id: "club-ajax", season: `${YEAR}-${YEAR + 1}`, season_start_year: YEAR, active: true, locked: true });
+    db.rows("player_team_seasons").push({ id: "protected", player_id: "p-bounida", club_id: "club-ajax", season: `${YEAR}-${YEAR + 1}`, season_start_year: YEAR, active: true, locked: true, is_primary: true });
     await syncTransfers(db, { ...EREDIVISIE }, { season: String(YEAR), startClubIndex: 0 });
     expect(player(db, "p-bounida").club_id).toBe("club-ajax");
     expect(db.rows("player_team_seasons").find((row) => row.id === "protected").active).toBe(true);
@@ -167,7 +176,7 @@ describe("imports ciblés et affectation protégée", () => {
   it("l'import ciblé d'un ancien club ne remplace pas le club protégé", async () => {
     const db = seedDb();
     Object.assign(player(db, "p-bounida"), { club_id: "club-psv", country: "Mexico", competition: null });
-    db.rows("player_team_seasons").push({ id: "protected", player_id: "p-bounida", club_id: "club-psv", season_start_year: YEAR, active: true, locked: true });
+    db.rows("player_team_seasons").push({ id: "protected", player_id: "p-bounida", club_id: "club-psv", season_start_year: YEAR, active: true, locked: true, is_primary: true });
     registerProvider({
       key: PROVIDER,
       async fetchClubById() { return { external_id: "1", name: "Ajax" }; },
@@ -189,7 +198,7 @@ describe("imports ciblés et affectation protégée", () => {
       ],
       national_team_callups: [{ national_team_id: "be", player_id: "p1", season: `${YEAR}-${YEAR + 1}`, active: true }],
       players: [{ id: "p1", source: "apifootball", external_id: "7", name: "Joueur", club_id: "new", country: "Mexico", competition: null, locked: false }],
-      player_team_seasons: [{ player_id: "p1", club_id: "new", season_start_year: YEAR, active: true, locked: true }],
+      player_team_seasons: [{ player_id: "p1", club_id: "new", season_start_year: YEAR, active: true, locked: true, is_primary: true }],
     });
     registerProvider({ key: "apifootball", async fetchPlayerClubSeason() {
       return { club: { external_id: "1", name: "Ancien club" }, nationalLeague: true, country: "USA", competition: "MLS" };
