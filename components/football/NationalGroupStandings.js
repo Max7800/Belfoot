@@ -5,16 +5,19 @@ import { computeStandings } from "@/lib/standings";
 import { isKnockoutPhase } from "@/lib/competitionType";
 import { selectionGroupStanding } from "@/lib/selectionGroup";
 import { groupDisplayLabel } from "@/lib/groupedStandings";
-import { prioritizeResultCompetition } from "@/lib/nationalCompetitionOrder";
+import { nationalStandingSeason, orderNationalStandings } from "@/lib/nationalCompetitionOrder";
 
 // Classement du GROUPE de la sélection, par compétition (Nations League, qualif CDM…).
 // IMPORTANT : tout est scopé sur la SAISON EN COURS (l'édition du match le plus récent),
 // sinon on mélange les éditions (ex. NL 2024 + NL 2026 = groupe incohérent).
 // Le groupe = la sélection + ses adversaires de cette édition ; le classement est calculé
 // sur tous les matchs intra-groupe de cette saison. Les amicaux sont ignorés.
-export default function NationalGroupStandings({ teamId, matches, competitions, preferredCompetitionId }) {
+export default function NationalGroupStandings({ teamId, matches, competitions, featuredMatch }) {
   const [tables, setTables] = useState([]);
+  const [matchesFeatured, setMatchesFeatured] = useState(false);
   const [showOlder, setShowOlder] = useState(false);
+  const featuredCompetitionId = featuredMatch?.competition_id;
+  const featuredSeasonId = featuredMatch?.season_id;
 
   useEffect(() => {
     if (!teamId || !matches?.length) { setTables([]); return; }
@@ -22,14 +25,14 @@ export default function NationalGroupStandings({ teamId, matches, competitions, 
     setTables([]);
     setShowOlder(false);
     (async () => {
+      const featured = { competition_id: featuredCompetitionId, season_id: featuredSeasonId };
       const byComp = {};
       for (const m of matches) { if (m.competition_id) (byComp[m.competition_id] ||= []).push(m); }
       const out = [];
       const clubIds = new Set();
       for (const [compId, allCompMatches] of Object.entries(byComp)) {
         // Saison en cours = celle du match le plus récent de la sélection dans cette compétition.
-        const withSeason = allCompMatches.filter((m) => m.season_id && m.kickoff).sort((a, b) => new Date(b.kickoff) - new Date(a.kickoff));
-        const seasonId = withSeason[0]?.season_id;
+        const seasonId = nationalStandingSeason(allCompMatches, featured);
         if (!seasonId) continue;
         const compMatches = allCompMatches.filter((m) => m.season_id === seasonId);
         const opponents = new Set();
@@ -46,7 +49,7 @@ export default function NationalGroupStandings({ teamId, matches, competitions, 
         const official = selectionGroupStanding({ competition, seasonLabel: season?.label, matches: seasonMatches || [], teamId, isKnockout: isKnockoutPhase });
         if (official) {
           official.rows.forEach((r) => clubIds.add(r.club));
-          out.push({ compId, standings: official.rows, label: official.label, source: official.source, matches: compMatches });
+          out.push({ compId, seasonId, seasonLabel: season?.label, standings: official.rows, label: official.label, source: official.source, matches: compMatches });
           continue;
         }
         const group = [teamId, ...opponents];
@@ -61,26 +64,28 @@ export default function NationalGroupStandings({ teamId, matches, competitions, 
         const standings = computeStandings(groupMatches);
         if (standings.length < 3) continue;
         standings.forEach((r) => clubIds.add(r.club));
-        out.push({ compId, standings, matches: compMatches });
+        out.push({ compId, seasonId, seasonLabel: season?.label, standings, matches: compMatches });
       }
       if (!out.length) { if (active) setTables([]); return; }
       const { data: clubs } = await supabase.from("clubs").select("id,name,logo_url").in("id", [...clubIds]);
       const clubMap = Object.fromEntries((clubs || []).map((c) => [c.id, c]));
       if (active) {
-        const ordered = prioritizeResultCompetition(out, preferredCompetitionId);
-        setTables(ordered.map((t) => ({ ...t, clubMap })));
+        const ordered = orderNationalStandings(out, featured);
+        setMatchesFeatured(ordered.matchesFeatured);
+        setTables(ordered.tables.map((t) => ({ ...t, clubMap })));
       }
     })().catch(() => { if (active) setTables([]); });
     return () => { active = false; };
-  }, [teamId, matches, preferredCompetitionId]);
+  }, [teamId, matches, featuredCompetitionId, featuredSeasonId]);
 
   if (!tables.length) return null;
 
   return (
     <div className="space-y-3">
+      {!matchesFeatured && featuredMatch && <p className="text-xs text-muted">Classement d'une autre compétition ou édition.</p>}
       {(showOlder ? tables : tables.slice(0, 1)).map((t) => (
         <div key={t.compId} className="rounded-2xl border border-line/10 bg-surface/60 p-4">
-          <div className="mb-2 text-xs font-black uppercase tracking-wider text-amber-300">{competitions?.[t.compId]?.name || "Classement"} — {t.label ? groupDisplayLabel(t.label, "groupe") : "groupe"}{t.source === "detected" && <span className="ml-2 text-[9px] text-amber-200/70">détecté</span>}</div>
+          <div className="mb-2 text-xs font-black uppercase tracking-wider text-amber-300">{competitions?.[t.compId]?.name || "Classement"}{t.seasonLabel ? ` · ${t.seasonLabel}` : ""} — {t.label ? groupDisplayLabel(t.label, "groupe") : "groupe"}{t.source === "detected" && <span className="ml-2 text-[9px] text-amber-200/70">détecté</span>}</div>
           <div className="divide-y divide-line/10">
             {t.standings.map((r, i) => {
               const bel = r.club === teamId;
