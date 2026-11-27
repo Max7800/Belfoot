@@ -112,11 +112,13 @@ const asideOf = () => {
 const childSources = (el) => el.children.filter((c) => c.type !== "JSXText" || c.value.trim()).map((c) => source.slice(c.range[0], c.range[1]));
 
 describe("page Diables — classement FIFA et ordre des blocs", () => {
-  it("le classement de groupe est le premier bloc de la colonne, au-dessus du FIFA", () => {
-    const blocks = childSources(asideOf());
-    expect(blocks[0]).toMatch(/^<NationalGroupStandings /);
-    const fifaIndex = blocks.findIndex((b) => b.includes("config.labels.fifa"));
-    expect(fifaIndex).toBeGreaterThan(0);
+  it("affiche le groupe juste après le résultat et avant les statistiques", () => {
+    const result = source.indexOf("<FeaturedMatch match={featured}");
+    const group = source.indexOf("<NationalGroupStandings teamId={selectedId}");
+    const stats = source.indexOf("{statTiles.map");
+    expect(result).toBeGreaterThan(-1);
+    expect(group).toBeGreaterThan(result);
+    expect(stats).toBeGreaterThan(group);
   });
   it("le bloc FIFA n'est rendu que pour l'équipe A masculine (condition de rendu, pas de CSS)", () => {
     const fifa = childSources(asideOf()).find((b) => b.includes("config.labels.fifa"));

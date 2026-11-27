@@ -5,6 +5,8 @@ import { frenchNationName } from "@/lib/frenchNations";
 import { resolveNationalMatchSeason } from "./nationalMatchSeasons";
 import { nationalTeamTraits } from "./nationalClassification";
 import { providerIdentityPatch } from "@/lib/playerIdentity";
+import { readAll } from "@/lib/readAll";
+import { applyApiCallups, atomicCallupsAvailable } from "@/modules/football/callupTransactions";
 
 // Seulement le nom et la photo : la nationalité suit ici sa propre règle (sélection).
 function nameAndPhoto(existing, member) {
@@ -181,13 +183,17 @@ export async function syncNationalTeam(db, ctx = {}) {
   });
   await upsertExternal(db, "matches", providerKey, resolvedMatches, ["competition_id", "season_id", "home_club_id", "away_club_id", "home_score", "away_score", "status", "minute", "kickoff", "matchday", "round_raw", "phase", "round_number", "provider"]);
 
-  // Désactive TOUTES les convocations de la sélection (toutes saisons confondues) avant de
-  // réactiver l'effectif actuel. L'affichage lit les convocations actives sans filtre de
-  // saison : sans ça, un joueur convoqué une saison passée (ex. parti dans une autre
-  // sélection) resterait « actif » à vie. L'historique est conservé (lignes gardées,
-  // active=false) ; les convocations verrouillées manuellement ne sont pas touchées.
-  const { error: deactivateError } = await db.from("national_team_callups").update({ active: false, updated_at: syncedAt }).eq("national_team_id", nationalTeamId).eq("source", providerKey).eq("locked", false);
-  if (deactivateError) throw deactivateError;
+  // Préserver les anciennes lignes tant que l'ensemble du nouvel effectif
+  // n'a pas été enregistré. Une réponse vide n'est pas une liste officielle vide.
+  const atomicCallups = squad.length ? await atomicCallupsAvailable(db) : false;
+  const atomicPeople = [];
+  let atomicResult = null;
+  const { data: existingCallups, error: callupsError } = squad.length && !atomicCallups
+    ? await readAll(() => db.from("national_team_callups").select("id,player_id,season,source,locked,active").eq("national_team_id", nationalTeamId))
+    : { data: [], error: null };
+  if (callupsError) throw callupsError;
+  const callupByPlayerSeason = new Map((existingCallups || []).map((row) => [`${row.player_id}:${row.season}`, row]));
+  const retainedIds = new Set();
 
   let callups = 0;
   for (const member of squad) {
@@ -215,7 +221,19 @@ export async function syncNationalTeam(db, ctx = {}) {
       const { error } = await db.from("players").update(playerPatch).eq("id", existing.id);
       if (error) throw new Error(`${member.name}: ${error.message}`);
     }
-    const { error: callupError } = await db.from("national_team_callups").upsert({
+    if (atomicCallups) {
+      atomicPeople.push({ playerId, externalId: member.external_id, number: member.number ?? null, position: member.position ?? null, ext: member.ext || member });
+      callups++;
+      continue;
+    }
+    const callupKey = `${playerId}:${selectedSeason}`;
+    const currentCallup = callupByPlayerSeason.get(callupKey);
+    if (currentCallup?.locked || (currentCallup && currentCallup.source !== providerKey)) {
+      retainedIds.add(currentCallup.id);
+      callups++;
+      continue;
+    }
+    const callupPatch = {
       national_team_id: nationalTeamId,
       player_id: playerId,
       season: selectedSeason,
@@ -227,15 +245,32 @@ export async function syncNationalTeam(db, ctx = {}) {
       ext: member.ext || member,
       synced_at: syncedAt,
       updated_at: syncedAt,
-    }, { onConflict: "national_team_id,player_id,season" });
+    };
+    const query = currentCallup
+      ? db.from("national_team_callups").update(callupPatch).eq("id", currentCallup.id).eq("locked", false).eq("source", providerKey)
+      : db.from("national_team_callups").insert({ ...callupPatch, locked: false });
+    const { data: savedCallup, error: callupError } = await query.select("id").maybeSingle();
     if (callupError) throw new Error(`${member.name}: ${callupError.message}`);
+    if (!savedCallup?.id) throw new Error(`${member.name}: convocation modifiée pendant la synchronisation`);
+    retainedIds.add(savedCallup.id);
+    callupByPlayerSeason.set(callupKey, { id: savedCallup.id, player_id: playerId, season: selectedSeason, source: providerKey, locked: false });
     callups++;
+  }
+
+  if (atomicCallups) atomicResult = await applyApiCallups(db, nationalTeamId, selectedSeason, atomicPeople);
+  const staleIds = (existingCallups || []).filter((row) => row.active && row.source === providerKey && !row.locked && !retainedIds.has(row.id)).map((row) => row.id);
+  for (let offset = 0; offset < staleIds.length; offset += 400) {
+    const { error } = await db.from("national_team_callups").update({ active: false, updated_at: syncedAt })
+      .in("id", staleIds.slice(offset, offset + 400)).eq("national_team_id", nationalTeamId).eq("source", providerKey).eq("locked", false);
+    if (error) throw error;
   }
 
   const competitionNames = [...new Set(matches.map((match) => match.league_name).filter(Boolean))];
   const listPreview = (items) => items.slice(0, 5).join(" ; ") + (items.length > 5 ? ` ; +${items.length - 5}` : "");
   const seasonSummary = [...seasonCounts.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([label, count]) => `${label} ×${count}`).join(", ");
   const notes = [`saisons API : ${seasonSummary || "aucune"}`];
+  if (atomicResult?.skipped) notes.push("convocations API ignorées : liste RBFA prioritaire");
+  if (!squad.length) notes.push("avertissement : effectif API vide, convocations précédentes conservées");
   const existingWithoutSeason = withoutSeason.length - newWithoutSeason.length;
   if (existingWithoutSeason) notes.push(`avertissement : ${existingWithoutSeason} match(s) existant(s) sans saison API exploitable : saison actuelle conservée`);
   if (newWithoutSeason.length) notes.push(`avertissement : ${newWithoutSeason.length} nouveau(x) match(s) inséré(s) sans saison : ${listPreview(newWithoutSeason.map((match) => `${match.home_name || "?"}–${match.away_name || "?"} du ${String(match.kickoff || "").slice(0, 10) || "?"}`))}`);
@@ -243,3 +278,4 @@ export async function syncNationalTeam(db, ctx = {}) {
   if (lockedIgnored) notes.push(`matchs verrouillés ignorés : ${lockedIgnored}`);
   return `${team.name} (${category.toUpperCase()}) : ${resolvedMatches.length} matchs, ${competitionMap.size} compétitions (${competitionNames.join(", ") || "aucune"}) et ${callups} joueurs (${season}) · ${notes.join(" · ")}`;
 }
+

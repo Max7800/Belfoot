@@ -268,12 +268,23 @@ export async function syncCompetition(db, competition, ctx = {}) {
       if (error) throw error;
     }
   }
+  // La date de l'import complet ne prouve pas que le classement a été lu :
+  // conserver sa propre date si l'appel échoue ou renvoie une liste vide.
+  const standingsDates = { ...(finalExt.standings_synced_at_by_season || {}) };
+  if (!Object.hasOwn(standingsDates, selectedSeason)) {
+    standingsDates[selectedSeason] = finalExt.full_competition_seasons?.[selectedSeason] || null;
+  }
   if (provider.fetchStandings) {
     try {
+      const standingsStartedAt = new Date().toISOString();
       const groups = normalizeStandings(await provider.fetchStandings(competition, ctx), map);
-      if (groups.length) finalExt = { ...finalExt, standings_by_season: { ...(finalExt.standings_by_season || {}), [selectedSeason]: groups } };
+      if (groups.length) {
+        finalExt = { ...finalExt, standings_by_season: { ...(finalExt.standings_by_season || {}), [selectedSeason]: groups } };
+        standingsDates[selectedSeason] = standingsStartedAt;
+      }
     } catch (error) { if (isLeaseLost(error)) throw error; warnings.push(`classements: ${error.message}`); }
   }
+  finalExt = { ...finalExt, standings_synced_at_by_season: standingsDates };
   // Ces marqueurs ne sont posés qu'après la fin du job de base. La carte par
   // saison évite qu'un import complet 2024 fasse passer une saison 2026 encore
   // partielle pour complète. Les imports ciblés des sélections ne les posent pas.

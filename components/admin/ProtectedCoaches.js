@@ -20,7 +20,7 @@ export default function ProtectedCoaches() {
       }
       setRows(all.sort((a, b) => (a.clubs?.name || "").localeCompare(b.clubs?.name || "", "fr")));
     }
-    load();
+    load().catch(() => { if (active) setError("Chargement impossible"); });
     return () => { active = false; };
   }, []);
   return <section className="mb-4 rounded-xl border border-amber-400/30 bg-amber-400/5 p-3">

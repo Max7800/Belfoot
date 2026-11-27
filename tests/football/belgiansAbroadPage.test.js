@@ -21,16 +21,17 @@ describe("championnat d'un Belge à l'étranger", () => {
 
 describe("page Belges à l'étranger", () => {
   const page = fs.readFileSync("app/belges-a-l-etranger/page.js", "utf8");
+  const form = fs.readFileSync("lib/abroadForm.js", "utf8");
   const map = fs.readFileSync("components/football/BelgiansWorldMap.js", "utf8");
   it("championnat non suivi : un groupe par pays, plus un seul groupe au drapeau du premier joueur", () => {
     expect(page).toContain("const key = known ? item.competition : `?${item.country}`;");
     expect(page).toContain("selectLeague(league.filter, league.unknownLeague ? league.country : null)");
   });
   it("dernières performances : matchs en club où le joueur est entré en jeu", () => {
-    expect(page).toContain('Number(row.performance.minutes) > 0 && data.clubs[row.performance.club_id]?.team_type !== "national"');
+    expect(form).toContain('Number(row.performance.minutes) > 0 && data.clubs[row.performance.club_id]?.team_type !== "national"');
   });
   it("championnat cohérent avec le club actuel", () => {
-    expect(page).toContain("clubLeagues, club });");
+    expect(form).toContain("clubLeagues, club });");
   });
   it("coquilles corrigées", () => {
     expect(map).toContain("Clique sur une <span");
@@ -41,8 +42,8 @@ describe("page Belges à l'étranger", () => {
 describe("en-tête de la page Belges", () => {
   const page = fs.readFileSync("app/belges-a-l-etranger/page.js", "utf8");
   it("Diables à l'étranger et « sous d'autres couleurs » comptés à côté des joueurs, pays et clubs", () => {
-    expect(page).toContain("{view.diables}</b>");
-    expect(page).toContain("{view.otherColors.length}</b>");
+    expect(page).toContain('data.loading || data.error ? "—" : view.diables');
+    expect(page).toContain('data.loading || data.error ? "—" : view.otherColors.length');
     expect(page).toContain('diables: enriched.filter((item) => item.watch === "belgium").length');
   });
 });
@@ -52,6 +53,6 @@ describe("liste des Belges suivis", () => {
   it("paginée par 24 (bouton « Voir plus »), remise à 24 quand un filtre change", () => {
     expect(page).toContain("const PAGE_SIZE = 24;");
     expect(page).toContain("shown.slice(0, visibleCount).map(");
-    expect(page).toContain("useEffect(() => { setVisibleCount(PAGE_SIZE); }, [query, country, competition, position, profile]);");
+    expect(page).toContain("useEffect(() => { setVisibleCount(PAGE_SIZE); }, [query, country, competition, position, profile, age]);");
   });
 });

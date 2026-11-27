@@ -10,6 +10,34 @@ permissions:
   contents: read
 
 jobs:
+  postgres-concurrency:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: test-only
+          POSTGRES_DB: belfoot_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d belfoot_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: test-only
+      PGDATABASE: belfoot_test
+    steps:
+      - name: Recuperer le depot
+        uses: actions/checkout@v7
+      - name: Tester les ecritures simultanees
+        run: bash tests/football/rbfaConcurrency.sh
+
   quality:
     runs-on: ubuntu-latest
     timeout-minutes: 12

@@ -5,6 +5,8 @@ import { ArrowLeft, CalendarDays, ChevronDown, Clock3, MapPin, Pencil, RefreshCw
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import { readAll } from "@/lib/readAll";
+import { loadMatchesByIds } from "@/lib/publicFootballData";
 import { confirmationText, launchJob } from "@/lib/adminJobs";
 import { useLabels } from "@/lib/labels";
 import DiscussButton from "@/components/forum/DiscussButton";
@@ -15,6 +17,7 @@ import { preferAssignedPlayerStats } from "@/lib/playerStats";
 import { resolvePlayerCountry, resolvePlayerLeague } from "@/lib/playerSnapshot";
 import { competitionHrefs } from "@/lib/competitionLinks";
 import { NATIONAL_TEAM_CATALOG, isNationalSelectionClub, nationalityBadges, ratingTone } from "@/lib/nationalities";
+import { performanceDisplay } from "@/lib/playerPerformanceDisplay";
 import { useAuth } from "@/lib/auth";
 import AdminHint from "@/components/AdminHint";
 import { careerStints, resolveCurrentClubId } from "@/lib/playerCareer";
@@ -142,7 +145,7 @@ export default function PlayerPage() {
       currentClubId ? supabase.from("clubs").select("id,name,logo_url,city,team_type,parent_club_id,national_category,ext").eq("id", currentClubId).maybeSingle() : Promise.resolve({ data: null }),
       player.national_team_id ? supabase.from("clubs").select("id,name,short_name,logo_url,team_type,national_category").eq("id", player.national_team_id).maybeSingle() : Promise.resolve({ data: null }),
       supabase.from("player_season_stats").select("*").eq("player_id", id).order("season", { ascending: false }),
-      supabase.from("match_player_stats").select("*").eq("player_id", id).limit(60),
+      readAll(() => supabase.from("match_player_stats").select("*").eq("player_id", id)),
       relevantTeamIds.length ? supabase.from("matches").select("id,competition_id,home_club_id,away_club_id,home_score,away_score,kickoff,status").or(`home_club_id.in.(${relevantTeamIds.join(",")}),away_club_id.in.(${relevantTeamIds.join(",")})`).order("kickoff", { ascending: false }).limit(120) : Promise.resolve({ data: [] }),
     ]);
     if (statsResult.error) throw statsResult.error;
@@ -153,8 +156,7 @@ export default function PlayerPage() {
     const matchesById = new Map((clubMatchesResult.data || []).map((match) => [match.id, match]));
     const missingMatchIds = [...new Set((performancesResult.data || []).map((row) => row.match_id).filter((matchId) => matchId && !matchesById.has(matchId)))];
     if (missingMatchIds.length) {
-      const { data: oldMatches, error } = await supabase.from("matches").select("id,competition_id,home_club_id,away_club_id,home_score,away_score,kickoff,status").in("id", missingMatchIds);
-      if (error) throw error;
+      const oldMatches = await loadMatchesByIds(supabase, missingMatchIds);
       for (const match of oldMatches || []) matchesById.set(match.id, match);
     }
     const matches = [...matchesById.values()];
@@ -389,7 +391,8 @@ export default function PlayerPage() {
         <div hidden={profileSection === "career"} className="space-y-8">
           <section><div className="mb-3 flex items-center gap-2"><Clock3 className="h-5 w-5 text-accent" /><h2 className="text-lg font-black">{L("player.recent.performances", "Dernières performances")}</h2></div>{view.performanceRows.length ? <><div className="space-y-2">{view.performanceRows.slice(0, showAllPerformances ? undefined : VISIBLE_LINES).map(({ performance, match }) => {
             const home = state.clubs[match.home_club_id]; const away = state.clubs[match.away_club_id];
-            return <Link key={performance.id} href={`/matchs/${performance.match_id}`} className="block rounded-2xl border border-line/10 bg-surface/65 p-3 transition hover:border-accent/40"><div className="flex items-center gap-2"><ClubMark club={home} /><span className="min-w-0 flex-1 truncate text-xs font-semibold">{home?.name || "—"}</span><b className="shrink-0 rounded-lg bg-bg/70 px-2.5 py-1.5 text-sm tabular-nums">{match.home_score ?? "–"} : {match.away_score ?? "–"}</b><span className="min-w-0 flex-1 truncate text-right text-xs font-semibold">{away?.name || "—"}</span><ClubMark club={away} /></div><div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-line/10 pt-3 text-[11px] text-muted"><span>{new Date(match.kickoff).toLocaleDateString("fr-BE", { day: "numeric", month: "short" })}</span><span><b className="text-content">{performance.minutes ?? 0}</b> min</span>{performance.starter && <span>Titulaire</span>}{performance.goals > 0 && <b className="text-content">⚽ {performance.goals}</b>}{performance.assists > 0 && <b className="text-sky-300">A {performance.assists}</b>}{performance.rating != null && <b className={`ml-auto rounded-lg px-2 py-1 ${ratingTone(performance.rating)}`}>{Number(performance.rating).toFixed(1)}</b>}</div></Link>;
+            const display = performanceDisplay(performance);
+            return <Link key={performance.id} href={`/matchs/${performance.match_id}`} className="block rounded-2xl border border-line/10 bg-surface/65 p-3 transition hover:border-accent/40"><div className="flex items-center gap-2"><ClubMark club={home} /><span className="min-w-0 flex-1 truncate text-xs font-semibold">{home?.name || "—"}</span><b className="shrink-0 rounded-lg bg-bg/70 px-2.5 py-1.5 text-sm tabular-nums">{match.home_score ?? "–"} : {match.away_score ?? "–"}</b><span className="min-w-0 flex-1 truncate text-right text-xs font-semibold">{away?.name || "—"}</span><ClubMark club={away} /></div><div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-line/10 pt-3 text-[11px] text-muted"><span>{new Date(match.kickoff).toLocaleDateString("fr-BE", { day: "numeric", month: "short" })}</span><span>{display.minutes === null ? "Temps de jeu inconnu" : display.minutes === 0 ? "0 min enregistrée" : <><b className="text-content">{display.minutes}</b> min</>}</span>{performance.starter && <span>Titulaire</span>}{performance.goals > 0 && <b className="text-content">⚽ {performance.goals}</b>}{performance.assists > 0 && <b className="text-sky-300">A {performance.assists}</b>}{display.rating != null && <b className={`ml-auto rounded-lg px-2 py-1 ${ratingTone(display.rating)}`}>{display.rating.toFixed(1)}</b>}</div></Link>;
           })}</div>{view.performanceRows.length > VISIBLE_LINES && <button type="button" onClick={() => setShowAllPerformances((current) => !current)} className="mt-3 w-full rounded-xl border border-line/15 px-3 py-2 text-xs font-bold text-muted transition hover:border-accent/40 hover:text-content">{showAllPerformances ? "Réduire" : `Voir les ${view.performanceRows.length - VISIBLE_LINES} autres matchs`}</button>}</> : <div className="rounded-2xl border border-dashed border-line/15 bg-surface/40 p-5 text-sm leading-6 text-muted">Les statistiques de saison sont disponibles ; le détail match par match ne l’est pas encore.<AdminHint>synchronisation ciblée « Compositions & performances ».</AdminHint></div>}</section>
         </div>
       </div>
