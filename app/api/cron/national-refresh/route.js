@@ -7,6 +7,7 @@ import { monitorRbfaSelections } from "@/modules/football/rbfaMonitor";
 import { syncFifaRanking } from "@/modules/football/fifaRankingSync";
 import { syncFifaTournamentSquad } from "@/modules/football/fifaTournamentSquads";
 import { syncU21Draw } from "@/modules/football/uefaDrawSync";
+import { syncFifaU17Fixtures } from "@/modules/football/fifaU17FixturesSync";
 
 export const dynamic = "force-dynamic";
 // Vercel Hobby : 60 s max par Function. Le travail réel est borné (lots + budget).
@@ -133,6 +134,8 @@ export async function GET(request) {
 
     const u21DrawPromise = syncU21Draw(db, settings?.data || {}, { now })
       .catch((error) => ({ ok: false, error: String(error?.message || error).slice(0, 200) }));
+    const fifaU17FixturesPromise = syncFifaU17Fixtures(db, settings?.data || {}, { now })
+      .catch((error) => ({ ok: false, error: String(error?.message || error).slice(0, 200) }));
 
     let used = 0;
     const results = [];
@@ -164,17 +167,17 @@ export async function GET(request) {
     // Direct : active le live_enabled des compétitions INTERNATIONALES avec un match de
     // sélection suivie proche, et le désactive sur celles sans match proche (ménage après
     // rassemblement). On ne touche qu'aux compétitions de sélections, jamais aux clubs.
-    const [liveToggle, rbfaMonitor, fifaRanking, fifaSquad, u21Draw] = await Promise.all([
-      syncSelectionLiveFlags(db, teamIds, teamIn, now, strategy), rbfaMonitorPromise, fifaRankingPromise, fifaSquadPromise, u21DrawPromise,
+    const [liveToggle, rbfaMonitor, fifaRanking, fifaSquad, u21Draw, fifaU17Fixtures] = await Promise.all([
+      syncSelectionLiveFlags(db, teamIds, teamIn, now, strategy), rbfaMonitorPromise, fifaRankingPromise, fifaSquadPromise, u21DrawPromise, fifaU17FixturesPromise,
     ]);
 
     const attempted = results.filter((result) => !result.skipped);
     return Response.json({
-      ok: attempted.every((result) => result.ok) && [rbfaMonitor, fifaRanking, fifaSquad, u21Draw].every((result) => result?.ok !== false),
+      ok: attempted.every((result) => result.ok) && [rbfaMonitor, fifaRanking, fifaSquad, u21Draw, fifaU17Fixtures].every((result) => result?.ok !== false),
       season, window: { from, to },
       followed: teams.length, due: due.length, heldAfterCollision, refreshed: attempted.filter((result) => result.ok).length,
       skipped: results.filter((result) => result.skipped).length,
-      estimatedCalls: used, liveToggle, rbfaMonitor, fifaRanking, fifaSquad, u21Draw, results,
+      estimatedCalls: used, liveToggle, rbfaMonitor, fifaRanking, fifaSquad, u21Draw, fifaU17Fixtures, results,
     }, { status: attempted.length === 0 || attempted.some((result) => result.ok) ? 200 : 500 });
   } catch (error) {
     return Response.json({ ok: false, error: String(error?.message || error).slice(0, 500) }, { status: 500 });
