@@ -10,6 +10,7 @@ import StandingsTable from "@/components/football/StandingsTable";
 import CompetitionTransfers from "@/components/football/CompetitionTransfers";
 import CupRounds from "@/components/football/CupRounds";
 import FifaU17Fixtures from "@/components/football/FifaU17Fixtures";
+import UefaYouthDraw from "@/components/football/UefaYouthDraw";
 import NationsLeagueStandings from "@/components/football/NationsLeagueStandings";
 import GroupStandings from "@/components/football/GroupStandings";
 import CompetitionHeader from "@/components/football/CompetitionHeader";
@@ -612,7 +613,7 @@ export default function CompetitionPage() {
         </div>
       )}
 
-      {showMatchData && tab === "classement" && <div className="mb-4"><FifaU17Fixtures enabled={comp?.id === "d7088941-8ca5-4d6f-aa3d-c3724d44ba2b" && seasonLabel === "2026-2027"} matches={seasonMatches} clubs={clubsMap} /></div>}
+      {showMatchData && tab === "classement" && <div className="mb-4 space-y-4"><FifaU17Fixtures enabled={comp?.id === "d7088941-8ca5-4d6f-aa3d-c3724d44ba2b" && seasonLabel === "2026-2027"} matches={seasonMatches} clubs={clubsMap} /><UefaYouthDraw competition={comp} season={seasonLabel} /></div>}
       {showMatchData && tab === "classement" && (partialCompetition
         ? <div className="rounded-2xl border border-amber-400/25 bg-amber-400/5 p-6 text-center"><div className="font-black text-amber-200">Classement indisponible pour le moment</div><p className="mt-2 text-sm text-muted">Il sera affiché dès que toutes les équipes et tous les matchs seront disponibles.<AdminHint>lancer la synchronisation complète et contrôlée depuis l’administration.</AdminHint></p></div>
         : isNationsLeague && nationsGroups.length

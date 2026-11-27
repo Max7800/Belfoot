@@ -58,9 +58,12 @@ describe("état des synchronisations", () => {
   it("distingue les échéances passées des prochaines sans leur attribuer une automatisation", () => {
     const before = upcomingInternationalDraws(Date.parse("2026-12-05T00:00:00Z"));
     expect(before).toHaveLength(3);
-    expect(before.every((draw) => draw.status === "upcoming" && !draw.automatic)).toBe(true);
+    expect(before.every((draw) => draw.status === "upcoming")).toBe(true);
+    expect(before.find((draw) => draw.id === "euro-2028-qualifying").automatic).toBe(false);
+    expect(before.find((draw) => draw.id === "u17-2027-round2").automatic).toBe(true);
     const after = upcomingInternationalDraws(Date.parse("2026-12-07T00:00:00Z"));
     expect(after.find((draw) => draw.id === "euro-2028-qualifying").status).toBe("check");
-    expect(upcomingInternationalDraws(Date.parse("2027-02-01T00:00:00Z"))).toHaveLength(0);
+    expect(upcomingInternationalDraws(Date.parse("2027-02-01T00:00:00Z"))).toHaveLength(2);
+    expect(upcomingInternationalDraws(Date.parse("2027-04-01T00:00:00Z"))).toHaveLength(0);
   });
 });
