@@ -1,0 +1,10 @@
+# Audit des pages Diables — 21 novembre 2026
+
+## Constats et suite
+
+- La PR #132 corrige la sélection des matchs récents et à venir. L'ancien chargement privilégiait les 120 plus anciens, ce qui peut fausser le match vedette, les résultats et le choix des compétitions. La PR reste à valider et sa mise en production à vérifier.
+- Les tuiles matchs, victoires et buts comptaient les seuls résultats chargés, toutes années confondues, sans indiquer la limite. Choix de Max : bilan de l'année civile courante. Cette branche lit les matchs terminés de l'année en heure belge avec pagination indépendante du calendrier ; les scores absents ne sont pas assimilés à des zéros. Les totaux restent tributaires des données importées ; le classement FIFA est distinct.
+- Le classement de groupe est choisi par proximité des matchs et affiché dans la colonne latérale ; il ne garantit pas d'être celui du dernier résultat. Un match amical n'a pas nécessairement de classement. Étudier un lien explicite compétition + saison, sans afficher une autre édition comme liée au résultat. Contrôler les cas de live, d'absence de groupe, de tournoi et de sélection jeune/féminine avant modification.
+- La page met actuellement le prochain match en avant, puis des résultats ; le classement est latéral sur ordinateur et vient plus loin sur mobile. Examiner avec Max la priorité contextuelle : direct ou match imminent, sinon dernier résultat et son classement pertinent, prochains matchs et résultats récents.
+- La surveillance RBFA existante porte sur les sélections A et U21 ; `observedAt` est une date de vérification et `changedAt` une date de détection de modification, pas une date de publication d'une annonce officielle. Ne pas afficher automatiquement « annonce aujourd'hui » sur cette seule base. Étudier une source d'annonce datée et fiable, les mises à jour, l'expiration et les identités avant d'ajouter un événement d'accueil.
+- Le contrôle du fonctionnement des crons et la couverture réelle des données demandent des relevés en production ; le simple examen du code ne les démontre pas.

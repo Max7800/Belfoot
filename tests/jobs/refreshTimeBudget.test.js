@@ -6,6 +6,10 @@ import { REFRESH_TIME_BUDGET_MS } from "@/lib/competitionRefresh";
 // synchro (10 à 20 s) en avançant l'horloge simulée.
 const state = vi.hoisted(() => ({ db: null, runs: [], durationMs: 15000, failOn: null, savesDuringRun: [] }));
 vi.mock("@/lib/supabaseAdmin", () => ({ getAdmin: () => state.db }));
+vi.mock("@/modules/football/rbfaMonitor", () => ({ monitorRbfaSelections: async () => ({ skipped: true }) }));
+vi.mock("@/modules/football/fifaRankingSync", () => ({ syncFifaRanking: async () => ({ skipped: true }) }));
+vi.mock("@/modules/football/fifaTournamentSquads", () => ({ syncFifaTournamentSquad: async () => ({ skipped: true }) }));
+vi.mock("@/modules/football/uefaDrawSync", () => ({ syncU21Draw: async () => ({ skipped: true }) }));
 vi.mock("@/lib/jobs", () => ({
   runJob: async (key, ctx) => {
     // État déjà enregistré pour les compétitions précédentes AVANT ce lancement ?

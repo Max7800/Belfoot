@@ -84,7 +84,9 @@ describe("pages publiques : lectures des tables volumineuses toujours complètes
     const read = (file) => fs.readFileSync(file, "utf8");
     const competition = read("app/competitions/[slug]/page.js");
     // Lectures complètes, regroupées en vagues parallèles (perf du 28/10).
-    expect(competition).toContain("const [statsResult, membershipResult, transferResult] = await Promise.all([\n      readAll(() => {\n        const query = supabase.from(\"player_season_stats\")".replace(/\n/g, competition.includes("\r\n") ? "\r\n" : "\n"));
+    expect(competition).toContain("const [statsResult, membershipResult, transferResult] = await Promise.all([");
+    expect(competition).toContain('unpublishedSeasons ? Promise.resolve({ data: [], error: null }) : readAll(() => {');
+    expect(competition).toContain('const query = supabase.from("player_season_stats")');
     expect(competition).toContain('readAll(() => supabase.from("player_team_seasons")');
     expect(competition).toContain("const [loadedPlayers, exactMatchStats] = await Promise.all([");
     expect(read("app/competitions/page.js")).toContain('readAll(() => supabase.from("matches").select("id,competition_id,phase,round_raw")),');

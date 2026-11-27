@@ -244,6 +244,7 @@ export default function OnzePage() {
         {!votable && Object.keys(results).length > 0 && <span className="ml-auto rounded-full bg-amber-400/15 px-3 py-1 text-xs font-black uppercase tracking-wider text-amber-300">Onze des lecteurs</span>}
       </div>
 
+      {preMatch && <p className="text-sm text-muted">Joueurs proposés à partir des données disponibles et des choix de la rédaction : cette liste ne garantit pas la convocation officielle pour ce match.</p>}
       {!userId && !sharedComposition && <p className="rounded-xl border border-amber-400/25 bg-amber-400/5 p-3 text-sm text-amber-200">Connecte-toi pour composer et enregistrer ton XI.</p>}
       {preMatch && votable && <div className="flex gap-1 overflow-x-auto rounded-xl border border-line/10 bg-surface p-1">{FORMATION_OPTIONS.map((formation) => <button key={formation} onClick={() => changeFormation(formation)} className={`shrink-0 rounded-lg px-4 py-2 text-sm font-black ${activeFormation === formation ? "bg-red-500 text-white" : "text-muted hover:bg-white/[0.04] hover:text-white"}`}>{formation}</button>)}</div>}
       {sharedComposition && <a href={`/onze?match=${sess.match_id}`} className="block rounded-xl border border-sky-400/25 bg-sky-400/5 p-3 text-center text-sm font-bold text-sky-200">Composer mon propre onze</a>}

@@ -49,6 +49,23 @@ beforeEach(() => {
   registerFakeProvider();
 });
 
+describe("syncNationalTeam — migration transactionnelle", () => {
+  it("transmet le lot complet à la transaction et respecte la priorité RBFA", async () => {
+    const db = createFakeSupabase({ schema_migrations: [{ module: "football", version: "0043_rbfa_callups_atomic" }] }, { rpc: { apply_api_callups_atomic: async () => ({ data: { skipped: true, reason: "rbfa_priority" }, error: null }) } });
+    const detail = await syncNationalTeam(db, CRON_CTX);
+    expect(detail).toContain("liste RBFA prioritaire");
+    expect(db.rpcCalls).toHaveLength(1);
+    expect(db.rpcCalls[0]).toMatchObject({ name: "apply_api_callups_atomic", args: { p_season: "2026-2027", p_people: [{ externalId: "100" }] } });
+    expect(db.rows("national_team_callups")).toHaveLength(0);
+  });
+  it("ne retombe pas sur une écriture directe si la transaction échoue", async () => {
+    const existing = { id: "old", player_id: "old-player", national_team_id: "team", season: "2026-2027", source: "apifootball", active: true, locked: false };
+    const db = createFakeSupabase({ schema_migrations: [{ module: "football", version: "0043_rbfa_callups_atomic" }], clubs: [{ id: "team", source: "apifootball", external_id: "1", name: "Belgique", team_type: "national", locked: false }], national_team_callups: [existing] }, { rpc: { apply_api_callups_atomic: async () => ({ data: null, error: { message: "panne simulée" } }) } });
+    await expect(syncNationalTeam(db, CRON_CTX)).rejects.toThrow(/panne simulée/);
+    expect(db.rows("national_team_callups")).toEqual([existing]);
+  });
+});
+
 describe("syncNationalTeam — saison de chaque match", () => {
   it("rattache chaque match à SA saison API, jamais à la saison du cron", async () => {
     fixtures = [
@@ -189,6 +206,47 @@ describe("syncNationalTeam — comportements existants préservés", () => {
     expect(callups.find((row) => row.player_id === player.id)).toMatchObject({ season: "2026-2027", active: true, national_team_id: "club-be" });
   });
 
+  it("un effectif API vide conserve les convocations existantes et signale le problème", async () => {
+    const db = createFakeSupabase({
+      clubs: [{ id: "club-be", source: "apifootball", external_id: "1", name: "Belgique", team_type: "national", locked: false }],
+      national_team_callups: [{ id: "callup-old", national_team_id: "club-be", player_id: "player-old", season: "2025-2026", active: true, source: "apifootball", locked: false }],
+    });
+    squad = [];
+    const detail = await syncNationalTeam(db, CRON_CTX);
+    expect(db.rows("national_team_callups")[0].active).toBe(true);
+    expect(detail).toContain("effectif API vide, convocations précédentes conservées");
+  });
+
+  it("conserve les convocations précédentes si l'enregistrement d'un joueur échoue", async () => {
+    const db = createFakeSupabase({
+      clubs: [{ id: "club-be", source: "apifootball", external_id: "1", name: "Belgique", team_type: "national", locked: false }],
+      national_team_callups: [{ id: "callup-old", national_team_id: "club-be", player_id: "player-old", season: "2025-2026", active: true, source: "apifootball", locked: false }],
+    }, { notNull: { players: ["name"] } });
+    squad = [{ external_id: "100", name: null, ext: {} }];
+    await expect(syncNationalTeam(db, CRON_CTX)).rejects.toThrow();
+    expect(db.rows("national_team_callups")[0].active).toBe(true);
+  });
+
+  it("une convocation verrouillée n'est pas écrasée par le fournisseur", async () => {
+    const db = createFakeSupabase({
+      clubs: [{ id: "club-be", source: "apifootball", external_id: "1", name: "Belgique", team_type: "national", locked: false }],
+      players: [{ id: "player-100", source: "apifootball", external_id: "100", name: "Joueur Test", locked: false }],
+      national_team_callups: [{ id: "locked", national_team_id: "club-be", player_id: "player-100", season: "2026-2027", active: true, source: "apifootball", locked: true, shirt_number: 22 }],
+    });
+    await syncNationalTeam(db, CRON_CTX);
+    expect(db.rows("national_team_callups")).toEqual([expect.objectContaining({ id: "locked", active: true, locked: true, shirt_number: 22 })]);
+  });
+
+  it("préserve une convocation manuelle de la même saison", async () => {
+    const db = createFakeSupabase({
+      clubs: [{ id: "club-be", source: "apifootball", external_id: "1", name: "Belgique", team_type: "national", locked: false }],
+      players: [{ id: "player-100", source: "apifootball", external_id: "100", name: "Joueur Test", locked: false }],
+      national_team_callups: [{ id: "manual", national_team_id: "club-be", player_id: "player-100", season: "2026-2027", active: true, source: "manual", locked: false, shirt_number: 22 }],
+    });
+    await syncNationalTeam(db, CRON_CTX);
+    expect(db.rows("national_team_callups")).toEqual([expect.objectContaining({ id: "manual", source: "manual", shirt_number: 22 })]);
+  });
+
   it("crée les compétitions internationales comme avant", async () => {
     fixtures = [rawFixture({ id: 101, date: "2024-09-07T18:45:00+00:00", season: 2024, ...NL })];
     const db = createFakeSupabase();
@@ -222,3 +280,4 @@ describe("syncNationalTeam — comportements existants préservés", () => {
     expect(secondDetail).not.toContain("nouveau(x) match(s)");
   });
 });
+

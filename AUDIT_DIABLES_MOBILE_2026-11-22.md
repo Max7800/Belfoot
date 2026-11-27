@@ -1,0 +1,5 @@
+# Page Diables et groupe en cours
+
+Contrôle en production le 22 novembre 2026 : les données du groupe G du Mondial U17 étaient disponibles et s'affichaient sur la page Diables sous les résultats et la sélection. La Belgique était deuxième derrière le Mali. La difficulté relevée sur mobile provient notamment de la position tardive du bloc ; les données étaient bien présentes, il ne faut pas inventer une panne de synchronisation.
+
+La page présente le match en direct ou le dernier résultat, puis le classement de la compétition de ce résultat lorsqu'il existe. Les autres classements restent consultables ; si le dernier résultat est un amical sans groupe, l'ordre existant retient une compétition pertinente. Les statistiques de l'année et les autres résultats viennent ensuite. Les futurs matchs restent dans « Prochains rendez-vous » et le lien vers le onze d'avant-match reste attaché au prochain match. Aucune modification des classements, des règles de calcul ou des sources ; quand aucun groupe exploitable n'est disponible, aucun tableau n'est inventé.

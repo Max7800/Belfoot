@@ -163,7 +163,7 @@ export default function MatchPage() {
   const diableSquad = useMemo(() => {
     const nationalTeamId = Object.values(clubs).find((club) => club.team_type === "national" && club.national_followed && club.national_category === "senior" && (club.national_gender || "men") === "men")?.id;
     if (!nationalTeamId) return [];
-    return callups.filter((row) => row.national_team_id === nationalTeamId && players[row.player_id]).map((row) => ({ ...row, player: players[row.player_id] }));
+    return callups.filter((row) => row.national_team_id === nationalTeamId && ["started", "played"].includes(row.status) && players[row.player_id]).map((row) => ({ ...row, player: players[row.player_id] }));
   }, [callups, clubs, players]);
 
   if (m === undefined) return <p className="text-muted">Chargement…</p>;
