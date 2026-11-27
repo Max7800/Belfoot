@@ -3,6 +3,10 @@ import { assertImportTargetAllowed } from "@/lib/importPlan";
 import { JOB_CATALOG } from "@/lib/jobCatalog";
 import { getAdmin } from "@/lib/supabaseAdmin";
 import { COMPETITION_COLLISION } from "@/modules/football/sync";
+import { monitorRbfaSelections } from "@/modules/football/rbfaMonitor";
+import { syncFifaRanking } from "@/modules/football/fifaRankingSync";
+import { syncFifaTournamentSquad } from "@/modules/football/fifaTournamentSquads";
+import { syncU21Draw } from "@/modules/football/uefaDrawSync";
 
 export const dynamic = "force-dynamic";
 // Vercel Hobby : 60 s max par Function. Le travail réel est borné (lots + budget).
@@ -117,6 +121,19 @@ export async function GET(request) {
       });
     }
 
+    // Surveillance indépendante, sans appel API-Football ni modification des
+    // convocations. Trois documents au maximum par passage et délais réseau bornés.
+    const rbfaMonitorPromise = monitorRbfaSelections(db, settings?.data || {}, { now })
+      .catch((error) => ({ ok: false, error: String(error?.message || error).slice(0, 200) }));
+    const fifaRankingPromise = syncFifaRanking(db, settings?.data || {}, { now })
+      .catch(() => ({ ok: false, error: "Synchronisation du classement indisponible" }));
+
+    const fifaSquadPromise = syncFifaTournamentSquad(db, settings?.data || {}, { now })
+      .catch(() => ({ ok: false, error: "Liste FIFA indisponible" }));
+
+    const u21DrawPromise = syncU21Draw(db, settings?.data || {}, { now })
+      .catch((error) => ({ ok: false, error: String(error?.message || error).slice(0, 200) }));
+
     let used = 0;
     const results = [];
     const callsPerSelection = 5; // fiche + matchs (2 saisons) + effectif, avec marge
@@ -147,15 +164,17 @@ export async function GET(request) {
     // Direct : active le live_enabled des compétitions INTERNATIONALES avec un match de
     // sélection suivie proche, et le désactive sur celles sans match proche (ménage après
     // rassemblement). On ne touche qu'aux compétitions de sélections, jamais aux clubs.
-    const liveToggle = await syncSelectionLiveFlags(db, teamIds, teamIn, now, strategy);
+    const [liveToggle, rbfaMonitor, fifaRanking, fifaSquad, u21Draw] = await Promise.all([
+      syncSelectionLiveFlags(db, teamIds, teamIn, now, strategy), rbfaMonitorPromise, fifaRankingPromise, fifaSquadPromise, u21DrawPromise,
+    ]);
 
     const attempted = results.filter((result) => !result.skipped);
     return Response.json({
-      ok: attempted.every((result) => result.ok),
+      ok: attempted.every((result) => result.ok) && [rbfaMonitor, fifaRanking, fifaSquad, u21Draw].every((result) => result?.ok !== false),
       season, window: { from, to },
       followed: teams.length, due: due.length, heldAfterCollision, refreshed: attempted.filter((result) => result.ok).length,
       skipped: results.filter((result) => result.skipped).length,
-      estimatedCalls: used, liveToggle, results,
+      estimatedCalls: used, liveToggle, rbfaMonitor, fifaRanking, fifaSquad, u21Draw, results,
     }, { status: attempted.length === 0 || attempted.some((result) => result.ok) ? 200 : 500 });
   } catch (error) {
     return Response.json({ ok: false, error: String(error?.message || error).slice(0, 500) }, { status: 500 });

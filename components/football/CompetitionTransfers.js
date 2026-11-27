@@ -7,7 +7,8 @@ import { seasonYear } from "@/modules/football/season";
 import { readAll, readChunks } from "@/lib/readAll";
 import { dedupeTransfers } from "@/lib/transferLabels";
 import { chunkIds, loadPlayersByIds } from "@/lib/publicFootballData";
-import { matchesTransferQuery, summarizeTransfers } from "@/lib/transfersView";
+import { collapseFreeAgentTransitions, matchesTransferQuery, summarizeTransfers } from "@/lib/transfersView";
+import { dateInZone, transferWindowId, transferWindowsFor, windowStatus } from "@/lib/transferWindows";
 
 // Page Transferts : bilan chiffré, vue par club (par défaut) ou fil chronologique.
 // Refonte après l'audit du 28/10/2026 (lib/transfersView.js).
@@ -47,7 +48,7 @@ function TransferLine({ item, clubs, photos, side = null }) {
       </div>
       <div className="flex flex-shrink-0 flex-col items-end gap-1">
         {item.label && <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${KIND_STYLE[item.kind]}`}>{item.label}</span>}
-        <span className="text-[10px] text-muted">{fmtDate(item.transfer_date)}</span>
+        <span className="text-[10px] text-muted">{item.transfer_date_uncertain ? "Date à confirmer" : fmtDate(item.transfer_date)}</span>
       </div>
     </div>
   );
@@ -63,6 +64,8 @@ export default function CompetitionTransfers({ competition }) {
   const [loading, setLoading] = useState(true);
   const [mode, setMode] = useState("clubs");
   const [filter, setFilter] = useState("all");
+  const [windowFilter, setWindowFilter] = useState("all");
+  const [clock, setClock] = useState(() => new Date());
   const [clubFilter, setClubFilter] = useState("");
   const [query, setQuery] = useState("");
   const [expanded, setExpanded] = useState(() => new Set());
@@ -78,7 +81,7 @@ export default function CompetitionTransfers({ competition }) {
 
   useEffect(() => {
     if (!competition?.id || !year) return;
-    setLoading(true); setClubFilter("");
+    setLoading(true); setClubFilter(""); setWindowFilter("all");
     (async () => {
       const { data: seasonRows } = await supabase.from("seasons").select("id,label").eq("competition_id", competition.id);
       const seasonRow = (seasonRows || []).find((s) => Number(seasonYear(s.label)) === year);
@@ -91,7 +94,7 @@ export default function CompetitionTransfers({ competition }) {
       if (!ids.size) { setRows([]); setClubs({}); setPhotos({}); setLoading(false); return; }
       const idList = [...ids].join(",");
       const { data } = await readAll(() => supabase.from("player_transfers")
-        .select("id,player_id,player_name,from_club_id,to_club_id,from_club_name,to_club_name,transfer_date,transfer_type")
+        .select("id,player_id,player_name,from_club_id,to_club_id,to_club_external_id,from_club_name,to_club_name,transfer_date,transfer_type,source")
         .eq("season_start_year", year)
         .or(`from_club_id.in.(${idList}),to_club_id.in.(${idList})`)
         .order("transfer_date", { ascending: false }));
@@ -104,14 +107,21 @@ export default function CompetitionTransfers({ competition }) {
         loadPlayersByIds(supabase, playerIds),
       ]);
       const clubMap = Object.fromEntries((clubResult.data || []).map((club) => [club.id, club]));
-      setRows(dedupeTransfers(raw, clubMap));
+      setRows(dedupeTransfers(collapseFreeAgentTransitions(raw), clubMap));
       setClubs(clubMap);
       setPhotos(Object.fromEntries(players.map((player) => [player.id, player.photo_url])));
       setLoading(false);
     })().catch(() => { setRows([]); setLoading(false); });
   }, [competition?.id, year]);
 
-  const summary = useMemo(() => summarizeTransfers(rows, clubIds), [rows, clubIds]);
+  const windowInfo = transferWindowsFor(competition, year);
+  useEffect(() => {
+    if (!windowInfo) return undefined;
+    const timer = window.setInterval(() => setClock(new Date()), 60000);
+    return () => window.clearInterval(timer);
+  }, [windowInfo]);
+  const windowRows = useMemo(() => !windowInfo || windowFilter === "all" ? rows : rows.filter((row) => transferWindowId(row, windowInfo.periods) === windowFilter), [rows, windowInfo, windowFilter]);
+  const summary = useMemo(() => summarizeTransfers(windowRows, clubIds), [windowRows, clubIds]);
   const searched = useMemo(() => summary.items.filter((item) => matchesTransferQuery(item, query)), [summary, query]);
   const feed = useMemo(() => searched.filter((item) => {
     if (filter === "in" && !(item.dir === "in" || item.dir === "internal")) return false;
@@ -132,6 +142,15 @@ export default function CompetitionTransfers({ competition }) {
 
   return (
     <div className="space-y-4">
+      {windowInfo ? <section className="rounded-2xl border border-line/15 bg-surface/70 p-4" aria-label="Périodes du mercato">
+        <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="text-sm font-black">Périodes d’enregistrement · {windowInfo.association}</h3><a className="text-xs text-sky-300 underline" href={windowInfo.source} target="_blank" rel="noreferrer">Source FIFA</a></div>
+        <div className="mt-3 flex flex-wrap gap-2">{windowInfo.periods.map((period) => {
+          const status = windowStatus(period, dateInZone(clock, windowInfo.timeZone));
+          const label = { upcoming: "À venir", open: "Ouvert", closed: "Fermé" }[status];
+          return <div key={period.id} className="rounded-xl border border-line/10 bg-bg/40 px-3 py-2 text-sm"><b>{period.label}</b> · {fmtDate(period.start)} – {fmtDate(period.end)} <span className="font-bold text-sky-300">{label}</span></div>;
+        })}</div>
+        <p className="mt-2 text-xs text-muted">Football professionnel masculin · dates vérifiées le 22 novembre 2026. Des mouvements peuvent être annoncés ou enregistrés hors de ces périodes.</p>
+      </section> : <p className="text-xs text-muted">Dates officielles du mercato indisponibles pour cette compétition et cette saison.</p>}
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         {tile("Arrivées", loading ? "…" : summary.totals.arrivals, "text-emerald-300")}
         {tile("Départs", loading ? "…" : summary.totals.departures, "text-red-300")}
@@ -146,6 +165,7 @@ export default function CompetitionTransfers({ competition }) {
         </div>
         {mode === "feed" && <div className="flex gap-1 rounded-lg bg-surface2 p-1 text-xs">{[["all", "Tous"], ["in", "Arrivées"], ["out", "Départs"]].map(([key, label]) => <button type="button" key={key} onClick={() => setFilter(key)} className={button(filter === key)}>{label}</button>)}</div>}
         <label className="flex min-w-[10rem] flex-1 items-center gap-2 rounded-lg border border-line/10 bg-surface2 px-2.5"><Search className="h-4 w-4 text-muted" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Joueur ou club…" className="min-w-0 flex-1 bg-transparent py-1.5 text-sm outline-none" /></label>
+        {windowInfo && <select value={windowFilter} onChange={(event) => setWindowFilter(event.target.value)} aria-label="Période du mercato" className="rounded-lg border border-line/10 bg-surface2 px-2 py-1.5 text-sm"><option value="all">Toute la saison</option>{windowInfo.periods.map((period) => <option key={period.id} value={period.id}>{period.label}</option>)}<option value="outside">Hors périodes</option><option value="uncertain">Date à confirmer</option></select>}
         {clubOptions.length > 0 && <select value={clubFilter} onChange={(event) => setClubFilter(event.target.value)} aria-label="Club" className="rounded-lg border border-line/10 bg-surface2 px-2 py-1.5 text-sm"><option value="">Tous les clubs</option>{clubOptions.map((club) => <option key={club.id} value={club.id}>{club.name}</option>)}</select>}
         {years.length > 1 && <select value={year} onChange={(event) => setYear(Number(event.target.value))} aria-label="Saison" className="rounded-lg border border-line/10 bg-surface2 px-2 py-1.5 text-sm">{years.map((y) => <option key={y} value={y}>{y}–{Number(y) + 1}</option>)}</select>}
       </div>

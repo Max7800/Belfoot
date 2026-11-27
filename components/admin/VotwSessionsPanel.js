@@ -106,7 +106,7 @@ export default function VotwSessionsPanel() {
 
   const generate = async (session) => {
     setBusy(true); setMsg("");
-    try { const r = await generateEligibles(session); const src = r.source === "squad" ? " — repli effectifs (pas de stats de match)" : r.source === "current-callups" ? " — noyau actuel utilisé : vérifie manuellement les convoqués" : r.source === "match-callups" ? " — convocations exactes du match" : r.source === "no-season" ? " — des matchs existent mais SANS saison rattachée (season_id manquant) : corrige la saison des matchs" : r.source === "none" ? " — aucun match pour cette journée" : ""; setMsg(`${r.added} ajouté(s) · ${r.found} trouvé(s) sur ${r.matches} match(s)${src}.`); await loadCandidates(session.id); }
+    try { const r = await generateEligibles(session); const src = r.source === "squad" ? " — repli effectifs (pas de stats de match)" : r.source === "current-callups" ? ` — noyau actuel utilisé${r.sourceDate ? `, données depuis le ${new Date(r.sourceDate).toLocaleDateString("fr-BE")}` : ", date inconnue"} : vérifie manuellement les convoqués` : r.source === "match-callups" ? " — convocations du match disponibles" : r.source === "no-season" ? " — des matchs existent mais SANS saison rattachée (season_id manquant) : corrige la saison des matchs" : r.source === "none" ? " — aucun match pour cette journée" : ""; setMsg(`${r.added} ajouté(s) · ${r.found} trouvé(s) sur ${r.matches} match(s)${src}.`); await loadCandidates(session.id); }
     catch (e) { setMsg(e.message); }
     setBusy(false);
   };

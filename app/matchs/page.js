@@ -9,6 +9,7 @@ import { loadClubsForMatches, loadPublicSeasonState, loadSeasonMatches } from "@
 import { useCompetitionMatchUpdates } from "@/lib/useCompetitionMatchUpdates";
 import SeasonNotice from "@/components/football/SeasonNotice";
 import { phaseLabel } from "@/lib/phaseLabels";
+import { publicPageStatus } from "@/lib/publicPageStatus";
 
 export default function MatchsPage() {
   const [comps, setComps] = useState([]); const [cid, setCid] = useState("");
@@ -17,24 +18,35 @@ export default function MatchsPage() {
   const [unpublished, setUnpublished] = useState(false);
   const [phase, setPhase] = useState(null); const [round, setRound] = useState("all");
   const [loading, setLoading] = useState(false); const [error, setError] = useState("");
+  const [competitionsLoading, setCompetitionsLoading] = useState(true);
+  const [seasonOwner, setSeasonOwner] = useState("");
+  const [seasonReady, setSeasonReady] = useState(false);
   const [view, setView] = useState("list");
+  const pageStatus = publicPageStatus({ competitionsLoading, loading, cid, seasonOwner, error, unpublished, competitionCount: comps.length });
   const activeSeason = seasons.find((season) => season.label === seasonLabel) || null;
   const viewChosen = useRef(false);
   useEffect(() => { if (!viewChosen.current && window.matchMedia("(max-width: 639px)").matches) setView("calendar"); }, []);
   const chooseView = (next) => { viewChosen.current = true; setView(next); };
-  useEffect(() => { supabase.from("competitions").select("id,name,logo_url,public_visible,position").order("name").then(({ data }) => { const arr = (data || []).filter((c) => c.public_visible !== false).sort((a, b) => (a.position ?? 999) - (b.position ?? 999)); setComps(arr); if (arr[0]) setCid(arr[0].id); }); }, []);
-  useEffect(() => { if (!cid) return; (async () => {
-    setError(""); setMatches([]); setClubs({}); setPhase(null); setRound("all");
+  useEffect(() => { let alive = true; supabase.from("competitions").select("id,name,logo_url,public_visible,position").order("name").then(({ data, error: loadError }) => {
+    if (!alive) return;
+    if (loadError) setError(loadError.message || String(loadError));
+    else { const arr = (data || []).filter((c) => c.public_visible !== false).sort((a, b) => (a.position ?? 999) - (b.position ?? 999)); setComps(arr); if (arr[0]) setCid(arr[0].id); }
+    setCompetitionsLoading(false);
+  }).catch((loadError) => { if (alive) { setError(loadError.message || String(loadError)); setCompetitionsLoading(false); } }); return () => { alive = false; }; }, []);
+  useEffect(() => { if (!cid) return; let alive = true; (async () => {
+    setLoading(true); setSeasonReady(false); setError(""); setMatches([]); setClubs({}); setPhase(null); setRound("all");
     const { seasons: orderedSeasons, unpublished: noPublishedSeason } = await loadPublicSeasonState(supabase, cid);
-    setSeasons(orderedSeasons); setSeasonLabel(orderedSeasons[0]?.label || ""); setUnpublished(noPublishedSeason);
-  })().catch((loadError) => setError(loadError.message || String(loadError))); }, [cid]);
-  useEffect(() => { if (!cid || (seasons.length && !activeSeason)) return; let alive = true; (async () => {
+    if (!alive) return;
+    setSeasons(orderedSeasons); setSeasonLabel(orderedSeasons[0]?.label || ""); setUnpublished(noPublishedSeason); setSeasonOwner(cid); setSeasonReady(true);
+    if (noPublishedSeason) setLoading(false);
+  })().catch((loadError) => { if (alive) { setSeasonOwner(cid); setLoading(false); setError(loadError.message || String(loadError)); } }); return () => { alive = false; }; }, [cid]);
+  useEffect(() => { if (!cid || !seasonReady || seasonOwner !== cid || unpublished || (seasons.length && !activeSeason)) return; let alive = true; (async () => {
     setLoading(true); setError(""); setPhase(null); setRound("all");
     const rows = await loadSeasonMatches(supabase, cid, activeSeason?.id);
     const clubMap = await loadClubsForMatches(supabase, rows);
     if (!alive) return;
     setMatches(rows); setClubs(clubMap); setLoading(false);
-  })().catch((loadError) => { if (alive) { setMatches([]); setClubs({}); setLoading(false); setError(loadError.message || String(loadError)); } }); return () => { alive = false; }; }, [cid, activeSeason, seasons.length]);
+  })().catch((loadError) => { if (alive) { setMatches([]); setClubs({}); setLoading(false); setError(loadError.message || String(loadError)); } }); return () => { alive = false; }; }, [cid, activeSeason, seasons.length, seasonOwner, seasonReady, unpublished]);
   useCompetitionMatchUpdates(cid, activeSeason?.id || null, setMatches);
   const seasonMatches = matches;
   const phases = useMemo(() => { const c = {}; for (const m of seasonMatches) { const p = m.phase || "—"; c[p] = (c[p] || 0) + 1; } return Object.keys(c).sort((a, b) => c[b] - c[a]); }, [seasonMatches]);
@@ -49,7 +61,7 @@ export default function MatchsPage() {
       <div className="-mx-4 mb-3 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:mx-0 sm:overflow-visible sm:px-0">
         <div className="flex w-max gap-2 sm:w-auto sm:flex-wrap">
           {comps.map((c) => (
-            <button key={c.id} onClick={() => setCid(c.id)} className={`flex shrink-0 items-center gap-2 rounded-xl border p-2 pr-3 text-sm transition ${cid === c.id ? "border-accent bg-accent/10" : "border-line/10 bg-surface hover:border-accent/40"}`}>
+            <button key={c.id} onClick={() => { if (c.id !== cid) { setLoading(true); setCid(c.id); } }} className={`flex shrink-0 items-center gap-2 rounded-xl border p-2 pr-3 text-sm transition ${cid === c.id ? "border-accent bg-accent/10" : "border-line/10 bg-surface hover:border-accent/40"}`}>
               {c.logo_url && <img src={c.logo_url} className="h-7 w-7 object-contain" alt="" />}
               <span className="font-semibold">{c.name}</span>
             </button>
@@ -59,13 +71,14 @@ export default function MatchsPage() {
       <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center">
         {phases.length > 1 && <select value={cur || ""} onChange={(e) => { setPhase(e.target.value); setRound("all"); }} className="w-full rounded-xl border border-line/10 bg-surface px-3 py-2 text-sm sm:hidden">{phases.map((p) => <option key={p} value={p}>{phaseLabel(p)}</option>)}</select>}
         {phases.length > 1 && <div className="hidden flex-wrap gap-2 sm:flex">{phases.map((p) => <button key={p} onClick={() => { setPhase(p); setRound("all"); }} className={`rounded-full border px-3 py-1 text-xs ${cur === p ? "border-accent bg-accent/10 text-accent" : "border-line/20 text-muted"}`}>{phaseLabel(p)}</button>)}</div>}
-        {seasons.length > 0 && <select value={seasonLabel} onChange={(e) => { setSeasonLabel(e.target.value); setPhase(null); setRound("all"); }} className="w-full rounded-xl border border-line/10 bg-surface px-3 py-2 text-sm sm:ml-auto sm:w-auto">{seasons.map((season) => <option key={season.id}>{season.label}</option>)}</select>}
+        {seasonOwner === cid && seasons.length > 0 && <select value={seasonLabel} onChange={(e) => { if (e.target.value !== seasonLabel) setLoading(true); setSeasonLabel(e.target.value); setPhase(null); setRound("all"); }} className="w-full rounded-xl border border-line/10 bg-surface px-3 py-2 text-sm sm:ml-auto sm:w-auto">{seasons.map((season) => <option key={season.id}>{season.label}</option>)}</select>}
       </div>
       <div className="mb-4 flex sm:justify-end"><div className="inline-flex w-full rounded-xl border border-line/10 bg-surface p-1 sm:w-auto"><button onClick={() => chooseView("calendar")} className={`order-1 flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold sm:order-2 sm:flex-none sm:py-1.5 ${view === "calendar" ? "bg-accent text-white" : "text-muted hover:text-content"}`}><CalendarDays className="h-3.5 w-3.5" />Calendrier</button><button onClick={() => chooseView("list")} className={`order-2 flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold sm:order-1 sm:flex-none sm:py-1.5 ${view === "list" ? "bg-accent text-white" : "text-muted hover:text-content"}`}><List className="h-3.5 w-3.5" />Liste</button></div></div>
-      <SeasonNotice unpublished={unpublished} season={activeSeason} matchCount={matches.length} loading={loading} error={error} />
+      <SeasonNotice unpublished={unpublished} season={activeSeason} matchCount={matches.length} loading={pageStatus === "loading"} error={error} />
       {error && <p className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">Impossible de charger cette saison : {error}</p>}
-      {loading && <div className="mb-4 h-40 animate-pulse rounded-2xl bg-surface" />}
-      {!loading && <>
+      {pageStatus === "loading" && <div role="status" aria-label="Chargement des matchs" className="mb-4 h-40 animate-pulse rounded-2xl bg-surface" />}
+      {pageStatus === "empty" && <p className="text-muted">Aucune compétition publiée.</p>}
+      {pageStatus === "ready" && <>
       {view === "calendar" ? <SeasonCalendar matches={pm} clubs={clubs} selectedRound={round} onRoundChange={setRound} /> : <>
         {rounds.length > 1 && <select value={round} onChange={(e) => setRound(e.target.value)} className="mb-4 w-full rounded-xl border border-line/10 bg-surface px-3 py-2 text-sm sm:hidden"><option value="all">Toutes les journées</option>{rounds.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}</select>}
         {rounds.length > 1 && <div className="mb-4 hidden flex-wrap gap-1 sm:flex"><button onClick={() => setRound("all")} className={`rounded-full border px-3 py-1 text-xs ${round === "all" ? "border-accent bg-accent/10 text-accent" : "border-line/20 text-muted"}`}>Tout</button>{rounds.map((r) => <button key={r.key} onClick={() => setRound(r.key)} className={`rounded-full border px-3 py-1 text-xs ${round === r.key ? "border-accent bg-accent/10 text-accent" : "border-line/20 text-muted"}`}>{r.num != null ? `J${r.num}` : r.label}</button>)}</div>}

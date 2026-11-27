@@ -7,12 +7,16 @@ import { useNationalTeamsConfig } from "@/lib/nationalTeams";
 import { useRankings } from "@/lib/rankings";
 import DiableRatings from "@/components/football/DiableRatings";
 import NationalGroupStandings from "@/components/football/NationalGroupStandings";
+import U21Draw from "@/components/football/U21Draw";
+import { RbfaSquadSummary, useRbfaSquad } from "@/components/football/RbfaSquad";
+import { FifaTournamentSquad, useFifaTournamentSquad } from "@/components/football/FifaTournamentSquad";
 import { groupByPosition, positionLabel } from "@/lib/positions";
 import { matchStatusMeta } from "@/lib/matchStatus";
 import { nationalityBadges } from "@/lib/nationalities";
 import { categoryLabel, isBelgianNationalTeam, isSeniorMenTeam, pickNationalTabs } from "@/lib/nationalCategories";
 import AdminHint from "@/components/AdminHint";
 import { readAll } from "@/lib/readAll";
+import { belgianCalendarYear, nationalMatchRecord } from "@/lib/nationalMatchRecord";
 
 const COUNTRY_CODES = {
   Belgium: "be", Belgique: "be", France: "fr", Netherlands: "nl", "Pays-Bas": "nl", Germany: "de", Allemagne: "de", England: "gb-eng", Angleterre: "gb-eng", Spain: "es", Espagne: "es", Italy: "it", Italie: "it", Portugal: "pt", Croatia: "hr", Croatie: "hr", Denmark: "dk", Danemark: "dk", Sweden: "se", Suède: "se", Norway: "no", Norvège: "no", Finland: "fi", Finlande: "fi", Switzerland: "ch", Suisse: "ch", Austria: "at", Autriche: "at", Poland: "pl", Pologne: "pl", Ukraine: "ua", Scotland: "gb-sct", Écosse: "gb-sct", Wales: "gb-wls", "Pays de Galles": "gb-wls", Ireland: "ie", Irlande: "ie", Greece: "gr", Grèce: "gr", Turkey: "tr", Turquie: "tr", Romania: "ro", Roumanie: "ro", Hungary: "hu", Hongrie: "hu", Serbia: "rs", Serbie: "rs", Albania: "al", Albanie: "al", Slovakia: "sk", Slovaquie: "sk", Slovenia: "si", Slovénie: "si", Czechia: "cz", Tchéquie: "cz", "Czech Republic": "cz", Luxembourg: "lu", Kazakhstan: "kz", Kosovo: "xk", Morocco: "ma", Maroc: "ma", Brazil: "br", Brésil: "br", Argentina: "ar", Argentine: "ar", Uruguay: "uy", Colombia: "co", Colombie: "co", Mexico: "mx", Mexique: "mx", USA: "us", "États-Unis": "us", Canada: "ca", Japan: "jp", Japon: "jp", Senegal: "sn", Sénégal: "sn", Nigeria: "ng", Algeria: "dz", Algérie: "dz", Egypt: "eg", Égypte: "eg", Australia: "au", Australie: "au", Iran: "ir", Korea: "kr", "Corée du Sud": "kr",
@@ -126,6 +130,7 @@ export default function NationalTeamsPage() {
   const [selectedGender, setSelectedGender] = useState("");
   const [selectedId, setSelectedId] = useState("");
   const [matches, setMatches] = useState([]);
+  const [annualRecord, setAnnualRecord] = useState(null);
   const [clubs, setClubs] = useState({});
   const [competitions, setCompetitions] = useState({});
   const [squad, setSquad] = useState([]);
@@ -140,7 +145,7 @@ export default function NationalTeamsPage() {
     // sans team_type=national : on les remonte afin de ne jamais perdre le
     // lien vers leurs matchs et convocations historiques.
     (async () => {
-      const fields = "id,name,short_name,logo_url,national_category,national_gender,fifa_ranking,national_followed,ext";
+      const fields = "id,name,short_name,logo_url,national_category,national_gender,fifa_ranking,national_followed,ext,source,external_id";
       const [nationalResult, legacyResult] = await Promise.all([
         readAll(() => supabase.from("clubs").select(fields).eq("team_type", "national")),
         supabase.from("clubs").select(fields).or("name.ilike.Belgium%,name.ilike.Belgique%,name.ilike.%Diables%,name.ilike.%Flames%"),
@@ -172,12 +177,15 @@ export default function NationalTeamsPage() {
     setRatingSquad([]);
     setPreMatchSessions([]);
     (async () => {
-      const [matchesResult, callupsResult] = await Promise.all([
-        supabase.from("matches").select("*").or(`home_club_id.eq.${selectedId},away_club_id.eq.${selectedId}`).order("kickoff", { ascending: true }).limit(120),
+      const cutoff = new Date().toISOString();
+      const teamFilter = `home_club_id.eq.${selectedId},away_club_id.eq.${selectedId}`;
+      const [pastMatches, futureMatches, callupsResult] = await Promise.all([
+        supabase.from("matches").select("*").or(teamFilter).lt("kickoff", cutoff).order("kickoff", { ascending: false }).limit(120),
+        supabase.from("matches").select("*").or(teamFilter).gte("kickoff", cutoff).order("kickoff", { ascending: true }).limit(30),
         supabase.from("national_team_callups").select("*").eq("national_team_id", selectedId).eq("active", true).order("updated_at", { ascending: false }),
       ]);
-      if (matchesResult.error || callupsResult.error) throw matchesResult.error || callupsResult.error;
-      const matchRows = matchesResult.data || [];
+      if (pastMatches.error || futureMatches.error || callupsResult.error) throw pastMatches.error || futureMatches.error || callupsResult.error;
+      const matchRows = [...(pastMatches.data || []), ...(futureMatches.data || [])];
       const callups = callupsResult.data || [];
       const clubIds = [...new Set(matchRows.flatMap((match) => [match.home_club_id, match.away_club_id]).filter(Boolean))];
       const competitionIds = [...new Set(matchRows.map((match) => match.competition_id).filter(Boolean))];
@@ -222,38 +230,47 @@ export default function NationalTeamsPage() {
           const historicalClubIds = [...new Set((historicalPlayers || []).map((player) => player.club_id).filter(Boolean))];
           const { data: historicalClubs } = historicalClubIds.length ? await supabase.from("clubs").select("id,name,logo_url").in("id", historicalClubIds) : { data: [] };
           const historicalClubMap = Object.fromEntries((historicalClubs || []).map((club) => [club.id, club]));
-          setRatingSquad(historicalCallups.map((callup) => ({ ...callup, player: historicalPlayerMap[callup.player_id], club: historicalClubMap[historicalPlayerMap[callup.player_id]?.club_id] })).filter((row) => row.player));
+          setRatingSquad(historicalCallups.filter((callup) => ["started", "played"].includes(callup.status)).map((callup) => ({ ...callup, player: historicalPlayerMap[callup.player_id], club: historicalClubMap[historicalPlayerMap[callup.player_id]?.club_id] })).filter((row) => row.player));
         }
       }
       setLoading(false);
     })().catch(() => { setSchemaMissing(true); setLoading(false); });
   }, [selectedId]);
 
+  const { year, from: yearFrom, to: yearTo } = belgianCalendarYear();
+  useEffect(() => {
+    if (!selectedId) return;
+    let active = true;
+    setAnnualRecord(null);
+    (async () => {
+      const { data, error } = await readAll(() => supabase.from("matches")
+        .select("id,status,home_club_id,away_club_id,home_score,away_score")
+        .or(`home_club_id.eq.${selectedId},away_club_id.eq.${selectedId}`)
+        .eq("status", "finished").gte("kickoff", yearFrom).lt("kickoff", yearTo));
+      if (active) setAnnualRecord({ teamId: selectedId, year, ...(error ? { error: true } : nationalMatchRecord(data || [], selectedId)) });
+    })().catch(() => { if (active) setAnnualRecord({ teamId: selectedId, year, error: true }); });
+    return () => { active = false; };
+  }, [selectedId, year, yearFrom, yearTo]);
+
   const selectedTeam = teams.find((team) => team.id === selectedId);
+  const { loaded: rbfaLoaded, snapshot: rbfaSquad } = useRbfaSquad(selectedTeam);
+  const { loaded: fifaSquadLoaded, snapshot: fifaSquad } = useFifaTournamentSquad({ teamId: selectedId, current: true });
   const genders = [...new Set(teams.map((team) => team.national_gender || "men"))];
   const teamsForGender = teams.filter((team) => (team.national_gender || "men") === (selectedGender || "men"));
   const now = Date.now();
   const upcoming = matches.filter((match) => match.status === "live" || (match.status === "scheduled" && new Date(match.kickoff).getTime() >= now));
   const results = matches.filter((match) => match.status === "finished").sort((a, b) => new Date(b.kickoff) - new Date(a.kickoff));
-  const featured = upcoming[0] || results[0] || null;
-  const preMatchSession = featured && ["scheduled", "live"].includes(featured.status)
-    ? preMatchSessions.find((item) => item.match_id === featured.id && item.status === "open" && (!item.opens_at || new Date(item.opens_at).getTime() <= now) && (!item.closes_at || new Date(item.closes_at).getTime() > now))
+  const featured = upcoming.find((match) => match.status === "live") || results[0] || upcoming[0] || null;
+  const preMatchMatch = upcoming[0];
+  const preMatchSession = preMatchMatch
+    ? preMatchSessions.find((item) => item.match_id === preMatchMatch.id && item.status === "open" && (!item.opens_at || new Date(item.opens_at).getTime() <= now) && (!item.closes_at || new Date(item.closes_at).getTime() > now))
     : null;
   // Classement FIFA de la Belgique : seulement pour l'équipe A masculine.
   const showFifa = isSeniorMenTeam(selectedTeam);
-  const fifaRank = selectedTeam?.fifa_ranking || rankings.fifa.find((row) => row.isBelgium)?.rank || "—";
-  const record = useMemo(() => {
-    if (!selectedId) return { wins: 0, draws: 0, losses: 0, goals: 0 };
-    return results.reduce((total, match) => {
-      const home = match.home_club_id === selectedId;
-      const mine = home ? match.home_score : match.away_score;
-      const theirs = home ? match.away_score : match.home_score;
-      total.goals += mine || 0;
-      if (mine > theirs) total.wins++; else if (mine === theirs) total.draws++; else total.losses++;
-      return total;
-    }, { wins: 0, draws: 0, losses: 0, goals: 0 });
-  }, [results, selectedId]);
-  const statTiles = [[results.length, config.labels.stats_matches, "text-white"], [record.wins, config.labels.stats_wins, "text-emerald-400"], [record.goals, config.labels.stats_goals, "text-white"], ...(showFifa ? [[fifaRank, config.labels.stats_fifa, "text-amber-300"]] : [])];
+  const fifaRank = rankings.fifa.find((row) => row.isBelgium)?.rank || selectedTeam?.fifa_ranking || "—";
+  const featuredClubs = showFifa && rankings.fifaSource && clubs[selectedId] ? { ...clubs, [selectedId]: { ...clubs[selectedId], fifa_ranking: fifaRank } } : clubs;
+  const annual = annualRecord?.teamId === selectedId && annualRecord?.year === year ? annualRecord : null;
+  const statTiles = [[annual?.matches ?? "—", config.labels.stats_matches, "text-white"], [annual?.scoredMatches ? annual.wins : "—", config.labels.stats_wins, "text-emerald-400"], [annual?.scoredMatches ? annual.goals : "—", config.labels.stats_goals, "text-white"], ...(showFifa ? [[fifaRank, config.labels.stats_fifa, "text-amber-300"]] : [])];
   const sectionConfig = Object.fromEntries(config.sections.map((section) => [section.key, section]));
   const displayedResults = results.slice(0, 6);
   const otherUpcoming = upcoming.filter((match) => match.id !== featured?.id).slice(0, 2);
@@ -267,20 +284,23 @@ export default function NationalTeamsPage() {
       <div className="absolute inset-0 bg-gradient-to-r from-black via-black/75 to-black/20" style={{ opacity: config.hero.overlay }} />
       <div className="relative z-10 max-w-2xl"><div className="text-[11px] font-black uppercase tracking-[.25em]" style={{ color: config.hero.secondary_color }}>{config.hero.kicker}</div><h1 className="mt-3 text-4xl font-black uppercase leading-none sm:text-6xl">{!selectedTeam || isSeniorMenTeam(selectedTeam) ? config.hero.title : categoryLabel(selectedTeam)}</h1><p className="mt-4 max-w-xl text-sm leading-6 text-slate-300 sm:text-base">{config.hero.intro}</p>
         {genders.length > 1 && <div className="mt-5 inline-flex rounded-xl border border-white/15 bg-black/25 p-1">{genders.map((gender) => <button key={gender} onClick={() => { setSelectedGender(gender); const first = teams.find((team) => (team.national_gender || "men") === gender); if (first) setSelectedId(first.id); }} className={`rounded-lg px-4 py-1.5 text-sm font-bold transition ${(selectedGender || "men") === gender ? "bg-white text-black" : "text-slate-300 hover:text-white"}`}>{gender === "women" ? "Femmes" : "Hommes"}</button>)}</div>}
-        <div className="mt-4 flex flex-wrap gap-2">{teamsForGender.map((team) => <button key={team.id} onClick={() => setSelectedId(team.id)} className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-bold transition ${selectedId === team.id ? "border-red-400/60 bg-red-500/20 text-white" : "border-white/15 bg-black/20 text-slate-300 hover:border-white/35"}`}>{team.logo_url && <img src={team.logo_url} className="h-5 w-5 object-contain" alt="" />}{categoryLabel(team)}</button>)}</div>
+        <div className="-mx-1 mt-4 flex gap-2 overflow-x-auto px-1 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">{teamsForGender.map((team) => <button key={team.id} onClick={() => setSelectedId(team.id)} className={`inline-flex shrink-0 items-center gap-2 rounded-xl border px-3 py-2 text-sm font-bold transition ${selectedId === team.id ? "border-red-400/60 bg-red-500/20 text-white" : "border-white/15 bg-black/20 text-slate-300 hover:border-white/35"}`}>{team.logo_url && <img src={team.logo_url} className="h-5 w-5 object-contain" alt="" />}{categoryLabel(team)}</button>)}</div>
       </div>
     </section>
 
     {loading ? <div className="h-72 animate-pulse rounded-3xl bg-surface" /> : teams.length === 0 ? <div className="rounded-3xl border border-dashed border-line/20 p-10 text-center"><div className="text-5xl">🇧🇪</div><h2 className="mt-4 text-xl font-black">Les sélections sont prêtes à être reliées</h2><p className="mt-2 text-sm text-muted">Lance la synchronisation ciblée depuis l’administration avec l’identifiant API-Football de la Belgique.</p></div> : <div className="grid items-start gap-4 lg:grid-cols-12">
       <div className="order-1 min-w-0 space-y-4 lg:col-span-8">
         <ModuleCard>
-          <PanelHeader icon={CalendarDays} title={config.labels.featured} />
-          <FeaturedMatch match={featured} clubs={clubs} competitions={competitions} />
+          <PanelHeader icon={CalendarDays} title={featured?.status === "live" ? "Match en direct" : featured?.status === "finished" ? "Dernier résultat" : "Prochain match"} />
+          <FeaturedMatch match={featured} clubs={featuredClubs} competitions={competitions} />
         </ModuleCard>
+        <U21Draw team={selectedTeam} />
+        <NationalGroupStandings teamId={selectedId} matches={matches} competitions={competitions} preferredCompetitionId={results[0]?.competition_id} />
         <div className={`grid gap-2 ${statTiles.length === 4 ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-3"}`}>
           {statTiles.map(([value, label, color]) => <div key={label} className="rounded-2xl border border-line/10 bg-surface/60 px-2 py-4 text-center sm:py-5"><b className={`block text-xl sm:text-2xl ${color}`}>{value}</b><span className="mt-1 block text-[8px] font-bold uppercase tracking-wider text-muted sm:text-[9px]">{label}</span></div>)}
         </div>
-      {preMatchSession && <Link href={`/onze?match=${featured.id}`} className="group flex flex-col gap-4 overflow-hidden rounded-2xl border border-red-400/25 bg-gradient-to-r from-red-950/60 via-surface to-amber-950/25 p-5 transition hover:border-red-400/55 sm:flex-row sm:items-center">
+        <p className="text-xs text-muted">{annual?.error ? `Bilan ${year} indisponible.` : `Bilan ${year} : matchs terminés disponibles pour cette sélection.`}{annual && !annual.error && annual.scoredMatches < annual.matches ? ` Victoires et buts calculés sur ${annual.scoredMatches} match(s) dont le score est disponible.` : ""}{showFifa ? " Le classement FIFA est indépendant de ce bilan." : ""}</p>
+      {preMatchSession && <Link href={`/onze?match=${preMatchMatch.id}`} className="group flex flex-col gap-4 overflow-hidden rounded-2xl border border-red-400/25 bg-gradient-to-r from-red-950/60 via-surface to-amber-950/25 p-5 transition hover:border-red-400/55 sm:flex-row sm:items-center">
         <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-amber-300/25 bg-amber-300/10"><Star className="h-5 w-5 text-amber-300" /></div>
         <div className="min-w-0 flex-1"><div className="text-[10px] font-black uppercase tracking-[.18em] text-amber-300">Avant-match communautaire</div><h2 className="mt-1 text-lg font-black text-white">Compose ton 11 des Diables</h2><p className="mt-1 text-xs leading-5 text-muted">Choisis ta tactique et tes titulaires, puis partage ta composition avant le coup d’envoi.</p></div>
         <span className="inline-flex shrink-0 items-center gap-1 text-sm font-black text-white">Faire mon 11 <ChevronRight className="h-4 w-4 transition group-hover:translate-x-1" /></span>
@@ -292,8 +312,8 @@ export default function NationalTeamsPage() {
       </ModuleCard>}
 
       {sectionConfig.squad?.enabled && <ModuleCard>
-        <PanelHeader icon={Users} title={sectionConfig.squad.label} subtitle={sectionConfig.squad.subtitle} accent={sectionConfig.squad.accent} action={squad.length > 4 ? `${config.labels.show_all_players} (${squad.length})` : null} actionHref={`/diables-rouges/selection?equipe=${selectedId}`} />
-        {squad.length ? <>
+        <PanelHeader icon={Users} title={sectionConfig.squad.label} subtitle={fifaSquad ? "La sélection belge pour la Coupe du monde U17." : rbfaSquad ? "La liste de joueurs publiée par la RBFA." : sectionConfig.squad.subtitle} accent={sectionConfig.squad.accent} action={(fifaSquad?.players.length || rbfaSquad?.players.length || squad.length) > 4 ? `${config.labels.show_all_players} (${fifaSquad?.players.length || rbfaSquad?.players.length || squad.length})` : null} actionHref={`/diables-rouges/selection?equipe=${selectedId}`} />
+        {!rbfaLoaded || !fifaSquadLoaded ? <p className="text-sm text-muted">Chargement de la sélection…</p> : fifaSquad ? <FifaTournamentSquad snapshot={fifaSquad} compact /> : rbfaSquad ? <RbfaSquadSummary snapshot={rbfaSquad} accent={sectionConfig.squad.accent} /> : squad.length ? <>
           <div className="sm:hidden"><SquadNamesPreview rows={squad} accent={sectionConfig.squad.accent} /></div>
           <SquadPreview rows={squad} accent={sectionConfig.squad.accent} className="hidden sm:grid" />
         </> : <p className="text-sm text-muted">La liste des joueurs n’est pas encore disponible.</p>}
@@ -301,12 +321,12 @@ export default function NationalTeamsPage() {
       </div>
 
       <aside className="order-5 min-w-0 space-y-4 lg:order-2 lg:col-span-4">
-        <NationalGroupStandings teamId={selectedId} matches={matches} competitions={competitions} />
         {showFifa && rankings.fifa.length > 0 && <ModuleCard>
           <PanelHeader icon={Trophy} title={config.labels.fifa} />
+          {rankings.fifaCheckedAt && <p className="mb-2 text-xs text-muted">Source : {rankings.fifaSource} · publication du {new Date(rankings.fifaPublishedAt).toLocaleDateString("fr-BE")} · vérifié le {new Date(rankings.fifaCheckedAt).toLocaleDateString("fr-BE")}</p>}
           <div className="divide-y divide-line/10 overflow-hidden rounded-xl border border-line/10 bg-black/10">{rankings.fifa.map((row, index) => <div key={index} className={`flex items-center justify-between px-3 py-1.5 text-sm lg:py-2.5 ${row.isBelgium ? "bg-gradient-to-r from-red-500/20 to-amber-300/[0.06] font-black text-white" : "text-slate-300"}`}><span className="flex min-w-0 items-center gap-2.5"><span className={`inline-block w-5 shrink-0 text-center text-xs font-black tabular-nums ${Number(row.rank) <= 3 ? "text-amber-300" : "text-slate-500"}`}>{row.rank}</span><CountryFlag nation={row.nation} /><span className="truncate">{row.nation}</span></span><span className={`ml-2 w-[78px] shrink-0 text-right text-[11px] tabular-nums ${row.isBelgium ? "text-amber-200" : "text-muted"}`}>{row.points !== "" ? <>{row.points} <span className="text-[9px]">pts</span></> : "—"}</span></div>)}</div>
         </ModuleCard>}
-        {showFifa && results[0] && ratingSquad.length > 0 && <DiableRatings match={results[0]} squad={ratingSquad} title={config.labels.ratings} showAllLabel={config.labels.show_all_players} showLessLabel={config.labels.show_less_players} compact />}
+        {showFifa && results[0] && <DiableRatings match={results[0]} squad={ratingSquad} title={config.labels.ratings} showAllLabel={config.labels.show_all_players} showLessLabel={config.labels.show_less_players} compact />}
         {sectionConfig.schedule?.enabled && otherUpcoming.length > 0 && <ModuleCard>
           <PanelHeader icon={CalendarDays} title={sectionConfig.schedule.label} subtitle={sectionConfig.schedule.subtitle} accent={sectionConfig.schedule.accent} />
           <div className="space-y-3">{otherUpcoming.map((match) => <SmallMatch key={match.id} match={match} clubs={clubs} competitions={competitions} compact />)}</div>

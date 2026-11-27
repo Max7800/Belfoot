@@ -1,0 +1,69 @@
+name: Audit vitesse Belfoot
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/audit-vitesse.yml
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    # Une seule exécution lors de la création de cette PR, puis uniquement à la demande.
+    if: github.event_name == 'workflow_dispatch' || github.head_ref == 'codex/audit-vitesse'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Installer Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Installer Lighthouse
+        run: npm install --prefix "$RUNNER_TEMP/belfoot-lighthouse" --no-save --ignore-scripts lighthouse@12.8.2
+      - name: Mesurer les pages publiques
+        shell: bash
+        run: |
+          set -u
+          mkdir -p rapports-vitesse
+          LH="$RUNNER_TEMP/belfoot-lighthouse/node_modules/.bin/lighthouse"
+          CHROME_PATH="$(command -v google-chrome || command -v chromium || command -v chromium-browser)"
+          export CHROME_PATH
+          pages=(
+            'accueil|https://belfoot.vercel.app/'
+            'competition|https://belfoot.vercel.app/competitions/pro-league'
+            'club|https://belfoot.vercel.app/clubs/f012418d-b844-431b-82b6-aafce85b2ef0'
+            'joueur|https://belfoot.vercel.app/players/a61ad20a-109d-4cce-a48e-39b6126ae432'
+            'match|https://belfoot.vercel.app/matchs/3cf57aec-4436-45f5-a184-754bc1b7b9b0'
+          )
+          echo '| Page | Profil | Score /100 | LCP (s) | FCP (s) | TBT (ms) | CLS |' >> "$GITHUB_STEP_SUMMARY"
+          echo '|---|---|---:|---:|---:|---:|---:|' >> "$GITHUB_STEP_SUMMARY"
+          failed=0
+          for page in "${pages[@]}"; do
+            IFS='|' read -r name url <<< "$page"
+            for profile in mobile ordinateur; do
+              preset=()
+              if [ "$profile" = ordinateur ]; then preset=(--preset=desktop); fi
+              file="rapports-vitesse/${name}-${profile}.json"
+              if "$LH" "$url" --only-categories=performance --output=json --output-path="$file" --chrome-flags='--headless --no-sandbox' --quiet "${preset[@]}" && jq -e '.runtimeError == null and .categories.performance.score != null' "$file" > /dev/null; then
+                jq -r --arg page "$name" --arg profile "$profile" '
+                  "| \($page) | \($profile) | \((.categories.performance.score * 100 | round)) | \((.audits["largest-contentful-paint"].numericValue / 1000 * 10 | round) / 10) | \((.audits["first-contentful-paint"].numericValue / 1000 * 10 | round) / 10) | \(.audits["total-blocking-time"].numericValue | round) | \((.audits["cumulative-layout-shift"].numericValue * 1000 | round) / 1000) |"
+                ' "$file" >> "$GITHUB_STEP_SUMMARY" || failed=1
+              else
+                echo "| $name | $profile | Erreur de mesure | — | — | — | — |" >> "$GITHUB_STEP_SUMMARY"
+                failed=1
+              fi
+            done
+          done
+          echo >> "$GITHUB_STEP_SUMMARY"
+          echo 'Une mesure synthétique par page et profil, depuis le runner GitHub. Le profil mobile est émulé, pas un vrai téléphone. Ces chiffres varient selon le réseau et la charge ; ils ne décrivent pas les visiteurs réels.' >> "$GITHUB_STEP_SUMMARY"
+          exit "$failed"
+      - name: Conserver les rapports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rapports-vitesse-lighthouse
+          path: rapports-vitesse/
+          if-no-files-found: warn
+          retention-days: 14
