@@ -103,7 +103,7 @@ describe("bilan de la compétition", () => {
 describe("page Transferts : branchements", () => {
   const component = fs.readFileSync("components/football/CompetitionTransfers.js", "utf8");
   it("bilan et clubs calculés par lib/transfersView ; libellé « Sans club » ; vue par club par défaut", () => {
-    expect(component).toContain("summarizeTransfers(rows, clubIds)");
+    expect(component).toContain("summarizeTransfers(windowRows, clubIds)");
     expect(component).toContain("Sans club");
     expect(component).toContain('useState("clubs")');
   });
