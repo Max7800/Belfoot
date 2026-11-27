@@ -1,8 +1,97 @@
-### 04/11/2026 — Matchs et performances des Belges à l'étranger
+## Mondial U17 et convocations — 21 novembre 2026
 
-- À la demande de l'utilisateur, les modules prochains matchs et dernières performances sont placés avant la carte, après le joueur mis en avant. Leur visibilité et leur ordre relatif restent administrables ; les autres blocs restent après la carte, l'annuaire en bas. Aucun appel API supplémentaire.
-- Le site affiche actuellement K. Karetsas (`70561371-efe6-41d7-85c9-fd5794aefad9`) avec les nationalités belge et grecque, mais sans sélection représentée et avec le statut « binational ». L'UEFA le liste avec la Grèce. Diagnostic et correction en base restent à faire : identifier de façon certaine la sélection grecque et respecter tout verrou ; ne pas modifier ses nationalités. Aucune modification de données effectuée.
-- Tests locaux ciblés : 8 réussis ; lint sans erreur avec avertissements images existants. Vérification responsive et CI à faire.
+- PR #124 fusionnée, commit main 6ad2d346 ; Vercel production dpl_FbS1VHe3itUkfMCe8hp8Yt8rnVGx READY, domaine belfoot.vercel.app associé, /diables-rouges HTTP 200. L'utilisateur a exécuté la migration 0043 et rapporté « Succès » ; absence d'accès direct à sa base, migration et première synchronisation des convocations pas encore vérifiées indépendamment. Voir le corps PR #124. Code déployé ne prouve pas que les convocations sont à jour.
+- Diagnostic communiqué par l'utilisateur : Mondial U17 `d7088941-8ca5-4d6f-aa3d-c3724d44ba2b`, API-Football 587, international, compétition `public_visible=false`, `live_enabled=true`; 2026-2027 `draft`, `public_active=false`, 10 matchs connus, plan compétition et saison désactivés. Valeurs 20/380 dans le plan sont des valeurs génériques inadaptées. Aucune donnée ou réglage U17 modifié en production ; pas d'import lancé. La source FIFA annonce 48 équipes et 104 matchs pour le tournoi entier ; le fournisseur peut publier les phases finales plus tard.
+- Une branche U17 corrige les estimations génériques seulement pour l'édition 2026-2027 de la compétition 587, sans toucher aux valeurs personnalisées ; elle ne publie pas la compétition. Poursuivre : vérifier la couverture API 2026, autoriser l'import sur la bonne saison, synchroniser et contrôler le calendrier, puis utiliser les mécanismes d'activation/publication et vérifier le direct et les données disponibles ; l'utilisateur a autorisé le chantier. Respecter le quota, ne pas dupliquer.
+
+## Reprise du 21 novembre 2026 — convocations et Mondial U17
+
+- L'utilisateur autorise la mise en production de la PR #124 et souhaite finir les convocations avant de poursuivre le Mondial U17. La branche fix/national-squad-empty pointe sur 6981d97 ; tests, lint, build et test de concurrence PostgreSQL CI réussis pour ce commit. Aucun merge ni déploiement de cette PR réalisé au moment de cette note.
+- Le résultat SQL fourni par l'utilisateur est `migration_deja_installee=false, table_convocations=true, table_reglages=true`. Cela vérifie la version exacte 0043_rbfa_callups_atomic, pas tous les prérequis, ni l'absence d'une autre version 0043. Le connecteur Supabase n'est pas disponible dans cette conversation. Ne pas prétendre que la migration a été installée ; vérifier la base cible, les autres migrations 0043, les fonctions/objets existants avant application et procéder suivant l'autorisation déjà donnée. Vérifier le résultat et le déploiement.
+- Prévisualisation Vercel en échec car les variables publiques Supabase sont configurées pour production uniquement. La production précédemment observée est main 7cec5a7 ; ne pas supposer que le build preview défaillant prouve une panne de production.
+- En attente ensuite : Coupe du monde U17 Qatar 2026 (début 19 novembre). Aucun résultat du diagnostic de la compétition en base n'a encore été fourni ; nom, identité fournisseur, couverture effective 2026, saison, autorisation du plan d'import et état public restent à vérifier avant import. Ne pas confondre cette tâche avec la migration des convocations.
+- Attention au contenu opérationnel : la page RBFA peut refléter le dernier rassemblement ; le rapprochement nom/date est inféré ; l'autorité RBFA ne s'efface pas automatiquement. Contrôler les logs et effectifs réels après activation. L'utilisateur souhaite changer de conversation après transmission.
+
+## Validation simultanée PostgreSQL — 18 novembre 2026
+
+- Ajout d'un service PostgreSQL 16 isolé dans la CI et d'un test sur deux sessions : un ancien worker API tente d'écrire pendant la transaction RBFA. Le test vérifie le refus de l'écriture et la liste finale. Base strictement locale et éphémère ; le SQL de préparation a été vérifié avec PGlite. Résultat CI à consulter impérativement avant déploiement.
+- Déploiement preview Vercel ab6a688 en échec : variables NEXT_PUBLIC_SUPABASE_URL et NEXT_PUBLIC_SUPABASE_ANON_KEY configurées uniquement pour production. Production actuelle encore sur main 7cec5a7. Accès direct Supabase indisponible ; aucune migration ni synchronisation de production réalisée. L'utilisateur a autorisé l'activation, après vérifications et accès effectifs.
+
+## Raccordement transactionnel des convocations — 18 novembre 2026
+
+- Si 0043 est installée, syncNationalTeam agrège les joueurs puis applique la transaction API ; en erreur il ne retombe jamais sur une écriture directe. Sans migration, le chemin historique reste utilisé. Une réponse API vide ne désactive toujours rien.
+- Après observation RBFA valide et résolution complète des identités, le monitor vérifie la migration, localise la sélection A/U21 et appelle la transaction. L'administration reçoit l'état appliqué, identités incomplètes, migration absente ou erreur ; un snapshot plus récent ne reçoit pas l'état d'une ancienne observation. Nouvelle tentative au prochain contrôle.
+- La migration ajoute un trigger qui refuse les insertions/mises à jour directes API après établissement de l'autorité RBFA, notamment les anciens workers ; les transactions utilisent le verrou commun. La priorité RBFA ne s'efface pas automatiquement ; prévoir un retour arrière contrôlé. Les tests PGlite vérifient l'ancien worker séquentiellement mais PAS une concurrence multi-connexions réelle.
+- Risques non levés : la source peut correspondre au dernier rassemblement, l'identification par nom/date est une inférence, la disponibilité réelle et la couverture des identités sont inconnues ; migration 0043 non installée, aucun import ni changement en production. 976 tests locaux et ESLint ciblé réussis ; CI à vérifier. Ne pas fusionner/activer sans accord et validation de concurrence et de déploiement.
+
+## Priorité RBFA même sur les lignes protégées — 18 novembre 2026
+
+- La migration 0043 mémorise une autorité RBFA après application transactionnelle, même lorsque toutes les convocations étaient manuelles et ne pouvaient pas être converties. La transaction API prend le même verrou et consulte cette autorité avant toute écriture. Test PostgreSQL ajouté pour ce cas ; 971 tests locaux et ESLint ciblé réussis.
+- Cette autorité ne s'efface pas automatiquement : prévoir une procédure explicite et sécurisée de retour à l'API avant activation. Aucun chemin applicatif ne doit appeler ces fonctions isolément ; concurrence réelle multi-connexions, reprise et processus anciens restent à traiter. Migration non installée, aucun changement ni appel de production.
+
+## Transactions coordonnées préparées — 18 novembre 2026
+
+- La migration 0043 prépare aussi `apply_api_callups_atomic` : les fonctions RBFA et API prennent le même verrou transactionnel, et une liste RBFA active bloque l'application d'un ancien effectif API. L'API vide et les conflits protégés sont traités sans suppression. Tests PGlite couvrent les deux ordres séquentiels API/RBFA, les protections et le rollback ; pas encore de test multi-connexions concurrents.
+- Aucune fonction n'est appelée par l'application. Pour terminer : brancher les DEUX chemins de façon cohérente (y compris reprise et gestion des fonctions absentes), vérifier les anciens processus en vol et la disponibilité/validité des sources, exécuter des tests concurrents réels. Ne pas activer un seul chemin en isolant l'autre : l'ancien import JS peut encore écrire après la transaction. La migration n'a pas été installée et aucune synchronisation de production n'a été lancée.
+- 970 tests locaux et ESLint ciblé réussis ; CI à vérifier.
+
+## Transaction RBFA préparée — 18 novembre 2026
+
+- Migration 0043 ajoute `apply_rbfa_callups_atomic`, réservée à service_role et non appelée par l'application. Elle verrouille les convocations pendant la transaction, relit le snapshot courant, impose une observation récente et complète, des identités uniques existantes et l'absence de conflits manuels/verrouillés, puis applique en une transaction. Une erreur annule toutes les modifications. Elle ne crée ni joueur ni club.
+- Attention : verrouiller pendant la transaction ne suffit pas à empêcher un import API-Football ultérieur de réintroduire son ancien effectif. Ne PAS brancher/activer la fonction avant d'avoir coordonné tous les écrivains (y compris jobs déjà en cours), testé la concurrence et défini le repli si migration absente. La correspondance RBFA est inférée et la page peut correspondre au dernier rassemblement ; la disponibilité réelle des identités est inconnue.
+- 968 tests locaux réussis, dont tests PostgreSQL PGlite de rejeu, autorisations, échecs, anciennes données et annulation forcée ; ESLint ciblé réussi. CI à vérifier. Migration non installée, aucun changement ou synchronisation en production.
+
+## Préparation sécurisée des convocations — 18 novembre 2026
+
+- `rbfaCallupPlan` calcule en lecture seule les ajouts, réactivations et retraits candidats. Refuse les listes incomplètes, identifiants dupliqués et conflits avec convocations manuelles/verrouillées. L'administration affiche le résultat lors de la comparaison RBFA ; aucune écriture en base n'a été ajoutée.
+- Le rapprochement nom+date n'accepte plus deux prénoms complets différents avec la même initiale. Les initiales restent compatibles, sous réserve d'unicité ; ce n'est pas un identifiant officiel partagé.
+- Une réelle mise à jour automatique exige encore une transaction en base et une sérialisation avec tous les imports API-Football ; ne pas appeler le plan comme s'il était atomique. La source peut représenter le dernier rassemblement et les catégories autres que A/U21 ne sont pas couvertes. Aucun déploiement ou synchronisation de production.
+- 960 tests locaux avant ajout d'un test d'intégration route supplémentaire ; celui-ci réussit séparément. ESLint ciblé réussi ; CI à vérifier.
+
+## Liens joueurs et clubs RBFA — 18 novembre 2026
+
+- À chaque lecture RBFA A/U21 valide, recherche des fiches Belfoot par date de naissance, nom et unicité dans les deux sens ; les ambiguïtés et absences restent sans lien et sont retentées au passage suivant. Aucun nouveau joueur ni club n'est créé et aucun champ de joueur ou de convocation n'est modifié. Une correspondance automatique reste une inférence, pas un identifiant officiel commun.
+- Le snapshot garde uniquement l'identifiant Belfoot résolu, et la page lit les photos, postes et clubs actuels depuis Belfoot. Liens vers les fiches joueur et club ; si le nom de club RBFA diffère, les deux noms sont explicitement affichés. L'admin montre le nombre de fiches reliées et les éventuelles erreurs. En cas d'échec de résolution, la liste source reste disponible sans lien et une nouvelle tentative aura lieu.
+- Limites : aucune validation de la couverture des dates de naissance en production, aucune garantie de parution immédiate à l'annonce, aucune mise à jour de national_team_callups ou des autres catégories jeunes. Les identités non résolues n'ont ni photo ni lien. Aucun accès ni synchronisation de production. 957 tests locaux et ESLint ciblé sans erreur ; CI à vérifier.
+
+## Affichage automatique des listes RBFA — 18 novembre 2026
+
+- La page Diables et la page sélection complète présentent la dernière liste RBFA A/U21 observée par le cron existant, quand elle est valide ; l'interface indique la date de vérification et précise qu'elle peut concerner le dernier rassemblement. La source doit être mise à jour par la RBFA : aucune garantie sur sa rapidité après annonce.
+- Repli sur les convocations Belfoot en l'absence de liste valide. Correspondance de catégorie strictement bornée aux identifiants API-Football 1 et 8183. Les joueurs de la source sont affichés par nom et club, sans association hasardeuse à une fiche Belfoot ; photos, liens, filtres par poste et autres usages de national_team_callups ne sont pas mis à jour par cette vue. Les autres jeunes ne sont pas encore couverts.
+- Aucun changement ni fusion de production, aucune migration et aucun appel provider déclenché. Le cron doit être actif et l'accès à RBFA fonctionnel en production ; aucune vérification en conditions réelles n'a été possible. 953 tests locaux et ESLint ciblé sans erreur. CI à vérifier.
+
+## Surveillance des pages RBFA — 18 novembre 2026
+
+- `national-refresh` surveille en parallèle les pages RBFA A/U21, au maximum une source par passage et une tentative par source/heure ; délai réseau de 5 s, aucun appel API-Football. Cela suppose que le cron national existant fonctionne ; aucun lancement ni vérification de production effectué.
+- Stockage CAS dans `site_settings.football_rbfa_monitor` : dernière liste valide, trois versions précédentes, date de vérification et éventuelle erreur. En cas de page incomplète ou d'échec, la dernière observation est conservée. Un état de surveillance apparaît dans l'administration. Les changements reflètent des identifiants de joueurs différents, pas nécessairement une annonce.
+- La page officielle A précise qu'elle présente le dernier rassemblement (https://www.rbfa.be/en/national-teams/red-devils/red-devils-team-selection). Elle peut donc ne pas correspondre à une annonce récente. Les actualités RBFA mentionnent séparément les annonces A/U21/U17 (https://www.rbfa.be/en/news), mais leur accès et leurs formats complets ne sont pas validés. Ne pas présenter cette surveillance comme une mise à jour automatique des convocations : aucune écriture des convocations ni annonce publique n'a été ajoutée ; source des nouvelles listes, identité et publication atomique restent à résoudre, notamment pour les autres jeunes.
+- 950 tests locaux réussis, ESLint ciblé réussi ; CI et accès depuis la production restent à vérifier. Aucun merge ni import en production.
+
+## Comparaison RBFA en lecture seule — 18 novembre 2026
+
+- Pages officielles RBFA A et U21 lues en lecture seule ; observation ponctuelle le 17/11 UTC : 26 et 24 joueurs. La page ne fournit pas de date fiable de l'annonce, Last-Modified concerne le document, et un rapprochement n'est pas une preuve officielle.
+- `rbfaSelections.js` parse la structure réelle (HTML ancien mal imbriqué, iso-8859-1), refuse listes vides/incomplètes/doublons, compare date de naissance + nom et refuse les ambiguïtés. Aucun ajout ou retrait si des identités sont incertaines. L'absence ne peut pas être déduite lorsque des identités manquent.
+- Route admin authentifiée GET `rbfa-selection-preview` et panneau Synchros : comparaison exclusivement en lecture, sans appel API-Football, aucune écriture. Aucune publication automatique ni historique d'annonces ; l'automatisation et l'identification des joueurs absents demeurent à concevoir et tester.
+- 70 tests ciblés et ESLint sans erreur en local ; CI à vérifier. Aucun import en production ni fusion.
+
+## Import des convocations — suite du 18 novembre 2026
+
+- L'import enregistre les nouveaux joueurs et leurs convocations avant de désactiver les anciennes ; une réponse vide ou une erreur d'enregistrement ne vide pas l'effectif précédent. Les lignes verrouillées ou de source manuelle de la même saison ne sont pas écrasées ; les désactivations concernent seulement les anciennes lignes API non verrouillées. Cette séquence limite les dégâts mais n'est pas une transaction atomique : une interruption peut laisser temporairement un mélange ancien/nouveau.
+- Tests : réponse vide, échec pendant l'import, verrou, source manuelle, répétition et saison ; 106 tests ciblés et ESLint réussis localement. Aucun appel API ni synchronisation en production.
+- La RBFA publie une page officielle des joueurs (https://static.rbfa.be/project/publiek/rencintstat/spelers_fr_145.htm) qui inclut dates de naissance et clubs, source potentielle de comparaison. Sa fraîcheur, ses droits d'usage, sa relation exacte à la liste d'un rassemblement et la correspondance des identités doivent être validés avant automatisation ; pas de scraping ou modification production ajouté.
+
+## Statistiques internationales automatiques — 18 novembre 2026
+
+- `competition-refresh` rend éligibles les compétitions internationales API-Football avec `ext.coverage.players === true`, saison publique et plan d'import autorisé. Après un match récent ou en reprise, le job existant `football.squads` traite une sélection par passage ; entraîneurs internationaux exclus du job coaches. Le quota et les checkpoints existants restent utilisés.
+- Les statistiques alimentent `player_season_stats` et les classements existants ; elles ne touchent ni au club actuel ni aux convocations. Les compétitions sans couverture explicite ne sont pas traitées. Le fournisseur plafonne actuellement fetchSquadPlayers à trois pages par équipe : les données peuvent rester partielles ; disponibilité et saison effectives des qualifs U17 à vérifier avant de promettre un classement complet.
+- 98 tests ciblés réussis et ESLint sans erreur en local. Pas de synchronisation de production ni fusion. Le diagnostic de la liste actuelle des Diables reste à faire ; le fournisseur peut renvoyer un effectif courant différent de la liste officielle.
+
+## Audit sélections et classements — 18 novembre 2026
+
+- Le cron national-refresh lance `football.national-team` sur les sélections suivies et autorisées (4 h en fenêtre, 20 h hors fenêtre par défaut). La source `/players/squads` est l'effectif courant du fournisseur : aucune garantie que ce soit la liste officielle d'un rassemblement. Cause exacte de la liste ancienne non vérifiée en production.
+- Une réponse effectif vide n'efface plus les convocations existantes et produit un avertissement. Ce garde-fou ne corrige pas une liste fournisseur ancienne ou incomplète.
+- `refreshTargets` exclut explicitement les compétitions internationales du passage automatique `football.squads` : leurs lignes player_season_stats et classements peuvent rester périmés. Prévoir un import distinct, borné, reprenable, respectant couverture et plan d'import ; vérifier les saisons API et distinguer l'absence de données de zéro. Les endpoints API top scorers/assists ne couvrent que le top 20 et ne remplacent pas toutes les statistiques.
+- Aucune synchronisation de production lancée. 17 tests ciblés et ESLint sans erreur en local. À compléter : diagnostic du cron et source en production, disponibilité par compétition, mise à jour atomique des convocations, plan de tests et suivi admin.
 
 ### 04/11/2026 — Lisibilité des compositions sur les fiches match
 
@@ -2892,3 +2981,9 @@ Fonctionnalités Belfoot qui seraient de bons candidats à généraliser dans le
   doublons provider** du Plan d’import. Il est en lecture seule ; aucun import, appel API ou fusion
   ne doit être lancé avant lecture de son rapport.
 - Aucun SQL, aucune migration et aucun appel API-Football ne sont nécessaires pour ce lot.
+
+# Suivi des compétitions internationales — 21 novembre 2026
+
+- Les classements récupèrent les fiches manquantes référencées seulement par les performances de match, sans appel API-Football. Les données dépendent de la couverture du fournisseur et des identifiants résolus.
+- Les checkpoints du cron des détails sont associés à la saison publique : un ancien passage ne bloque plus le traitement d'une nouvelle saison. Les anciens checkpoints sont revérifiés une fois sans supprimer les marqueurs de matchs synchronisés.
+- Vérifier séparément en production la couverture et l'exécution du cron pour la Coupe du monde U17 : aucune synchronisation de production n'a été lancée depuis cette branche. Les compteurs ne prouvent pas que le fournisseur retourne des statistiques complètes.
