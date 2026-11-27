@@ -55,7 +55,15 @@ export function compareRbfaSelection(official = [], players = [], activePlayerId
       // Une initiale reste compatible avec le prénom complet, mais deux
       // prénoms complets différents ne doivent jamais être rapprochés.
       const givenMatches = given.length === 1 ? given === officialGiven[0] : given === officialGiven;
-      return givenMatches && name.at(-1) === officialName.at(-1);
+      const officialFamily = officialName.slice(1);
+      const playerFamily = name.slice(1);
+      // Un fournisseur peut omettre la fin d'un nom composé. Les mots
+      // conservés doivent former le même préfixe complet, jamais une
+      // simple sous-chaîne. La date et l'unicité restent obligatoires.
+      const shortFamily = officialFamily.length <= playerFamily.length ? officialFamily : playerFamily;
+      const longFamily = officialFamily.length <= playerFamily.length ? playerFamily : officialFamily;
+      const familyMatches = shortFamily.length > 0 && shortFamily.every((part, i) => part.length >= 3 && part === longFamily[i]);
+      return givenMatches && (name.at(-1) === officialName.at(-1) || familyMatches);
     });
     if (candidates.length !== 1) { unresolved.push({ ...person, reason: candidates.length ? "identité ambiguë" : "aucune identité vérifiée" }); continue; }
     const match = { official: person, playerId: candidates[0].id, playerName: candidates[0].name };

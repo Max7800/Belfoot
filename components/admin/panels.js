@@ -21,6 +21,7 @@ import { invalidateTilesCache, TILE_SCOPES } from "@/lib/tiles";
 import { COMPETITION_SCOPES, groupCompetitionsByScope } from "@/lib/competitionScopes";
 import { healthItems, historyRows, resumableRuns, syncSections } from "@/lib/adminSync";
 import RbfaSelectionPreview from "./RbfaSelectionPreview";
+import ProtectedCoaches from "./ProtectedCoaches";
 
 // Écriture sûre de site_settings (lib/siteSettings.js) : ne remplace que les
 // clés données, sans effacer une écriture concurrente (cron, job, autre onglet).
@@ -251,6 +252,7 @@ export function JobsPanel() {
       <button disabled={!!busy} onClick={() => setHistoryAuto(settingsData.football_jpl_history_enabled !== true)} className="mt-2 rounded-lg border border-line/20 px-3 py-1.5 text-xs font-bold disabled:opacity-50">{settingsData.football_jpl_history_enabled === true ? "Désactiver" : "Activer"} les historiques automatiques Pro League</button>
     </section>
 
+    <ProtectedCoaches />
     <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-line/10 bg-surface/60 p-3">
       <select value={compId} onChange={(e) => setCompId(e.target.value)} aria-label="Compétition" className="rounded border border-line/10 bg-surface2 px-2 py-1 text-sm"><option value="">Choisir une compétition…</option>{(() => {
         // Taxonomie partagée avec le plan d'import : Belgique / Europe / Étranger (par pays) / Sélections.
@@ -755,7 +757,7 @@ export function RankingsPanel() {
   return (
     <div>
       <h2 className="mb-2 text-lg font-bold">Classements Belgique</h2>
-      <p className="mb-4 text-xs text-muted">Le classement FIFA est vérifié chaque semaine auprès de la FIFA. Le tableau manuel reste disponible ; le coefficient UEFA est saisi ici.</p>
+      <p className="mb-4 text-xs text-muted">Le classement FIFA est vérifié au plus une fois par jour auprès de la FIFA. Le tableau manuel reste disponible ; le coefficient UEFA est saisi ici.</p>
       <label className="mb-3 flex items-center gap-2 text-sm"><input type="checkbox" checked={autoFifa} onChange={(e) => setAutoFifa(e.target.checked)} />Utiliser le classement FIFA automatique lorsqu'il est disponible</label>
       <p className="mb-4 text-xs text-muted">{autoState?.checkedAt ? `Dernière vérification réussie : ${new Date(autoState.checkedAt).toLocaleString("fr-BE")}.` : "Aucun classement automatique reçu."}{autoState?.error ? " Dernière tentative en erreur ; le dernier classement valide est conservé." : ""} Lorsque le mode automatique est actif et disponible, les données manuelles restent enregistrées mais ne sont pas affichées.</p>
 

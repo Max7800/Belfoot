@@ -53,6 +53,6 @@ describe("liste des Belges suivis", () => {
   it("paginée par 24 (bouton « Voir plus »), remise à 24 quand un filtre change", () => {
     expect(page).toContain("const PAGE_SIZE = 24;");
     expect(page).toContain("shown.slice(0, visibleCount).map(");
-    expect(page).toContain("useEffect(() => { setVisibleCount(PAGE_SIZE); }, [query, country, competition, position, profile]);");
+    expect(page).toContain("useEffect(() => { setVisibleCount(PAGE_SIZE); }, [query, country, competition, position, profile, age]);");
   });
 });

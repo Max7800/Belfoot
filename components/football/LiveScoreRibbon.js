@@ -100,7 +100,7 @@ export default function LiveScoreRibbon({ config = {}, competitions = [], clubs:
       : shown.length ? <div className="p-3 sm:p-4">
         <div className="space-y-2">{groups.map(([id, group]) => <div key={id} className="overflow-hidden rounded-2xl border border-white/10 bg-black/15">
           <div className="border-b border-white/10 px-3 py-2 text-xs font-bold text-white/75">{competitionMap[id]?.name || "Compétition"}</div>
-          <div className="divide-y divide-white/10">{group.map((match) => <ScoreRow key={match.id} match={match} clubs={clubs} competition={competitionMap[match.competition_id]} highlighted={Boolean(followedSide(match))} followedSide={followedSide(match)} latestEvent={latestEvents[match.id]} />)}</div>
+          <div className="divide-y divide-white/10">{group.map((match) => <ScoreRow key={match.id} match={match} clubs={clubs} competition={competitionMap[match.competition_id]} highlighted={Boolean(followedSide(match))} latestEvent={latestEvents[match.id]} />)}</div>
         </div>)}</div>
         {pool.length > shown.length && <Link href="/direct" className="mt-2 flex items-center justify-center gap-1 rounded-xl border border-dashed border-white/15 py-2 text-xs font-bold text-white/70 hover:border-white/30 hover:text-white">Voir les {pool.length - shown.length} autres matchs<ArrowRight size={12} /></Link>}
       </div>
