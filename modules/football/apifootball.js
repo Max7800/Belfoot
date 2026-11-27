@@ -21,6 +21,9 @@ export function mapFixture(f) {
     home_name: f.teams.home.name, away_name: f.teams.away.name,
     home_logo: f.teams.home.logo || null, away_logo: f.teams.away.logo || null,
     home_score: f.goals.home, away_score: f.goals.away,
+    // Résultat fournisseur et tirs au but distincts du score après prolongation.
+    home_winner: f.teams.home.winner ?? null, away_winner: f.teams.away.winner ?? null,
+    home_penalties: f.score?.penalty?.home ?? null, away_penalties: f.score?.penalty?.away ?? null,
     status: mapStatus(f.fixture.status?.short), minute: f.fixture.status?.elapsed ?? null,
     status_short: f.fixture.status?.short || null,
     status_long: f.fixture.status?.long || null,

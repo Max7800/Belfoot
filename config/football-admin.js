@@ -24,6 +24,7 @@ export const FOOTBALL_ENTITIES = {
       { key: "public_visible", label: "Visible dans les pages publiques", type: "bool" },
       { key: "competition_scope", label: "Portail (catégorie)", type: "select", options: COMPETITION_SCOPES.map((scope) => ({ value: scope.key, label: `${scope.icon} ${scope.label}` })) },
       { key: "zones", label: "Zones de classement", type: "zones" },
+      { key: "winners_history", label: "Derniers vainqueurs", type: "competitionWinners" },
       { key: "rating_min", label: "Note : min. apparitions", type: "number" },
       { key: "live_enabled", label: "Direct activé pour les jobs automatiques", type: "bool" },
       { key: "live_refresh_seconds", label: "Direct : intervalle conseillé en secondes (30 à 900)", type: "number" },
@@ -229,3 +230,4 @@ export const FOOTBALL_ENTITIES = {
     ],
   },
 };
+
