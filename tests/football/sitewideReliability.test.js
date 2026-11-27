@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createFakeSupabase } from "../helpers/fakeSupabase";
 import { loadSeasonMatches } from "@/lib/publicFootballData";
 import { syncHealth } from "@/lib/syncHealth";
+import { upcomingInternationalDraws } from "@/lib/internationalDrawWatch";
 
 describe("lectures de compétition", () => {
   it("ne tronque pas une saison de plus de 1 000 matchs", async () => {
@@ -41,5 +42,25 @@ describe("état des synchronisations", () => {
     const rows = syncHealth(settings, [], now).snapshots;
     expect(rows.find((r) => r.label === "RBFA · Diables Rouges").status).toBe("missing");
     expect(rows.find((r) => r.label === "FIFA · Mondial U17 Belgique").status).toBe("missing");
+  });
+  it("signale les tirages absents ou en erreur sans les présenter comme à jour", () => {
+    const settings = { football_fifa_u17_2026_fixtures: { observedAt: "2026-11-22T11:00:00Z", stages: {} }, football_uefa_u21_2027_draw: { observedAt: "2026-11-22T11:00:00Z", error: "Source indisponible" } };
+    const rows = syncHealth(settings, [], now).snapshots;
+    expect(rows.find((row) => row.label === "FIFA · programme Mondial U17").status).toBe("missing");
+    expect(rows.find((row) => row.label === "UEFA · tirage Euro U21 2027").status).toBe("error");
+  });
+  it("classe un programme FIFA périmé et conserve les archives", () => {
+    const matches = Array.from({ length: 16 }, (_, i) => ({ id: String(i), kickoff: "2026-11-30T13:30:00Z", home: { id: `h${i}`, name: `h${i}` }, away: { id: `a${i}`, name: `a${i}` } }));
+    const settings = { football_fifa_u17_2026_fixtures: { observedAt: "2026-11-22T08:00:00Z", stages: { "292957": matches } } };
+    expect(syncHealth(settings, [], now).snapshots.find((row) => row.label === "FIFA · programme Mondial U17").status).toBe("stale");
+    expect(syncHealth(settings, [], Date.parse("2026-12-29T12:00:00Z")).snapshots.find((row) => row.label === "FIFA · programme Mondial U17")).toMatchObject({ status: "ok", extra: "1 phase(s) complète(s) · archive" });
+  });
+  it("distingue les échéances passées des prochaines sans leur attribuer une automatisation", () => {
+    const before = upcomingInternationalDraws(Date.parse("2026-12-05T00:00:00Z"));
+    expect(before).toHaveLength(3);
+    expect(before.every((draw) => draw.status === "upcoming" && !draw.automatic)).toBe(true);
+    const after = upcomingInternationalDraws(Date.parse("2026-12-07T00:00:00Z"));
+    expect(after.find((draw) => draw.id === "euro-2028-qualifying").status).toBe("check");
+    expect(upcomingInternationalDraws(Date.parse("2027-02-01T00:00:00Z"))).toHaveLength(0);
   });
 });
