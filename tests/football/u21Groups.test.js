@@ -242,6 +242,20 @@ describe("syncCompetition — une saison Belfoot par campagne", () => {
     expect(Object.keys(stored).sort()).toEqual(["2023-2024", "2025-2026"]);
     expect(stored["2023-2024"][0].label).toBe("Group A");
     expect(stored["2025-2026"][0].label).toBe("Group H");
+    expect(db.rows("competitions")[0].ext.standings_synced_at_by_season["2023-2024"]).toBeTruthy();
+  });
+
+  it("échec du classement : garde son ancienne date malgré l'import complet", async () => {
+    const old = "2026-11-20T10:00:00.000Z";
+    const previous = { ...COMPETITION, ext: { full_competition_seasons: { "2023-2024": old }, standings_by_season: { "2023-2024": [{ label: "Group A", rows: [{ club: "old" }] }] } } };
+    const db = createFakeSupabase({ competitions: [previous] });
+    registerProvider({ key: PROVIDER, async fetchMatches() { return campaigns[2023]; }, async fetchStandings() { throw new Error("indisponible"); } });
+    const result = await syncCompetition(db, previous, { season: "2023", mode: "full" });
+    const ext = db.rows("competitions")[0].ext;
+    expect(result).toContain("classements: indisponible");
+    expect(ext.standings_synced_at_by_season["2023-2024"]).toBe(old);
+    expect(ext.full_competition_seasons["2023-2024"]).not.toBe(old);
+    expect(ext.standings_by_season["2023-2024"][0].rows[0].club).toBe("old");
   });
 });
 
