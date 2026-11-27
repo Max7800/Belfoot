@@ -9,6 +9,12 @@ const H = 3600000;
 const stats = (extra = {}) => ({ season: "2026-2027", league: "Eredivisie", league_id: "88", league_logo: "ere.png", country: "Netherlands", appearances: 9, goals: 2, ...extra });
 
 describe("suivi des Belges à l'étranger : cadence", () => {
+  it("ne cherche pas les matchs d'un nouveau club dans le championnat de l'ancien", () => {
+    const clubs = { monterrey: { external_id: "2282" }, chicago: { external_id: "1600" } };
+    const chicagoStats = stats({ club_id: "chicago", league: "MLS", league_id: "253", country: "USA" });
+    expect(followTargets([{ club_id: "monterrey", ext: { league_stats: chicagoStats } }], clubs)).toEqual([]);
+    expect(followTargets([{ club_id: "chicago", ext: { league_stats: chicagoStats } }], clubs)[0].id).toBe("253");
+  });
   it("balayage : chaque semaine pendant le mercato (juillet, août, janvier), sinon toutes les deux semaines", () => {
     expect(["2026-07-10", "2026-08-31", "2027-01-15", "2026-10-28", "2026-12-01", "2026-06-30"].map((date) => scanIntervalDays(new Date(`${date}T12:00:00Z`)))).toEqual([7, 7, 7, 14, 14, 14]);
   });
