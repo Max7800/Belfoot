@@ -9,6 +9,7 @@ vi.mock("@/lib/supabaseAdmin", () => ({ getAdmin: () => state.db }));
 vi.mock("@/modules/football/rbfaMonitor", () => ({ monitorRbfaSelections: async () => ({ skipped: true }) }));
 vi.mock("@/modules/football/fifaRankingSync", () => ({ syncFifaRanking: async () => ({ skipped: true }) }));
 vi.mock("@/modules/football/fifaTournamentSquads", () => ({ syncFifaTournamentSquad: async () => ({ skipped: true }) }));
+vi.mock("@/modules/football/uefaDrawSync", () => ({ syncU21Draw: async () => ({ skipped: true }) }));
 vi.mock("@/lib/jobs", () => ({
   runJob: async (key, ctx) => {
     // État déjà enregistré pour les compétitions précédentes AVANT ce lancement ?
