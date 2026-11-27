@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Users } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { rbfaCategoryForTeam, rbfaPublicSnapshot, rbfaSquadGroups } from "@/lib/rbfaPublicSelection";
-import { positionLabel } from "@/lib/positions";
+import { filterPositionGroups, positionLabel } from "@/lib/positions";
 import { rbfaSourceUrl } from "@/lib/rbfaSources";
 
 export function useRbfaSquad(team) {
@@ -50,8 +50,8 @@ export function RbfaSquadSummary({ snapshot, accent }) {
   </div>)}</div></div>;
 }
 
-export default function RbfaSquad({ snapshot }) {
-  const groups = rbfaSquadGroups(snapshot);
+export default function RbfaSquad({ snapshot, positionFilter = "ALL" }) {
+  const groups = filterPositionGroups(rbfaSquadGroups(snapshot), positionFilter);
   const checked = new Date(snapshot.observedAt).toLocaleDateString("fr-BE", { day: "numeric", month: "short", year: "numeric" });
   return <div>
     <p className="mb-3 text-xs leading-5 text-muted">Liste publiée par la RBFA · vérifiée le {checked}. Elle peut concerner le dernier rassemblement. <a className="underline hover:text-white" href={rbfaSourceUrl(snapshot.category)} target="_blank" rel="noreferrer">Voir la source</a></p>

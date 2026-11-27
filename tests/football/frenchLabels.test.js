@@ -76,6 +76,7 @@ describe("fiche « club » d'une sélection belge", () => {
   it("renvoie vers la page Diables ; autre sélection, féminine de jeunes ou club : non", () => {
     expect(nationalTeamPagePath({ team_type: "national", name: "Belgium", national_category: "senior" })).toBe("/diables-rouges");
     expect(nationalTeamPagePath({ team_type: "national", name: "Belgique U21" })).toBe("/diables-rouges");
+    expect(nationalTeamPagePath({ id: "u17 test", team_type: "national", name: "Belgium U17" })).toBe("/diables-rouges?equipe=u17%20test");
     expect(nationalTeamPagePath({ team_type: "national", name: "France" })).toBeNull();
     expect(nationalTeamPagePath({ team_type: "national", name: "Belgium W U19", national_gender: "women", national_category: "u19" })).toBeNull();
     expect(nationalTeamPagePath({ team_type: "first_team", name: "Belgium FC" })).toBeNull();

@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import { createRequire } from "node:module";
 import { describe, expect, it } from "vitest";
-import { categoryLabel, isDisplayedNationalTeam, isSeniorMenTeam, pickNationalTabs, sortNationalTeams, teamCategory, teamGender } from "@/lib/nationalCategories";
+import { categoryLabel, includeRequestedNationalTeam, isDisplayedNationalTeam, isSeniorMenTeam, pickNationalTabs, requestedNationalTab, sortNationalTeams, teamCategory, teamGender } from "@/lib/nationalCategories";
 import { selectionGroupStanding } from "@/lib/selectionGroup";
 import { isKnockoutPhase } from "@/lib/competitionType";
 
@@ -42,6 +42,25 @@ describe("catégories des sélections — genre et âge distincts", () => {
 });
 
 describe("onglets de la page Diables — données réelles", () => {
+  it("conserve une sélection belge non suivie dans ses pages détaillées sans exposer une catégorie masquée", () => {
+    const followed = BELGIUM.filter((t) => t.national_followed);
+    const u17 = { ...BELGIUM.find((t) => t.id === "u17"), team_type: "national" };
+    expect(includeRequestedNationalTeam(followed, u17).map((t) => t.id)).toContain("u17");
+    expect(includeRequestedNationalTeam(followed, { ...BELGIUM.find((t) => t.id === "u17w"), team_type: "national" }).map((t) => t.id)).not.toContain("u17w");
+    expect(includeRequestedNationalTeam(followed, { ...team("fra", "France U17"), team_type: "national" }).map((t) => t.id)).not.toContain("fra");
+    expect(includeRequestedNationalTeam(followed, { id: "club", name: "Belgium U17", team_type: "first_team" }).map((t) => t.id)).not.toContain("club");
+    expect(includeRequestedNationalTeam(followed, followed[0]).filter((t) => t.id === followed[0].id)).toHaveLength(1);
+  });
+  it("ouvre le bon onglet pour un lien jeune ou féminin, y compris un doublon historique", () => {
+    const teams = [...BELGIUM, team("u17-old", "Belgium U17")];
+    const shown = pickNationalTabs(teams, ACTIVITY);
+    expect(requestedNationalTab(shown, teams, "u17").id).toBe("u17");
+    expect(requestedNationalTab(shown, teams, "u17-old").id).toBe("u17");
+    expect(requestedNationalTab(shown, teams, "w").id).toBe("w");
+    expect(requestedNationalTab(shown, teams, "u17w")).toBeNull();
+    expect(requestedNationalTab(shown, teams, "inconnu")).toBeNull();
+    expect(requestedNationalTab(shown, [...teams, team("fra", "France U17")], "fra")).toBeNull();
+  });
   it("plus de faux « U23 » ni de « U17 » féminine chez les hommes ; féminines de jeunes masquées", () => {
     expect(tabs()).toEqual([
       "men:Diables Rouges=Belgium",
