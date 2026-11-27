@@ -7,6 +7,7 @@ import { useNationalTeamsConfig } from "@/lib/nationalTeams";
 import { useRankings } from "@/lib/rankings";
 import DiableRatings from "@/components/football/DiableRatings";
 import NationalGroupStandings from "@/components/football/NationalGroupStandings";
+import U21Draw from "@/components/football/U21Draw";
 import { RbfaSquadSummary, useRbfaSquad } from "@/components/football/RbfaSquad";
 import { FifaTournamentSquad, useFifaTournamentSquad } from "@/components/football/FifaTournamentSquad";
 import { groupByPosition, positionLabel } from "@/lib/positions";
@@ -293,6 +294,7 @@ export default function NationalTeamsPage() {
           <PanelHeader icon={CalendarDays} title={featured?.status === "live" ? "Match en direct" : featured?.status === "finished" ? "Dernier résultat" : "Prochain match"} />
           <FeaturedMatch match={featured} clubs={featuredClubs} competitions={competitions} />
         </ModuleCard>
+        <U21Draw team={selectedTeam} />
         <NationalGroupStandings teamId={selectedId} matches={matches} competitions={competitions} preferredCompetitionId={results[0]?.competition_id} />
         <div className={`grid gap-2 ${statTiles.length === 4 ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-3"}`}>
           {statTiles.map(([value, label, color]) => <div key={label} className="rounded-2xl border border-line/10 bg-surface/60 px-2 py-4 text-center sm:py-5"><b className={`block text-xl sm:text-2xl ${color}`}>{value}</b><span className="mt-1 block text-[8px] font-bold uppercase tracking-wider text-muted sm:text-[9px]">{label}</span></div>)}
