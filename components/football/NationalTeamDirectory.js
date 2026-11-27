@@ -7,7 +7,7 @@ import { useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { groupByPosition, positionGroup } from "@/lib/positions";
 import { matchStatusMeta } from "@/lib/matchStatus";
-import { categoryLabel, sortNationalTeams, teamGender } from "@/lib/nationalCategories";
+import { categoryLabel, includeRequestedNationalTeam, teamGender } from "@/lib/nationalCategories";
 import RbfaSquad, { useRbfaSquad } from "@/components/football/RbfaSquad";
 import { FifaTournamentSquad, useFifaTournamentSquad } from "@/components/football/FifaTournamentSquad";
 
@@ -62,14 +62,23 @@ export default function NationalTeamDirectory({ mode }) {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    supabase.from("clubs").select("id,name,logo_url,national_category,national_gender,source,external_id").eq("team_type", "national").eq("national_followed", true).then(({ data, error: teamsError }) => {
+    let active = true;
+    (async () => {
+      const fields = "id,name,logo_url,team_type,national_category,national_gender,source,external_id,ext";
+      const [followed, requestedResult] = await Promise.all([
+        supabase.from("clubs").select(fields).eq("team_type", "national").eq("national_followed", true),
+        requestedTeamId ? supabase.from("clubs").select(fields).eq("id", requestedTeamId).maybeSingle() : Promise.resolve({ data: null, error: null }),
+      ]);
+      if (!active) return;
+      const teamsError = followed.error || requestedResult.error;
       if (teamsError) { setError(teamsError.message); setLoading(false); return; }
-      const sorted = sortNationalTeams(data || []);
+      const sorted = includeRequestedNationalTeam(followed.data || [], requestedResult.data);
       setTeams(sorted);
       const requested = sorted.find((team) => team.id === requestedTeamId);
       setSelectedId(requested?.id || sorted[0]?.id || "");
       if (!sorted.length) setLoading(false);
-    });
+    })().catch((loadError) => { if (active) { setError(loadError.message || String(loadError)); setLoading(false); } });
+    return () => { active = false; };
   }, [requestedTeamId]);
 
   useEffect(() => {
@@ -125,7 +134,7 @@ export default function NationalTeamDirectory({ mode }) {
   const filteredSquadGroups = positionFilter === "ALL" ? squadGroups : squadGroups.filter((group) => group.key === positionFilter);
 
   return <div className="space-y-6">
-    <Link href="/diables-rouges" className="inline-flex items-center gap-2 text-sm font-bold text-muted transition hover:text-white"><ArrowLeft className="h-4 w-4" />Retour aux Diables Rouges</Link>
+    <Link href={selectedId ? `/diables-rouges?equipe=${encodeURIComponent(selectedId)}` : "/diables-rouges"} className="inline-flex items-center gap-2 text-sm font-bold text-muted transition hover:text-white"><ArrowLeft className="h-4 w-4" />Retour aux Diables Rouges</Link>
     <header className="rounded-3xl border border-red-400/20 bg-gradient-to-br from-red-950/35 via-surface to-bg p-5 sm:p-8">
       <div className="text-[10px] font-black uppercase tracking-[.22em] text-amber-300">Sélections belges</div>
       <div className="mt-2 flex flex-wrap items-center gap-3"><h1 className="text-3xl font-black uppercase sm:text-5xl">{mode === "matches" ? "Tous les matchs" : "La sélection complète"}</h1>{selectedTeam && <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs font-bold text-slate-300">{categoryLabel(selectedTeam)}</span>}</div>
