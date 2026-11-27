@@ -23,6 +23,7 @@ import { useHomeConfig } from "@/lib/homeSections";
 import { useBelgiansAbroadConfig } from "@/lib/belgiansAbroad";
 import { buildAbroadForm, loadAbroadFormData } from "@/lib/abroadForm";
 import { computeStandings } from "@/lib/standings";
+import { rankBelgianStandings } from "@/lib/belgianStandings";
 import { supabase } from "@/lib/supabaseClient";
 import { readAll } from "@/lib/readAll";
 import { seasonScopedMatches, sortPublicSeasons } from "@/lib/publicSeasons";
@@ -234,7 +235,7 @@ export default function Home() {
     leagueMatches.forEach((match) => phaseCounts.set(match.phase || "—", (phaseCounts.get(match.phase || "—") || 0) + 1));
     const primaryPhase = [...phaseCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
     const primaryMatches = leagueMatches.filter((match) => (match.phase || "—") === primaryPhase);
-    const standings = computeStandings(primaryMatches.filter((match) => match.status === "finished" && match.home_score != null && match.away_score != null));
+    const standings = rankBelgianStandings(computeStandings(primaryMatches.filter((match) => match.status === "finished" && match.home_score != null && match.away_score != null)), primaryMatches.filter((match) => match.status === "finished" && match.home_score != null && match.away_score != null), league, activeSeason?.label, primaryPhase);
     const leagueRecent = primaryMatches.filter((match) => match.status === "finished").sort((a, b) => new Date(b.kickoff || 0) - new Date(a.kickoff || 0)).slice(0, 5);
     const leagueUpcoming = primaryMatches.filter((match) => match.status !== "finished" && new Date(match.kickoff || 0) >= now).sort((a, b) => new Date(a.kickoff || 0) - new Date(b.kickoff || 0)).slice(0, 5);
 
@@ -297,7 +298,7 @@ export default function Home() {
         nationsGroups: nationsLeague ? nationsLeagueGroups(competition, activeSeason?.label, matches, data.clubs) : [],
         groups: knockout || nationsLeague ? [] : phaseGroups(competition, activeSeason?.label, displayMatches, data.clubs),
         activeSeason,
-        standings: knockout || groupPhase ? [] : computeStandings(displayMatches.filter((match) => isMatchOver(match, now) && match.away_score != null)),
+        standings: knockout || groupPhase ? [] : rankBelgianStandings(computeStandings(displayMatches.filter((match) => isMatchOver(match, now) && match.away_score != null)), displayMatches.filter((match) => isMatchOver(match, now) && match.away_score != null), competition, activeSeason?.label, primaryPhase),
         recent: finished.sort((a, b) => new Date(b.kickoff || 0) - new Date(a.kickoff || 0)).slice(0, 5),
         upcoming: scheduleMatches.filter((match) => match.status !== "finished" && new Date(match.kickoff || 0) >= now).sort((a, b) => new Date(a.kickoff || 0) - new Date(b.kickoff || 0)).slice(0, 5),
       };

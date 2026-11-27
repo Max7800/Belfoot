@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { computeStandings } from "@/lib/standings";
+import { rankBelgianStandings } from "@/lib/belgianStandings";
 import { competitionPhases, getCompetitionType, isKnockoutPhase } from "@/lib/competitionType";
 import { isMatchOver } from "@/lib/matchStatus";
 import { mergeGroupStagePhases, phaseGroups } from "@/lib/groupedStandings";
@@ -30,7 +31,7 @@ export default function ClassementPage() {
   const [seasonReady, setSeasonReady] = useState(false);
   const pageStatus = publicPageStatus({ competitionsLoading, loading, cid, seasonOwner, error, unpublished, competitionCount: comps.length });
   const activeSeason = seasons.find((season) => season.label === seasonLabel) || null;
-  useEffect(() => { let alive = true; supabase.from("competitions").select("id,name,logo_url,public_visible,position,competition_type,ext,zones").order("name").then(({ data, error: loadError }) => {
+  useEffect(() => { let alive = true; supabase.from("competitions").select("id,name,logo_url,public_visible,position,competition_type,provider,external_id,ext,zones").order("name").then(({ data, error: loadError }) => {
     if (!alive) return;
     if (loadError) setError(loadError.message || String(loadError));
     else { const arr = (data || []).filter((c) => c.public_visible !== false).sort((a, b) => (a.position ?? 999) - (b.position ?? 999) || (a.name || "").localeCompare(b.name || "")); setComps(arr); if (arr[0]) setCid(arr[0].id); }
@@ -60,7 +61,7 @@ export default function ClassementPage() {
   const cur = phase && phases.includes(phase) ? phase : primaryPhase;
   const phaseMatches = useMemo(() => seasonMatches.filter((m) => (m.phase || "—") === cur), [seasonMatches, cur]);
   const phaseIsKnockout = isCup || (type === "hybrid" && isKnockoutPhase(cur));
-  const standings = useMemo(() => phaseIsKnockout ? [] : computeStandings(phaseMatches.filter((m) => isMatchOver(m))), [phaseMatches, phaseIsKnockout]);
+  const standings = useMemo(() => phaseIsKnockout ? [] : rankBelgianStandings(computeStandings(phaseMatches.filter((m) => isMatchOver(m))), phaseMatches.filter((m) => isMatchOver(m)), comp, activeSeason?.label, cur), [phaseMatches, phaseIsKnockout, comp, activeSeason?.label, cur]);
   const groups = useMemo(() => phaseIsKnockout ? [] : phaseGroups(comp, activeSeason?.label, phaseMatches, clubs), [phaseIsKnockout, comp, activeSeason?.label, phaseMatches, clubs]);
   const zones = zonesForPhase(comp, activeSeason, cur, primaryPhase);
   return (

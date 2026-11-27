@@ -9,6 +9,7 @@ import MatchRow from "@/components/football/MatchRow";
 import CollapsibleSection from "@/components/CollapsibleSection";
 import { useClubSections } from "@/lib/clubSections";
 import { computeStandings } from "@/lib/standings";
+import { rankBelgianStandings } from "@/lib/belgianStandings";
 import { competitionPhases, getCompetitionType } from "@/lib/competitionType";
 import { competitionPath } from "@/lib/competitionRoutes";
 import DiscussButton from "@/components/forum/DiscussButton";
@@ -113,7 +114,7 @@ export default function ClubPage() {
       const phase = phases.includes(contextMatch.phase) ? contextMatch.phase : phases[0];
       const phaseMatches = allMatches.filter((match) => (match.phase || "—") === phase);
       const finishedPhase = phaseMatches.filter((match) => match.status === "finished" && match.home_score != null && match.away_score != null);
-      const standings = type === "cup" ? [] : computeStandings(finishedPhase);
+      const standings = type === "cup" ? [] : rankBelgianStandings(computeStandings(finishedPhase), finishedPhase, competition, seasonResult.data?.label, phase);
       const teamMatches = finishedPhase.filter((match) => match.home_club_id === id || match.away_club_id === id);
       // Faits, compositions et statistiques collectives de ces matchs (widget de saison).
       const teamMatchIds = teamMatches.map((match) => match.id);
