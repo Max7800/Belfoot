@@ -163,6 +163,25 @@ describe("syncSquads sur une compétition de sélections", () => {
     expect(db.rows("national_team_callups")).toEqual([expect.objectContaining({ id: "callup-be", active: true })]);
   });
 
+  it("actualise les buts et passes de compétition sans modifier les convocations ni le club", async () => {
+    let goals = 1;
+    registerProvider({
+      key: PROVIDER,
+      async fetchSquadPlayers(team) {
+        return team.external_id === "1" ? [{ ...apiPlayer("100", "Belgium"), stats: { ...apiPlayer("100", "Belgium").stats, goals, assists: 2 } }] : [];
+      },
+      async fetchCurrentSquad() { return []; },
+    });
+    const db = nationsDb();
+    await syncSquads(db, { ...NATIONS_LEAGUE }, { season: String(YEAR) });
+    expect(db.rows("player_season_stats").find((row) => row.player_id === "p-be")).toMatchObject({ club_id: "nat-be", goals: 1, assists: 2 });
+    goals = 3;
+    await syncSquads(db, { ...NATIONS_LEAGUE }, { season: String(YEAR) });
+    expect(db.rows("player_season_stats").filter((row) => row.player_id === "p-be")).toEqual([expect.objectContaining({ club_id: "nat-be", goals: 3, assists: 2 })]);
+    expect(db.rows("players").find((row) => row.id === "p-be").club_id).toBe("club-brugge");
+    expect(db.rows("national_team_callups")).toEqual([expect.objectContaining({ id: "callup-be", active: true })]);
+  });
+
   it("la découverte des Belges sur une sélection ne crée pas non plus d'affectation", async () => {
     const db = nationsDb();
     for (let run = 1; run <= 2; run++) await discoverBelgians(db, { ...NATIONS_LEAGUE }, { season: String(YEAR) });

@@ -5,6 +5,8 @@ import { ArrowLeft, CalendarDays, ChevronDown, Clock3, MapPin, Pencil, RefreshCw
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import { readAll } from "@/lib/readAll";
+import { loadMatchesByIds } from "@/lib/publicFootballData";
 import { confirmationText, launchJob } from "@/lib/adminJobs";
 import { useLabels } from "@/lib/labels";
 import DiscussButton from "@/components/forum/DiscussButton";
@@ -143,7 +145,7 @@ export default function PlayerPage() {
       currentClubId ? supabase.from("clubs").select("id,name,logo_url,city,team_type,parent_club_id,national_category,ext").eq("id", currentClubId).maybeSingle() : Promise.resolve({ data: null }),
       player.national_team_id ? supabase.from("clubs").select("id,name,short_name,logo_url,team_type,national_category").eq("id", player.national_team_id).maybeSingle() : Promise.resolve({ data: null }),
       supabase.from("player_season_stats").select("*").eq("player_id", id).order("season", { ascending: false }),
-      supabase.from("match_player_stats").select("*").eq("player_id", id).limit(60),
+      readAll(() => supabase.from("match_player_stats").select("*").eq("player_id", id)),
       relevantTeamIds.length ? supabase.from("matches").select("id,competition_id,home_club_id,away_club_id,home_score,away_score,kickoff,status").or(`home_club_id.in.(${relevantTeamIds.join(",")}),away_club_id.in.(${relevantTeamIds.join(",")})`).order("kickoff", { ascending: false }).limit(120) : Promise.resolve({ data: [] }),
     ]);
     if (statsResult.error) throw statsResult.error;
@@ -154,8 +156,7 @@ export default function PlayerPage() {
     const matchesById = new Map((clubMatchesResult.data || []).map((match) => [match.id, match]));
     const missingMatchIds = [...new Set((performancesResult.data || []).map((row) => row.match_id).filter((matchId) => matchId && !matchesById.has(matchId)))];
     if (missingMatchIds.length) {
-      const { data: oldMatches, error } = await supabase.from("matches").select("id,competition_id,home_club_id,away_club_id,home_score,away_score,kickoff,status").in("id", missingMatchIds);
-      if (error) throw error;
+      const oldMatches = await loadMatchesByIds(supabase, missingMatchIds);
       for (const match of oldMatches || []) matchesById.set(match.id, match);
     }
     const matches = [...matchesById.values()];

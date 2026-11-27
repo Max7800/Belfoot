@@ -40,12 +40,14 @@ describe("accueil : branchements", () => {
     expect(ribbon).toContain("const view = loading ? null : homeDefaultDay(matches, new Date());");
     expect(ribbon).toContain("dayWindow(new Date(), DAYS_BACK, DAYS_AHEAD)");
   });
-  it("lignes de score partagées (issue colorée, V / N / D), plus de carte vedette", () => {
+  it("lignes de score partagées sans pastilles V / N / D ambiguës", () => {
     expect(ribbon).toContain("<ScoreRow key={match.id} match={match} clubs={clubs} competition={competitionMap[match.competition_id]}");
     expect(ribbon).not.toContain("FeaturedScore");
     expect(ribbon).not.toContain("CompactScore");
+    expect(ribbon).not.toContain("followedSide={followedSide(match)}");
   });
   it("faits en temps réel : rechargement seulement pour un match affiché", () => {
     expect(ribbon).toContain("if (loadedIds.current.has(payload.new?.match_id || payload.old?.match_id)) scheduleReload();");
   });
 });
+

@@ -61,7 +61,9 @@ export async function syncLineups(db, competition, ctx = {}) {
     ? await db.from("match_player_stats")
       .select("id,match_id,club_id,player_external_id,player_name,number,position,starter,minutes,ext,locked")
       .eq("competition_id", competition.id)
+      .in("match_id", candidates.map((match) => match.id))
       .in("club_id", [...nationalTeamIds])
+      .eq("locked", false)
       .is("player_id", null)
       .not("player_external_id", "is", null)
       .limit(20)
@@ -124,6 +126,10 @@ export async function syncLineups(db, competition, ctx = {}) {
     }
     relinked++;
   }
+  // Un lot plein ayant fait des progrès peut cacher d'autres liens à réparer.
+  // Reprendre sans appel fournisseur, jusqu'à épuisement ; si rien n'a pu être
+  // relié, arrêter pour éviter une boucle infinie sur des données invalides.
+  const moreRelinks = (unresolvedRows || []).length === 20 && relinked > 0;
   const eligible = (candidates || []).filter((match) => match.status === "live"
     || (canLineups && !match.lineups_synced_at)
     || (canStats && !match.player_stats_synced_at)
@@ -131,7 +137,7 @@ export async function syncLineups(db, competition, ctx = {}) {
   const todo = eligible.slice(0, cap);
   if (!todo.length) {
     const detail = `${competition.name}: compositions déjà à jour${relinked ? `, ${relinked} joueurs reliés` : ""}${materialized ? `, ${materialized} fiches historiques créées` : ""}`;
-    return ctx.drain ? { detail, complete: true, progress: { current: 0, total: 0, unit: "matchs détaillés" } } : detail;
+    return ctx.drain ? { detail, complete: !moreRelinks, progress: { current: 0, total: 0, unit: "matchs détaillés" } } : detail;
   }
 
   let teams = 0;
@@ -298,7 +304,7 @@ export async function syncLineups(db, competition, ctx = {}) {
   await ctx.saveCheckpoint?.({ total });
   return {
     detail: `${detail} · ${remaining} match(s) restant(s)`,
-    complete: remaining === 0,
+    complete: remaining === 0 && !moreRelinks,
     progress: { current: Math.max(0, total - remaining), total, unit: "matchs détaillés" },
   };
 }

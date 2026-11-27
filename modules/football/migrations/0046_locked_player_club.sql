@@ -78,4 +78,4 @@ create trigger guard_locked_player_membership before insert or update or delete 
 for each row execute function public.guard_locked_player_membership();
 
 insert into public.schema_migrations (module, version)
-values ('football', '0042_locked_player_club') on conflict do nothing;
+values ('football', '0046_locked_player_club') on conflict do nothing;

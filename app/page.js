@@ -24,17 +24,21 @@ import { useBelgiansAbroadConfig } from "@/lib/belgiansAbroad";
 import { buildAbroadForm, loadAbroadFormData } from "@/lib/abroadForm";
 import { computeStandings } from "@/lib/standings";
 import { supabase } from "@/lib/supabaseClient";
+import { readAll } from "@/lib/readAll";
 import { seasonScopedMatches, sortPublicSeasons } from "@/lib/publicSeasons";
 import { mergeGroupStagePhases, phaseGroups } from "@/lib/groupedStandings";
 import { isKnockoutPhase } from "@/lib/competitionType";
 import { isMatchOver } from "@/lib/matchStatus";
 import GroupStandings from "@/components/football/GroupStandings";
-import { PUBLIC_MATCH_FIELDS, PUBLIC_PLAYER_FIELDS, loadPlayerStatsForPlayers } from "@/lib/publicFootballData";
+import { PUBLIC_MATCH_FIELDS, loadPlayerStatsForPlayers } from "@/lib/publicFootballData";
+import { readFollowedPlayers, readOverviewCompetitions } from "@/lib/footballOverviewReads";
 import { preferAssignedPlayerStats } from "@/lib/playerStats";
 import { currentSeasonStart, seasonTotals } from "@/lib/belgiansRankings";
 import { isBelgianFollowed } from "@/lib/playerIdentity";
 import { clubNationalLeagues, resolvePlayerCountry, resolvePlayerLeague } from "@/lib/playerSnapshot";
 import { isNationsLeagueCompetition, nationsLeagueGroups } from "@/lib/nationsLeague";
+import { rankHomeCompetitions } from "@/lib/homeCompetitionPriority";
+import { homeCompetitionFormat } from "@/lib/homeCompetitionFormat";
 import AdminHint from "@/components/AdminHint";
 
 const normal = (value) => String(value || "").trim().toLocaleLowerCase("fr");
@@ -42,7 +46,6 @@ const year = (value) => Number((String(value || "").match(/\d{4}/) || [0])[0]);
 const isBelgian = (value) => normal(value).startsWith("belg");
 // Noms français depuis le 30/10/2026 (« Ligue Conférence » : avec accent).
 const isEurope = (competition) => /(champions|europa|conf[ée]rence)/i.test(competition?.name || "");
-const isKnockoutCompetition = (competition) => /(cup|coupe|beker|pokal)/i.test(`${competition?.name || ""} ${competition?.ext?.type || ""}`);
 const FOLLOWED_BELGIANS_SLIDE_ID = "followed-belgians";
 
 // Saison en cours seulement, chiffres du balayage à défaut (lib/belgiansRankings.js),
@@ -88,6 +91,9 @@ export default function Home() {
   const configuredCompetitionIds = (config.competition_carousel?.competition_ids || []).join(",");
   const featuredCompetitionId = config.competition_carousel?.featured_competition_id || "";
   const [data, setData] = useState({ loading: true, matches: [], clubs: {}, competitions: [], seasons: [], players: [], stats: [], news: [], votwSessions: [], topics: [] });
+  const [editorial, setEditorial] = useState({ newsLoading: true, communityLoading: true, newsError: false, communityError: false, news: [], votwSessions: [], topics: [] });
+  const [sportError, setSportError] = useState(false);
+  const [competitionsReady, setCompetitionsReady] = useState(false);
   const [activeCompetitionId, setActiveCompetitionId] = useState("");
   const [homeNationsDivision, setHomeNationsDivision] = useState("A");
 
@@ -100,16 +106,46 @@ export default function Home() {
     return () => { active = false; };
   }, []);
 
-  useEffect(() => { (async () => {
-    const [recentMatchResult, competitionResult, seasonResult, playerResult, newsResult, votwResult, topicsResult] = await Promise.all([
-      supabase.from("matches").select(PUBLIC_MATCH_FIELDS).order("kickoff", { ascending: false }).limit(250),
-      supabase.from("competitions").select("*"),
+  useEffect(() => {
+    let active = true;
+    const news = supabase.from("entries").select("id,slug,title,excerpt,category,cover_url,published_at").eq("collection", "news").eq("published", true).is("deleted_at", null).order("published_at", { ascending: false, nullsFirst: false }).limit(9);
+    const votes = supabase.from("votw_sessions").select("id,matchday,season_label,formation,status,closes_at").order("created_at", { ascending: false }).limit(5);
+    const topics = supabase.from("forum_topics").select("id,title,author_name,last_activity").order("last_activity", { ascending: false }).limit(4);
+    Promise.resolve(news).then((result) => { if (active) setEditorial((current) => ({ ...current, newsLoading: false, newsError: Boolean(result.error), news: result.data || [] })); }).catch(() => { if (active) setEditorial((current) => ({ ...current, newsLoading: false, newsError: true })); });
+    Promise.all([votes, topics]).then(([voteResult, topicResult]) => { if (active) setEditorial((current) => ({ ...current, communityLoading: false, communityError: Boolean(voteResult.error || topicResult.error), votwSessions: voteResult.data || [], topics: topicResult.data || [] })); }).catch(() => { if (active) setEditorial((current) => ({ ...current, communityLoading: false, communityError: true })); });
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => { let active = true; (async () => {
+    setSportError(false);
+    const competitionPromise = readOverviewCompetitions(supabase);
+    competitionPromise.then((result) => {
+      if (active && !result.error) {
+        setData((current) => ({ ...current, competitions: result.data || [] }));
+        setCompetitionsReady(true);
+      }
+    }).catch(() => {});
+    const now = Date.now();
+    const from = new Date(now - 14 * 86400000).toISOString();
+    const to = new Date(now + 14 * 86400000).toISOString();
+    const recentMatchesPromise = competitionPromise.then((result) => {
+      if (result.error) return { data: null, error: result.error };
+      const requested = new Set(configuredCompetitionIds.split(",").filter(Boolean));
+      if (featuredCompetitionId) requested.add(featuredCompetitionId);
+      // Le bloc « Belges à suivre » utilise aussi les matchs proches : conserver
+      // toutes les compétitions publiques même si le carrousel est restreint.
+      const ids = (result.data || []).filter((competition) => competition.public_visible !== false || requested.has(competition.id)).map((competition) => competition.id);
+      if (!ids.length) return { data: [], error: null };
+      return readAll(() => supabase.from("matches").select(PUBLIC_MATCH_FIELDS).in("competition_id", ids).gte("kickoff", from).lte("kickoff", to).order("kickoff", { ascending: false }));
+    });
+    const [recentMatchResult, competitionResult, seasonResult, playerResult] = await Promise.all([
+      recentMatchesPromise,
+      competitionPromise,
       supabase.from("seasons").select("*"),
-      supabase.from("players").select(`${PUBLIC_PLAYER_FIELDS},binational_watch:ext->binational_watch,birth:ext->birth,league_stats:ext->league_stats`).eq("tracked", true).eq("active", true),
-      supabase.from("entries").select("id,slug,title,excerpt,category,cover_url,published_at").eq("collection", "news").eq("published", true).is("deleted_at", null).order("published_at", { ascending: false, nullsFirst: false }).limit(9),
-      supabase.from("votw_sessions").select("id,matchday,season_label,formation,status,closes_at").order("created_at", { ascending: false }).limit(5),
-      supabase.from("forum_topics").select("id,title,author_name,last_activity").order("last_activity", { ascending: false }).limit(4),
+      readFollowedPlayers(supabase),
     ]);
+    const firstError = [recentMatchResult, competitionResult, seasonResult, playerResult].find((result) => result.error);
+    if (firstError) throw firstError.error;
     // Saison en cours seulement, lue en même temps que les matchs (avant : à la suite).
     const statsPromise = loadPlayerStatsForPlayers(supabase, (playerResult.data || []).map((player) => player.id), { sinceSeason: currentSeasonStart() });
     const competitionRows = competitionResult.data || [];
@@ -119,16 +155,25 @@ export default function Home() {
     const carouselCompetitions = requestedIds.size
       ? competitionRows.filter((competition) => requestedIds.has(competition.id))
       : competitionRows.filter((competition) => competition.public_visible !== false);
-    const [statsRows, ...carouselMatchResults] = await Promise.all([statsPromise, ...carouselCompetitions.map((competition) => {
+    const recentMatches = recentMatchResult.data || [];
+    const activeCarousel = rankHomeCompetitions(carouselCompetitions.map((competition) => {
+      const competitionSeasons = seasonRows.filter((season) => season.competition_id === competition.id);
+      const activeSeason = sortPublicSeasons(competitionSeasons)[0];
+      return { competition, matches: seasonScopedMatches(competitionSeasons, recentMatches.filter((match) => match.competition_id === competition.id), activeSeason?.id) };
+    }), { now, featuredId: featuredCompetitionId });
+    const [statsRows, ...carouselMatchResults] = await Promise.all([statsPromise, ...activeCarousel.map(({ competition }) => {
       const competitionSeasons = seasonRows.filter((season) => season.competition_id === competition.id);
       const activeSeason = sortPublicSeasons(competitionSeasons)[0];
       // Saisons existantes mais aucune publiée : aucun match (jamais de campagnes mélangées).
       if (!activeSeason && competitionSeasons.length) return Promise.resolve({ data: [] });
-      let query = supabase.from("matches").select(PUBLIC_MATCH_FIELDS).eq("competition_id", competition.id).order("kickoff", { ascending: false }).limit(600);
-      if (activeSeason) query = query.eq("season_id", activeSeason.id);
-      return query;
+      return readAll(() => {
+        let query = supabase.from("matches").select(PUBLIC_MATCH_FIELDS).eq("competition_id", competition.id).order("kickoff", { ascending: false });
+        if (activeSeason) query = query.eq("season_id", activeSeason.id);
+        return query;
+      });
     })]);
     const matchesById = new Map((recentMatchResult.data || []).map((match) => [match.id, match]));
+    if (carouselMatchResults.some((result) => result.error)) throw carouselMatchResults.find((result) => result.error).error;
     carouselMatchResults.forEach((result) => (result.data || []).forEach((match) => matchesById.set(match.id, match)));
 
     // Charger UNIQUEMENT les clubs référencés (matchs affichés + joueurs suivis), par
@@ -140,11 +185,12 @@ export default function Home() {
     const clubList = [];
     const clubIdChunks = [...neededClubIds];
     for (let i = 0; i < clubIdChunks.length; i += 400) {
-      const { data } = await supabase.from("clubs").select("id,name,logo_url,team_type,national_followed,national_category,ext").in("id", clubIdChunks.slice(i, i + 400));
+      const { data, error } = await supabase.from("clubs").select("id,name,logo_url,team_type,national_followed,national_category,ext").in("id", clubIdChunks.slice(i, i + 400));
+      if (error) throw error;
       if (data) clubList.push(...data);
     }
 
-    setData({
+    if (active) setData({
       loading: false,
       matches: [...matchesById.values()],
       clubs: Object.fromEntries(clubList.map((club) => [club.id, club])),
@@ -152,11 +198,8 @@ export default function Home() {
       seasons: seasonRows,
       players: playerResult.data || [],
       stats: statsRows,
-      news: newsResult.data || [],
-      votwSessions: votwResult.data || [],
-      topics: topicsResult.data || [],
     });
-  })().catch(() => setData((current) => ({ ...current, loading: false }))); }, [configuredCompetitionIds, featuredCompetitionId]);
+  })().catch(() => { if (active) { setSportError(true); setData((current) => ({ ...current, loading: false })); } }); return () => { active = false; }; }, [configuredCompetitionIds, featuredCompetitionId]);
 
   const view = useMemo(() => {
     const now = new Date();
@@ -200,12 +243,12 @@ export default function Home() {
       if (!groups[key]) groups[key] = { name: key, count: 0, logo: item.competitionData?.logo_url || "" };
       groups[key].count += 1;
       return groups;
-    }, {})).sort((a, b) => b.count - a.count).slice(0, 7);
+    }, {})).sort((a, b) => b.count - a.count);
 
     const europeIds = new Set(data.competitions.filter(isEurope).map((competition) => competition.id));
     const europeMatches = chronological.filter((match) => europeIds.has(match.competition_id));
     const europe = [...europeMatches.filter((match) => match.status !== "finished" && new Date(match.kickoff) >= now), ...europeMatches.filter((match) => match.status === "finished").reverse()].slice(0, 5);
-    return { players, watched, league, activeSeason, standings, leagueRecent, leagueUpcoming, leagues, europe };
+    return { players, watched, league, activeSeason, standings, leagueRecent, leagueUpcoming, leagues: leagues.slice(0, 7), leagueCount: leagues.length, europe };
   }, [data]);
 
   const sectionMap = Object.fromEntries(config.sections.map((section) => [section.key, section]));
@@ -221,50 +264,48 @@ export default function Home() {
     const allowedIds = new Set(configuredIds.length ? configuredIds : publicCompetitions.map((competition) => competition.id));
     if (featuredId) allowedIds.add(featuredId);
     const now = new Date();
-    const slides = data.competitions.filter((competition) => allowedIds.has(competition.id)).map((competition) => {
+    const candidates = data.competitions.filter((competition) => allowedIds.has(competition.id)).map((competition) => {
       const competitionSeasons = data.seasons.filter((season) => season.competition_id === competition.id);
       const activeSeason = sortPublicSeasons(competitionSeasons)[0];
       const matches = mergeGroupStagePhases(competition, activeSeason?.label, seasonScopedMatches(competitionSeasons, data.matches.filter((match) => match.competition_id === competition.id), activeSeason?.id), { isKnockout: isKnockoutPhase });
+      return { competition, activeSeason, matches };
+    });
+    if (allowedIds.has(FOLLOWED_BELGIANS_SLIDE_ID)) candidates.push({
+      competition: { id: FOLLOWED_BELGIANS_SLIDE_ID, name: "Matchs des Belges suivis", position: 998 },
+      matches: view.watched.map(({ match }) => match), kind: "belgians",
+    });
+    return rankHomeCompetitions(candidates, { now: now.getTime(), featuredId }).map(({ competition, activeSeason, matches, kind }) => {
+      if (kind === "belgians") return {
+        competition, href: "/matchs", kind, activeSeason: null, standings: [], recent: [],
+        upcoming: view.watched.map(({ match }) => match).slice(0, 5),
+        players: view.watched.map(({ item }) => item).filter((item, index, rows) => rows.findIndex((candidate) => candidate.player.id === item.player.id) === index).slice(0, 5),
+      };
       const phaseCounts = new Map();
-      matches.forEach((match) => phaseCounts.set(match.phase || "—", (phaseCounts.get(match.phase || "—") || 0) + 1));
-      const primaryPhase = [...phaseCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
-      const knockout = isKnockoutCompetition(competition);
+      matches.forEach((match) => { const phase = match.phase || match.round_raw || "—"; phaseCounts.set(phase, (phaseCounts.get(phase) || 0) + 1); });
+      const { cup, groupPhase, leaguePhase, knockout } = homeCompetitionFormat(competition, matches);
+      const primaryPhase = groupPhase || leaguePhase || [...phaseCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
       const nationsLeague = isNationsLeagueCompetition(competition);
-      const displayMatches = knockout || nationsLeague ? matches : (primaryPhase ? matches.filter((match) => (match.phase || "—") === primaryPhase) : matches);
-      const finished = displayMatches.filter((match) => isMatchOver(match, now) && match.away_score != null);
+      const displayMatches = knockout || nationsLeague ? matches : (primaryPhase ? matches.filter((match) => (match.phase || match.round_raw || "—") === primaryPhase) : matches);
+      const scheduleMatches = cup ? matches : displayMatches;
+      const finished = scheduleMatches.filter((match) => isMatchOver(match, now) && match.away_score != null);
       return {
         competition,
         href: competitionPath(competition),
         knockout,
+        groupPhase,
         nationsLeague,
         nationsGroups: nationsLeague ? nationsLeagueGroups(competition, activeSeason?.label, matches, data.clubs) : [],
         groups: knockout || nationsLeague ? [] : phaseGroups(competition, activeSeason?.label, displayMatches, data.clubs),
         activeSeason,
-        standings: knockout ? [] : computeStandings(finished),
+        standings: knockout || groupPhase ? [] : computeStandings(displayMatches.filter((match) => isMatchOver(match, now) && match.away_score != null)),
         recent: finished.sort((a, b) => new Date(b.kickoff || 0) - new Date(a.kickoff || 0)).slice(0, 5),
-        upcoming: displayMatches.filter((match) => match.status !== "finished" && new Date(match.kickoff || 0) >= now).sort((a, b) => new Date(a.kickoff || 0) - new Date(b.kickoff || 0)).slice(0, 5),
+        upcoming: scheduleMatches.filter((match) => match.status !== "finished" && new Date(match.kickoff || 0) >= now).sort((a, b) => new Date(a.kickoff || 0) - new Date(b.kickoff || 0)).slice(0, 5),
       };
     });
-    if (allowedIds.has(FOLLOWED_BELGIANS_SLIDE_ID)) slides.push({
-      competition: { id: FOLLOWED_BELGIANS_SLIDE_ID, name: "Matchs des Belges suivis", position: 998 },
-      href: "/matchs",
-      kind: "belgians",
-      activeSeason: null,
-      standings: [],
-      recent: [],
-      upcoming: view.watched.map(({ match }) => match).slice(0, 5),
-      players: view.watched.map(({ item }) => item).filter((item, index, rows) => rows.findIndex((candidate) => candidate.player.id === item.player.id) === index).slice(0, 5),
-    });
-    return slides.sort((a, b) => {
-      if (a.competition.id === featuredId) return -1;
-      if (b.competition.id === featuredId) return 1;
-      return (a.competition.position ?? 999) - (b.competition.position ?? 999) || a.competition.name.localeCompare(b.competition.name, "fr");
-    });
-  }, [config.competition_carousel, data.competitions, data.matches, data.seasons, publicCompetitions, view.watched]);
+  }, [config.competition_carousel, data.clubs, data.competitions, data.matches, data.seasons, publicCompetitions, view.watched]);
   useEffect(() => {
-    const preferred = config.competition_carousel?.featured_competition_id;
-    setActiveCompetitionId((current) => competitionSlides.some((slide) => slide.competition.id === current) ? current : (competitionSlides.find((slide) => slide.competition.id === preferred)?.competition.id || competitionSlides[0]?.competition.id || ""));
-  }, [competitionSlides, config.competition_carousel?.featured_competition_id]);
+    setActiveCompetitionId((current) => competitionSlides.some((slide) => slide.competition.id === current) ? current : (competitionSlides[0]?.competition.id || ""));
+  }, [competitionSlides]);
   useEffect(() => { setHomeNationsDivision("A"); }, [activeCompetitionId]);
   const activeCompetitionIndex = Math.max(0, competitionSlides.findIndex((slide) => slide.competition.id === activeCompetitionId));
   const activeCompetitionSlide = competitionSlides[activeCompetitionIndex];
@@ -304,17 +345,17 @@ export default function Home() {
 
     leagues: view.leagues.length ? <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">{view.leagues.map((league, index) => <Link key={league.name} href="/belges-a-l-etranger" className="rounded-2xl border border-line/10 bg-gradient-to-br from-surface to-bg/50 p-3 transition hover:-translate-y-0.5 hover:border-sky-400/40">{league.logo ? <img src={league.logo} className="h-8 w-8 object-contain" alt="" /> : <Globe2 className={`h-7 w-7 ${index % 2 ? "text-violet-400" : "text-sky-400"}`} />}<div className="mt-3 truncate text-xs font-black">{league.name}</div><div className="mt-1 text-xl font-black">{league.count}</div><div className="text-[10px] text-muted">Belge{league.count > 1 ? "s" : ""} suivi{league.count > 1 ? "s" : ""}</div></Link>)}</div> : <EmptyBlock>Les championnats étrangers suivis apparaîtront automatiquement ici.</EmptyBlock>,
 
-    news: data.news.length ? <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{data.news.slice(0, 3).map((item) => <Link key={item.id} href={`/actus/${item.slug}`} className="group overflow-hidden rounded-2xl border border-line/10 bg-surface transition hover:border-sky-400/40">{item.cover_url ? <img src={item.cover_url} className="aspect-[16/9] w-full object-cover transition duration-300 group-hover:scale-[1.02]" alt="" /> : <div className="flex aspect-[16/9] items-center justify-center bg-gradient-to-br from-sky-400/15 to-surface2"><Newspaper className="h-8 w-8 text-sky-400/60" /></div>}<div className="p-4">{item.category && <div className="text-[10px] font-black uppercase tracking-wider text-sky-300">{item.category}</div>}<h3 className="mt-1 line-clamp-2 font-black leading-snug">{item.title}</h3>{item.excerpt && <p className="mt-2 line-clamp-2 text-xs leading-5 text-muted">{item.excerpt}</p>}</div></Link>)}</div> : <EmptyBlock>Les derniers articles apparaîtront ici.<AdminHint>les articles publiés dans l’administration s’affichent automatiquement.</AdminHint></EmptyBlock>,
+    news: editorial.news.length ? <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{editorial.news.slice(0, 3).map((item) => <Link key={item.id} href={`/actus/${item.slug}`} className="group overflow-hidden rounded-2xl border border-line/10 bg-surface transition hover:border-sky-400/40">{item.cover_url ? <img src={item.cover_url} className="aspect-[16/9] w-full object-cover transition duration-300 group-hover:scale-[1.02]" alt="" /> : <div className="flex aspect-[16/9] items-center justify-center bg-gradient-to-br from-sky-400/15 to-surface2"><Newspaper className="h-8 w-8 text-sky-400/60" /></div>}<div className="p-4">{item.category && <div className="text-[10px] font-black uppercase tracking-wider text-sky-300">{item.category}</div>}<h3 className="mt-1 line-clamp-2 font-black leading-snug">{item.title}</h3>{item.excerpt && <p className="mt-2 line-clamp-2 text-xs leading-5 text-muted">{item.excerpt}</p>}</div></Link>)}</div> : <EmptyBlock>Les derniers articles apparaîtront ici.<AdminHint>les articles publiés dans l’administration s’affichent automatiquement.</AdminHint></EmptyBlock>,
 
-    brief: data.news.length > 3 ? <div className="divide-y divide-line/10 overflow-hidden rounded-2xl border border-line/10 bg-surface/60">{data.news.slice(3, 9).map((item, index) => <Link key={item.id} href={`/actus/${item.slug}`} className="flex items-center gap-3 px-4 py-3 transition hover:bg-white/[0.025]"><span className={`h-2 w-2 shrink-0 rounded-full ${index % 3 === 0 ? "bg-emerald-400" : index % 3 === 1 ? "bg-pink-500" : "bg-sky-400"}`} /><span className="min-w-0 flex-1 text-sm font-semibold">{item.title}</span>{item.published_at && <time className="hidden shrink-0 text-[11px] text-muted sm:block">{new Date(item.published_at).toLocaleDateString("fr-BE", { day: "numeric", month: "short" })}</time>}<ChevronRight className="h-4 w-4 shrink-0 text-muted/50" /></Link>)}</div> : <EmptyBlock>Les brèves supplémentaires apparaîtront ici.</EmptyBlock>,
+    brief: editorial.news.length > 3 ? <div className="divide-y divide-line/10 overflow-hidden rounded-2xl border border-line/10 bg-surface/60">{editorial.news.slice(3, 9).map((item, index) => <Link key={item.id} href={`/actus/${item.slug}`} className="flex items-center gap-3 px-4 py-3 transition hover:bg-white/[0.025]"><span className={`h-2 w-2 shrink-0 rounded-full ${index % 3 === 0 ? "bg-emerald-400" : index % 3 === 1 ? "bg-pink-500" : "bg-sky-400"}`} /><span className="min-w-0 flex-1 text-sm font-semibold">{item.title}</span>{item.published_at && <time className="hidden shrink-0 text-[11px] text-muted sm:block">{new Date(item.published_at).toLocaleDateString("fr-BE", { day: "numeric", month: "short" })}</time>}<ChevronRight className="h-4 w-4 shrink-0 text-muted/50" /></Link>)}</div> : <EmptyBlock>Les brèves supplémentaires apparaîtront ici.</EmptyBlock>,
 
     europe: view.europe.length ? <div className="space-y-2">{view.europe.map((match) => <MatchRow key={match.id} m={match} clubs={data.clubs} href={`/matchs/${match.id}`} />)}</div> : <EmptyBlock>Ce bloc peut rester masqué tant que les compétitions européennes ne sont pas alimentées.</EmptyBlock>,
 
     noyau: (() => {
-      const sessions = data.votwSessions || [];
+      const sessions = editorial.votwSessions || [];
       const openSess = sessions.find((s) => s.status === "open") || null;
       const lastPublished = sessions.find((s) => s.status === "published") || null;
-      const topics = data.topics || [];
+      const topics = editorial.topics || [];
       const votw = openSess || lastPublished;
       if (!votw && !topics.length) return <EmptyBlock>Le vote du 11 de la semaine et les discussions du Noyau apparaîtront ici.</EmptyBlock>;
       return (
@@ -362,10 +403,17 @@ export default function Home() {
       <section className="relative mb-8 overflow-hidden rounded-3xl border border-sky-400/15 bg-[linear-gradient(115deg,rgba(5,19,36,.98),rgba(8,28,49,.94),rgba(4,15,29,.98))] px-5 py-8 shadow-[0_30px_90px_-55px_rgba(56,189,248,.7)] sm:min-h-[390px] sm:px-9 sm:py-12">
         <div className="pointer-events-none absolute inset-0 opacity-20 [background-image:linear-gradient(rgba(255,255,255,.05)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.05)_1px,transparent_1px)] [background-size:38px_38px]" />
         {config.hero.image_url ? <img src={config.hero.image_url} className="pointer-events-none absolute inset-y-0 right-0 hidden h-full w-[58%] object-cover object-center opacity-90 [mask-image:linear-gradient(to_right,transparent,black_28%)] sm:block" alt="" /> : <div className="pointer-events-none absolute bottom-0 right-3 hidden h-[90%] w-[52%] sm:block">{heroPlayers.filter((item) => item.player.photo_url).map((item, index) => <img key={item.player.id} src={item.player.photo_url} className="absolute bottom-0 h-[72%] w-[42%] rounded-t-[5rem] object-cover object-top opacity-90 shadow-2xl" style={{ left: `${index * 28}%`, zIndex: 3 - index, transform: `translateY(${index === 1 ? 0 : 24}px)` }} alt="" />)}</div>}
-        <div className="relative z-10 max-w-2xl"><div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.24em] text-sky-300"><Sparkles className="h-3.5 w-3.5" />{config.hero.kicker}</div><h1 className="mt-4 max-w-xl whitespace-pre-line text-4xl font-black uppercase leading-[.98] sm:text-6xl"><HeroTitle value={config.hero.title} /></h1><p className="mt-4 max-w-xl text-sm leading-6 text-slate-300 sm:text-base">{config.hero.subtitle}</p><div className="mt-6 flex flex-wrap gap-2">{config.hero.primary_label && config.hero.primary_url && <Link href={config.hero.primary_url} className="inline-flex items-center gap-2 rounded-xl bg-amber-400 px-4 py-2.5 text-sm font-black text-slate-950 transition hover:brightness-110">{config.hero.primary_label}<ArrowRight className="h-4 w-4" /></Link>}{config.hero.secondary_label && config.hero.secondary_url && <Link href={config.hero.secondary_url} className="inline-flex items-center gap-2 rounded-xl border border-white/20 bg-white/[0.035] px-4 py-2.5 text-sm font-bold transition hover:border-sky-300/50">{config.hero.secondary_label}</Link>}</div><div className="mt-7 flex max-w-md divide-x divide-white/10"><div className="pr-5"><b className="text-2xl text-amber-300">{view.players.length}</b><span className="block text-[10px] text-slate-400">Belges suivis</span></div><div className="px-5"><b className="text-2xl">{view.leagues.length}</b><span className="block text-[10px] text-slate-400">Championnats couverts</span></div><div className="pl-5"><b className="text-2xl">1</b><span className="block text-[10px] text-slate-400">Passion commune 🇧🇪</span></div></div></div>
+        <div className="relative z-10 max-w-2xl"><div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.24em] text-sky-300"><Sparkles className="h-3.5 w-3.5" />{config.hero.kicker}</div><h1 className="mt-4 max-w-xl whitespace-pre-line text-4xl font-black uppercase leading-[.98] sm:text-6xl"><HeroTitle value={config.hero.title} /></h1><p className="mt-4 max-w-xl text-sm leading-6 text-slate-300 sm:text-base">{config.hero.subtitle}</p><div className="mt-6 flex flex-wrap gap-2">{config.hero.primary_label && config.hero.primary_url && <Link href={config.hero.primary_url} className="inline-flex items-center gap-2 rounded-xl bg-amber-400 px-4 py-2.5 text-sm font-black text-slate-950 transition hover:brightness-110">{config.hero.primary_label}<ArrowRight className="h-4 w-4" /></Link>}{config.hero.secondary_label && config.hero.secondary_url && <Link href={config.hero.secondary_url} className="inline-flex items-center gap-2 rounded-xl border border-white/20 bg-white/[0.035] px-4 py-2.5 text-sm font-bold transition hover:border-sky-300/50">{config.hero.secondary_label}</Link>}</div><div className="mt-7 flex max-w-md divide-x divide-white/10"><div className="pr-5"><b className="text-2xl text-amber-300">{data.loading || sportError ? "—" : view.players.length}</b><span className="block text-[10px] text-slate-400">Belges suivis</span></div><div className="px-5"><b className="text-2xl">{data.loading || sportError ? "—" : view.leagueCount}</b><span className="block text-[10px] text-slate-400">Championnats couverts</span></div><div className="pl-5"><b className="text-2xl">1</b><span className="block text-[10px] text-slate-400">Passion commune 🇧🇪</span></div></div></div>
       </section>
 
-      {data.loading ? <div className="grid gap-4 sm:grid-cols-2"><div className="h-48 animate-pulse rounded-2xl bg-surface" /><div className="h-48 animate-pulse rounded-2xl bg-surface" /></div> : <div className="space-y-9">{config.sections.filter((section) => section.enabled).map((section) => section.key === "live" ? <Fragment key={section.key}>{content.live}</Fragment> : section.key === "jpl" ? <section key={section.key}>{content.jpl}</section> : <section key={section.key}><SectionTitle section={section} href={meta[section.key]?.href} icon={meta[section.key]?.icon} />{content[section.key]}</section>)}</div>}
+      <div className="space-y-9">{config.sections.filter((section) => section.enabled).map((section) => {
+        const isNews = ["news", "brief"].includes(section.key);
+        const isCommunity = section.key === "noyau";
+        const loading = isNews ? editorial.newsLoading : isCommunity ? editorial.communityLoading : section.key === "form" ? false : section.key === "live" ? !competitionsReady && !sportError : data.loading;
+        const error = isNews ? editorial.newsError : isCommunity ? editorial.communityError : section.key === "form" ? false : sportError && (section.key !== "live" || !competitionsReady);
+        const body = loading ? <div className="h-32 animate-pulse rounded-2xl bg-surface" /> : error ? <EmptyBlock>Ces informations sont momentanément indisponibles.</EmptyBlock> : content[section.key];
+        return section.key === "live" ? <Fragment key={section.key}>{body}</Fragment> : section.key === "jpl" ? <section key={section.key}>{body}</section> : <section key={section.key}><SectionTitle section={section} href={meta[section.key]?.href} icon={meta[section.key]?.icon} />{body}</section>;
+      })}</div>
     </div>
   );
 }

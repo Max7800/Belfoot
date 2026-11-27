@@ -28,7 +28,11 @@ import { useCompetitionMatchUpdates } from "@/lib/useCompetitionMatchUpdates";
 import SeasonNotice from "@/components/football/SeasonNotice";
 import { isNationsLeagueCompetition, nationsLeagueGroups } from "@/lib/nationsLeague";
 import { mergeGroupStagePhases, phaseGroups } from "@/lib/groupedStandings";
-import { PUBLIC_PLAYER_FIELDS, PUBLIC_PLAYER_STATS_FIELDS, loadClubsForMatches, loadMatchStatsForMatches, loadPlayersByIds, loadSeasonMatches } from "@/lib/publicFootballData";
+import { PUBLIC_PLAYER_FIELDS, PUBLIC_PLAYER_STATS_FIELDS, loadClubsForMatches, loadGoalEventsForMatches, loadMatchStatsForMatches, loadPlayersByIds, loadSeasonMatches, missingMatchPlayerIds } from "@/lib/publicFootballData";
+import { eventRankings } from "@/lib/eventRankings";
+import { matchRosterByTeam } from "@/lib/competitionRoster";
+import { FIFA_U17_TEAM_ID } from "@/lib/fifaTournamentRoster";
+import { FifaTournamentSquad, useFifaTournamentSquad } from "@/components/football/FifaTournamentSquad";
 import { playerAge } from "@/lib/playerAge";
 import { preferAssignedPlayerStats } from "@/lib/playerStats";
 import { nationalityBadges } from "@/lib/nationalities";
@@ -96,6 +100,7 @@ export default function CompetitionPage() {
   const [tab, setTab] = useState("overview");
   const [seasons, setSeasons] = useState([]); const [seasonLabel, setSeasonLabel] = useState("");
   const [unpublishedSeasons, setUnpublishedSeasons] = useState(false);
+  const [goalEvents, setGoalEvents] = useState([]);
   const [matches, setMatches] = useState([]);
   const [clubsMap, setClubsMap] = useState({});
   const [players, setPlayers] = useState([]); const [playerStats, setPlayerStats] = useState([]); const [playerMemberships, setPlayerMemberships] = useState([]);
@@ -107,6 +112,7 @@ export default function CompetitionPage() {
   const matchViewChosen = useRef(false);
   const [selClub, setSelClub] = useState(null); const [posFilter, setPosFilter] = useState("all");
   const [anchor, setAnchor] = useState(null);
+  const { snapshot: fifaSquad } = useFifaTournamentSquad({ teamId: FIFA_U17_TEAM_ID, competitionId: comp?.id, season: seasonLabel });
   const [nationsDivision, setNationsDivision] = useState("A");
   const competitionType = getCompetitionType(comp, matches);
   const isCup = competitionType === "cup";
@@ -151,7 +157,7 @@ export default function CompetitionPage() {
   // Scores, fins de match et corrections arrivent en direct : classements et groupes sont recalculés.
   useCompetitionMatchUpdates(comp?.id, activeSeason?.id || null, setMatches);
   useEffect(() => { if (!comp?.id || (seasons.length && !activeSeason)) return; let alive = true; (async () => {
-    setSeasonLoading(true); setDataError(""); setMatches([]); setClubsMap({}); setPlayers([]); setPlayerStats([]); setPlayerMemberships([]); setTransfers([]); setMatchPlayerStats([]); setPhase(null); setRound("all");
+    setSeasonLoading(true); setDataError(""); setMatches([]); setClubsMap({}); setPlayers([]); setPlayerStats([]); setPlayerMemberships([]); setTransfers([]); setMatchPlayerStats([]); setGoalEvents([]); setPhase(null); setRound("all");
     const seasonMatches = await loadSeasonMatches(supabase, comp.id, activeSeason?.id);
     const clubMap = await loadClubsForMatches(supabase, seasonMatches);
     const activeYear = seasonKey(activeSeason?.label);
@@ -162,7 +168,7 @@ export default function CompetitionPage() {
     // rafale plus large faisait dépasser le délai d'exécution de la base (26/10).
     const clubIds = Object.keys(clubMap);
     const [statsResult, membershipResult, transferResult] = await Promise.all([
-      readAll(() => {
+      unpublishedSeasons ? Promise.resolve({ data: [], error: null }) : readAll(() => {
         const query = supabase.from("player_season_stats").select(PUBLIC_PLAYER_STATS_FIELDS).eq("competition_id", comp.id);
         return activeYear ? query.ilike("season", `${activeYear}%`) : query;
       }),
@@ -189,7 +195,10 @@ export default function CompetitionPage() {
       // Matchs terminés ou en cours seulement : un match à venir n'a aucune performance.
       loadMatchStatsForMatches(supabase, seasonMatches.filter((match) => ["finished", "live"].includes(match.status)).map((match) => match.id)),
     ]);
-    let playerRows = loadedPlayers;
+    const useEvents = comp.ext?.coverage?.players === false && comp.ext?.coverage?.top_scorers === false && comp.ext?.coverage?.top_assists === false;
+    const events = useEvents ? await loadGoalEventsForMatches(supabase, seasonMatches.filter((match) => match.status === "finished").map((match) => match.id)) : [];
+    const missingPlayerIds = missingMatchPlayerIds(loadedPlayers, exactMatchStats);
+    let playerRows = missingPlayerIds.length ? [...loadedPlayers, ...await loadPlayersByIds(supabase, missingPlayerIds)] : loadedPlayers;
     if (!playerRows.length && clubIds.length) {
       const fallback = await readAll(() => supabase.from("players").select(PUBLIC_PLAYER_FIELDS).in("club_id", clubIds).order("name"));
       if (fallback.error) throw fallback.error;
@@ -198,8 +207,8 @@ export default function CompetitionPage() {
     const competitionClubIds = new Set(clubIds);
     const transferRows = transferResult.error ? [] : dedupeTransfers((transferResult.data || []).filter((transfer) => competitionClubIds.has(transfer.from_club_id) || competitionClubIds.has(transfer.to_club_id))).slice(0, 5);
     if (!alive) return;
-    setMatches(seasonMatches); setClubsMap(clubMap); setPlayers(playerRows); setPlayerStats(statsRows); setPlayerMemberships(membershipRows); setTransfers(transferRows); setMatchPlayerStats(exactMatchStats); setSeasonLoading(false);
-  })().catch((loadError) => { if (alive) { setSeasonLoading(false); setDataError(loadError.message || String(loadError)); } }); return () => { alive = false; }; }, [comp?.id, activeSeason, seasons.length]);
+    setMatches(seasonMatches); setClubsMap(clubMap); setPlayers(playerRows); setPlayerStats(statsRows); setPlayerMemberships(membershipRows); setTransfers(transferRows); setMatchPlayerStats(exactMatchStats); setGoalEvents(events); setSeasonLoading(false);
+  })().catch((loadError) => { if (alive) { setSeasonLoading(false); setDataError(loadError.message || String(loadError)); } }); return () => { alive = false; }; }, [comp?.id, comp?.ext?.coverage?.players, comp?.ext?.coverage?.top_assists, comp?.ext?.coverage?.top_scorers, activeSeason, seasons.length, unpublishedSeasons]);
 
   const pss = useMemo(() => {
     const activeSeason = seasonKey(seasonLabel);
@@ -256,8 +265,12 @@ export default function CompetitionPage() {
   const membershipByPlayer = useMemo(() => new Map(playerMemberships.map((row) => [row.player_id, row])), [playerMemberships]);
   const rosterPlayers = playerMemberships.length ? players.filter((player) => membershipByPlayer.has(player.id)) : visiblePlayers;
   const rosterClubId = (player) => membershipByPlayer.get(player.id)?.club_id || playerClubId(player);
+  const partialNationalRoster = isInternational && comp?.ext?.coverage?.players === false;
+  const matchRosters = useMemo(() => matchRosterByTeam(matchPlayerStats, players), [matchPlayerStats, players]);
   const withStats = visiblePlayers.map((p) => ({ p, st: pss[p.id] })).filter((x) => x.st);
   const topBy = (key) => withStats.filter((x) => x.st[key] != null).sort((a, b) => (b.st[key] || 0) - (a.st[key] || 0)).slice(0, 10);
+  const fromEvents = comp?.ext?.coverage?.players === false && comp?.ext?.coverage?.top_scorers === false && comp?.ext?.coverage?.top_assists === false;
+  const eventLeaders = eventRankings(goalEvents);
   const maxApp = Math.max(0, ...withStats.map((x) => x.st.appearances || 0));
   const ratingThreshold = comp?.rating_min ?? Math.max(5, Math.round(maxApp * 0.4));
   const topRating = withStats.filter((x) => x.st.rating != null && (x.st.appearances || 0) >= ratingThreshold).sort((a, b) => b.st.rating - a.st.rating).slice(0, 10);
@@ -348,7 +361,7 @@ export default function CompetitionPage() {
           <div className={`text-xs font-bold uppercase tracking-wider ${overSub}`}>{v.icon} {title}</div>
           {x ? (
             <div className="mt-2 flex items-center gap-3">
-              <img src={x.p.photo_url || ""} className="h-14 w-14 rounded-full object-cover ring-2" style={{ "--tw-ring-color": accent }} alt="" />
+              {x.p.photo_url && <img src={x.p.photo_url} className="h-14 w-14 rounded-full object-cover ring-2" style={{ "--tw-ring-color": accent }} alt="" />}
               <span className="min-w-0 flex-1"><b className={`line-clamp-2 leading-tight [overflow-wrap:anywhere] ${overName}`} title={x.p.name}>{x.p.name}</b><span className={`flex min-w-0 items-center gap-1 text-xs ${overSub}`}>{clubsMap[playerClubId(x.p)]?.logo_url && <img src={clubsMap[playerClubId(x.p)].logo_url} className="h-3.5 w-3.5 object-contain" alt="" />}{clubName(playerClubId(x.p))}</span>{meta && <span className={`block text-[11px] ${overSub2}`}>{meta(x.st)}</span>}</span>
               <b className="ml-auto text-2xl" style={{ color: bg ? "#fff" : accent, textShadow: bg ? `0 1px 6px ${accent}, 0 1px 3px rgba(0,0,0,0.8)` : "none" }}>{unit}</b>
             </div>
@@ -381,6 +394,10 @@ export default function CompetitionPage() {
   }
 
   function StatsBlock({ section }) {
+    if (fromEvents && ["scorers", "assists"].includes(section.key)) {
+      const rows = eventLeaders[section.key];
+      return <div id={section.key === "scorers" ? "buteurs" : "passeurs"} className="rounded-2xl border border-line/10 bg-surface p-4"><h3 className="font-black">{section.label}</h3><p className="mt-1 text-xs text-muted">Classement indicatif calculé à partir des événements disponibles, potentiellement incomplet.</p><ol className="mt-3 space-y-2">{rows.map((row, index) => <li key={row.key} className="flex items-center gap-2 text-sm"><span className="text-muted">{index + 1}.</span><span className="min-w-0 flex-1">{row.name}<span className="block text-xs text-muted">{clubsMap[row.clubId]?.name || "Sélection"}</span></span><b>{row.total}</b></li>)}</ol>{!rows.length && <p className="mt-3 text-sm text-muted">Aucun événement exploitable.</p>}</div>;
+    }
     if (section.key === "overview") return (
       <div className="sm:col-span-2 lg:col-span-3">
         <div className="mb-3 flex items-center gap-2"><span className="h-4 w-1 rounded-full" style={{ background: section.accent }} /><h3 className="font-black">{section.label}</h3></div>
@@ -521,11 +538,10 @@ export default function CompetitionPage() {
           <div>
             <div className="mb-2 flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-muted"><span className="h-3 w-1 rounded bg-accent" />{L("comp.leaders", "Les leaders")}</div>
             <div className="grid gap-3 sm:grid-cols-3">
-              <LeaderCard title={L("comp.topscorer", "Meilleur buteur")} x={topScorer} unit={topScorer?.st.goals} onClick={() => goStats("buteurs")} variant="topscorer" />
-              <LeaderCard title={L("comp.topassist", "Meilleur passeur")} x={topAssist} unit={topAssist?.st.assists} onClick={() => goStats("passeurs")} variant="topassist" />
+              {fromEvents ? ["scorers", "assists"].map((key) => { const row = eventLeaders[key][0]; const variant = key === "scorers" ? "topscorer" : "topassist"; return <LeaderCard key={key} title={key === "scorers" ? "Buteurs · indicatif" : "Passeurs · indicatif"} x={row ? { p: { name: row.name, club_id: row.clubId }, st: {} } : null} unit={row?.total} onClick={() => goStats(key === "scorers" ? "buteurs" : "passeurs")} variant={variant} />; }) : <><LeaderCard title={L("comp.topscorer", "Meilleur buteur")} x={topScorer} unit={topScorer?.st.goals} onClick={() => goStats("buteurs")} variant="topscorer" /><LeaderCard title={L("comp.topassist", "Meilleur passeur")} x={topAssist} unit={topAssist?.st.assists} onClick={() => goStats("passeurs")} variant="topassist" /></>}
               <LeaderCard title={L("comp.cleansheets", "Matchs sans encaisser")} x={topCS} unit={topCS?.v} onClick={() => goStats("cleansheets")} variant="cleansheet" />
             </div>
-            {!withStats.length && <p className="mt-2 rounded-xl border border-dashed border-line/15 bg-surface/30 px-3 py-2 text-xs text-muted">Les fonds personnalisés restent visibles. Les noms et chiffres apparaîtront après l’import des effectifs et des statistiques.</p>}
+            {fromEvents ? <p className="mt-2 rounded-xl border border-amber-400/20 bg-amber-400/5 px-3 py-2 text-xs text-muted">Classements indicatifs issus des événements enregistrés, susceptibles d’être incomplets. Les buts contre leur camp sont exclus.</p> : !withStats.length && <p className="mt-2 rounded-xl border border-dashed border-line/15 bg-surface/30 px-3 py-2 text-xs text-muted">Les fonds personnalisés restent visibles. Les noms et chiffres apparaîtront après l’import des effectifs et des statistiques.</p>}
           </div>
 
           {transfers.length > 0 && <div>
@@ -598,25 +614,26 @@ export default function CompetitionPage() {
       )}
 
       {!seasonLoading && tab === "joueurs" && (
-        selClub === null ? (
+        selClub === null ? (<div>{partialNationalRoster && <p className="mb-3 text-xs text-muted">Pour les sélections sans liste FIFA, les joueurs affichés proviennent des feuilles de match disponibles et peuvent être incomplets.</p>}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             {[...clubsList].sort((a, b) => a.name.localeCompare(b.name)).map((c) => (
-              <button key={c.id} onClick={() => { setSelClub(c.id); setPosFilter("all"); }} className="rounded-2xl border border-line/10 bg-surface p-4 text-center transition hover:border-accent/40">{c.logo_url && <img src={c.logo_url} className="mx-auto h-14 w-14 object-contain" alt="" />}<div className="mt-2 font-bold">{c.name}</div><div className="text-xs text-muted">{rosterPlayers.filter((p) => rosterClubId(p) === c.id).length} {L("nav.joueurs", "joueurs")}</div></button>
+              <button key={c.id} onClick={() => { setSelClub(c.id); setPosFilter("all"); }} className="rounded-2xl border border-line/10 bg-surface p-4 text-center transition hover:border-accent/40">{c.logo_url && <img src={c.logo_url} className="mx-auto h-14 w-14 object-contain" alt="" />}<div className="mt-2 font-bold">{c.name}</div><div className="text-xs text-muted">{fifaSquad && c.id === FIFA_U17_TEAM_ID ? "21 joueurs · liste FIFA" : partialNationalRoster ? (matchRosters.get(c.id)?.size ? `${matchRosters.get(c.id).size} joueurs sur les feuilles` : "Effectif indisponible") : `${rosterPlayers.filter((p) => rosterClubId(p) === c.id).length} ${L("nav.joueurs", "joueurs")}`}</div></button>
             ))}
             {clubsList.length === 0 && <p className="text-muted">{L("empty.players", "Aucun joueur.")}</p>}
-          </div>
+          </div></div>
         ) : (() => {
           const POS_LABEL = { all: L("pos.all", "Tous"), Goalkeeper: L("pos.gk", "Gardiens"), Defender: L("pos.def", "Défenseurs"), Midfielder: L("pos.mid", "Milieux"), Attacker: L("pos.fwd", "Attaquants") };
-          const roster = rosterPlayers.filter((p) => (selClub === "__none__" ? !rosterClubId(p) : rosterClubId(p) === selClub));
+          const roster = partialNationalRoster ? [...(matchRosters.get(selClub)?.values() || [])] : rosterPlayers.filter((p) => (selClub === "__none__" ? !rosterClubId(p) : rosterClubId(p) === selClub));
           const shown = roster.filter((p) => posFilter === "all" || (membershipByPlayer.get(p.id)?.position || p.position) === posFilter).sort((a, b) => (POS[membershipByPlayer.get(a.id)?.position || a.position] ?? 9) - (POS[membershipByPlayer.get(b.id)?.position || b.position] ?? 9) || (a.name || "").localeCompare(b.name || ""));
           return (
             <div>
               <div className="mb-3 flex items-center gap-3"><button onClick={() => setSelClub(null)} className="text-sm text-muted hover:text-content">← {isInternational ? "Sélections" : L("nav.clubs", "Clubs")}</button><span className="flex items-center gap-2 font-bold">{clubsMap[selClub]?.logo_url && <img src={clubsMap[selClub].logo_url} className="h-6 w-6 object-contain" alt="" />}{clubName(selClub)}</span></div>
-              <div className="mb-4 flex flex-wrap gap-1">{["all", "Goalkeeper", "Defender", "Midfielder", "Attacker"].map((pf) => <button key={pf} onClick={() => setPosFilter(pf)} className={`rounded-full border px-3 py-1 text-xs ${posFilter === pf ? "border-accent bg-accent/10 text-accent" : "border-line/20 text-muted"}`}>{POS_LABEL[pf]}</button>)}</div>
+              {partialNationalRoster && !(fifaSquad && selClub === FIFA_U17_TEAM_ID) && clubsMap[selClub]?.national_followed && <p className="mb-4 rounded-xl border border-line/10 bg-surface p-3 text-xs text-muted">Les joueurs ci-dessous proviennent des feuilles de ce tournoi. <Link className="font-bold text-amber-300 underline" href={`/diables-rouges/selection?equipe=${selClub}`}>Voir aussi la sélection actuelle</Link>, qui peut concerner un autre rassemblement.</p>}
+              {fifaSquad && selClub === FIFA_U17_TEAM_ID ? <FifaTournamentSquad snapshot={fifaSquad} /> : <><div className="mb-4 flex flex-wrap gap-1">{["all", "Goalkeeper", "Defender", "Midfielder", "Attacker"].map((pf) => <button key={pf} onClick={() => setPosFilter(pf)} className={`rounded-full border px-3 py-1 text-xs ${posFilter === pf ? "border-accent bg-accent/10 text-accent" : "border-line/20 text-muted"}`}>{POS_LABEL[pf]}</button>)}</div>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-                {shown.map((p) => { const age = playerAge(p); const membership = membershipByPlayer.get(p.id); const nationalities = nationalityBadges(p.nationality); return <Link key={p.id} href={`/players/${p.id}`} className="rounded-2xl border border-line/10 bg-surface p-3 text-center transition hover:border-accent/40"><img src={p.photo_url || ""} className="mx-auto h-16 w-16 rounded-full object-cover" alt="" /><div className="mt-2 truncate text-sm font-bold">{p.name}</div><div className="text-xs text-muted">{[positionLabel(membership?.position || p.position), age ? `${age} ans` : null].filter(Boolean).join(" · ")}</div>{nationalities.length > 0 && <div className="mt-1 flex justify-center gap-1">{nationalities.map((nationality) => nationality.flagUrl ? <img key={`${nationality.code}-${nationality.label}`} src={nationality.flagUrl} title={nationality.label} alt={nationality.label} className="h-3 w-4 rounded-[2px] object-cover" /> : <span key={nationality.label} title={nationality.label}>🌍</span>)}</div>}</Link>; })}
-                {shown.length === 0 && <p className="text-muted">{L("empty.players", "Aucun joueur.")}</p>}
-              </div>
+                {shown.map((p) => { const age = playerAge(p); const membership = membershipByPlayer.get(p.id); const nationalities = nationalityBadges(p.nationality); const Card = p.id ? Link : "div"; return <Card key={p.id || p.rosterKey} {...(p.id ? { href: `/players/${p.id}` } : {})} className="rounded-2xl border border-line/10 bg-surface p-3 text-center transition hover:border-accent/40"><img src={p.photo_url || ""} className="mx-auto h-16 w-16 rounded-full object-cover" alt="" /><div className="mt-2 truncate text-sm font-bold">{p.name}</div><div className="text-xs text-muted">{[positionLabel(membership?.position || p.position), age ? `${age} ans` : null].filter(Boolean).join(" · ")}</div>{nationalities.length > 0 && <div className="mt-1 flex justify-center gap-1">{nationalities.map((nationality) => nationality.flagUrl ? <img key={`${nationality.code}-${nationality.label}`} src={nationality.flagUrl} title={nationality.label} alt={nationality.label} className="h-3 w-4 rounded-[2px] object-cover" /> : <span key={nationality.label} title={nationality.label}>🌍</span>)}</div>}{!p.id && <div className="mt-1 text-xs text-muted">Fiche non reliée</div>}</Card>; })}
+                {shown.length === 0 && <p className="text-muted">{partialNationalRoster ? "Aucun joueur identifié dans les feuilles de match disponibles." : L("empty.players", "Aucun joueur.")}</p>}
+              </div></>}
             </div>
           );
         })()

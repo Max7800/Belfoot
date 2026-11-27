@@ -189,6 +189,19 @@ describe("classement officiel daté — résultats annulés, matchs postérieurs
   it("date d'instantané illisible : repli équipe par équipe", () => {
     expect(groupC(withSnapshot(officialC, "pas une date"), matchesC()).source).toBe("computed");
   });
+
+  it("utilise la date du classement et non celle d'un import complet plus récent", () => {
+    const comp = withSnapshot(officialC, "2026-10-21T00:00:00Z");
+    comp.ext.standings_synced_at_by_season = { "2023-2024": SNAPSHOT };
+    const later = [...matchesC(), game("Group Stage", "svk", "esp", 1, 0, { kickoff: "2026-10-20T16:00:00Z" })];
+    expect(groupC(comp, later).source).toBe("computed");
+  });
+
+  it("date du classement explicitement inconnue : compare les résultats", () => {
+    const comp = withSnapshot(officialC);
+    comp.ext.standings_synced_at_by_season = { "2023-2024": null };
+    expect(groupC(comp, matchesC()).source).toBe("computed");
+  });
 });
 
 describe("groupes officiels contredits par les matchs (API U21 saison 2025)", () => {

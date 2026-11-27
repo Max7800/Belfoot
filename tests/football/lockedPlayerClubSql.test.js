@@ -27,7 +27,7 @@ beforeAll(async () => {
   await db.query("insert into clubs values ($1,'first_team'),($2,'first_team'),($3,'national')", [monterrey, chicago, belgium]);
   await db.query("insert into players values ($1,$2,'Cuypers')", [player, monterrey]);
   await db.query("insert into player_team_seasons values ($1,$2,$3,$4,$5,true,true,true)", [current, player, monterrey, String(year), year]);
-  const sql = await readFile(new URL("../../modules/football/migrations/0042_locked_player_club.sql", import.meta.url), "utf8");
+  const sql = await readFile(new URL("../../modules/football/migrations/0046_locked_player_club.sql", import.meta.url), "utf8");
   await db.exec(sql);
   await db.exec(sql);
 });

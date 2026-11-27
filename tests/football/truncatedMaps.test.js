@@ -120,6 +120,27 @@ describe("syncLineups au-delà de 1 000 joueurs", () => {
     expect(db.rows("match_player_stats").find((entry) => entry.id === "mps-nat").player_id).toBe(playerId(1300));
     expect(db.rows("national_match_callups")[0]).toMatchObject({ match_id: "m-1", national_team_id: "nat-be", player_id: playerId(1300), status: "started" });
   });
+
+  it("reprend les liens nationaux par lots sans nouvel appel fournisseur et sans toucher à une autre saison", async () => {
+    let calls = 0;
+    register({ async fetchMatchPlayerStats() { calls++; return []; } });
+    const national = { id: "nat-be", source: PROVIDER, external_id: "1", name: "Belgique", team_type: "national" };
+    const pending = Array.from({ length: 21 }, (_, i) => ({ id: `pending-${i}`, match_id: "m-1", competition_id: "comp-1", club_id: "nat-be", player_external_id: String(i + 1), player_id: null, starter: true, locked: false }));
+    const db = seedLineups({
+      clubs: [national], players: manyPlayers(30),
+      matches: [{ id: "m-1", external_id: "9001", competition_id: "comp-1", season_id: "season-2026", status: "finished", kickoff: "2026-08-01T18:00:00+00:00", player_stats_synced_at: "2026-08-02T00:00:00Z" }],
+      match_player_stats: [...pending, { id: "locked", match_id: "m-1", competition_id: "comp-1", club_id: "nat-be", player_external_id: "25", player_id: null, locked: true }, { id: "other-season", match_id: "old-match", competition_id: "comp-1", club_id: "nat-be", player_external_id: "26", player_id: null, locked: false }],
+    });
+    const first = await syncLineups(db, { ...COMPETITION }, { ...CTX, drain: true });
+    expect(first.complete).toBe(false);
+    expect(db.rows("match_player_stats").filter((row) => row.id.startsWith("pending-") && row.player_id)).toHaveLength(20);
+    const second = await syncLineups(db, { ...COMPETITION }, { ...CTX, drain: true });
+    expect(second.complete).toBe(true);
+    expect(db.rows("match_player_stats").filter((row) => row.id.startsWith("pending-") && row.player_id)).toHaveLength(21);
+    expect(db.rows("match_player_stats").find((row) => row.id === "locked").player_id).toBeNull();
+    expect(db.rows("match_player_stats").find((row) => row.id === "other-season").player_id).toBeNull();
+    expect(calls).toBe(0);
+  });
 });
 
 describe("syncTransfers au-delà de 1 000 clubs", () => {
