@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import { createRequire } from "node:module";
 import { describe, expect, it } from "vitest";
-import { categoryLabel, isDisplayedNationalTeam, isSeniorMenTeam, pickNationalTabs, sortNationalTeams, teamCategory, teamGender } from "@/lib/nationalCategories";
+import { categoryLabel, isDisplayedNationalTeam, isSeniorMenTeam, pickNationalTabs, requestedNationalTab, sortNationalTeams, teamCategory, teamGender } from "@/lib/nationalCategories";
 import { selectionGroupStanding } from "@/lib/selectionGroup";
 import { isKnockoutPhase } from "@/lib/competitionType";
 
@@ -42,6 +42,16 @@ describe("catégories des sélections — genre et âge distincts", () => {
 });
 
 describe("onglets de la page Diables — données réelles", () => {
+  it("ouvre le bon onglet pour un lien jeune ou féminin, y compris un doublon historique", () => {
+    const teams = [...BELGIUM, team("u17-old", "Belgium U17")];
+    const shown = pickNationalTabs(teams, ACTIVITY);
+    expect(requestedNationalTab(shown, teams, "u17").id).toBe("u17");
+    expect(requestedNationalTab(shown, teams, "u17-old").id).toBe("u17");
+    expect(requestedNationalTab(shown, teams, "w").id).toBe("w");
+    expect(requestedNationalTab(shown, teams, "u17w")).toBeNull();
+    expect(requestedNationalTab(shown, teams, "inconnu")).toBeNull();
+    expect(requestedNationalTab(shown, [...teams, team("fra", "France U17")], "fra")).toBeNull();
+  });
   it("plus de faux « U23 » ni de « U17 » féminine chez les hommes ; féminines de jeunes masquées", () => {
     expect(tabs()).toEqual([
       "men:Diables Rouges=Belgium",
