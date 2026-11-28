@@ -16,6 +16,8 @@ export default function SeasonActivationPanel() {
   const [planSeasons, setPlanSeasons] = useState([]);
   const [readiness, setReadiness] = useState({});
   const [readinessBusy, setReadinessBusy] = useState({});
+  const [coverage, setCoverage] = useState({});
+  const [coverageBusy, setCoverageBusy] = useState({});
   const [status, setStatus] = useState("loading");
   const [message, setMessage] = useState("");
   // Affichage seulement (ce navigateur). Masquage partagé avec « Plan d'import ».
@@ -40,6 +42,7 @@ export default function SeasonActivationPanel() {
     // Contrôles chargés À LA DEMANDE (bouton par saison) : l'audit groupé de toutes
     // les saisons dépassait le timeout dès qu'on importait beaucoup de championnats.
     setReadiness({});
+    setCoverage({});
     setStatus("idle");
   }, []);
   useEffect(() => { load(); }, [load]);
@@ -124,12 +127,34 @@ export default function SeasonActivationPanel() {
     }
   };
 
+  const auditCoverage = async (seasonId) => {
+    setCoverageBusy((current) => ({ ...current, [seasonId]: true }));
+    try {
+      const result = await requestReadiness({ action: "coverage", seasonId });
+      setCoverage((current) => ({ ...current, [seasonId]: result.coverage }));
+    } catch (error) {
+      setStatus("error"); setMessage(`Contrôle des données indisponible : ${error.message}`);
+    } finally {
+      setCoverageBusy((current) => ({ ...current, [seasonId]: false }));
+    }
+  };
+
   const renderSeasonRow = (season) => {
     const report = readiness[season.id];
     const busy = readinessBusy[season.id];
     const failedChecks = report?.checks?.filter((item) => item.blocking && !item.ok) || [];
     const isHidden = hiddenSet.has(String(season.competition_id));
-    return <div key={season.id} className={`border-t border-line/10 p-3 text-sm ${isHidden ? "opacity-60" : ""}`}><div className="flex flex-wrap items-center gap-3"><div className="min-w-[190px] flex-1"><b>{competitionName(season.competition_id)} · {season.label}</b><div className="mt-0.5 text-[10px] uppercase tracking-wider text-muted">{season.import_status || "inconnu"}{report?.scopeLabel ? ` · ${report.scopeLabel}` : ""}</div></div>{report && <div className="min-w-[150px] sm:w-52"><div className="mb-1 flex justify-between text-[10px] font-bold uppercase tracking-wider text-muted"><span>Contrôles</span><span>{report.progress}%</span></div><div className="h-1.5 overflow-hidden rounded-full bg-bg"><div className={`h-full rounded-full ${report.ok ? "bg-emerald-400" : "bg-amber-400"}`} style={{ width: `${report.progress || 0}%` }} /></div></div>}{season.public_active ? <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-bold text-emerald-300"><CheckCircle2 className="h-3.5 w-3.5" />Par défaut</span> : !report ? <button type="button" onClick={() => auditSeason(season.id)} disabled={busy} className="rounded-lg border border-line/20 px-3 py-1.5 text-xs font-bold text-muted hover:text-content disabled:opacity-50">{busy ? "Contrôle…" : "Vérifier les contrôles"}</button> : <>{["draft", "error", "importing"].includes(season.import_status) && <button type="button" onClick={() => markReady(season)} disabled={status === "saving" || !report.ok} className="rounded-lg border border-amber-400/25 bg-amber-400/10 px-3 py-1.5 text-xs font-bold text-amber-200 disabled:cursor-not-allowed disabled:opacity-40">{report.ok ? "Marquer prête" : "Contrôles incomplets"}</button>}{season.import_status === "ready" && <button type="button" onClick={() => activate(season)} disabled={status === "saving" || !report.ok} className="rounded-lg border border-emerald-400/25 bg-emerald-400/10 px-3 py-1.5 text-xs font-bold text-emerald-200 disabled:cursor-not-allowed disabled:opacity-40">{report.ok ? "Utiliser par défaut" : "Revalidation requise"}</button>}</>}<HideButton hidden={isHidden} label={competitionName(season.competition_id)} onToggle={() => setHidden((current) => toggleInList(current, season.competition_id))} /></div>{report && <div className="mt-3 grid gap-2 lg:grid-cols-[minmax(0,1fr)_auto]"><div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted"><span>{report.counts.matches}{report.counts.expectedMatches ? ` / ${report.counts.expectedMatches}` : ""} matchs</span><span>{report.counts.clubs}{report.counts.expectedClubs ? ` / ${report.counts.expectedClubs}` : ""} clubs</span>{report.scope !== "base" && <span>{report.counts.memberships} affectations d’effectif</span>}{report.scope === "complete" && <span>{report.counts.pendingEvents + report.counts.pendingLineups + report.counts.pendingPlayerStats} traitements de match restants</span>}</div>{failedChecks.length > 0 && <div className="text-[11px] text-amber-200">{failedChecks.map((item) => `${item.label} : ${item.detail}`).join(" · ")}</div>}</div>}</div>;
+    return <div key={season.id} className={`border-t border-line/10 p-3 text-sm ${isHidden ? "opacity-60" : ""}`}><div className="flex flex-wrap items-center gap-3"><div className="min-w-[190px] flex-1"><b>{competitionName(season.competition_id)} · {season.label}</b><div className="mt-0.5 text-[10px] uppercase tracking-wider text-muted">{season.import_status || "inconnu"}{report?.scopeLabel ? ` · ${report.scopeLabel}` : ""}</div></div>{report && <div className="min-w-[150px] sm:w-52"><div className="mb-1 flex justify-between text-[10px] font-bold uppercase tracking-wider text-muted"><span>Contrôles</span><span>{report.progress}%</span></div><div className="h-1.5 overflow-hidden rounded-full bg-bg"><div className={`h-full rounded-full ${report.ok ? "bg-emerald-400" : "bg-amber-400"}`} style={{ width: `${report.progress || 0}%` }} /></div></div>}{season.public_active ? <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-bold text-emerald-300"><CheckCircle2 className="h-3.5 w-3.5" />Par défaut</span> : !report ? <button type="button" onClick={() => auditSeason(season.id)} disabled={busy} className="rounded-lg border border-line/20 px-3 py-1.5 text-xs font-bold text-muted hover:text-content disabled:opacity-50">{busy ? "Contrôle…" : "Vérifier les contrôles"}</button> : <>{["draft", "error", "importing"].includes(season.import_status) && <button type="button" onClick={() => markReady(season)} disabled={status === "saving" || !report.ok} className="rounded-lg border border-amber-400/25 bg-amber-400/10 px-3 py-1.5 text-xs font-bold text-amber-200 disabled:cursor-not-allowed disabled:opacity-40">{report.ok ? "Marquer prête" : "Contrôles incomplets"}</button>}{season.import_status === "ready" && <button type="button" onClick={() => activate(season)} disabled={status === "saving" || !report.ok} className="rounded-lg border border-emerald-400/25 bg-emerald-400/10 px-3 py-1.5 text-xs font-bold text-emerald-200 disabled:cursor-not-allowed disabled:opacity-40">{report.ok ? "Utiliser par défaut" : "Revalidation requise"}</button>}</>}<HideButton hidden={isHidden} label={competitionName(season.competition_id)} onToggle={() => setHidden((current) => toggleInList(current, season.competition_id))} /></div>{report && <div className="mt-3 grid gap-2 lg:grid-cols-[minmax(0,1fr)_auto]"><div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted"><span>{report.counts.matches}{report.counts.expectedMatches ? ` / ${report.counts.expectedMatches}` : ""} matchs</span><span>{report.counts.clubs}{report.counts.expectedClubs ? ` / ${report.counts.expectedClubs}` : ""} clubs</span>{report.scope !== "base" && <span>{report.counts.memberships} affectations d’effectif</span>}{report.scope === "complete" && <span>{report.counts.pendingEvents + report.counts.pendingLineups + report.counts.pendingPlayerStats} traitements de match restants</span>}</div>{failedChecks.length > 0 && <div className="text-[11px] text-amber-200">{failedChecks.map((item) => `${item.label} : ${item.detail}`).join(" · ")}</div>}</div>}
+      <div className="mt-2 text-xs text-muted">
+        <button type="button" onClick={() => auditCoverage(season.id)} disabled={coverageBusy[season.id]} className="rounded-lg border border-line/20 px-2 py-1 hover:text-content disabled:opacity-50">{coverageBusy[season.id] ? "Analyse…" : "Vérifier les données enregistrées"}</button>
+        {coverage[season.id] && <div className="mt-2 space-y-1">
+          <p>Échantillon : {coverage[season.id].sampleSize} match(s) terminé(s) les plus récents.</p>
+          {coverage[season.id].types.map((item) => <p key={item.key}>{item.label} : {item.withoutRows} sans ligne enregistrée sur {item.checked} match(s) marqués synchronisés.</p>)}
+          {!coverage[season.id].types.length && <p>Aucune couverture exploitable ou marqueur disponible.</p>}
+          <p>Une absence peut être normale. Les lignes joueurs peuvent provenir des compositions ; ce contrôle ne prouve pas la réponse du fournisseur ni la présence de statistiques complètes.</p>
+        </div>}
+      </div>
+    </div>;
   };
 
   return <div>
