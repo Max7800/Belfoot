@@ -37,6 +37,31 @@ function setup() {
 const competition = { id: "comp-1", name: "Test", provider: "batchprov", external_id: "1", ext: {} };
 
 describe("compositions : écritures groupées par match", () => {
+  it.each([
+    ["match_lineups", "club_id"],
+    ["match_player_stats", "player_external_id"],
+    ["national_match_callups", "player_id"],
+  ])("interrompt les écritures du match si la lecture des verrous %s échoue", async (failedTable, failedColumns) => {
+    const { db, writes } = setup();
+    const from = db.from.bind(db);
+    const failure = new Error("lecture des verrous indisponible");
+    db.from = (table) => {
+      const builder = from(table);
+      const select = builder.select.bind(builder);
+      builder.select = (columns, ...args) => {
+        const query = select(columns, ...args);
+        if (table === failedTable && columns === failedColumns) {
+          query.then = (resolve) => resolve({ data: null, error: failure });
+        }
+        return query;
+      };
+      return builder;
+    };
+    await expect(syncLineups(db, competition, { season: "2026-2027" })).rejects.toBe(failure);
+    expect(writes.filter((write) => ["match_lineups", "match_player_stats", "national_match_callups"].includes(write.table))).toEqual([]);
+    expect(db.rows("match_player_stats").find((row) => row.player_external_id === "4")).toMatchObject({ minutes: 45, locked: true });
+    expect(db.rows("matches")[0].lineups_synced_at).toBeUndefined();
+  });
   it("performances en un lot par forme de ligne, convocations en un seul lot (et non une écriture par joueur)", async () => {
     const { db, writes } = setup();
     await syncLineups(db, competition, { season: "2026-2027" });
