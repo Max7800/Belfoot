@@ -1,6 +1,7 @@
 import { getProvider } from "./providers";
 import { seasonLabel } from "./season";
 import { idMapByExternalIds } from "./sync";
+import { loadPendingDetails } from "./detailQueue";
 
 export async function syncEvents(db, competition, ctx = {}) {
   const provider = getProvider(competition.provider);
@@ -29,11 +30,9 @@ export async function syncEvents(db, competition, ctx = {}) {
   } else {
     // Le marqueur couvre aussi une réponse provider vide : elle ne sera pas
     // refacturée au prochain passage.
-    const { data: finished, error: finishedError } = await db.from("matches").select("id,external_id,status,events_synced_at").eq("competition_id", competition.id).eq("season_id", season.id).eq("status", "finished").not("external_id", "is", null).order("kickoff", { ascending: false }).limit(500);
-    if (finishedError) throw finishedError;
-    const eligible = (finished || []).filter((match) => !match.events_synced_at);
-    pendingBefore = eligible.length;
-    todo = eligible.slice(0, cap);
+    const pending = await loadPendingDetails(db, { competitionId: competition.id, seasonId: season.id, kind: "events", limit: cap });
+    pendingBefore = pending.count;
+    todo = pending.rows;
     if (!todo.length) return ctx.drain
       ? { detail: `${competition.name}: événements déjà à jour`, complete: true, progress: { current: 0, total: 0, unit: "matchs événements" } }
       : `${competition.name}: événements déjà à jour`;
@@ -42,6 +41,15 @@ export async function syncEvents(db, competition, ctx = {}) {
   let n = 0;
   for (const m of todo) {
     const evs = await provider.fetchEvents({ external_id: m.external_id }, ctx);
+    // Une réponse vide ne justifie pas la suppression d'événements déjà
+    // enregistrés pendant le direct. Garder le marqueur historique de passage.
+    if (!evs.length) {
+      if (m.status === "finished") {
+        const { error } = await db.from("matches").update({ events_synced_at: new Date().toISOString() }).eq("id", m.id);
+        if (error) throw error;
+      }
+      continue;
+    }
     // Correspondances limitées aux équipes et joueurs de CE match (jamais la table
     // entière, tronquée au-delà du plafond Supabase). Les erreurs de lecture remontent.
     const [clubMap, playerMap] = await Promise.all([
