@@ -2,6 +2,7 @@ import { getProvider } from "./providers";
 import { seasonLabel } from "./season";
 import { idMapByExternalIds, selectAllPages } from "./sync";
 import { isLeaseLost } from "@/lib/runLease";
+import { loadPendingDetails } from "./detailQueue";
 
 function coverageFlags(competition) {
   const fixtures = competition.ext?.coverage?.fixtures || {};
@@ -130,11 +131,8 @@ export async function syncLineups(db, competition, ctx = {}) {
   // Reprendre sans appel fournisseur, jusqu'à épuisement ; si rien n'a pu être
   // relié, arrêter pour éviter une boucle infinie sur des données invalides.
   const moreRelinks = (unresolvedRows || []).length === 20 && relinked > 0;
-  const eligible = (candidates || []).filter((match) => match.status === "live"
-    || (canLineups && !match.lineups_synced_at)
-    || (canStats && !match.player_stats_synced_at)
-    || (canTeamStats && !match.team_stats_synced_at));
-  const todo = eligible.slice(0, cap);
+  const pending = await loadPendingDetails(db, { competitionId: competition.id, seasonId: season.id, kind: "lineups", includeLive: !ctx.drain, coverage: { lineups: canLineups, playerStats: canStats, teamStats: canTeamStats }, limit: cap });
+  const todo = pending.rows;
   if (!todo.length) {
     const detail = `${competition.name}: compositions déjà à jour${relinked ? `, ${relinked} joueurs reliés` : ""}${materialized ? `, ${materialized} fiches historiques créées` : ""}`;
     return ctx.drain ? { detail, complete: !moreRelinks, progress: { current: 0, total: 0, unit: "matchs détaillés" } } : detail;
@@ -301,8 +299,8 @@ export async function syncLineups(db, competition, ctx = {}) {
   }
   const detail = `${competition.name}: ${todo.length} matchs, ${teams} formations, ${players} joueurs, ${collectiveStats} lignes collectives${relinked ? `, ${relinked} reliés` : ""}${materialized ? `, ${materialized} fiches historiques créées` : ""}`;
   if (!ctx.drain) return detail;
-  const total = Number(ctx.resumeState?.total) || eligible.length;
-  const remaining = Math.max(0, eligible.length - todo.length);
+  const total = Number(ctx.resumeState?.total) || pending.count;
+  const remaining = Math.max(0, pending.count - todo.length);
   await ctx.saveCheckpoint?.({ total });
   return {
     detail: `${detail} · ${remaining} match(s) restant(s)`,

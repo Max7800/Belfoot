@@ -26,9 +26,9 @@ const DETAIL_START_BEFORE_MS = 20000;
 const DETAIL_FIRST_START_BEFORE_MS = 24000;
 const DETAIL_CALLS = 4;
 const EVENTS_PER_STEP = 2;
-// Une passe de réparation des liens existants, même si les détails étaient
-// déjà marqués complets par une version antérieure.
-const DETAIL_RELINK_VERSION = 2;
+// Réexamine une fois les files après correction de la limite des 500 matchs.
+// Les marqueurs déjà acquis évitent les appels fournisseur inutiles.
+const DETAIL_RELINK_VERSION = 3;
 // Passage dédié (?pass=details, programmé à part 10 min après le passage
 // principal) : un match par lot et un seul lot par passage principal ne
 // suffisaient pas (≈ 3 matchs par heure, retard jamais résorbé, 28/10/2026).
