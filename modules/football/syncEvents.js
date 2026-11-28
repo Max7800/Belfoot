@@ -41,6 +41,15 @@ export async function syncEvents(db, competition, ctx = {}) {
   let n = 0;
   for (const m of todo) {
     const evs = await provider.fetchEvents({ external_id: m.external_id }, ctx);
+    // Une réponse vide ne justifie pas la suppression d'événements déjà
+    // enregistrés pendant le direct. Garder le marqueur historique de passage.
+    if (!evs.length) {
+      if (m.status === "finished") {
+        const { error } = await db.from("matches").update({ events_synced_at: new Date().toISOString() }).eq("id", m.id);
+        if (error) throw error;
+      }
+      continue;
+    }
     // Correspondances limitées aux équipes et joueurs de CE match (jamais la table
     // entière, tronquée au-delà du plafond Supabase). Les erreurs de lecture remontent.
     const [clubMap, playerMap] = await Promise.all([
