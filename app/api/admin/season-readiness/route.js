@@ -1,5 +1,6 @@
 import { getAdmin } from "@/lib/supabaseAdmin";
 import { auditSeasonReadiness } from "@/lib/seasonReadiness";
+import { auditSeasonCoverage } from "@/lib/seasonCoverage";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +22,10 @@ export async function POST(request) {
     const input = await request.json().catch(() => ({}));
     const seasonIds = [...new Set([...(Array.isArray(input.seasonIds) ? input.seasonIds : []), ...(input.seasonId ? [input.seasonId] : [])].filter(Boolean))].slice(0, 50);
     if (!seasonIds.length) return new Response("Aucune saison fournie", { status: 400 });
+    if (input.action === "coverage") {
+      if (seasonIds.length !== 1) return new Response("Une seule saison peut être analysée à la fois", { status: 400 });
+      return Response.json({ ok: true, coverage: await auditSeasonCoverage(db, seasonIds[0]) });
+    }
     const reports = [];
     for (const seasonId of seasonIds) reports.push(await auditSeasonReadiness(db, seasonId));
 
