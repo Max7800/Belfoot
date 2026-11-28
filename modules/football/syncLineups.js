@@ -166,8 +166,15 @@ export async function syncLineups(db, competition, ctx = {}) {
       idMapByExternalIds(db, "clubs", competition.provider, [...lineups, ...stats, ...teamStats].map((row) => row.team_ext)),
       idMapByExternalIds(db, "players", competition.provider, matchPlayerExternalIds),
     ]);
-    const { data: lockedLineups } = await db.from("match_lineups").select("club_id").eq("match_id", match.id).eq("locked", true);
+    const { data: lockedLineups, error: lockedLineupsError } = await db.from("match_lineups").select("club_id").eq("match_id", match.id).eq("locked", true);
+    if (lockedLineupsError) throw lockedLineupsError;
     const lockedClubIds = new Set((lockedLineups || []).map((row) => row.club_id));
+    const { data: lockedPlayers, error: lockedPlayersError } = await db.from("match_player_stats").select("player_external_id").eq("match_id", match.id).eq("locked", true);
+    if (lockedPlayersError) throw lockedPlayersError;
+    const lockedPlayerIds = new Set((lockedPlayers || []).map((row) => row.player_external_id));
+    const { data: lockedCallups, error: lockedCallupsError } = await db.from("national_match_callups").select("player_id").eq("match_id", match.id).eq("locked", true);
+    if (lockedCallupsError) throw lockedCallupsError;
+    const lockedCallupPlayerIds = new Set((lockedCallups || []).map((row) => row.player_id));
     for (const row of lineups) {
       const clubId = clubMap[row.team_ext] || null;
       if (!clubId || lockedClubIds.has(clubId)) continue;
@@ -194,11 +201,6 @@ export async function syncLineups(db, competition, ctx = {}) {
       // l’effectif « non remplaçant » (constat du 27/10/2026).
       merged.set(key, lineup ? { ...lineup, ...row, starter: lineup.starter, substitute: lineup.substitute, grid: lineup.grid ?? row.grid } : row);
     }
-    const { data: lockedPlayers } = await db.from("match_player_stats").select("player_external_id").eq("match_id", match.id).eq("locked", true);
-    const lockedPlayerIds = new Set((lockedPlayers || []).map((row) => row.player_external_id));
-    const { data: lockedCallups, error: lockedCallupsError } = await db.from("national_match_callups").select("player_id").eq("match_id", match.id).eq("locked", true);
-    if (lockedCallupsError) throw lockedCallupsError;
-    const lockedCallupPlayerIds = new Set((lockedCallups || []).map((row) => row.player_id));
     // Écritures groupées en fin de match (une par joueur coûtait 11 à 23 s par
     // match, 28/10/2026) : une clé par joueur, la dernière ligne l'emporte.
     const playerRows = new Map();
