@@ -34,7 +34,17 @@ describe("tirages UEFA de jeunes", () => {
     const now = new Date("2026-12-10T10:45:00Z");
     expect(await syncUefaYouthDraws(null, fake.settings, { now, fetcher })).toMatchObject({ ok: true, event: event.id, groups: 7 });
     const previous = fake.settings[UEFA_DRAW_SNAPSHOTS_KEY][event.id].groups;
-    expect(await syncUefaYouthDraws(null, fake.settings, { now: new Date("2026-12-11T11:00:00Z"), fetcher: async () => new Response("", { status: 503 }) })).toMatchObject({ ok: false });
+    fake.settings[UEFA_DRAW_SNAPSHOTS_KEY]["u17-2027-round2"] = { attemptedAt: "2026-12-11T10:59:00Z" };
+    expect(await syncUefaYouthDraws(null, fake.settings, { now: new Date("2026-12-11T11:00:00Z"), fetcher: async () => new Response("", { status: 503 }) })).toMatchObject({ ok: false, event: event.id });
     expect(fake.settings[UEFA_DRAW_SNAPSHOTS_KEY][event.id].groups).toEqual(previous);
+  });
+  it("alterne les deux sources en attente même si le cron ne passe que toutes les 30 minutes", async () => {
+    fake.settings = {};
+    const fetcher = vi.fn(async () => Response.json([]));
+    const first = await syncUefaYouthDraws(null, fake.settings, { now: new Date("2026-12-10T12:00:00Z"), fetcher });
+    const second = await syncUefaYouthDraws(null, fake.settings, { now: new Date("2026-12-10T12:30:00Z"), fetcher });
+    expect(first).toMatchObject({ event: "u19-2027-round3", pending: true });
+    expect(second).toMatchObject({ event: "u17-2027-round2", pending: true });
+    expect(fetcher).toHaveBeenCalledTimes(2);
   });
 });

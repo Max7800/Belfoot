@@ -35,13 +35,19 @@ async function readStandings(event, fetcher) {
 }
 export async function syncUefaYouthDraws(db, settings, { now = new Date(), fetcher = fetch } = {}) {
   const states = settings?.[UEFA_DRAW_SNAPSHOTS_KEY] || {};
-  const event = youth.find((item) => {
+  const event = youth.filter((item) => {
     const elapsed = now.getTime() - Date.parse(item.at);
     const state = states[item.id] || {};
     if (elapsed < 0 || now.getTime() >= Date.parse("2027-04-01T00:00:00Z")) return false;
     const interval = validStoredUefaDraw(item, state.groups) ? 24 * HOUR : elapsed < 48 * HOUR ? 0.5 * HOUR : 6 * HOUR;
     return now.getTime() - (Date.parse(state.attemptedAt) || 0) >= interval;
-  });
+  }).sort((left, right) => {
+    // Un tirage jamais essayé passe avant une nouvelle tentative. Sans ce tri,
+    // un cron espacé d'au moins 30 minutes pourrait toujours choisir U19 et
+    // ne jamais atteindre U17 si les deux sources restent incomplètes.
+    const attempt = (item) => Date.parse(states[item.id]?.attemptedAt || "") || 0;
+    return attempt(left) - attempt(right) || Date.parse(left.at) - Date.parse(right.at);
+  })[0];
   if (!event) return { skipped: true, reason: "aucun tirage à relever" };
   const attemptedAt = now.toISOString(); let groups, error;
   try { groups = parseUefaDraw(await readStandings(event, fetcher), event); } catch (e) { error = String(e?.message || "Lecture UEFA impossible").slice(0, 200); }
