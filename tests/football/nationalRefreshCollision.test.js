@@ -15,6 +15,7 @@ vi.mock("@/modules/football/fifaRankingSync", () => ({ syncFifaRanking: async ()
 vi.mock("@/modules/football/fifaTournamentSquads", () => ({ syncFifaTournamentSquad: async () => ({ skipped: true }) }));
 vi.mock("@/modules/football/uefaDrawSync", () => ({ syncU21Draw: async () => ({ skipped: true }) }));
 vi.mock("@/modules/football/fifaU17FixturesSync", () => ({ syncFifaU17Fixtures: async () => ({ skipped: true }) }));
+vi.mock("@/modules/football/uefaYouthDrawSync", () => ({ syncUefaYouthDraws: async () => ({ skipped: true }) }));
 const { GET } = await import("@/app/api/cron/national-refresh/route");
 
 const P = "apifootball";

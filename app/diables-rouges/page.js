@@ -9,6 +9,7 @@ import { useRankings } from "@/lib/rankings";
 import DiableRatings from "@/components/football/DiableRatings";
 import NationalGroupStandings from "@/components/football/NationalGroupStandings";
 import U21Draw from "@/components/football/U21Draw";
+import UefaYouthDraw from "@/components/football/UefaYouthDraw";
 import FifaU17Fixtures from "@/components/football/FifaU17Fixtures";
 import { RbfaSquadSummary, useRbfaSquad } from "@/components/football/RbfaSquad";
 import { FifaTournamentSquad, useFifaTournamentSquad } from "@/components/football/FifaTournamentSquad";
@@ -302,6 +303,7 @@ function NationalTeamsPageContent() {
           <FeaturedMatch match={featured} clubs={featuredClubs} competitions={competitions} />
         </ModuleCard>
         <U21Draw team={selectedTeam} />
+        <UefaYouthDraw team={selectedTeam} />
         <FifaU17Fixtures enabled={selectedId === "1880918a-1176-4471-8056-b4b67f3a12e1"} matches={matches} clubs={clubs} belgiumOnly />
         <NationalGroupStandings teamId={selectedId} matches={matches} competitions={competitions} featuredMatch={featured} />
         <div className={`grid gap-2 ${statTiles.length === 4 ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-3"}`}>
